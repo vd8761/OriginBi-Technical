@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Logo from '../ui/Logo';
 import ThemeToggle from '../ui/ThemeToggle';
 import AssessmentCard from './AssessmentCard';
+import AptitudePreTest from '../assessment/aptitude/AptitudePreTest';
+import { useRouter } from 'next/navigation';
 
 const AssessmentPortal: React.FC = () => {
+    const [showAptitudeModal, setShowAptitudeModal] = useState(false);
+    const router = useRouter();
+
     const assessments = [
         {
             title: "Aptitude Assessment",
@@ -99,7 +104,13 @@ const AssessmentPortal: React.FC = () => {
                         <AssessmentCard 
                             key={idx}
                             {...item}
-                            onClick={() => console.log(`Starting ${item.title}`)}
+                            onClick={() => {
+                                if (item.title === "Aptitude Assessment") {
+                                    setShowAptitudeModal(true);
+                                } else {
+                                    console.log(`Starting ${item.title}`);
+                                }
+                            }}
                         />
                     ))}
                 </div>
@@ -109,6 +120,14 @@ const AssessmentPortal: React.FC = () => {
                     &copy; {new Date().getFullYear()} Origin BI &bull; Powered by Beyond Intelligence
                 </footer>
             </div>
+
+            {/* Aptitude Modal */}
+            {showAptitudeModal && (
+                <AptitudePreTest 
+                    onStart={() => router.push('/assessment/aptitude')} 
+                    onClose={() => setShowAptitudeModal(false)}
+                />
+            )}
         </div>
     );
 };
