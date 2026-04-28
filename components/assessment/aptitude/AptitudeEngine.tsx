@@ -153,7 +153,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     };
 
     return (
-        <div className="min-h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary flex flex-col font-sans transition-colors duration-500">
+        <div className="h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary flex flex-col font-sans transition-colors duration-500 overflow-hidden">
             {/* Top Bar */}
             <header className="h-14 border-b border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-[#1A1D21] flex items-center justify-between px-6 sticky top-0 z-50">
                 <div className="flex items-center gap-4">
@@ -179,8 +179,8 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </div>
             </header>
 
-            {/* Main Content - Constrained height */}
-            <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative h-[calc(100vh-120px)]">
+            {/* Main Content - Flex-1 with overflow hidden to allow internal scrolling */}
+            <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
                 
                 {/* Left Area: Question content */}
                 <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar p-4 md:p-6 relative">
@@ -281,7 +281,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     {currentIndex === MOCK_QUESTIONS.length - 1 ? (
                         <button 
                             onClick={handleSubmit}
-                            className="px-8 py-2.5 rounded-full bg-[#150089] hover:bg-blue-800 text-white font-bold text-[12px] shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] shadow-lg shadow-brand-green/20 transition-all active:scale-95"
                         >
                             Submit Test
                         </button>

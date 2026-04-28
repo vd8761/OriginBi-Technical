@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark, .dark *));
+
 @theme {
   --color-brand-green: #1ed36a;
   --color-brand-light-primary: #fafafa;

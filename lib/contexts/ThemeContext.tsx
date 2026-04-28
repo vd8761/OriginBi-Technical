@@ -44,12 +44,15 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (!mounted) return;
 
+    console.log("Setting theme to:", theme);
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
       localStorage.setItem("theme", "dark");
+      console.log("ClassList after add:", document.documentElement.classList.toString());
     } else {
       document.documentElement.classList.remove("dark");
       localStorage.setItem("theme", "light");
+      console.log("ClassList after remove:", document.documentElement.classList.toString());
     }
   }, [theme, mounted]);
 

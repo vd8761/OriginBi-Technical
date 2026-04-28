@@ -4,11 +4,13 @@ import ThemeToggle from '../ui/ThemeToggle';
 import AssessmentCard from './AssessmentCard';
 import AptitudePreTest from '../assessment/aptitude/AptitudePreTest';
 import CommunicationPreTest from '../assessment/communication/CommunicationPreTest';
+import RolePreTest from '../assessment/role/RolePreTest';
 import { useRouter } from 'next/navigation';
 
 const AssessmentPortal: React.FC = () => {
     const [showAptitudeModal, setShowAptitudeModal] = useState(false);
     const [showCommunicationModal, setShowCommunicationModal] = useState(false);
+    const [showRoleModal, setShowRoleModal] = useState(false);
     const router = useRouter();
 
     const assessments = [
@@ -111,6 +113,8 @@ const AssessmentPortal: React.FC = () => {
                                     setShowAptitudeModal(true);
                                 } else if (item.title === "Communication Assessment") {
                                     setShowCommunicationModal(true);
+                                } else if (item.title === "Role Based Questions") {
+                                    setShowRoleModal(true);
                                 } else {
                                     console.log(`Starting ${item.title}`);
                                 }
@@ -139,9 +143,17 @@ const AssessmentPortal: React.FC = () => {
                     onClose={() => setShowCommunicationModal(false)}
                 />
             )}
+
+            {showRoleModal && (
+                <RolePreTest 
+                    onStart={() => router.push('/assessment/role')} 
+                    onClose={() => setShowRoleModal(false)}
+                />
+            )}
         </div>
     );
 };
 
 export default AssessmentPortal;
+
 
