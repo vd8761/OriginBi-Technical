@@ -3,10 +3,12 @@ import Logo from '../ui/Logo';
 import ThemeToggle from '../ui/ThemeToggle';
 import AssessmentCard from './AssessmentCard';
 import AptitudePreTest from '../assessment/aptitude/AptitudePreTest';
+import CommunicationPreTest from '../assessment/communication/CommunicationPreTest';
 import { useRouter } from 'next/navigation';
 
 const AssessmentPortal: React.FC = () => {
     const [showAptitudeModal, setShowAptitudeModal] = useState(false);
+    const [showCommunicationModal, setShowCommunicationModal] = useState(false);
     const router = useRouter();
 
     const assessments = [
@@ -107,6 +109,8 @@ const AssessmentPortal: React.FC = () => {
                             onClick={() => {
                                 if (item.title === "Aptitude Assessment") {
                                     setShowAptitudeModal(true);
+                                } else if (item.title === "Communication Assessment") {
+                                    setShowCommunicationModal(true);
                                 } else {
                                     console.log(`Starting ${item.title}`);
                                 }
@@ -121,11 +125,18 @@ const AssessmentPortal: React.FC = () => {
                 </footer>
             </div>
 
-            {/* Aptitude Modal */}
+            {/* Modals */}
             {showAptitudeModal && (
                 <AptitudePreTest 
                     onStart={() => router.push('/assessment/aptitude')} 
                     onClose={() => setShowAptitudeModal(false)}
+                />
+            )}
+
+            {showCommunicationModal && (
+                <CommunicationPreTest 
+                    onStart={() => router.push('/assessment/communication')} 
+                    onClose={() => setShowCommunicationModal(false)}
                 />
             )}
         </div>
@@ -133,3 +144,4 @@ const AssessmentPortal: React.FC = () => {
 };
 
 export default AssessmentPortal;
+
