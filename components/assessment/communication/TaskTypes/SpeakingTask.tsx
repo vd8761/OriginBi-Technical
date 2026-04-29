@@ -91,18 +91,18 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
 
     return (
         <div className="flex flex-col gap-6 h-full">
-            <div className="bg-brand-light-secondary dark:bg-[#24272B] p-5 rounded-2xl border border-brand-light-tertiary dark:border-white/10 flex flex-col gap-4">
-                <p className="text-[13px] font-medium text-brand-text-light-secondary dark:text-gray-300">
+            <div className="bg-brand-light-secondary dark:bg-white/[0.03] p-5 rounded-2xl border border-brand-light-tertiary dark:border-white/10 flex flex-col gap-4">
+                <p className="text-[13px] font-medium text-black dark:text-white">
                     {task.instructions}
                 </p>
-                <div className="bg-white dark:bg-[#1A1D21] p-5 rounded-xl border border-brand-light-tertiary dark:border-white/5">
-                    <h3 className="text-[clamp(14px,1.2vw,18px)] font-semibold text-brand-text-light-primary dark:text-white leading-relaxed italic">
+                <div className="bg-white dark:bg-brand-dark-primary p-5 rounded-xl border border-brand-light-tertiary dark:border-white/5">
+                    <h3 className="text-[clamp(14px,1.2vw,18px)] font-semibold text-black dark:text-white leading-relaxed italic">
                         "{task.prompt}"
                     </h3>
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white dark:bg-[#1A1D21] rounded-[20px] shadow-sm border border-brand-light-tertiary dark:border-white/5 transition-colors min-h-[300px]">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white dark:bg-white/[0.03] rounded-[20px] border border-brand-light-tertiary dark:border-white/5 transition-colors min-h-[300px]">
                 
                 {/* Status Indicator */}
                 <div className="mb-8 flex flex-col items-center gap-2">
@@ -113,8 +113,8 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
-                            <h4 className="font-bold text-brand-text-light-primary dark:text-white">Recording Saved</h4>
-                            <p className="text-xs text-brand-text-light-secondary dark:text-gray-400">You can proceed to the next task.</p>
+                            <h4 className="font-bold text-black dark:text-white">Recording Saved</h4>
+                            <p className="text-xs text-black dark:text-white">You can proceed to the next task.</p>
                         </>
                     ) : isRecording ? (
                         <>
@@ -128,15 +128,15 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                 </div>
                             </div>
                             <h4 className="font-bold text-red-500 animate-pulse uppercase tracking-wider text-sm">Recording</h4>
-                            <p className="text-2xl font-mono font-bold text-brand-text-light-primary dark:text-white mt-1">{formatTime(recordTimeLeft)}</p>
+                            <p className="text-2xl font-mono font-bold text-black dark:text-white mt-1">{formatTime(recordTimeLeft)}</p>
                         </>
                     ) : (
                         <>
                             <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center mb-2 border border-amber-500/20">
                                 <span className="text-2xl font-bold font-mono text-amber-500">{formatTime(prepTimeLeft)}</span>
                             </div>
-                            <h4 className="font-bold text-brand-text-light-primary dark:text-white uppercase tracking-wider text-sm">Preparation Time</h4>
-                            <p className="text-xs text-brand-text-light-secondary dark:text-gray-400">Read the prompt and prepare your response.</p>
+                            <h4 className="font-bold text-black dark:text-white uppercase tracking-wider text-sm">Preparation Time</h4>
+                            <p className="text-xs text-black dark:text-white">Read the prompt and prepare your response.</p>
                         </>
                     )}
                 </div>
@@ -146,7 +146,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                     {!isRecording && !recordingComplete && (
                         <button 
                             onClick={startRecording}
-                            className="px-8 py-3 rounded-full bg-brand-green text-white font-bold text-xs shadow-lg shadow-brand-green/20 hover:bg-[#1bb85c] transition-all"
+                            className="px-8 py-3 rounded-full bg-brand-green text-white font-bold text-xs hover:bg-[#1bb85c] transition-all"
                         >
                             Start Early
                         </button>
@@ -154,7 +154,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                     {isRecording && (
                         <button 
                             onClick={stopRecording}
-                            className="px-8 py-3 rounded-full bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all"
+                            className="px-8 py-3 rounded-full bg-red-500 text-white font-bold text-xs hover:bg-red-600 transition-all"
                         >
                             Finish Recording
                         </button>

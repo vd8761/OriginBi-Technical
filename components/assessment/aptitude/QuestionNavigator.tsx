@@ -17,26 +17,26 @@ interface QuestionNavigatorProps {
 
 const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({ questions, currentIndex, onSelect }) => {
     const getBgColor = (state: QuestionState, isActive: boolean) => {
-        if (isActive) return 'bg-brand-text-light-primary dark:bg-white text-white dark:text-black border-transparent shadow-lg scale-110';
+        if (isActive) return 'bg-black dark:bg-white text-white dark:text-black border-transparent scale-110';
         
         switch (state) {
             case 'answered':
-                return 'bg-brand-green text-white border-brand-green shadow-brand-green/20';
+                return 'bg-brand-green text-white border-brand-green';
             case 'marked':
-                return 'bg-amber-500 text-white border-amber-500 shadow-amber-500/20';
+                return 'bg-amber-500 text-white border-amber-500';
             case 'unanswered':
             default:
-                return 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5';
+                return 'bg-white dark:bg-white/[0.05] border-brand-light-tertiary dark:border-white/10 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/10';
         }
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-[#1A1D21] border border-brand-light-tertiary dark:border-white/5 rounded-[20px] overflow-hidden shadow-sm transition-colors">
+        <div className="flex flex-col h-full bg-white dark:bg-brand-dark-primary border border-brand-light-tertiary dark:border-white/5 rounded-[20px] overflow-hidden transition-colors">
             <div className="p-4 border-b border-brand-light-tertiary dark:border-white/5">
-                <h3 className="text-sm font-bold text-brand-text-light-primary dark:text-white">Question Navigator</h3>
+                <h3 className="text-sm font-bold text-black dark:text-white">Question Navigator</h3>
                 
                 {/* Legend */}
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-brand-text-light-secondary dark:text-gray-500">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                     <div className="flex items-center gap-1">
                         <div className="w-2 h-2 rounded-full bg-brand-green"></div> Answered
                     </div>

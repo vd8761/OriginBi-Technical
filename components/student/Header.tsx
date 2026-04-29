@@ -42,7 +42,7 @@ const NavItem: React.FC<NavItemProps> = ({
                     isMobile ? "py-3.5 px-4" : "h-9 px-3.5"
                 } cursor-pointer ${
                     active
-                        ? "bg-[#1ED36A] text-white shadow-md shadow-brand-green/20"
+                        ? "bg-[#1ED36A] text-white"
                         : "bg-gray-50 border border-gray-200 text-[#19211C] hover:bg-gray-100 hover:text-black hover:border-gray-300 dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white"
                 }`}
             >

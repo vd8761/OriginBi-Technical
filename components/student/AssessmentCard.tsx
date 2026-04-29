@@ -26,10 +26,10 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
     onClick
 }) => {
     return (
-        <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] hover:shadow-xl hover:border-brand-green/20">
+        <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] hover:border-brand-green/40">
             <div className="flex gap-4 mb-4">
                 {/* Left: Hero Icon */}
-                <div className="flex items-center justify-center shrink-0 w-12 h-12 bg-brand-green/10 rounded-2xl text-brand-green transition-transform duration-500 group-hover:scale-110">
+                <div className="flex items-center justify-center shrink-0 w-12 h-12 bg-brand-green/10 rounded-2xl text-brand-green transition-transform duration-500 group-hover:scale-110 border border-brand-green/20">
                     {icon}
                 </div>
 
@@ -39,7 +39,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             </div>
 
             <div className="flex-1 flex flex-col">
-                <p className="text-[13px] text-black dark:text-white line-clamp-2 leading-relaxed mb-4">{description}</p>
+                <p className="text-[13px] text-black dark:text-white line-clamp-2 leading-relaxed mb-4 font-medium">{description}</p>
                 
                 {/* Stats Row */}
                 <div className="flex items-center gap-6 mb-4">
@@ -56,7 +56,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                 {/* Badges/Tags - Now at the bottom after para */}
                 <div className="flex flex-wrap gap-2 mb-6 mt-auto">
                     {tags.map((tag, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-md text-[9px] font-bold text-black dark:text-white uppercase tracking-wider">
+                        <span key={idx} className="px-2 py-0.5 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md text-[9px] font-bold text-black dark:text-white uppercase tracking-wider">
                             {tag}
                         </span>
                     ))}
@@ -64,7 +64,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             </div>
 
             {/* Thin Line Separator */}
-            <div className="h-[1px] w-full bg-gray-100 dark:bg-white/10 mb-5"></div>
+            <div className="h-[1px] w-full bg-black/10 dark:bg-white/10 mb-5"></div>
 
             {/* Bottom Actions */}
             <div className="flex items-center justify-between">
@@ -76,11 +76,11 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                 <div className="flex gap-2">
                     <button 
                         onClick={onDetailsClick}
-                        className="px-4 py-2.5 text-[10px] font-bold text-brand-green border border-brand-green/20 hover:bg-brand-green/5 rounded-full transition-all cursor-pointer uppercase tracking-wider"
+                        className="px-4 py-2.5 text-[10px] font-black text-black dark:text-white border-2 border-black dark:border-white hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer uppercase tracking-wider"
                     >
                         Details
                     </button>
-                    <button onClick={onClick} className="px-6 py-2.5 text-[10px] font-bold bg-brand-green text-white rounded-full hover:bg-brand-green/90 transition-all cursor-pointer uppercase tracking-wider">
+                    <button onClick={onClick} className="px-6 py-2.5 text-[10px] font-black bg-brand-green text-black rounded-full hover:bg-brand-green/90 transition-all cursor-pointer uppercase tracking-wider">
                         Unlock
                     </button>
                 </div>

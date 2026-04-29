@@ -169,19 +169,21 @@ const AssessmentPortal: React.FC = () => {
                                 <div className="relative z-10 p-8 lg:p-12 flex flex-col lg:flex-row gap-10 items-stretch">
                                     <div className="flex-1 flex flex-col justify-center">
                                         <div className="flex items-center gap-4 mb-8">
-                                            <div className="w-14 h-14 bg-brand-green/10 rounded-2xl flex items-center justify-center text-brand-green border border-brand-green/20">
-                                                {selectedAssessment.icon}
+                                            <div className="w-14 h-14 bg-brand-green/10 rounded-[1.25rem] flex items-center justify-center text-brand-green border border-brand-green/30 transition-transform hover:scale-105">
+                                                <div className="scale-125">
+                                                    {selectedAssessment.icon}
+                                                </div>
                                             </div>
-                                            <div className="px-4 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[#19211C] dark:text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                            <div className="px-5 py-2 border-2 border-black dark:border-white text-black dark:text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
                                                 Professional Assessment
                                             </div>
                                         </div>
                                         
-                                        <h1 className="text-[clamp(28px,3.5vw,48px)] font-black text-[#19211C] dark:text-white mb-6 tracking-tight leading-[1.1]">
+                                        <h1 className="text-[clamp(28px,3.5vw,48px)] font-black text-black dark:text-white mb-6 tracking-tight leading-[1.1]">
                                             {selectedAssessment.title}
                                         </h1>
                                         
-                                        <p className="text-[clamp(14px,1vw,16px)] text-[#19211C] dark:text-white max-w-2xl leading-relaxed mb-10 font-medium">
+                                        <p className="text-[clamp(14px,1vw,16px)] text-black dark:text-white max-w-2xl leading-relaxed mb-10 font-semibold">
                                             {selectedAssessment.description}
                                         </p>
 
@@ -193,8 +195,8 @@ const AssessmentPortal: React.FC = () => {
                                                     </svg>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-[#19211C] dark:text-white uppercase tracking-widest leading-none mb-1.5">Duration</p>
-                                                    <p className="text-[15px] font-bold text-[#19211C] dark:text-white leading-none">{selectedAssessment.duration}</p>
+                                                    <p className="text-[10px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1.5">Duration</p>
+                                                    <p className="text-[15px] font-bold text-black dark:text-white leading-none">{selectedAssessment.duration}</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-4 group">
@@ -204,8 +206,8 @@ const AssessmentPortal: React.FC = () => {
                                                     </svg>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-[#19211C] dark:text-white uppercase tracking-widest leading-none mb-1.5">Questions</p>
-                                                    <p className="text-[15px] font-bold text-[#19211C] dark:text-white leading-none">{selectedAssessment.totalQuestions} Questions</p>
+                                                    <p className="text-[10px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1.5">Questions</p>
+                                                    <p className="text-[15px] font-bold text-black dark:text-white leading-none">{selectedAssessment.totalQuestions} Questions</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-4 group">
@@ -215,8 +217,8 @@ const AssessmentPortal: React.FC = () => {
                                                     </svg>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-[#19211C] dark:text-white uppercase tracking-widest leading-none mb-1.5">Level</p>
-                                                    <p className="text-[15px] font-bold text-[#19211C] dark:text-white leading-none">Intermediate</p>
+                                                    <p className="text-[10px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1.5">Level</p>
+                                                    <p className="text-[15px] font-bold text-black dark:text-white leading-none">Intermediate</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -224,24 +226,24 @@ const AssessmentPortal: React.FC = () => {
 
                                     <div className="w-full lg:w-[340px] flex flex-col justify-center">
                                         <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-[1.5rem] p-8 relative overflow-hidden">
-                                            <p className="text-[11px] font-bold text-[#19211C] dark:text-white uppercase tracking-widest mb-2 relative z-10">Access Lifetime Report</p>
+                                            <p className="text-[11px] font-bold text-black dark:text-white uppercase tracking-widest mb-2 relative z-10">Access Lifetime Report</p>
                                             <div className="flex items-baseline gap-2 mb-8 relative z-10">
                                                 <span className="text-4xl font-black text-brand-green leading-none">{selectedAssessment.price}</span>
-                                                <span className="text-xs text-[#19211C] dark:text-white font-bold uppercase tracking-wider">One-time</span>
+                                                <span className="text-xs text-black dark:text-white font-bold uppercase tracking-wider">One-time</span>
                                             </div>
                                             
-                                            <button className="w-full py-4 bg-brand-green hover:bg-brand-green/90 text-[#19211C] rounded-xl font-black text-sm uppercase tracking-wider transition-all active:scale-95 mb-6 relative z-10 cursor-pointer">
+                                            <button className="w-full py-4 bg-brand-green hover:bg-brand-green/90 text-black dark:text-black rounded-xl font-black text-sm uppercase tracking-wider transition-all active:scale-95 mb-6 relative z-10 cursor-pointer">
                                                 Unlock Full Access
                                             </button>
                                             
                                             <div className="space-y-3 relative z-10">
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-[#19211C] dark:text-white uppercase tracking-wider">
+                                                <div className="flex items-center gap-2 text-[10px] font-bold text-black dark:text-white uppercase tracking-wider">
                                                     <svg className="w-4 h-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>
                                                     Lifetime Dashboard Access
                                                 </div>
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-[#19211C] dark:text-white uppercase tracking-wider">
+                                                <div className="flex items-center gap-2 text-[10px] font-bold text-black dark:text-white uppercase tracking-wider">
                                                     <svg className="w-4 h-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>
@@ -274,13 +276,13 @@ const AssessmentPortal: React.FC = () => {
                                                             </svg>
                                                             <div>
                                                                 <p className="font-bold text-[13px] text-brand-text-light-primary dark:text-white mb-1">{item.title}</p>
-                                                                <p className="text-[12px] text-[#19211C] dark:text-white leading-relaxed font-medium">{item.desc}</p>
+                                                                <p className="text-[12px] text-black dark:text-white leading-relaxed font-medium">{item.desc}</p>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </>
                                             ) : (
-                                                <p className="text-[#19211C] dark:text-white italic text-[12px] font-medium">Specific assessment dimensions coming soon...</p>
+                                                <p className="text-black dark:text-white italic text-[12px] font-medium">Specific assessment dimensions coming soon...</p>
                                             )}
                                         </div>
                                     </div>
@@ -301,7 +303,7 @@ const AssessmentPortal: React.FC = () => {
                                                             <span className="font-bold text-[13px] text-brand-text-light-primary dark:text-white">{section.name}</span>
                                                             <span className="text-[9px] font-bold text-brand-green uppercase tracking-wider">Group {i+1}</span>
                                                         </div>
-                                                        <p className="text-[12px] text-[#19211C] dark:text-white leading-relaxed font-medium">
+                                                        <p className="text-[12px] text-black dark:text-white leading-relaxed font-medium">
                                                             {section.topics}
                                                         </p>
                                                     </div>
@@ -328,7 +330,7 @@ const AssessmentPortal: React.FC = () => {
                                                 className="absolute inset-0"
                                             ></iframe>
                                         </div>
-                                        <p className="text-[12px] text-[#19211C] dark:text-white mt-3 font-medium">Methodology, sections, and scoring system overview.</p>
+                                        <p className="text-[12px] text-black dark:text-white mt-3 font-medium">Methodology, sections, and scoring system overview.</p>
                                     </div>
 
                                     {/* Insight Outcomes */}
@@ -341,7 +343,7 @@ const AssessmentPortal: React.FC = () => {
                                                 </svg>
                                                 <div>
                                                     <p className="text-[12px] font-bold text-brand-text-light-primary dark:text-white">Strength Profiling</p>
-                                                    <p className="text-[11px] text-[#19211C] dark:text-white mt-0.5 font-medium">Understand your natural cognitive and technical edges.</p>
+                                                    <p className="text-[11px] text-black dark:text-white mt-0.5 font-medium">Understand your natural cognitive and technical edges.</p>
                                                 </div>
                                             </div>
                                             <div className="flex gap-3">
@@ -350,7 +352,7 @@ const AssessmentPortal: React.FC = () => {
                                                 </svg>
                                                 <div>
                                                     <p className="text-[12px] font-bold text-brand-text-light-primary dark:text-white">Weakness Analysis</p>
-                                                    <p className="text-[11px] text-[#19211C] dark:text-white mt-0.5 font-medium">Pinpoint specific gaps that may hinder career growth.</p>
+                                                    <p className="text-[11px] text-black dark:text-white mt-0.5 font-medium">Pinpoint specific gaps that may hinder career growth.</p>
                                                 </div>
                                             </div>
                                             <div className="flex gap-3">
@@ -359,7 +361,7 @@ const AssessmentPortal: React.FC = () => {
                                                 </svg>
                                                 <div>
                                                     <p className="text-[12px] font-bold text-brand-text-light-primary dark:text-white">Benchmark Reports</p>
-                                                    <p className="text-[11px] text-[#19211C] dark:text-white mt-0.5 font-medium">Compare your scores against industry standards.</p>
+                                                    <p className="text-[11px] text-black dark:text-white mt-0.5 font-medium">Compare your scores against industry standards.</p>
                                                 </div>
                                             </div>
                                             <div className="flex gap-3">
@@ -368,7 +370,7 @@ const AssessmentPortal: React.FC = () => {
                                                 </svg>
                                                 <div>
                                                     <p className="text-[12px] font-bold text-brand-text-light-primary dark:text-white">Roadmap Guidance</p>
-                                                    <p className="text-[11px] text-[#19211C] dark:text-white mt-0.5 font-medium">Receive actionable learning paths based on performance.</p>
+                                                    <p className="text-[11px] text-black dark:text-white mt-0.5 font-medium">Receive actionable learning paths based on performance.</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -376,7 +378,7 @@ const AssessmentPortal: React.FC = () => {
 
                                     {/* Certification Section */}
                                     <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8 relative overflow-hidden group">
-                                        <h2 className="text-base font-bold text-[#19211C] dark:text-white mb-4 relative z-10">Verified Certification</h2>
+                                        <h2 className="text-base font-bold text-black dark:text-white mb-4 relative z-10">Verified Certification</h2>
                                         <div className="flex gap-4 items-center mb-4 relative z-10">
                                             <div className="w-10 h-10 bg-brand-green/10 rounded-xl flex items-center justify-center text-brand-green shrink-0">
                                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -384,14 +386,14 @@ const AssessmentPortal: React.FC = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-[13px] font-bold text-[#19211C] dark:text-white leading-tight">Assessment Completion Certificate</p>
+                                                <p className="text-[13px] font-bold text-black dark:text-white leading-tight">Assessment Completion Certificate</p>
                                                 <p className="text-[10px] text-brand-green font-bold uppercase tracking-wider mt-1">By OriginBI Official</p>
                                             </div>
                                         </div>
-                                        <p className="text-[11px] text-[#19211C] dark:text-white leading-relaxed font-medium mb-4 relative z-10">
+                                        <p className="text-[11px] text-black dark:text-white leading-relaxed font-medium mb-4 relative z-10">
                                             Earn your official **OriginBI Certification**—a trusted benchmark for cognitive and technical proficiency. A verified testament to your core strengths and potential, recognized across industry standards.
                                         </p>
-                                        <div className="p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-lg text-[10px] text-[#19211C] dark:text-white italic font-medium relative z-10">
+                                        <div className="p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-lg text-[10px] text-black dark:text-white italic font-medium relative z-10">
                                             "A recognized benchmark of excellence in the industry."
                                         </div>
                                     </div>

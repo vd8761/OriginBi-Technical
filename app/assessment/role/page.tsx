@@ -4,14 +4,27 @@ import React from 'react';
 import RoleEngine from '../../../components/assessment/role/RoleEngine';
 import { useRouter } from 'next/navigation';
 
+import SubmissionSuccess from '../../../components/ui/SubmissionSuccess';
+import { useState } from 'react';
+
 export default function RoleAssessmentPage() {
     const router = useRouter();
+    const [isSubmitted, setIsSubmitted] = useState(false);
 
     const handleComplete = (answers: Record<string, any>) => {
         console.log("Role-Based Assessment Completed. Answers:", answers);
-        alert("Assessment Completed successfully! Responses are saved.");
-        router.push('/'); // Route back to portal
+        // Here you would typically send data to backend
+        setIsSubmitted(true);
     };
+
+    if (isSubmitted) {
+        return (
+            <SubmissionSuccess 
+                onAction={() => router.push('/')}
+                message="Your role-based assessment has been submitted. We are mapping your performance against industry-standard role profiles."
+            />
+        );
+    }
 
     return (
         <div className="min-h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary transition-colors duration-500 font-sans flex flex-col relative overflow-hidden">
