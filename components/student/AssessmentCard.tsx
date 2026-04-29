@@ -76,11 +76,11 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                 <div className="flex gap-2">
                     <button 
                         onClick={onDetailsClick}
-                        className="px-4 py-2.5 text-[10px] font-black text-black dark:text-white border-2 border-black dark:border-white hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer uppercase tracking-wider"
+                        className="px-5 py-2 text-[11px] font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
                     >
                         Details
                     </button>
-                    <button onClick={onClick} className="px-6 py-2.5 text-[10px] font-black bg-brand-green text-black rounded-full hover:bg-brand-green/90 transition-all cursor-pointer uppercase tracking-wider">
+                    <button onClick={onClick} className="px-6 py-2 text-[11px] font-medium bg-brand-green text-white rounded-full hover:bg-brand-green/90 transition-all cursor-pointer">
                         Unlock
                     </button>
                 </div>

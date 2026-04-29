@@ -168,18 +168,18 @@ const AssessmentPortal: React.FC = () => {
 
                                 <div className="relative z-10 p-8 lg:p-12 flex flex-col lg:flex-row gap-10 items-stretch">
                                     <div className="flex-1 flex flex-col justify-center">
-                                        <div className="flex items-center gap-4 mb-8">
-                                            <div className="w-14 h-14 bg-brand-green/10 rounded-[1.25rem] flex items-center justify-center text-brand-green border border-brand-green/30 transition-transform hover:scale-105">
-                                                <div className="scale-125">
+                                        <div className="flex items-center gap-3 mb-5">
+                                            <div className="w-12 h-12 bg-brand-green/10 rounded-xl flex items-center justify-center text-brand-green border border-brand-green/30 transition-transform hover:scale-105">
+                                                <div className="scale-110">
                                                     {selectedAssessment.icon}
                                                 </div>
                                             </div>
-                                            <div className="px-5 py-2 border-2 border-black dark:border-white text-black dark:text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
+                                            <div className="px-4 py-1 border-2 border-black dark:border-white text-black dark:text-white rounded-full text-[9px] font-black uppercase tracking-[0.2em]">
                                                 Professional Assessment
                                             </div>
                                         </div>
                                         
-                                        <h1 className="text-[clamp(28px,3.5vw,48px)] font-black text-black dark:text-white mb-6 tracking-tight leading-[1.1]">
+                                        <h1 className="text-[clamp(28px,3.5vw,44px)] font-black text-black dark:text-white mb-4 tracking-tight leading-[1.1]">
                                             {selectedAssessment.title}
                                         </h1>
                                         
@@ -226,18 +226,18 @@ const AssessmentPortal: React.FC = () => {
 
                                     <div className="w-full lg:w-[340px] flex flex-col justify-center">
                                         <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-[1.5rem] p-8 relative overflow-hidden">
-                                            <p className="text-[11px] font-bold text-black dark:text-white uppercase tracking-widest mb-2 relative z-10">Access Lifetime Report</p>
+                                            <p className="text-[11px] font-medium text-white mb-2 relative z-10">Access Lifetime Report</p>
                                             <div className="flex items-baseline gap-2 mb-8 relative z-10">
                                                 <span className="text-4xl font-black text-brand-green leading-none">{selectedAssessment.price}</span>
-                                                <span className="text-xs text-black dark:text-white font-bold uppercase tracking-wider">One-time</span>
+                                                <span className="text-xs text-white font-medium">One-time</span>
                                             </div>
                                             
-                                            <button className="w-full py-4 bg-brand-green hover:bg-brand-green/90 text-black dark:text-black rounded-xl font-black text-sm uppercase tracking-wider transition-all active:scale-95 mb-6 relative z-10 cursor-pointer">
+                                            <button className="w-full py-4 bg-brand-green hover:bg-brand-green/90 text-white rounded-xl font-medium text-sm transition-all active:scale-95 mb-6 relative z-10 cursor-pointer">
                                                 Unlock Full Access
                                             </button>
                                             
                                             <div className="space-y-3 relative z-10">
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-black dark:text-white uppercase tracking-wider">
+                                                <div className="flex items-center gap-2 text-[10px] font-medium text-white">
                                                     <svg className="w-4 h-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>

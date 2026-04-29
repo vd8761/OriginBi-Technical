@@ -87,13 +87,13 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                     <div className="flex justify-end gap-3 sm:gap-4">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2.5 rounded-full border-2 border-black dark:border-white text-black dark:text-white text-[clamp(11px,0.9vw,14px)] font-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            className="px-6 py-2.5 rounded-full border border-gray-200 dark:border-white/20 text-black dark:text-white/80 font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                         >
                             Go Back
                         </button>
                         <button
                             onClick={onStart}
-                            className="px-10 py-2.5 rounded-full bg-brand-green text-black text-[clamp(11px,0.9vw,14px)] font-black uppercase tracking-wider hover:bg-brand-green/90 transition-colors active:scale-95 shadow-lg shadow-brand-green/10"
+                            className="px-10 py-2.5 rounded-full bg-brand-green text-white text-sm font-medium hover:bg-brand-green/90 transition-colors active:scale-95 shadow-md shadow-brand-green/10"
                         >
                             Begin Assessment
                         </button>

@@ -21,7 +21,7 @@ export default function RoleAssessmentPage() {
         return (
             <SubmissionSuccess 
                 onAction={() => router.push('/')}
-                message="Your role-based assessment has been submitted. We are mapping your performance against industry-standard role profiles."
+                message="Assessment submitted! Check your dashboard to view your detailed performance score."
             />
         );
     }

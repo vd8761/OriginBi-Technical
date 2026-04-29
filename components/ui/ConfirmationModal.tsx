@@ -59,7 +59,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 onClick={onClose}
             />
             
-            <div className="relative w-full max-w-md bg-white dark:bg-brand-dark-primary rounded-[2rem] p-8 border border-brand-light-tertiary dark:border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-md bg-white dark:bg-brand-dark-primary rounded-[2rem] p-6 border border-brand-light-tertiary dark:border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
                 <div className="flex flex-col items-center text-center">
                     {getIcon()}
                     
@@ -67,20 +67,20 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         {title}
                     </h3>
                     
-                    <p className="text-sm font-medium text-black dark:text-white/80 leading-relaxed mb-8">
+                    <p className="text-sm font-medium text-black dark:text-white/80 leading-relaxed mb-6">
                         {message}
                     </p>
                     
                     <div className="flex gap-3 w-full">
                         <button
                             onClick={onClose}
-                            className="flex-1 py-3.5 rounded-full border-2 border-black dark:border-white text-black dark:text-white font-bold text-xs uppercase tracking-widest hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                            className="flex-1 py-3 rounded-full border border-gray-200 dark:border-white/10 text-black dark:text-white/80 font-medium text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
                         >
                             {cancelText}
                         </button>
                         <button
                             onClick={onConfirm}
-                            className="flex-1 py-3.5 rounded-full bg-brand-green text-black font-bold text-xs uppercase tracking-widest hover:bg-brand-green/90 transition-all shadow-lg shadow-brand-green/10"
+                            className="flex-1 py-3 rounded-full bg-brand-green text-white font-medium text-sm hover:bg-brand-green/90 transition-all shadow-md shadow-brand-green/10"
                         >
                             {confirmText}
                         </button>

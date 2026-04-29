@@ -21,7 +21,7 @@ export default function CommunicationAssessmentPage() {
         return (
             <SubmissionSuccess 
                 onAction={() => router.push('/')}
-                message="Your communication assessment has been submitted. Your linguistic skills and technical explanations are being evaluated."
+                message="Assessment submitted! Check your dashboard to view your detailed performance score."
             />
         );
     }

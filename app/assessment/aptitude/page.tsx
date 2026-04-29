@@ -21,7 +21,7 @@ export default function AptitudeAssessmentPage() {
         return (
             <SubmissionSuccess 
                 onAction={() => router.push('/')}
-                message="Your aptitude assessment has been submitted. Our AI engine is analyzing your cognitive profile."
+                message="Assessment submitted! Check your dashboard to view your detailed performance score."
             />
         );
     }
