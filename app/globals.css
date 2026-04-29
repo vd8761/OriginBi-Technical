@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/* Font Declarations at Top Level */
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Thin.otf');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-ExtraLight.otf');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Light.otf');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Regular.otf');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Medium.otf');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-SemiBold.otf');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Bold.otf');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-ExtraBold.otf');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+@theme {
+  --color-brand-green: #1ed36a;
+  --color-brand-light-primary: #ffffff;
+  --color-brand-light-secondary: #f7fafc;
+  --color-brand-light-tertiary: #e2e8f0;
+  --color-brand-dark-primary: #19211c;
+  --color-brand-dark-secondary: #24272b;
+  --color-brand-dark-tertiary: #303438;
+  --color-brand-text-light-primary: #2d3748;
+  --color-brand-text-light-secondary: #718096;
+  --color-brand-text-primary: #ffffff;
+  --color-brand-text-secondary: #a0aec0;
+  
+  /* Setting the default sans font */
+  --font-sans: 'Haskoy', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: 'Haskoy', sans-serif;
+  }
+  
+  body {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+    @apply bg-brand-light-primary text-brand-text-light-primary dark:bg-brand-dark-primary dark:text-brand-text-primary font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Haskoy', sans-serif !important;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* --- FONT SIZE VW CLASSES --- */
+  .text-48vw { font-size: 2.5vw; }
+  .text-32vw { font-size: 1.666vw; }
+  .text-24vw { font-size: 1.25vw; }
+  .text-20vw { font-size: 1.04vw; }
+  .text-18vw { font-size: 0.9375vw; }
+  .text-16vw { font-size: 0.833vw; }
+  .text-14vw { font-size: 0.729vw; }
+  .text-12vw { font-size: 0.625vw; }
+  .text-10vw { font-size: 0.52vw; }
+
+  .h-24vw { height: 1.25vw; }
+  .w-48vw { width: 2.5vw; }
+  .w-16vw { width: 0.833vw; }
+  .h-16vw { height: 0.833vw; }
+
+  .translate-x-32vw { transform: translateX(1.66vw); }
+  .translate-x-4vw { transform: translateX(0.2vw); }
+
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(30, 211, 106, 0.3) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 3px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(30, 211, 106, 0.3);
+    border-radius: 3px;
+  }
+
+  .glass-card {
+    @apply bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.02)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.15)] rounded-2xl;
+  }
+
+  .portal-bg {
+    @apply bg-[url('/Background_Light_Theme.svg')] bg-cover bg-top bg-no-repeat dark:bg-none dark:bg-[#19211C];
+  }
+}
+
+@keyframes notice-pop-in {
+  0% { opacity: 0; transform: translateY(18px) scale(0.92); }
+  60% { opacity: 1; transform: translateY(-4px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-notice-pop {
+  animation: notice-pop-in 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
