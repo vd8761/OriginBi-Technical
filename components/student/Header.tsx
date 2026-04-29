@@ -164,15 +164,15 @@ const Header: React.FC<HeaderProps> = ({
                                 {user.name.substring(0, 2).toUpperCase()}
                             </div>
                             <div className="hidden xl:block text-left">
-                                <p className="font-semibold text-[13px] leading-tight text-[#19211C] dark:text-brand-text-primary">
+                                <p className="font-semibold text-[13px] leading-tight text-black dark:text-white">
                                     {user.name}
                                 </p>
-                                <p className="text-[10px] text-brand-text-light-secondary dark:text-brand-text-secondary leading-tight">
+                                <p className="text-[10px] text-black dark:text-white leading-tight">
                                     {user.email}
                                 </p>
                             </div>
                             <ChevronDownIcon
-                                className={`w-3.5 h-3.5 text-brand-text-light-secondary dark:text-brand-text-secondary transition-transform hidden sm:block ${
+                                className={`w-3.5 h-3.5 text-black dark:text-white transition-transform hidden sm:block ${
                                     isProfileOpen ? "rotate-180" : ""
                                 }`}
                             />
@@ -181,10 +181,10 @@ const Header: React.FC<HeaderProps> = ({
                         {isProfileOpen && (
                             <div className="absolute right-0 top-full mt-2 w-64 bg-brand-light-secondary dark:bg-brand-dark-secondary rounded-xl shadow-2xl z-[100] border border-brand-light-tertiary dark:border-brand-dark-tertiary/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                                 <div className="px-4 py-3 border-b border-brand-light-tertiary dark:border-brand-dark-tertiary bg-gray-50/50 dark:bg-white/5">
-                                    <p className="text-sm font-semibold text-[#19211C] dark:text-brand-text-primary truncate">
+                                    <p className="text-sm font-semibold text-black dark:text-white truncate">
                                         {user.name}
                                     </p>
-                                    <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary truncate mt-0.5">
+                                    <p className="text-xs text-black dark:text-white truncate mt-0.5">
                                         {user.email}
                                     </p>
                                 </div>
@@ -220,7 +220,7 @@ const Header: React.FC<HeaderProps> = ({
                     <nav className="flex flex-col p-4 space-y-2">
                         {renderNavItems(true)}
                         <div className="border-t border-brand-light-tertiary dark:border-brand-dark-tertiary my-2 pt-4 flex items-center justify-between px-2">
-                            <span className="text-xs font-bold text-brand-text-light-secondary dark:text-brand-text-secondary uppercase tracking-wider">Appearance</span>
+                            <span className="text-xs font-bold text-black dark:text-white uppercase tracking-wider">Appearance</span>
                             <ThemeToggle />
                         </div>
                     </nav>
