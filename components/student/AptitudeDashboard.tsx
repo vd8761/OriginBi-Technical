@@ -231,37 +231,25 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
                 
                 <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col justify-between">
                     <div>
-                        <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider mb-4">Recommended Learning</h3>
+                        <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider mb-4">Recommended Next Steps</h3>
                         <div className="space-y-3">
                             <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-brand-green transition-all">
-                                <div>
-                                    <p className="text-[11px] font-bold text-black dark:text-white leading-none mb-1">Advanced Abstract Reasoning</p>
-                                    <p className="text-[10px] text-black/50 dark:text-white/50">Course • 4.5 hours</p>
+                                <div className="flex-1">
+                                    <p className="text-[11px] font-bold text-black dark:text-white leading-none mb-1">Communication Assessment</p>
+                                    <p className="text-[10px] text-black/50 dark:text-white/50">Take this to check your verbal and soft skills</p>
                                 </div>
-                                <svg className="w-4 h-4 text-brand-green group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
+                                <div className="px-3 py-1 bg-brand-green/10 text-brand-green text-[9px] font-bold rounded-lg uppercase">Suggested</div>
                             </div>
                             <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-brand-green transition-all">
-                                <div>
-                                    <p className="text-[11px] font-bold text-black dark:text-white leading-none mb-1">Quantitative shortcuts for MNCs</p>
-                                    <p className="text-[10px] text-black/50 dark:text-white/50">Masterclass • 2 hours</p>
+                                <div className="flex-1">
+                                    <p className="text-[11px] font-bold text-black dark:text-white leading-none mb-1">Role Based Questions</p>
+                                    <p className="text-[10px] text-black/50 dark:text-white/50">Validate your core technical expertise</p>
                                 </div>
-                                <svg className="w-4 h-4 text-brand-green group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
+                                <div className="px-3 py-1 bg-gray-100 dark:bg-white/10 text-black/40 dark:text-white/40 text-[9px] font-bold rounded-lg uppercase">Unlock</div>
                             </div>
                         </div>
                     </div>
                     
-                    <div className="mt-6 flex gap-3">
-                        <button className="flex-1 py-3 border border-brand-green text-brand-green font-bold text-[11px] rounded-xl uppercase tracking-widest hover:bg-brand-green/5 transition-all">
-                            Retake Test
-                        </button>
-                        <button className="flex-1 py-3 bg-brand-green text-white font-bold text-[11px] rounded-xl uppercase tracking-widest hover:bg-[#1bb85c] transition-all">
-                            Share Result
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
