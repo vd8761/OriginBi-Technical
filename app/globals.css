@@ -1,27 +1,95 @@
 @import "tailwindcss";
 
+/* Font Declarations at Top Level */
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Thin.otf');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-ExtraLight.otf');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Light.otf');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Regular.otf');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Medium.otf');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-SemiBold.otf');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-Bold.otf');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Haskoy';
+  src: url('/fonts/Haskoy-ExtraBold.otf');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark, .dark *));
 
 @theme {
   --color-brand-green: #1ed36a;
-  --color-brand-light-primary: #fafafa;
-  --color-brand-light-secondary: #f4f4f4;
-  --color-brand-light-tertiary: #ebebeb;
-  --color-brand-dark-primary: #15171a;
-  --color-brand-dark-secondary: #1a1d21;
-  --color-brand-dark-tertiary: #24272b;
-  --color-brand-text-light-primary: #15171a;
-  --color-brand-text-light-secondary: #6b7280;
+  --color-brand-light-primary: #ffffff;
+  --color-brand-light-secondary: #f7fafc;
+  --color-brand-light-tertiary: #e2e8f0;
+  --color-brand-dark-primary: #19211c;
+  --color-brand-dark-secondary: #24272b;
+  --color-brand-dark-tertiary: #303438;
+  --color-brand-text-light-primary: #2d3748;
+  --color-brand-text-light-secondary: #718096;
   --color-brand-text-primary: #ffffff;
-  --color-brand-text-secondary: #9ca3af;
+  --color-brand-text-secondary: #a0aec0;
+  
+  /* Setting the default sans font */
+  --font-sans: 'Haskoy', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 @layer base {
+  html {
+    font-family: 'Haskoy', sans-serif;
+  }
+  
   body {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 300ms;
-    @apply bg-brand-light-primary text-brand-text-light-primary dark:bg-brand-dark-primary dark:text-brand-text-primary;
+    @apply bg-brand-light-primary text-brand-text-light-primary dark:bg-brand-dark-primary dark:text-brand-text-primary font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Haskoy', sans-serif !important;
   }
 }
 
@@ -73,25 +141,6 @@
   .portal-bg {
     @apply bg-[url('/Background_Light_Theme.svg')] bg-cover bg-top bg-no-repeat dark:bg-none dark:bg-[#19211C];
   }
-}
-
-/* Custom Fonts */
-@font-face {
-  font-family: 'Haskoy';
-  src: url('/fonts/Haskoy-Thin.otf');
-  font-weight: 100;
-}
-/* ... other Haskoy font faces ... */
-
-/* Simplified for brevity, user should copy fonts folder */
-
-@keyframes fillProgress {
-  from { width: 0%; }
-  to { width: 100%; }
-}
-
-.animate-fill {
-  animation: fillProgress 5000ms linear forwards;
 }
 
 @keyframes notice-pop-in {
