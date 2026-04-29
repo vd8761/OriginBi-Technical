@@ -166,28 +166,28 @@ const AssessmentPortal: React.FC = () => {
                                 {/* Subtle decorative circle to match theme */}
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 blur-3xl rounded-full -mr-32 -mt-32"></div>
 
-                                <div className="relative z-10 p-8 lg:p-12 flex flex-col lg:flex-row gap-10 items-stretch">
+                                <div className="relative z-10 p-7 lg:p-10 flex flex-col lg:flex-row gap-8 items-stretch">
                                     <div className="flex-1 flex flex-col justify-center">
-                                        <div className="flex items-center gap-3 mb-5">
-                                            <div className="w-12 h-12 bg-brand-green/10 rounded-xl flex items-center justify-center text-brand-green border border-brand-green/30 transition-transform hover:scale-105">
-                                                <div className="scale-110">
+                                        <div className="flex items-center gap-2.5 mb-3">
+                                            <div className="w-11 h-11 bg-brand-green/10 rounded-xl flex items-center justify-center text-brand-green border border-brand-green/30 transition-transform hover:scale-105">
+                                                <div className="scale-100">
                                                     {selectedAssessment.icon}
                                                 </div>
                                             </div>
-                                            <div className="px-4 py-1 border-2 border-black dark:border-white text-black dark:text-white rounded-full text-[9px] font-black uppercase tracking-[0.2em]">
+                                            <div className="px-3 py-1 border border-black/20 dark:border-white/20 text-black dark:text-white rounded-full text-[9px] font-bold uppercase tracking-wider">
                                                 Professional Assessment
                                             </div>
                                         </div>
                                         
-                                        <h1 className="text-[clamp(28px,3.5vw,44px)] font-black text-black dark:text-white mb-4 tracking-tight leading-[1.1]">
+                                        <h1 className="text-[clamp(26px,3vw,40px)] font-black text-black dark:text-white mb-2 tracking-tight leading-[1.1]">
                                             {selectedAssessment.title}
                                         </h1>
                                         
-                                        <p className="text-[clamp(14px,1vw,16px)] text-black dark:text-white max-w-2xl leading-relaxed mb-10 font-semibold">
+                                        <p className="text-[clamp(13px,0.95vw,15px)] text-black dark:text-white max-w-2xl leading-relaxed mb-6 font-medium">
                                             {selectedAssessment.description}
                                         </p>
 
-                                        <div className="flex flex-wrap gap-10 items-center">
+                                        <div className="flex flex-wrap gap-8 items-center">
                                             <div className="flex items-center gap-4 group">
                                                 <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 flex items-center justify-center transition-colors">
                                                     <svg className="w-6 h-6 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -224,19 +224,19 @@ const AssessmentPortal: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="w-full lg:w-[340px] flex flex-col justify-center">
-                                        <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-[1.5rem] p-8 relative overflow-hidden">
-                                            <p className="text-[11px] font-medium text-white mb-2 relative z-10">Access Lifetime Report</p>
-                                            <div className="flex items-baseline gap-2 mb-8 relative z-10">
-                                                <span className="text-4xl font-black text-brand-green leading-none">{selectedAssessment.price}</span>
+                                    <div className="w-full lg:w-[320px] flex flex-col justify-center">
+                                        <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-[1.5rem] p-6 relative overflow-hidden">
+                                            <p className="text-[11px] font-medium text-white mb-1.5 relative z-10">Access Lifetime Report</p>
+                                            <div className="flex items-baseline gap-2 mb-6 relative z-10">
+                                                <span className="text-3xl font-black text-brand-green leading-none">{selectedAssessment.price}</span>
                                                 <span className="text-xs text-white font-medium">One-time</span>
                                             </div>
                                             
-                                            <button className="w-full py-4 bg-brand-green hover:bg-brand-green/90 text-white rounded-xl font-medium text-sm transition-all active:scale-95 mb-6 relative z-10 cursor-pointer">
+                                            <button className="w-full py-3.5 bg-brand-green hover:bg-[#1bb85c] text-white rounded-xl font-medium text-sm transition-all active:scale-95 mb-5 relative z-10 cursor-pointer">
                                                 Unlock Full Access
                                             </button>
                                             
-                                            <div className="space-y-3 relative z-10">
+                                            <div className="space-y-2.5 relative z-10">
                                                 <div className="flex items-center gap-2 text-[10px] font-medium text-white">
                                                     <svg className="w-4 h-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

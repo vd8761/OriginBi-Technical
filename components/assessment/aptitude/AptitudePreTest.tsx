@@ -93,7 +93,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                         </button>
                         <button
                             onClick={onStart}
-                            className="px-10 py-2.5 rounded-full bg-brand-green text-white text-sm font-medium hover:bg-brand-green/90 transition-colors active:scale-95 shadow-md shadow-brand-green/10"
+                            className="px-10 py-2.5 rounded-full bg-brand-green text-white text-sm font-medium hover:bg-[#1bb85c] transition-all active:scale-95 shadow-md shadow-brand-green/10"
                         >
                             Begin Assessment
                         </button>

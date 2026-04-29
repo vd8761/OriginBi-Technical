@@ -80,7 +80,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         </button>
                         <button
                             onClick={onConfirm}
-                            className="flex-1 py-3 rounded-full bg-brand-green text-white font-medium text-sm hover:bg-brand-green/90 transition-all shadow-md shadow-brand-green/10"
+                            className="flex-1 py-3 rounded-full bg-brand-green text-white font-medium text-sm hover:bg-[#1bb85c] transition-all shadow-md shadow-brand-green/10 active:scale-95"
                         >
                             {confirmText}
                         </button>

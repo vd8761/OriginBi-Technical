@@ -39,7 +39,7 @@ const SubmissionSuccess: React.FC<SubmissionSuccessProps> = ({
                 
                 <button
                     onClick={onAction}
-                    className="relative px-10 py-3 bg-brand-green text-white font-medium rounded-full text-sm transition-all hover:scale-105 active:scale-95"
+                    className="relative px-10 py-3 bg-brand-green text-white font-medium rounded-full text-sm transition-all hover:bg-[#1bb85c] hover:scale-105 active:scale-95 shadow-md shadow-brand-green/10"
                 >
                     {actionText}
                 </button>

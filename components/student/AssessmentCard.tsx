@@ -80,7 +80,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                     >
                         Details
                     </button>
-                    <button onClick={onClick} className="px-6 py-2 text-[11px] font-medium bg-brand-green text-white rounded-full hover:bg-brand-green/90 transition-all cursor-pointer">
+                    <button onClick={onClick} className="px-6 py-2 text-[11px] font-medium bg-brand-green text-white rounded-full hover:bg-[#1bb85c] transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md">
                         Unlock
                     </button>
                 </div>
