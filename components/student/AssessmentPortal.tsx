@@ -5,13 +5,14 @@ import AssessmentCard from './AssessmentCard';
 import AptitudePreTest from '../assessment/aptitude/AptitudePreTest';
 import CommunicationPreTest from '../assessment/communication/CommunicationPreTest';
 import RolePreTest from '../assessment/role/RolePreTest';
+import AptitudeDashboard from './AptitudeDashboard';
 import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from '../icons';
 
 const AssessmentPortal: React.FC = () => {
     const [showAptitudeModal, setShowAptitudeModal] = useState(false);
     const [showCommunicationModal, setShowCommunicationModal] = useState(false);
     const [showRoleModal, setShowRoleModal] = useState(false);
-    const [currentView, setCurrentView] = useState<"dashboard" | "assessment" | "profile" | "details">("dashboard");
+    const [currentView, setCurrentView] = useState<"dashboard" | "assessment" | "profile" | "details" | "aptitude-results">("dashboard");
     const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
     const router = useRouter();
 
@@ -19,10 +20,10 @@ const AssessmentPortal: React.FC = () => {
         {
             title: "Aptitude Assessment",
             description: "Evaluate logical thinking, numerical problem-solving, data interpretation, and abstract reasoning skills.",
-            progress: 0,
+            progress: 100,
             totalQuestions: 60,
-            completedQuestions: 0,
-            status: "not-started" as const,
+            completedQuestions: 60,
+            status: "completed" as const,
             icon: <AptitudeIcon />,
             price: "₹99.00",
             tags: ["Quantitative", "Logical", "DI", "Abstract"],
@@ -86,13 +87,21 @@ const AssessmentPortal: React.FC = () => {
 
             <Header 
                 currentView={currentView}
-                onNavigate={(view) => setCurrentView(view)}
+                onNavigate={(view) => {
+                    if (view === "dashboard") {
+                        setCurrentView("aptitude-results");
+                    } else if (view === "assessment") {
+                        setCurrentView("dashboard");
+                    } else {
+                        setCurrentView(view);
+                    }
+                }}
                 onLogout={() => console.log("Logging out...")}
             />
 
-            <div className="relative z-10 max-w-[1440px] mx-auto flex flex-col gap-6 md:gap-8 px-4 sm:px-6 lg:px-12 pt-24 pb-10">
+            <div className="relative z-10 max-w-[2000px] mx-auto flex flex-col gap-6 md:gap-8 px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 lg:pt-28 pb-10">
                 
-                {currentView === "dashboard" || currentView === "assessment" ? (
+                {currentView === "dashboard" ? (
                     <>
                         {/* Welcome Section */}
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mt-2">
@@ -162,9 +171,7 @@ const AssessmentPortal: React.FC = () => {
 
                         <div className="flex flex-col gap-6 lg:gap-8">
                             {/* Hero Section */}
-                            <div className="relative overflow-hidden bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-[2rem]">
-                                {/* Subtle decorative circle to match theme */}
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 blur-3xl rounded-full -mr-32 -mt-32"></div>
+                            <div className="relative overflow-hidden bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-3xl">
 
                                 <div className="relative z-10 p-7 lg:p-10 flex flex-col lg:flex-row gap-8 items-stretch">
                                     <div className="flex-1 flex flex-col justify-center">
@@ -258,6 +265,22 @@ const AssessmentPortal: React.FC = () => {
                             {/* Content Grid */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-2 flex flex-col gap-8">
+                                    {/* Trial Assessment Card */}
+                                    <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                                        <div className="flex-1">
+                                            <div className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-brand-green/10 text-brand-green border border-brand-green/20 mb-3">
+                                                Limited Access
+                                            </div>
+                                            <h2 className="text-xl font-bold text-brand-text-light-primary dark:text-white mb-2">Experience a Trial Assessment</h2>
+                                            <p className="text-[12px] text-black dark:text-white leading-relaxed font-medium">
+                                                Get a preview of the question types and difficulty level. Try our 10-minute mini-assessment to calibrate your readiness before unlocking the full comprehensive report.
+                                            </p>
+                                        </div>
+                                        <button className="w-full md:w-auto px-8 py-3 bg-brand-green hover:bg-[#1bb85c] text-white rounded-xl font-bold text-[12px] shadow-lg shadow-brand-green/10 transition-all active:scale-95 cursor-pointer whitespace-nowrap">
+                                            Start Trial Test
+                                        </button>
+                                    </div>
+
                                     {/* Skills Assessed */}
                                     <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8">
                                         <h2 className="text-xl font-bold text-brand-text-light-primary dark:text-white mb-6">Skills Assessed</h2>
@@ -401,6 +424,8 @@ const AssessmentPortal: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                ) : currentView === "aptitude-results" ? (
+                    <AptitudeDashboard onBack={() => setCurrentView("dashboard")} />
                 ) : (
                     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-brand-light-secondary dark:bg-brand-dark-secondary rounded-3xl border border-brand-light-tertiary dark:border-brand-dark-tertiary shadow-xl">
                         <div className="w-20 h-20 bg-brand-green/10 rounded-full flex items-center justify-center mb-6">

@@ -15,8 +15,8 @@ import {
 
 interface HeaderProps {
     onLogout?: () => void;
-    currentView?: "dashboard" | "assessment" | "profile" | "details";
-    onNavigate?: (view: "dashboard" | "assessment" | "profile" | "details") => void;
+    currentView?: "dashboard" | "assessment" | "profile" | "details" | "aptitude-results";
+    onNavigate?: (view: "dashboard" | "assessment" | "profile" | "details" | "aptitude-results") => void;
 }
 
 interface NavItemProps {
@@ -39,14 +39,14 @@ const NavItem: React.FC<NavItemProps> = ({
             <button
                 onClick={onClick}
                 className={`flex items-center gap-2 rounded-full transition-all duration-200 w-full ${
-                    isMobile ? "py-3.5 px-4" : "h-9 px-3.5"
+                    isMobile ? "py-3.5 px-4" : "lg:h-8.5 xl:h-9 2xl:h-10 px-2 xl:px-3 2xl:px-3.5"
                 } cursor-pointer ${
                     active
                         ? "bg-[#1ED36A] text-white"
-                        : "bg-gray-50 border border-gray-200 text-[#19211C] hover:bg-gray-100 hover:text-black hover:border-gray-300 dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white"
+                        : "bg-[#19211C] border border-white/10 text-white/70 hover:bg-black hover:text-white dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white"
                 }`}
             >
-                <div className={`${active ? "text-white" : "text-[#1ED36A] dark:text-brand-green"}`}>
+                <div className="text-white">
                     {icon}
                 </div>
                 <span className={`font-medium ${isMobile ? "text-sm ml-2" : "text-[10.5px] xl:text-[11.5px]"} whitespace-nowrap hidden lg:inline`}>
@@ -95,8 +95,8 @@ const Header: React.FC<HeaderProps> = ({
         setMobileMenuOpen(false);
     };
 
-    const isDashboardActive = currentView === 'dashboard';
-    const isAssessmentActive = currentView === 'assessment';
+    const isDashboardActive = currentView === 'aptitude-results';
+    const isAssessmentActive = currentView === 'dashboard';
     const isProfileActive = currentView === 'profile';
 
     const renderNavItems = (isMobile: boolean) => (
@@ -126,20 +126,19 @@ const Header: React.FC<HeaderProps> = ({
     );
 
     return (
-        <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 dark:bg-[#19211C]/95 backdrop-blur-xl border-b border-[#E0E0E0] dark:border-white/[0.08] transition-colors duration-500">
-            <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-2.5 sm:py-3 flex items-center justify-between">
+        <header className="fixed top-0 left-0 right-0 w-full z-50 bg-[#19211C]/95 backdrop-blur-xl border-b border-white/[0.08] transition-colors duration-500">
+            <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-3 sm:py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <button
                         id="mobile-menu-btn"
-                        className="md:hidden text-gray-700 dark:text-white p-1 cursor-pointer"
+                        className="md:hidden text-white p-1 cursor-pointer"
                         onClick={() => setMobileMenuOpen((p) => !p)}
                     >
                         <MenuIcon className="w-6 h-6" />
                     </button>
                     
                     <div className="flex items-center">
-                        <img src="/Origin-BI-Logo-01.png" alt="OriginBI Logo" className="h-5 lg:h-5.5 2xl:h-6 w-auto dark:hidden" />
-                        <img src="/Origin-BI-white-logo.png" alt="OriginBI Logo" className="h-5 lg:h-5.5 2xl:h-6 w-auto hidden dark:block" />
+                        <img src="/Origin-BI-white-logo.png" alt="OriginBI Logo" className="h-5 lg:h-5.5 2xl:h-6 w-auto" />
                     </div>
 
                     <nav className="hidden md:flex items-center space-x-1.5 ml-4">
@@ -164,15 +163,15 @@ const Header: React.FC<HeaderProps> = ({
                                 {user.name.substring(0, 2).toUpperCase()}
                             </div>
                             <div className="hidden xl:block text-left">
-                                <p className="font-semibold text-[13px] leading-tight text-black dark:text-white">
+                                <p className="font-semibold text-[13px] leading-tight text-white">
                                     {user.name}
                                 </p>
-                                <p className="text-[10px] text-black dark:text-white leading-tight">
+                                <p className="text-[10px] text-white/70 leading-tight">
                                     {user.email}
                                 </p>
                             </div>
                             <ChevronDownIcon
-                                className={`w-3.5 h-3.5 text-black dark:text-white transition-transform hidden sm:block ${
+                                className={`w-3.5 h-3.5 text-white transition-transform hidden sm:block ${
                                     isProfileOpen ? "rotate-180" : ""
                                 }`}
                             />
