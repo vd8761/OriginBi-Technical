@@ -80,10 +80,10 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
       onClick={handleBackdropClick}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" />
+      <div className="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md transition-opacity duration-300 animate-in fade-in" />
 
       {/* Modal */}
-      <div className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-3xl bg-white dark:bg-[#111a15] shadow-[0_32px_80px_rgba(0,0,0,0.4)]">
+      <div className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-[2rem] bg-white/95 dark:bg-[#111a15]/95 backdrop-blur-2xl shadow-[0_32px_80px_rgba(0,0,0,0.15)] dark:shadow-[0_40px_100px_rgba(0,0,0,0.5)] border border-slate-200/60 dark:border-white/10 animate-in slide-in-from-bottom-8 duration-500">
         {/* Header */}
         <div className="relative overflow-hidden">
           <div
@@ -125,38 +125,38 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+                className="group flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200/60 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-white"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-5 h-5 transform group-hover:scale-110 group-hover:rotate-90 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 mt-6">
-              <div className="rounded-xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Questions</p>
-                <p className="text-lg font-semibold text-slate-700 dark:text-white">{exam.questions}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
+              <div className="group/stat rounded-2xl bg-slate-50/50 dark:bg-white/5 p-4 border border-slate-100/50 dark:border-white/5 hover:bg-slate-100/80 dark:hover:bg-white/10 transition-all duration-300 transform hover:-translate-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 group-hover/stat:text-brand-green transition-colors">Questions</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white">{exam.questions}</p>
               </div>
-              <div className="rounded-xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Duration</p>
-                <p className="text-lg font-semibold text-slate-700 dark:text-white">{exam.duration}</p>
+              <div className="group/stat rounded-2xl bg-slate-50/50 dark:bg-white/5 p-4 border border-slate-100/50 dark:border-white/5 hover:bg-slate-100/80 dark:hover:bg-white/10 transition-all duration-300 transform hover:-translate-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 group-hover/stat:text-cyan-500 transition-colors">Duration</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white">{exam.duration}</p>
               </div>
-              <div className="rounded-xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Certificate</p>
-                <p className="text-lg font-semibold text-slate-700 dark:text-white">Included</p>
+              <div className="group/stat rounded-2xl bg-slate-50/50 dark:bg-white/5 p-4 border border-slate-100/50 dark:border-white/5 hover:bg-slate-100/80 dark:hover:bg-white/10 transition-all duration-300 transform hover:-translate-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 group-hover/stat:text-purple-500 transition-colors">Certificate</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white">Included</p>
               </div>
-              <div className="rounded-xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Starting at</p>
-                <p className="text-lg font-semibold" style={{ color: exam.accentColor }}>₹{exam.price}</p>
+              <div className="group/stat rounded-2xl bg-slate-50/50 dark:bg-white/5 p-4 border border-slate-100/50 dark:border-white/5 hover:bg-slate-100/80 dark:hover:bg-white/10 transition-all duration-300 transform hover:-translate-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Starting at</p>
+                <p className="text-xl font-bold" style={{ color: exam.accentColor }}>₹{exam.price}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 px-6 sm:px-8 border-b border-slate-100 dark:border-white/5">
+        <div className="flex items-center gap-2 px-6 sm:px-8 border-b border-slate-100/60 dark:border-white/5 relative">
           {[
             { id: "overview", label: "Overview", icon: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
             { id: "pricing", label: "Pricing", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
@@ -167,17 +167,21 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
               type="button"
               onClick={() => setActiveTab(tab.id as TabType)}
               className={`
-                flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200
-                border-b-2 -mb-px
+                relative flex items-center gap-2 px-4 py-4 text-sm font-semibold transition-all duration-300
                 ${
                   activeTab === tab.id
-                    ? "border-current text-slate-800 dark:text-white"
-                    : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    ? "text-slate-900 dark:text-white"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-white/5 rounded-t-xl"
                 }
               `}
-              style={{ borderColor: activeTab === tab.id ? exam.accentColor : undefined }}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              {activeTab === tab.id && (
+                <span 
+                  className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full shadow-[0_-2px_8px_currentColor]"
+                  style={{ background: exam.accentColor }} 
+                />
+              )}
+              <svg className={`w-4 h-4 ${activeTab === tab.id ? 'transform scale-110 transition-transform' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
               </svg>
               {tab.label}
@@ -197,15 +201,16 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
 
               {/* Skills */}
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Skills assessed</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-4">Skills assessed</h3>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  {detail.skills.map((skill) => (
+                  {detail.skills.map((skill, i) => (
                     <div
                       key={skill.title}
-                      className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5"
+                      className="group p-5 rounded-2xl bg-slate-50/50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 hover:shadow-md hover:-translate-y-1 transition-all duration-300"
+                      style={{ animationDelay: `${i * 100}ms` }}
                     >
-                      <h4 className="font-medium text-slate-800 dark:text-white mb-1">{skill.title}</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{skill.description}</p>
+                      <h4 className="font-bold text-slate-800 dark:text-white mb-2 group-hover:text-brand-green transition-colors">{skill.title}</h4>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{skill.description}</p>
                     </div>
                   ))}
                 </div>
@@ -264,21 +269,24 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
                 </p>
               </div>
 
-              <div className="grid sm:grid-cols-3 gap-4">
-                {detail.pricingTiers.map((tier) => (
+              <div className="grid sm:grid-cols-3 gap-5">
+                {detail.pricingTiers.map((tier, i) => (
                   <div
                     key={tier.id}
                     onClick={() => setSelectedTier(tier.id)}
                     className={`
-                      relative p-5 rounded-2xl cursor-pointer transition-all duration-200
+                      group relative p-6 rounded-[2rem] cursor-pointer transition-all duration-300 animate-slide-up overflow-hidden
                       ${
                         selectedTier === tier.id
-                          ? "ring-2 bg-white dark:bg-[#161f1a] shadow-lg"
-                          : "bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10"
+                          ? "ring-2 bg-white dark:bg-[#161f1a] shadow-xl -translate-y-2"
+                          : "bg-slate-50/80 dark:bg-white/5 border border-slate-200/50 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-lg"
                       }
                     `}
-                    style={{ "--tw-ring-color": selectedTier === tier.id ? exam.accentColor : undefined } as React.CSSProperties}
+                    style={{ "--tw-ring-color": selectedTier === tier.id ? exam.accentColor : undefined, animationDelay: `${i * 150}ms` } as React.CSSProperties}
                   >
+                    {selectedTier === tier.id && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-50 pointer-events-none" />
+                    )}
                     {tier.popular && (
                       <div
                         className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold text-white"
@@ -404,35 +412,42 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-4 p-6 sm:p-8 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 sm:p-8 border-t border-slate-100/60 dark:border-white/5 bg-slate-50/30 dark:bg-black/20">
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/5"
+            className="w-full sm:w-auto px-6 py-3.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 transition-all hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white"
           >
-            Close
+            Cancel
           </button>
           <button
             type="button"
             onClick={handleStartExam}
             disabled={!exam.available}
-            className="px-8 py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full sm:w-auto group relative overflow-hidden px-8 py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none disabled:hover:shadow-none flex items-center justify-center gap-2"
             style={{ background: exam.gradient }}
           >
+            {exam.available && (
+                <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12" />
+            )}
             {exam.available ? (
               <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {selectedTier ? `Pay ₹${detail.pricingTiers.find(t => t.id === selectedTier)?.price} & Start` : "Start Free Trial"}
+                <span className="relative z-10 flex items-center gap-2">
+                  <svg className="w-4 h-4 transform group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {selectedTier ? `Pay ₹${detail.pricingTiers.find(t => t.id === selectedTier)?.price} & Start` : "Start Free Trial"}
+                </span>
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Coming Soon
+                <span className="relative z-10 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Coming Soon
+                </span>
               </>
             )}
           </button>

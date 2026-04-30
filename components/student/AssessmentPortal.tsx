@@ -432,72 +432,135 @@ const AssessmentPortal: React.FC = () => {
       <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
         {currentView === "dashboard" || currentView === "assessment" ? (
           <>
-            {/* Hero Section - Lighter, refined typography */}
-            <section className="relative overflow-hidden rounded-3xl bg-white/80 dark:bg-[#111a15]/80 backdrop-blur-xl border border-slate-200/60 dark:border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.08)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.3)] p-8 sm:p-12">
-              {/* Decorative gradient orb */}
-              <div className="absolute -top-32 -right-32 w-64 h-64 bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 rounded-full blur-3xl" />
+            {/* Hero Section - Ultra Premium Design */}
+            <section className="relative overflow-hidden rounded-[2.5rem] bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-2xl border border-white/80 dark:border-white/10 shadow-[0_20px_60px_rgba(30,211,106,0.05)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)] p-8 sm:p-12 lg:p-16 group transition-all duration-700 hover:shadow-[0_30px_80px_rgba(30,211,106,0.08)]">
+              {/* Dynamic Animated Orbs */}
+              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 animate-float-slow opacity-80 group-hover:opacity-100 transition-opacity duration-700 mix-blend-multiply dark:mix-blend-screen" />
+              <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-brand-green/10 to-teal-400/20 rounded-full blur-[60px] translate-y-1/3 -translate-x-1/4 animate-float-slower opacity-60 group-hover:opacity-90 transition-opacity duration-700 mix-blend-multiply dark:mix-blend-screen" />
               
-              <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] items-center">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 mb-6">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                      {readyExams.length} exams available now
+              <div className="relative z-10 grid gap-12 lg:grid-cols-[1.2fr_1fr] items-center">
+                <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+                  <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/20 mb-8 backdrop-blur-md shadow-sm transform transition-all duration-300 hover:scale-105 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/20 cursor-default">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 tracking-wide">
+                      {readyExams.length} Premium Exams Live
                     </span>
                   </div>
                   
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-slate-800 dark:text-white tracking-tight leading-[1.15]">
-                    Discover your potential with
-                    <span className="block mt-1 bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-transparent">
-                      professional assessments
+                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-[1.1] mb-6">
+                    Elevate your career with
+                    <span className="block mt-2 bg-gradient-to-r from-emerald-500 via-brand-green to-cyan-500 bg-clip-text text-transparent pb-2 animate-pulse" style={{ animationDuration: '4s' }}>
+                      precision insights.
                     </span>
                   </h1>
                   
-                  <p className="mt-6 text-lg text-slate-500 dark:text-slate-400 max-w-2xl font-light leading-relaxed">
-                    Choose from our curated selection of industry-recognized exams. 
-                    Get detailed insights, skill gap analysis, and personalized recommendations.
+                  <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl font-light leading-relaxed mb-8">
+                    Step into the future of hiring. AI-driven assessments that don't just test you—they <strong className="font-semibold text-slate-800 dark:text-slate-200">reveal your true potential</strong> and guide your growth.
                   </p>
+
+                  <div className="flex flex-wrap gap-4">
+                    <button className="px-8 py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold shadow-xl shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                      Explore Library
+                    </button>
+                    <button className="px-8 py-4 rounded-2xl bg-white dark:bg-white/5 text-slate-700 dark:text-white font-semibold border border-slate-200 dark:border-white/10 shadow-sm hover:bg-slate-50 dark:hover:bg-white/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Watch Demo
+                    </button>
+                  </div>
                 </div>
 
-                {/* Quick Stats */}
-                <div className="flex lg:flex-col gap-4">
-                  <div className="flex-1 lg:flex-none p-5 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center lg:text-left">
-                    <p className="text-3xl font-medium text-slate-800 dark:text-white">{EXAMS.length}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Total Exams</p>
+                {/* Glassmorphic Stats Grid */}
+                <div className="grid grid-cols-2 gap-4 sm:gap-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
+                  <div className="group relative p-6 rounded-3xl bg-white/40 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-300 overflow-hidden col-span-2 sm:col-span-1">
+                    <div className="absolute inset-0 bg-gradient-to-br from-brand-green/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="relative z-10 flex flex-col items-center sm:items-start text-center sm:text-left">
+                      <div className="p-3 bg-white dark:bg-white/10 rounded-2xl shadow-sm mb-4 text-brand-green">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                      </div>
+                      <p className="text-4xl font-bold text-slate-800 dark:text-white tracking-tight">{EXAMS.length}</p>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">Curated Exams</p>
+                    </div>
                   </div>
-                  <div className="flex-1 lg:flex-none p-5 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center lg:text-left">
-                    <p className="text-3xl font-medium text-slate-800 dark:text-white">{readyExams.length}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Available Now</p>
+                  
+                  <div className="group relative p-6 rounded-3xl bg-white/40 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-300 overflow-hidden col-span-2 sm:col-span-1">
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="relative z-10 flex flex-col items-center sm:items-start text-center sm:text-left">
+                      <div className="p-3 bg-white dark:bg-white/10 rounded-2xl shadow-sm mb-4 text-cyan-500">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      <p className="text-4xl font-bold text-slate-800 dark:text-white tracking-tight">{readyExams.length}</p>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">Available Now</p>
+                    </div>
                   </div>
-                  <div className="flex-1 lg:flex-none p-5 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center lg:text-left">
-                    <p className="text-3xl font-medium text-slate-800 dark:text-white">{totalQuestions}+</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Questions</p>
+                  
+                  <div className="group relative p-6 rounded-3xl bg-white/40 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-300 overflow-hidden col-span-2">
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-400/10 to-pink-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="relative z-10 flex flex-col sm:flex-row items-center sm:justify-between gap-4 text-center sm:text-left">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white dark:bg-white/10 rounded-2xl shadow-sm text-purple-500">
+                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{totalQuestions}+</p>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Unique Questions</p>
+                        </div>
+                      </div>
+                      <div className="flex -space-x-3">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="w-10 h-10 rounded-full border-2 border-white dark:border-[#111a15] bg-slate-200 dark:bg-slate-700 shadow-sm" style={{ backgroundImage: `url('https://i.pravatar.cc/100?img=${i}')`, backgroundSize: 'cover' }} />
+                        ))}
+                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-[#111a15] bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm z-10">
+                          +2k
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
 
             {/* Filter Tabs */}
-            <section className="flex flex-wrap items-center gap-2">
-              {FILTERS.map((item) => {
-                const isActive = filter === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setFilter(item.value)}
-                    className={`
-                      px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
-                      ${isActive 
-                        ? "bg-slate-800 dark:bg-white text-white dark:text-slate-900 shadow-lg" 
-                        : "bg-white dark:bg-[#1a231e] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
-                      }
-                    `}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
+            <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 animate-slide-up" style={{ animationDelay: '300ms' }}>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Browse Categories</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Find the perfect assessment for your goals</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-white/60 dark:bg-[#1a231e]/80 backdrop-blur-md rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={`
+                        relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 overflow-hidden
+                        ${isActive 
+                          ? "text-white shadow-md" 
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-white/5"
+                        }
+                      `}
+                    >
+                      {isActive && (
+                        <span className="absolute inset-0 bg-slate-800 dark:bg-white rounded-xl -z-10 animate-fade-in-scale" />
+                      )}
+                      <span className="relative z-10">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </section>
 
             {/* Exam Carousel */}
@@ -509,33 +572,24 @@ const AssessmentPortal: React.FC = () => {
               />
             </section>
 
-            {/* Trust Badges */}
-            <section className="py-8 border-t border-slate-200 dark:border-white/10">
-              <div className="flex flex-wrap items-center justify-center gap-8 text-slate-400 dark:text-slate-500">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  <span className="text-sm font-medium">Secure Payments</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-sm font-medium">Instant Results</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
-                  <span className="text-sm font-medium">Expert Verified</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span className="text-sm font-medium">Free Retakes</span>
-                </div>
+            {/* Trust Badges - Enhanced */}
+            <section className="py-10 border-t border-slate-200/60 dark:border-white/10 mt-4 animate-slide-up" style={{ animationDelay: '500ms' }}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {[
+                  { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", label: "Bank-Grade Security", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+                  { icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", label: "Instant Analytics", color: "text-cyan-500", bg: "bg-cyan-500/10" },
+                  { icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253", label: "Industry Certified", color: "text-purple-500", bg: "bg-purple-500/10" },
+                  { icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15", label: "Unlimited Retakes", color: "text-amber-500", bg: "bg-amber-500/10" }
+                ].map((badge, i) => (
+                  <div key={i} className="group flex flex-col items-center justify-center p-6 rounded-3xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 text-center">
+                    <div className={`p-4 rounded-2xl ${badge.bg} ${badge.color} mb-4 transform group-hover:scale-110 transition-transform duration-300`}>
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d={badge.icon} />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{badge.label}</span>
+                  </div>
+                ))}
               </div>
             </section>
           </>

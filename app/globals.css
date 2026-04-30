@@ -287,6 +287,10 @@
   animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
 }
 
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
 /* Glass morphism utilities */
 .glass {
   @apply bg-white/80 dark:bg-[#111a15]/80 backdrop-blur-xl;

@@ -165,7 +165,10 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                 `}
               >
                 {/* Card */}
-                <div className="relative overflow-hidden rounded-3xl bg-white/90 dark:bg-[#161f1a]/90 backdrop-blur-xl border border-slate-200/60 dark:border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.12)] dark:shadow-[0_32px_64px_rgba(0,0,0,0.4)]">
+                <div className="relative overflow-hidden rounded-[2rem] bg-white/90 dark:bg-[#161f1a]/90 backdrop-blur-xl border border-slate-200/60 dark:border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.12)] dark:shadow-[0_32px_64px_rgba(0,0,0,0.4)] transition-all duration-500 hover:shadow-[0_40px_80px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_40px_80px_rgba(30,211,106,0.1)] group/card">
+                  {/* Decorative background for the card */}
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-current to-transparent opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover/card:opacity-10 transition-opacity duration-500 pointer-events-none" style={{ color: exam.accentColor }} />
+                  
                   {/* Top Gradient Bar */}
                   <div
                     className="h-1.5 w-full"
@@ -232,43 +235,47 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-3 gap-4 mb-8">
-                      <div className="rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                        <div className="flex items-center gap-2 mb-2">
-                          <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <div className="group/stat rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
+                        <div className="relative z-10 flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-slate-400 group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
                           <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Questions</span>
                         </div>
-                        <p className="text-xl font-semibold text-slate-700 dark:text-white">{exam.questions}</p>
+                        <p className="relative z-10 text-xl font-bold text-slate-700 dark:text-white transform group-hover/stat:scale-105 transition-transform origin-left">{exam.questions}</p>
                       </div>
 
-                      <div className="rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                        <div className="flex items-center gap-2 mb-2">
-                          <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <div className="group/stat rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
+                        <div className="relative z-10 flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-slate-400 group-hover/stat:text-cyan-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Duration</span>
                         </div>
-                        <p className="text-xl font-semibold text-slate-700 dark:text-white">{exam.duration}</p>
+                        <p className="relative z-10 text-xl font-bold text-slate-700 dark:text-white transform group-hover/stat:scale-105 transition-transform origin-left">{exam.duration}</p>
                       </div>
 
-                      <div className="rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5">
-                        <div className="flex items-center gap-2 mb-2">
-                          <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <div className="group/stat rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
+                        <div className="relative z-10 flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-slate-400 group-hover/stat:text-purple-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                           </svg>
                           <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Certificate</span>
                         </div>
-                        <p className="text-xl font-semibold text-slate-700 dark:text-white">Yes</p>
+                        <p className="relative z-10 text-xl font-bold text-slate-700 dark:text-white transform group-hover/stat:scale-105 transition-transform origin-left">Yes</p>
                       </div>
                     </div>
 
                     {/* Tags */}
                     <div className="flex flex-wrap gap-2 mb-8">
-                      {exam.tags.map((tag) => (
+                      {exam.tags.map((tag, i) => (
                         <span
                           key={tag}
-                          className="rounded-lg bg-slate-100/80 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-white/5"
+                          className="rounded-lg bg-slate-100/80 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/10 hover:-translate-y-0.5 transition-all duration-300 cursor-default"
+                          style={{ animationDelay: `${i * 100}ms` }}
                         >
                           {tag}
                         </span>
@@ -280,9 +287,9 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                       <button
                         type="button"
                         onClick={() => onSelectExam(exam)}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-6 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition-all duration-200 hover:bg-slate-50 dark:hover:bg-white/5 hover:border-slate-300 dark:hover:border-white/20"
+                        className="flex-1 group/btn inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-6 py-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:shadow-md active:scale-95"
                       >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg className="w-4 h-4 transform group-hover/btn:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         View Details
@@ -291,23 +298,29 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                         type="button"
                         onClick={() => onStartExam(exam)}
                         disabled={!exam.available}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="relative overflow-hidden flex-1 group/btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg active:scale-95"
                         style={{ background: exam.gradient }}
                       >
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 -translate-x-full group-hover/btn:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12" />
+                        
                         {exam.available ? (
                           <>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Start Exam
+                            <span className="relative z-10 flex items-center gap-2">
+                              Start Exam
+                              <svg className="w-4 h-4 transform group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
+                            </span>
                           </>
                         ) : (
                           <>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Coming Soon
+                            <span className="relative z-10 flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Coming Soon
+                            </span>
                           </>
                         )}
                       </button>
