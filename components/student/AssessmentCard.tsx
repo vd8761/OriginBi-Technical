@@ -1,91 +1,114 @@
 interface AssessmentCardProps {
     title: string;
     description: string;
-    progress: number;
+    statusLabel: string;
+    statusTone: string;
     totalQuestions: number;
-    completedQuestions: number;
-    status: 'not-started' | 'in-progress' | 'completed';
+    duration: string;
+    price: string;
+    tags: string[];
     icon: React.ReactNode;
-    price?: string;
-    tags?: string[];
-    duration?: string;
-    onDetailsClick?: () => void;
-    onClick?: () => void;
+    available: boolean;
+    level: string;
+    insight: string;
+    onDetailsClick: () => void;
+    onStartClick: () => void;
 }
 
 const AssessmentCard: React.FC<AssessmentCardProps> = ({
     title,
     description,
+    statusLabel,
+    statusTone,
     totalQuestions,
-    completedQuestions,
-    duration = "45 Mins",
+    duration,
+    price,
+    tags,
     icon,
-    price = "₹0.00",
-    tags = [],
+    available,
+    level,
+    insight,
     onDetailsClick,
-    onClick
+    onStartClick,
 }) => {
     return (
-        <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] hover:shadow-xl hover:border-brand-green/20">
-            <div className="flex gap-4 mb-4">
-                {/* Left: Hero Icon */}
-                <div className="flex items-center justify-center shrink-0 w-12 h-12 bg-brand-green/10 rounded-2xl text-brand-green transition-transform duration-500 group-hover:scale-110">
-                    {icon}
-                </div>
-
-                <div className="flex-1 min-w-0 flex items-center">
-                    <h3 className="text-lg font-bold text-black dark:text-white transition-colors">{title}</h3>
-                </div>
-            </div>
-
-            <div className="flex-1 flex flex-col">
-                <p className="text-[13px] text-black dark:text-white line-clamp-2 leading-relaxed mb-4">{description}</p>
-                
-                {/* Stats Row */}
-                <div className="flex items-center gap-6 mb-4">
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1">Questions</span>
-                        <span className="text-xs font-bold text-black dark:text-white">{totalQuestions} Qs</span>
+        <article className="group flex h-full flex-col rounded-lg border border-slate-200 bg-white shadow-[0_16px_48px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1 hover:border-brand-green/40 hover:shadow-[0_22px_60px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#111a15] dark:shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+            <div className="flex flex-1 flex-col p-5 sm:p-6">
+                <div className="mb-5 flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-green/20 bg-brand-green/10 text-brand-green">
+                            {icon}
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-base font-extrabold leading-snug text-[#17201b] dark:text-white">
+                                {title}
+                            </h3>
+                            <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
+                                {level}
+                            </p>
+                        </div>
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1">Duration</span>
-                        <span className="text-xs font-bold text-black dark:text-white">{duration}</span>
+
+                    <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-bold ${statusTone}`}>
+                        {statusLabel}
+                    </span>
+                </div>
+
+                <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    {description}
+                </p>
+
+                <div className="my-5 grid grid-cols-3 gap-3 border-y border-slate-100 py-4 dark:border-white/10">
+                    <div>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Questions</p>
+                        <p className="mt-1 text-sm font-extrabold text-[#17201b] dark:text-white">{totalQuestions}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Duration</p>
+                        <p className="mt-1 text-sm font-extrabold text-[#17201b] dark:text-white">{duration}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Access</p>
+                        <p className="mt-1 text-sm font-extrabold text-[#17201b] dark:text-white">{price}</p>
                     </div>
                 </div>
 
-                {/* Badges/Tags - Now at the bottom after para */}
-                <div className="flex flex-wrap gap-2 mb-6 mt-auto">
-                    {tags.map((tag, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-md text-[9px] font-bold text-black dark:text-white uppercase tracking-wider">
+                <div className="mb-5 flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                        <span
+                            key={tag}
+                            className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
+                        >
                             {tag}
                         </span>
                     ))}
                 </div>
-            </div>
 
-            {/* Thin Line Separator */}
-            <div className="h-[1px] w-full bg-gray-100 dark:bg-white/10 mb-5"></div>
-
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-black dark:text-white uppercase tracking-widest leading-none">Price</span>
-                    <span className="text-[15px] font-black text-brand-green mt-1">{price}</span>
-                </div>
-                
-                <div className="flex gap-2">
-                    <button 
-                        onClick={onDetailsClick}
-                        className="px-4 py-2.5 text-[10px] font-bold text-brand-green border border-brand-green/20 hover:bg-brand-green/5 rounded-full transition-all cursor-pointer uppercase tracking-wider"
-                    >
-                        Details
-                    </button>
-                    <button onClick={onClick} className="px-6 py-2.5 text-[10px] font-bold bg-brand-green text-white rounded-full hover:bg-brand-green/90 transition-all cursor-pointer uppercase tracking-wider">
-                        Unlock
-                    </button>
+                <div className="mt-auto rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Report focus</p>
+                    <p className="mt-1 text-sm font-bold leading-5 text-[#17201b] dark:text-white">{insight}</p>
                 </div>
             </div>
-        </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 p-4 sm:flex-row dark:border-white/10">
+                <button
+                    type="button"
+                    onClick={onDetailsClick}
+                    className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-white/15 dark:text-white dark:hover:border-brand-green dark:focus-visible:ring-offset-[#111a15]"
+                >
+                    Details
+                </button>
+                <button
+                    type="button"
+                    onClick={onStartClick}
+                    disabled={!available}
+                    className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-brand-green px-4 text-sm font-extrabold text-[#0f1712] transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 dark:focus-visible:ring-offset-[#111a15] dark:disabled:bg-white/10 dark:disabled:text-slate-400"
+                    aria-label={available ? `Start ${title}` : `${title} is launching soon`}
+                >
+                    {available ? "Start" : "Soon"}
+                </button>
+            </div>
+        </article>
     );
 };
 
