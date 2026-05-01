@@ -53,8 +53,8 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
                             />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-4xl font-black text-black dark:text-white">78%</span>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-black/50 dark:text-white/50">Overall Score</span>
+                            <span className="text-4xl font-bold text-slate-900 dark:text-white">78%</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-gray-400">Overall Score</span>
                         </div>
                     </div>
 
@@ -63,28 +63,28 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
                             <div className="w-10 h-10 bg-brand-green/10 rounded-xl flex items-center justify-center text-brand-green border border-brand-green/30">
                                 <AptitudeIcon />
                             </div>
-                            <h2 className="text-2xl font-black text-black dark:text-white">Aptitude Performance</h2>
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Aptitude Performance</h2>
                         </div>
-                        <p className="text-sm text-black dark:text-white/80 max-w-xl mb-6 font-medium leading-relaxed">
+                        <p className="text-sm text-slate-600 dark:text-gray-300 max-w-xl mb-6 font-normal leading-relaxed">
                             You have a strong ability to solve complex problems and work with numbers accurately. Your results show that you are a great fit for roles that require careful thinking and data analysis.
                         </p>
                         
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div className="bg-gray-50 dark:bg-white/5 p-3.5 rounded-2xl border border-gray-100 dark:border-white/10">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40 mb-1.5">Conceptual Grip</p>
-                                <p className="text-xl font-black text-black dark:text-white">Advanced</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 dark:text-gray-400 mb-1.5">Conceptual Grip</p>
+                                <p className="text-xl font-bold text-slate-800 dark:text-white">Advanced</p>
                             </div>
                             <div className="bg-gray-50 dark:bg-white/5 p-3.5 rounded-2xl border border-gray-100 dark:border-white/10">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40 mb-1.5">Thinking Speed</p>
-                                <p className="text-xl font-black text-black dark:text-white">42s / qn</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 dark:text-gray-400 mb-1.5">Thinking Speed</p>
+                                <p className="text-xl font-bold text-slate-800 dark:text-white">42s / qn</p>
                             </div>
                             <div className="bg-gray-50 dark:bg-white/5 p-3.5 rounded-2xl border border-gray-100 dark:border-white/10">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40 mb-1.5">Logic Accuracy</p>
-                                <p className="text-xl font-black text-brand-green">88.4%</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 dark:text-gray-400 mb-1.5">Logic Accuracy</p>
+                                <p className="text-xl font-bold text-brand-green">88.4%</p>
                             </div>
                             <div className="bg-gray-50 dark:bg-white/5 p-3.5 rounded-2xl border border-gray-100 dark:border-white/10">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40 mb-1.5">Total Questions</p>
-                                <p className="text-xl font-black text-black dark:text-white">60 / 60</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 dark:text-gray-400 mb-1.5">Total Questions</p>
+                                <p className="text-xl font-bold text-slate-800 dark:text-white">60 / 60</p>
                             </div>
                         </div>
                     </div>
@@ -95,13 +95,13 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Sectional Breakdown */}
                 <div className="lg:col-span-2 bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6">
-                    <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider mb-6">Sectional Analysis</h3>
+                    <h3 className="text-sm font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-6">Sectional Analysis</h3>
                     <div className="flex flex-col gap-6">
                         {performanceData.map((item, idx) => (
                             <div key={idx} className="group">
                                 <div className="flex justify-between items-end mb-2">
-                                    <span className="text-[11px] font-bold text-black dark:text-white uppercase tracking-wider">{item.topic}</span>
-                                    <span className="text-[11px] font-black text-black dark:text-white">{item.score}%</span>
+                                    <span className="text-[11px] font-semibold text-slate-800 dark:text-white uppercase tracking-wider">{item.topic}</span>
+                                    <span className="text-[11px] font-bold text-slate-900 dark:text-white">{item.score}%</span>
                                 </div>
                                 <div className="h-2 w-full bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                                     <div 
@@ -116,7 +116,7 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
 
                 {/* Mind Analysis Card */}
                 <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col">
-                    <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider mb-6">Mind Analysis</h3>
+                    <h3 className="text-sm font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-6">Mind Analysis</h3>
                     <div className="flex flex-col gap-4 flex-1">
                         {insights.map((insight, idx) => (
                             <div key={idx} className={`p-4 rounded-2xl border ${
@@ -124,14 +124,14 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
                                 insight.type === 'improvement' ? 'bg-amber-500/5 border-amber-500/20' : 
                                 'bg-blue-500/5 border-blue-500/20'
                             }`}>
-                                <p className="text-[12px] font-medium text-black dark:text-white leading-relaxed">
+                                <p className="text-[12px] font-normal text-slate-700 dark:text-gray-300 leading-relaxed">
                                     {insight.text}
                                 </p>
                             </div>
                         ))}
                     </div>
                     
-                    <button className="w-full mt-6 py-3 bg-black dark:bg-white text-white dark:text-black font-bold text-[11px] rounded-xl uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all">
+                    <button className="w-full mt-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-[11px] rounded-xl uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all">
                         View Detailed roadmap
                     </button>
                 </div>
@@ -140,7 +140,7 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
             {/* Bottom Comparison Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6">
-                    <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider mb-4">Competency Radar</h3>
+                    <h3 className="text-sm font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-4">Competency Radar</h3>
                     <div className="aspect-square w-full max-w-[320px] mx-auto relative flex items-center justify-center p-4">
                         <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl">
                             {/* Radar Background Circles */}
@@ -219,7 +219,7 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
                                         textAnchor="middle"
                                         dominantBaseline="middle"
                                         fill="currentColor"
-                                        className="text-[3px] font-bold uppercase tracking-tighter text-black/40 dark:text-white/40"
+                                        className="text-[3px] font-semibold uppercase tracking-tighter text-slate-500 dark:text-gray-500"
                                     >
                                         {d.topic.substring(0, 4)}
                                     </text>
@@ -231,19 +231,19 @@ const AptitudeDashboard: React.FC<AptitudeDashboardProps> = ({ onBack }) => {
                 
                 <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col justify-between">
                     <div>
-                        <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider mb-4">Recommended Next Steps</h3>
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-4">Recommended Next Steps</h3>
                         <div className="space-y-3">
                             <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-brand-green transition-all">
                                 <div className="flex-1">
-                                    <p className="text-[11px] font-bold text-black dark:text-white leading-none mb-1">Communication Assessment</p>
-                                    <p className="text-[10px] text-black/50 dark:text-white/50">Take this to check your verbal and soft skills</p>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-white leading-none mb-1">Communication Assessment</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-gray-400">Take this to check your verbal and soft skills</p>
                                 </div>
                                 <div className="px-3 py-1 bg-brand-green/10 text-brand-green text-[9px] font-bold rounded-lg uppercase">Suggested</div>
                             </div>
                             <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-brand-green transition-all">
                                 <div className="flex-1">
-                                    <p className="text-[11px] font-bold text-black dark:text-white leading-none mb-1">Role Based Questions</p>
-                                    <p className="text-[10px] text-black/50 dark:text-white/50">Validate your core technical expertise</p>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-white leading-none mb-1">Role Based Questions</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-gray-400">Validate your core technical expertise</p>
                                 </div>
                                 <div className="px-3 py-1 bg-gray-100 dark:bg-white/10 text-black/40 dark:text-white/40 text-[9px] font-bold rounded-lg uppercase">Unlock</div>
                             </div>

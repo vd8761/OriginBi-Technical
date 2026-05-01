@@ -34,29 +34,29 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                 </div>
 
                 <div className="flex-1 min-w-0 flex items-center">
-                    <h3 className="text-lg font-bold text-black dark:text-white transition-colors">{title}</h3>
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white transition-colors">{title}</h3>
                 </div>
             </div>
 
             <div className="flex-1 flex flex-col">
-                <p className="text-[13px] text-black dark:text-white line-clamp-2 leading-relaxed mb-4 font-medium">{description}</p>
-                
+                <p className="text-[13px] text-slate-600 dark:text-gray-300 line-clamp-2 leading-relaxed mb-4 font-normal">{description}</p>
+
                 {/* Stats Row */}
                 <div className="flex items-center gap-6 mb-4">
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1">Questions</span>
-                        <span className="text-xs font-bold text-black dark:text-white">{totalQuestions} Qs</span>
+                        <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Questions</span>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-white">{totalQuestions} Qs</span>
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-black dark:text-white uppercase tracking-widest leading-none mb-1">Duration</span>
-                        <span className="text-xs font-bold text-black dark:text-white">{duration}</span>
+                        <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Duration</span>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-white">{duration}</span>
                     </div>
                 </div>
 
                 {/* Badges/Tags - Now at the bottom after para */}
                 <div className="flex flex-wrap gap-2 mb-6 mt-auto">
                     {tags.map((tag, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md text-[9px] font-bold text-black dark:text-white uppercase tracking-wider">
+                        <span key={idx} className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-[9px] font-semibold text-slate-600 dark:text-gray-300 uppercase tracking-wider">
                             {tag}
                         </span>
                     ))}
@@ -69,19 +69,26 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             {/* Bottom Actions */}
             <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-black dark:text-white uppercase tracking-widest leading-none">Price</span>
-                    <span className="text-[15px] font-black text-brand-green mt-1">{price}</span>
+                    <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none">Price</span>
+                    <span className="text-[15px] font-bold text-brand-green mt-1">{price}</span>
                 </div>
-                
+
                 <div className="flex gap-2">
-                    <button 
+                    <button
                         onClick={onDetailsClick}
                         className="px-5 py-2 text-[11px] font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
                     >
                         Details
                     </button>
-                    <button onClick={onClick} className="px-6 py-2 text-[11px] font-medium bg-brand-green text-white rounded-full hover:bg-[#1bb85c] transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md">
-                        Unlock
+                    <button 
+                        onClick={onClick} 
+                        className={`px-6 py-2 text-[11px] font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
+                            status === 'completed' 
+                                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90' 
+                                : 'bg-brand-green text-white hover:bg-[#1bb85c]'
+                        }`}
+                    >
+                        {status === 'completed' ? 'View Results' : status === 'in-progress' ? 'Resume' : 'Start Test'}
                     </button>
                 </div>
             </div>
