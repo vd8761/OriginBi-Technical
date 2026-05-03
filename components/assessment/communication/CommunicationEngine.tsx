@@ -118,6 +118,8 @@ const MOCK_TASKS: AssessmentTask[] = [
     }
 ];
 
+import ConfirmationModal from '../../ui/ConfirmationModal';
+
 interface CommunicationEngineProps {
     onComplete: (data: Record<string, any>) => void;
 }
@@ -126,13 +128,14 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     const [currentIndex, setCurrentIndex] = useState(0);
     const [timeLeft, setTimeLeft] = useState(45 * 60); // 45 mins
     const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
     
     const currentTask = MOCK_TASKS[currentIndex];
 
     // Timer Logic
     useEffect(() => {
         if (timeLeft <= 0) {
-            handleSubmit();
+            confirmSubmit();
             return;
         }
         const timerId = setInterval(() => {
@@ -160,6 +163,11 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     };
 
     const handleSubmit = () => {
+        setShowSubmitModal(true);
+    };
+
+    const confirmSubmit = () => {
+        setShowSubmitModal(false);
         onComplete(answers);
     };
 
@@ -188,20 +196,20 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     return (
         <div className="h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary flex flex-col font-sans transition-colors duration-500 overflow-hidden">
             {/* Top Bar */}
-            <header className="h-14 border-b border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-[#1A1D21] flex items-center justify-between px-6 sticky top-0 z-50">
+            <header className="h-14 border-b border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary flex items-center justify-between px-6 sticky top-0 z-50">
                 <div className="flex items-center gap-4">
                     <div className="scale-75 origin-left">
                         <Logo />
                     </div>
                     <div className="h-4 w-px bg-brand-light-tertiary dark:bg-white/10 hidden md:block"></div>
-                    <span className="text-[11px] font-bold text-brand-text-light-secondary dark:text-gray-400 hidden md:block uppercase tracking-wider">
+                    <span className="text-[11px] font-bold text-black dark:text-white hidden md:block uppercase tracking-wider">
                         Communication Assessment
                     </span>
                 </div>
 
                 <div className="flex items-center gap-6">
                     {/* Timer */}
-                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft < 300 ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400 animate-pulse' : 'bg-black/5 dark:bg-white/5 border-transparent text-brand-text-light-primary dark:text-white'}`}>
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft < 300 ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400 animate-pulse' : 'bg-black/5 dark:bg-white/5 border-transparent text-black dark:text-white'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -231,10 +239,10 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
 
                 {/* Right Area: Sidebar Navigator */}
                 <div className="w-full lg:w-[280px] border-t lg:border-t-0 lg:border-l border-brand-light-tertiary dark:border-white/5 bg-brand-light-primary dark:bg-brand-dark-primary flex flex-col p-4 shrink-0 z-10 lg:z-0">
-                    <div className="flex-1 overflow-hidden flex flex-col h-full bg-white dark:bg-[#1A1D21] border border-brand-light-tertiary dark:border-white/5 rounded-[20px] shadow-sm transition-colors">
+                    <div className="flex-1 overflow-hidden flex flex-col h-full bg-white dark:bg-brand-dark-primary border border-brand-light-tertiary dark:border-white/5 rounded-[20px] transition-colors">
                         <div className="p-4 border-b border-brand-light-tertiary dark:border-white/5">
-                            <h3 className="text-sm font-bold text-brand-text-light-primary dark:text-white">Task Navigator</h3>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-brand-text-light-secondary dark:text-gray-500">
+                            <h3 className="text-sm font-bold text-black dark:text-white">Task Navigator</h3>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                 <div className="flex items-center gap-1">
                                     <div className="w-2 h-2 rounded-full bg-brand-green"></div> Completed
                                 </div>
@@ -249,11 +257,11 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                     const isActive = idx === currentIndex;
                                     const isCompleted = !!answers[task.id];
                                     
-                                    let bgColorClass = 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5';
+                                    let bgColorClass = 'bg-white dark:bg-white/[0.05] border-brand-light-tertiary dark:border-white/10 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/10';
                                     if (isActive) {
-                                        bgColorClass = 'bg-brand-text-light-primary dark:bg-white text-white dark:text-black border-transparent shadow-lg scale-110 z-10 relative';
+                                        bgColorClass = 'bg-black dark:bg-white text-white dark:text-black border-transparent scale-110 z-10 relative';
                                     } else if (isCompleted) {
-                                        bgColorClass = 'bg-brand-green text-white border-brand-green shadow-brand-green/20';
+                                        bgColorClass = 'bg-brand-green text-white border-brand-green';
                                     }
 
                                     return (
@@ -277,12 +285,12 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             </main>
 
             {/* Bottom Action Bar */}
-            <footer className="h-16 md:h-20 border-t border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-[#1A1D21] p-4 flex flex-wrap gap-3 items-center justify-end sticky bottom-0 z-50">
+            <footer className="h-16 md:h-20 border-t border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary p-4 flex flex-wrap gap-3 items-center justify-end sticky bottom-0 z-50">
                 <div className="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
                     <button 
                         onClick={handlePrev}
                         disabled={currentIndex === 0}
-                        className="px-6 py-2.5 rounded-full border border-brand-light-tertiary dark:border-white/20 text-brand-text-light-primary dark:text-white font-bold text-[12px] hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="px-6 py-2.5 rounded-full border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[12px] hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         Previous
                     </button>
@@ -290,20 +298,31 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     {currentIndex === MOCK_TASKS.length - 1 ? (
                         <button 
                             onClick={handleSubmit}
-                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] shadow-lg shadow-brand-green/20 transition-all active:scale-95"
+                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] transition-all active:scale-95"
                         >
                             Submit Assessment
                         </button>
                     ) : (
                         <button 
                             onClick={handleNext}
-                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] shadow-lg shadow-brand-green/20 transition-all active:scale-95"
+                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] transition-all active:scale-95"
                         >
                             Save & Next
                         </button>
                     )}
                 </div>
             </footer>
+
+            <ConfirmationModal
+                isOpen={showSubmitModal}
+                onClose={() => setShowSubmitModal(false)}
+                onConfirm={confirmSubmit}
+                title="Finish Communication Test?"
+                message="Are you sure you want to submit your communication assessment? Your audio recordings and writing samples will be sent for evaluation."
+                confirmText="Submit Test"
+                cancelText="Review Again"
+                type="warning"
+            />
         </div>
     );
 };

@@ -119,7 +119,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
       <div>
         <label
           htmlFor="email"
-          className="block font-sans text-[clamp(14px,0.9vw,18px)] font-semibold text-brand-text-light-secondary dark:text-white mb-2 leading-none tracking-[0px]"
+          className="block font-sans text-[clamp(14px,0.9vw,18px)] font-semibold text-slate-500 dark:text-white mb-2 leading-none tracking-[0px]"
         >
           Email ID
         </label>
@@ -131,7 +131,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           onChange={handleChange}
           onBlur={handleBlur}
           autoFocus
-          className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-brand-text-light-primary dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full transition-colors duration-300 ${isEmailInvalid
+          className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-slate-800 dark:text-brand-text-primary placeholder:text-slate-400 dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full transition-colors duration-300 ${isEmailInvalid
             ? "border-red-500 focus:ring-red-500 focus:border-red-500"
             : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
             }`}
@@ -154,7 +154,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
       <div>
         <label
           htmlFor="password"
-          className="block font-sans text-[14px] font-semibold text-brand-text-light-secondary dark:text-white mb-2 leading-none tracking-[0px]"
+          className="block font-sans text-[14px] font-semibold text-slate-500 dark:text-white mb-2 leading-none tracking-[0px]"
         >
           Password
         </label>
@@ -167,7 +167,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="Enter your password"
-            className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-brand-text-light-primary dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full pr-16 transition-colors duration-300 ${isPasswordInvalid
+            className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-slate-800 dark:text-brand-text-primary placeholder:text-slate-400 dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full pr-16 transition-colors duration-300 ${isPasswordInvalid
               ? "border-red-500 focus:ring-red-500 focus:border-red-500"
               : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
               }`}
@@ -201,7 +201,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         <div className="flex justify-end mt-3">
           <Link
             href="/student/forgot-password"
-            className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-green transition-colors font-medium"
+            className="text-sm text-slate-500 dark:text-brand-text-secondary hover:text-brand-green transition-colors font-semibold"
           >
             Forgot Password?
           </Link>
@@ -212,7 +212,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         type="submit"
         disabled={isSubmitting}
         style={{ padding: 'clamp(14px,1vw,20px)' }}
-        className="w-full mt-4 text-white bg-brand-green cursor-pointer hover:bg-brand-green/90 focus:ring-4 focus:outline-none focus:ring-brand-green/30 font-sans font-semibold rounded-full text-[clamp(16px,1vw,20px)] leading-none tracking-[0px] text-center transition-colors duration-300 disabled:bg-brand-green/50 disabled:cursor-not-allowed flex justify-center items-center" aria-busy={isSubmitting}
+        className="w-full mt-4 text-white bg-brand-green cursor-pointer hover:bg-brand-green/90 font-sans font-semibold rounded-full text-[clamp(16px,1vw,20px)] leading-none tracking-[0px] text-center transition-colors duration-300 disabled:bg-brand-green/50 disabled:cursor-not-allowed flex justify-center items-center" aria-busy={isSubmitting}
       >
         {isSubmitting ? (
           <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

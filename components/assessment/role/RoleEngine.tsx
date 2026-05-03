@@ -88,6 +88,8 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     }
 ];
 
+import ConfirmationModal from '../../ui/ConfirmationModal';
+
 interface RoleEngineProps {
     onComplete: (answers: Record<string, string>) => void;
     roleName?: string;
@@ -98,13 +100,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(30 * 60); // 30 minutes in seconds
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
 
     const currentQuestion = MOCK_ROLE_QUESTIONS[currentIndex];
 
     // Timer Logic
     useEffect(() => {
         if (timeLeft <= 0) {
-            handleSubmit();
+            confirmSubmit();
             return;
         }
         const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
@@ -156,9 +159,12 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const handleSubmit = () => {
-        if (window.confirm("Are you sure you want to submit the assessment?")) {
-            onComplete(answers);
-        }
+        setShowSubmitModal(true);
+    };
+
+    const confirmSubmit = () => {
+        setShowSubmitModal(false);
+        onComplete(answers);
     };
 
     const renderQuestionContent = () => {
@@ -186,7 +192,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     return (
         <div className="h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary flex flex-col font-sans transition-colors duration-500 overflow-hidden">
             {/* Top Bar */}
-            <header className="h-14 border-b border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-[#1A1D21] flex items-center justify-between px-6 sticky top-0 z-50">
+            <header className="h-14 border-b border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary flex items-center justify-between px-6 sticky top-0 z-50">
                 <div className="flex items-center gap-4">
                     <div className="scale-75 origin-left">
                         <Logo />
@@ -206,7 +212,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
 
                 <div className="flex items-center gap-6">
                     {/* Timer */}
-                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft < 300 ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400 animate-pulse' : 'bg-black/5 dark:bg-white/5 border-transparent text-brand-text-light-primary dark:text-white'}`}>
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft < 300 ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400 animate-pulse' : 'bg-black/5 dark:bg-white/5 border-transparent text-black dark:text-white'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -236,14 +242,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
 
                     {/* Mobile Navigator - Only shows on mobile, at the bottom of scroll */}
                     <div className="lg:hidden mt-8 mb-4">
-                        <div className="bg-white dark:bg-[#1A1D21] border border-brand-light-tertiary dark:border-white/5 rounded-2xl p-4 shadow-sm">
-                            <h3 className="text-xs font-bold text-brand-text-light-primary dark:text-white mb-3 flex items-center justify-between">
+                        <div className="bg-white dark:bg-white/[0.03] border border-brand-light-tertiary dark:border-white/5 rounded-2xl p-4">
+                            <h3 className="text-xs font-bold text-black dark:text-white mb-3 flex items-center justify-between">
                                 Question Navigator
                                 <div className="flex gap-2">
-                                    <div className="flex items-center gap-1 text-[8px] uppercase tracking-tighter text-gray-400">
+                                    <div className="flex items-center gap-1 text-[8px] uppercase tracking-tighter text-black dark:text-white">
                                         <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div> Ans
                                     </div>
-                                    <div className="flex items-center gap-1 text-[8px] uppercase tracking-tighter text-gray-400">
+                                    <div className="flex items-center gap-1 text-[8px] uppercase tracking-tighter text-black dark:text-white">
                                         <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div> Rev
                                     </div>
                                 </div>
@@ -254,8 +260,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                     const isAnswered = !!answers[q.id];
                                     const isMarked = markedForReview.has(q.id);
                                     
-                                    let bgColorClass = 'bg-gray-50 dark:bg-white/5 text-gray-400';
-                                    if (isActive) bgColorClass = 'bg-brand-text-light-primary dark:bg-white text-white dark:text-black shadow-md';
+                                    let bgColorClass = 'bg-gray-50 dark:bg-white/5 text-black dark:text-white';
+                                    if (isActive) bgColorClass = 'bg-black dark:bg-white text-white dark:text-black shadow-md';
                                     else if (isMarked) bgColorClass = 'bg-amber-500 text-white';
                                     else if (isAnswered) bgColorClass = 'bg-brand-green text-white';
 
@@ -276,10 +282,10 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
 
                 {/* Desktop Sidebar Navigator */}
                 <div className="hidden lg:flex w-[280px] border-l border-brand-light-tertiary dark:border-white/5 bg-brand-light-primary dark:bg-brand-dark-primary flex-col p-4 shrink-0">
-                    <div className="flex-1 overflow-hidden flex flex-col h-full bg-white dark:bg-[#1A1D21] border border-brand-light-tertiary dark:border-white/5 rounded-[20px] shadow-sm transition-colors">
+                    <div className="flex-1 overflow-hidden flex flex-col h-full bg-white dark:bg-brand-dark-primary border border-brand-light-tertiary dark:border-white/5 rounded-[20px] transition-colors">
                         <div className="p-4 border-b border-brand-light-tertiary dark:border-white/5">
-                            <h3 className="text-sm font-bold text-brand-text-light-primary dark:text-white">Navigator</h3>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-brand-text-light-secondary dark:text-gray-500">
+                            <h3 className="text-sm font-bold text-black dark:text-white">Navigator</h3>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                 <div className="flex items-center gap-1">
                                     <div className="w-2 h-2 rounded-full bg-brand-green"></div> Answered
                                 </div>
@@ -298,14 +304,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                     const isAnswered = !!answers[q.id];
                                     const isMarked = markedForReview.has(q.id);
                                     
-                                    let bgColorClass = 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5';
+                                    let bgColorClass = 'bg-white dark:bg-white/[0.05] border-brand-light-tertiary dark:border-white/10 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/5';
                                     
                                     if (isActive) {
-                                        bgColorClass = 'bg-brand-text-light-primary dark:bg-white text-white dark:text-black border-transparent shadow-lg scale-110 z-10 relative';
+                                        bgColorClass = 'bg-black dark:bg-white text-white dark:text-black border-transparent scale-110 z-10 relative';
                                     } else if (isMarked) {
-                                        bgColorClass = 'bg-amber-500 text-white border-amber-500 shadow-amber-500/20';
+                                        bgColorClass = 'bg-amber-500 text-white border-amber-500';
                                     } else if (isAnswered) {
-                                        bgColorClass = 'bg-brand-green text-white border-brand-green shadow-brand-green/20';
+                                        bgColorClass = 'bg-brand-green text-white border-brand-green';
                                     }
 
                                     return (
@@ -329,20 +335,20 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
             </main>
 
             {/* Bottom Action Bar - Highly optimized for Mobile */}
-            <footer className="min-h-[70px] md:h-20 border-t border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-[#1A1D21] p-3 md:p-4 flex flex-col md:flex-row gap-3 items-center justify-between sticky bottom-0 z-50 transition-all">
+            <footer className="min-h-[70px] md:h-20 border-t border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary p-3 md:p-4 flex flex-col md:flex-row gap-3 items-center justify-between sticky bottom-0 z-50 transition-all">
                 
                 {/* Primary Actions Row (Mobile) / Left Side (Desktop) */}
                 <div className="flex items-center gap-2 w-full md:w-auto order-2 md:order-1">
                     <button 
                         onClick={handleMarkReview}
-                        className={`flex-1 md:flex-none px-4 py-2.5 rounded-xl border font-bold text-[11px] transition-all ${markedForReview.has(currentQuestion.id) ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-500' : 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/20 text-brand-text-light-primary dark:text-white'}`}
+                        className={`flex-1 md:flex-none px-4 py-2.5 rounded-xl border font-bold text-[11px] transition-all ${markedForReview.has(currentQuestion.id) ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-500' : 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/20 text-black dark:text-white'}`}
                     >
                         {markedForReview.has(currentQuestion.id) ? 'Unmark Review' : 'Mark Review'}
                     </button>
                     <button 
                         onClick={handleClear}
                         disabled={!answers[currentQuestion.id]}
-                        className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-white dark:bg-[#24272B] border border-brand-light-tertiary dark:border-white/20 text-brand-text-light-primary dark:text-white font-bold text-[11px] disabled:opacity-30"
+                        className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-white dark:bg-[#24272B] border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[11px] disabled:opacity-30"
                     >
                         Clear
                     </button>
@@ -353,7 +359,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     <button 
                         onClick={handlePrev}
                         disabled={currentIndex === 0}
-                        className="flex-1 md:flex-none px-6 py-2.5 rounded-xl border border-brand-light-tertiary dark:border-white/20 text-brand-text-light-primary dark:text-white font-bold text-[12px] disabled:opacity-30"
+                        className="flex-1 md:flex-none px-6 py-2.5 rounded-xl border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[12px] disabled:opacity-30"
                     >
                         Previous
                     </button>
@@ -361,20 +367,31 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     {currentIndex === MOCK_ROLE_QUESTIONS.length - 1 ? (
                         <button 
                             onClick={handleSubmit}
-                            className="flex-[2] md:flex-none px-8 py-2.5 rounded-xl bg-brand-green text-white font-bold text-[12px] shadow-lg shadow-brand-green/20"
+                            className="flex-[2] md:flex-none px-8 py-2.5 rounded-xl bg-brand-green text-white font-bold text-[12px]"
                         >
                             Submit Test
                         </button>
                     ) : (
                         <button 
                             onClick={handleNext}
-                            className="flex-[2] md:flex-none px-8 py-2.5 rounded-xl bg-brand-green text-white font-bold text-[12px] shadow-lg shadow-brand-green/20"
+                            className="flex-[2] md:flex-none px-8 py-2.5 rounded-xl bg-brand-green text-white font-bold text-[12px]"
                         >
                             Save & Next
                         </button>
                     )}
                 </div>
             </footer>
+
+            <ConfirmationModal
+                isOpen={showSubmitModal}
+                onClose={() => setShowSubmitModal(false)}
+                onConfirm={confirmSubmit}
+                title="Finish Role Assessment?"
+                message="Are you sure you want to submit your role-based assessment? All your responses will be evaluated for your target role profile."
+                confirmText="Submit Test"
+                cancelText="Review Again"
+                type="warning"
+            />
         </div>
     );
 };

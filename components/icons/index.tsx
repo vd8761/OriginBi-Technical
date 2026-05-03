@@ -286,3 +286,217 @@ export const RoleIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-
     <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
   </svg>
 );
+
+export const NotificationIcon: React.FC<{ className?: string }> = ({
+  className = "w-5 h-5",
+}) => (
+  <svg
+    className={className}
+    viewBox="0 0 16 18"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M14.7715 15.0851H0.734753C0.0452248 15.0851 -0.262893 14.22 0.270627 13.784L2.1543 12.2435V7.40523C2.1543 4.77114 3.97319 2.56141 6.42554 1.96629C6.42872 1.67928 6.43097 1.45152 6.43097 1.32206C6.43097 0.591946 7.02374 0 7.75304 0C8.48234 0 9.0751 0.592049 9.0751 1.32206C9.0751 1.45152 9.07746 1.67928 9.08054 1.96629C11.5328 2.56141 13.3518 4.77114 13.3518 7.40523V12.2435L15.2354 13.784C15.7691 14.22 15.4611 15.0851 14.7715 15.0851Z" />
+    <path d="M9.33048 15.9972C9.56593 15.9972 9.74244 16.2166 9.68996 16.4461C9.48598 17.3369 8.68821 18 7.73515 18C6.78199 18 5.98606 17.3368 5.7827 16.4459C5.73032 16.2165 5.90683 15.9972 6.14217 15.9972H9.33048Z" />
+  </svg>
+);
+
+export const NotificationWithDotIcon: React.FC<{ className?: string }> = ({
+  className = "w-5 h-5",
+}) => (
+  <svg
+    className={className}
+    viewBox="0 0 18 18"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M14.6145 14.8835H0.725024C0.0448578 14.8835 -0.259528 14.0301 0.267029 13.5995L2.1251 12.0804V7.30647C2.1251 4.70765 3.91966 2.52752 6.33979 1.94026C6.34231 1.6569 6.34484 1.43219 6.34484 1.30456C6.34484 0.584627 6.92945 0 7.64935 0C8.36926 0 8.95124 0.584627 8.95124 1.30456C8.95124 1.41176 8.95892 1.639 8.96651 1.94026C9.1452 1.98364 9.31883 2.03471 9.4873 2.096C9.26017 2.45086 9.08654 2.84142 8.97419 3.25757C8.87469 3.61496 8.82099 3.99277 8.82099 4.38333C8.82099 4.56203 8.8312 4.74072 8.85416 4.91436C8.91291 5.38916 9.05075 5.83848 9.25492 6.2521C9.93397 7.64848 11.3559 8.61356 13.0075 8.63904C13.0304 8.64157 13.0534 8.64157 13.0764 8.64157C13.1071 8.64157 13.1402 8.64157 13.1709 8.63904V12.0446L15.0725 13.5995C15.5991 14.0301 15.2947 14.8835 14.6145 14.8835Z"
+      fill="currentColor"
+    />
+    <path
+      d="M9.20556 16.024C9.43785 16.024 9.61199 16.2406 9.56021 16.467C9.35897 17.3458 8.57192 18 7.63166 18C6.69129 18 5.90606 17.3457 5.70543 16.4668C5.65375 16.2405 5.82789 16.024 6.06007 16.024H9.20556Z"
+      fill="currentColor"
+    />
+    <path
+      d="M13.6916 8.08551C15.7548 7.74658 17.1526 5.79921 16.8137 3.73593C16.4747 1.67266 14.5275 0.274798 12.4643 0.613728C10.4011 0.952659 9.00326 2.90003 9.34218 4.96331C9.6811 7.02658 11.6284 8.42444 13.6916 8.08551Z"
+      fill="#1ED36A"
+    />
+  </svg>
+);
+
+export const RoadmapIcon: React.FC<{ className?: string }> = ({
+  className = "w-5 h-4",
+}) => (
+  <svg
+    className={className}
+    viewBox="0 0 22 16"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M17.3338 9.5531V12.4532C17.3338 13.5066 16.7137 14.4466 15.7537 14.8866C14.587 15.42 12.8203 16 10.6669 16C8.51348 16 6.74676 15.42 5.57338 14.8866C4.62002 14.4466 4 13.5066 4 12.4532V9.5531L8.74015 11.7198C9.34684 11.9998 10.0002 12.1399 10.6669 12.1399C11.3336 12.1399 11.9869 11.9998 12.5936 11.7198L17.3338 9.5531Z" />
+    <path d="M20.0009 8.33313V12.6666C20.0009 13.0333 19.7008 13.3333 19.3342 13.3333C18.9675 13.3333 18.6675 13.0333 18.6675 12.6666V8.94648L20.0009 8.33313Z" />
+    <path d="M9.2923 10.5092C9.72898 10.7085 10.1977 10.8085 10.667 10.8085C11.1364 10.8085 11.6044 10.7092 12.0417 10.5092L20.556 6.61705C21.036 6.39771 21.334 5.93303 21.334 5.40434C21.334 4.87566 21.036 4.41031 20.556 4.19097L12.0417 0.29951C11.1677 -0.0998366 10.167 -0.0998366 9.29297 0.29951L0.778025 4.1903C0.29801 4.41031 0 4.87499 0 5.40368C0 5.93236 0.29801 6.39704 0.778025 6.61705L9.2923 10.5092Z" />
+  </svg>
+);
+
+export const VideosIcon: React.FC<{ className?: string }> = ({
+  className = "w-4 h-4",
+}) => (
+  <svg
+    className={className}
+    viewBox="0 0 15 16"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M2.71764 0.352787C1.21679 -0.474644 0 0.203197 0 1.86558V14.1332C0 15.7973 1.21679 16.4742 2.71764 15.6476L13.874 9.49828C15.3753 8.67055 15.3753 7.32952 13.874 6.50199L2.71764 0.352787Z" />
+  </svg>
+);
+
+export const OriginDataIcon: React.FC<{ className?: string }> = ({
+  className = "w-4 h-4",
+}) => (
+  <svg
+    className={className}
+    viewBox="0 0 15 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M15 16L0 0H15V16Z" fill="currentColor" />
+  </svg>
+);
+
+export const MarkAllReadIcon: React.FC<{ className?: string }> = ({ className = "relative w-4 h-4" }) => (
+  <div className={className}>
+    <svg className="absolute inset-0 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+    <svg className="absolute inset-0 w-4 h-4 -left-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  </div>
+);
+
+export const NoNotificationsIcon: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <svg className={className} width="165" height="200" viewBox="0 0 165 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M76.5936 200C88.0672 200 98.2076 194.456 104.629 185.965H48.5938C54.9797 194.456 65.1551 200 76.6287 200H76.5936Z" fill="#1ED36A" />
+    <path d="M76.6289 1C85.7608 1 93.1729 8.41198 93.1729 17.5439C93.1728 21.8713 91.4556 25.8397 88.6738 28.7871L87.4678 30.0654L89.1816 30.4492C94.4366 31.6276 99.4251 33.4833 104.04 35.9307C97.2889 43.0414 93.1377 52.6215 93.1377 63.1582C93.1378 85.0087 110.884 102.755 132.734 102.755C133.588 102.755 134.42 102.718 135.243 102.661V144.035C135.243 147.229 137.115 150.178 139.991 151.536L139.994 151.538C146.215 154.448 150.532 160.267 151.57 167.063L151.699 167.913H151.732L152.199 171.014V171.015C152.44 172.762 151.931 174.51 150.784 175.873C149.642 177.196 147.989 177.198 146.243 177.948H7.01562C5.27217 177.948 3.62159 177.198 2.47949 175.879C1.32846 174.515 0.81625 172.764 1.05762 171.014L1.65332 167.063C2.69125 160.267 7.00818 154.448 13.2285 151.538L13.2314 151.536C16.1077 150.178 17.9805 147.229 17.9805 144.035V87.7197C17.9805 59.7098 37.782 36.2118 64.0713 30.4502L64.0713 30.4502C64.0713 30.4502 64.0713 30.4502 64.0713 30.4502ZM11.1428 5.14287C11.1428 4.67142 11.5286 4.2857 12 4.2857C12.4714 4.2857 12.8572 4.67142 12.8572 5.14287V11.5886L16.8215 14.76C17.19 15.0557 17.25 15.5957 16.9543 15.9643C16.7871 16.1743 16.5386 16.2857 16.2857 16.2857C16.0971 16.2857 15.9085 16.2257 15.75 16.0971L11.4643 12.6686C11.2629 12.5057 11.1429 12.2615 11.1429 12V5.14287H11.1428Z" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
+
+
+export const EmailIcon: React.FC<{ className?: string }> = ({
+  className = "w-5 h-5",
+}) => (
+  <svg
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+  >
+    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+  </svg>
+);
+
+export const PhoneIcon: React.FC<{ className?: string }> = ({
+  className = "w-4 h-4",
+}) => (
+  <svg
+    className={className}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M15.5804 11.7424L13.3429 9.50953C12.5438 8.71208 11.1853 9.03109 10.8656 10.0677C10.6259 10.7855 9.82675 11.1842 9.10754 11.0247C7.50929 10.626 5.35166 8.5526 4.95209 6.87796C4.71236 6.16023 5.19183 5.36278 5.91104 5.12358C6.9499 4.8046 7.26955 3.44895 6.47043 2.6515L4.23288 0.418658C3.59358 -0.139553 2.63464 -0.139553 2.07525 0.418658L0.556915 1.9338C-0.96142 3.52869 0.71674 7.75515 4.47262 11.5031C8.2285 15.2511 12.4639 17.0055 14.0621 15.4106L15.5804 13.8955C16.1399 13.2575 16.1399 12.3006 15.5804 11.7424Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+export const MapPinIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+
+export const EditIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+  </svg>
+);
+
+export const CameraIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>
+  </svg>
+);
+
+export const LockIcon: React.FC<{ className?: string }> = ({
+  className = "w-5 h-5",
+}) => (
+  <svg
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+  >
+    <path
+      fillRule="evenodd"
+      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+      clipRule="evenodd"
+    />
+  </svg>
+);
+
+export const ArrowRightWithoutLineIcon: React.FC<{ className?: string }> = ({ className = "w-2 h-4" }) => (
+  <svg width="8" height="15" viewBox="0 0 8 15" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <path d="M0.858619 13.974C0.662243 14.1708 0.343861 14.1708 0.147484 13.974C-0.0488759 13.7771 -0.0488759 13.458 0.147484 13.2612L6.33311 7.06091L0.147281 0.860465C-0.049095 0.663641 -0.0490951 0.344505 0.147281 0.147665C0.343658 -0.0491765 0.662041 -0.0491766 0.8584 0.147665L7.3525 6.65711C7.46243 6.7673 7.51082 6.91578 7.49769 7.0597C7.51152 7.20431 7.4632 7.35375 7.35272 7.4645L0.858619 13.974Z" fill="currentColor" />
+  </svg>
+);
+
+export const XIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+  <svg
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M6 18L18 6M6 6l12 12"
+    />
+  </svg>
+);
+
+export const ReportTriangleIcon: React.FC<{ className?: string; fillColor?: string }> = ({ 
+  className = "w-4 h-4", 
+  fillColor = "currentColor" 
+}) => (
+  <svg 
+    width="15" 
+    height="16" 
+    viewBox="0 0 15 16" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg" 
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M15 16L0 0H15V16Z" fill={fillColor} />
+  </svg>
+);
+
+export const LinkedInIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.066-.926-2.066-2.065 0-1.142.922-2.067 2.066-2.067 1.141 0 2.065.925 2.065 2.067 0 1.139-.924 2.065-2.065 2.065zM7.119 20.452H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+  </svg>
+);
