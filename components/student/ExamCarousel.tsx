@@ -31,26 +31,26 @@ interface ExamCarouselProps {
 const getDifficultyColor = (difficulty: string) => {
   switch (difficulty) {
     case "Beginner":
-      return "bg-emerald-50 text-emerald-600 border-emerald-100";
+      return "bg-brand-green/10 text-brand-green border-brand-green/20";
     case "Intermediate":
-      return "bg-amber-50 text-amber-600 border-amber-100";
+      return "bg-brand-text-light-secondary/10 text-brand-text-light-secondary border-brand-text-light-secondary/20";
     case "Advanced":
-      return "bg-rose-50 text-rose-600 border-rose-100";
+      return "bg-brand-dark-primary/10 text-brand-dark-primary border-brand-dark-primary/20";
     default:
-      return "bg-slate-50 text-slate-600 border-slate-100";
+      return "bg-brand-light-tertiary/50 text-brand-text-light-secondary border-brand-light-tertiary";
   }
 };
 
 const getDifficultyDarkColor = (difficulty: string) => {
   switch (difficulty) {
     case "Beginner":
-      return "dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
+      return "dark:bg-brand-green/15 dark:text-brand-green dark:border-brand-green/30";
     case "Intermediate":
-      return "dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
+      return "dark:bg-brand-text-secondary/15 dark:text-brand-text-secondary dark:border-brand-text-secondary/30";
     case "Advanced":
-      return "dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20";
+      return "dark:bg-brand-text-primary/15 dark:text-brand-text-primary dark:border-brand-text-primary/30";
     default:
-      return "dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20";
+      return "dark:bg-brand-dark-tertiary/30 dark:text-brand-text-secondary dark:border-white/10";
   }
 };
 
@@ -165,7 +165,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                 `}
               >
                 {/* Card */}
-                <div className="relative overflow-hidden rounded-[2rem] bg-white/90 dark:bg-[#161f1a]/90 backdrop-blur-xl border border-slate-200/60 dark:border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.12)] dark:shadow-[0_32px_64px_rgba(0,0,0,0.4)] transition-all duration-500 hover:shadow-[0_40px_80px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_40px_80px_rgba(30,211,106,0.1)] group/card">
+                <div className="relative overflow-hidden rounded-[2rem] bg-brand-light-primary/90 dark:bg-brand-dark-secondary/90 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10 shadow-[0_32px_64px_rgba(25,33,28,0.1)] dark:shadow-[0_32px_64px_rgba(0,0,0,0.4)] transition-all duration-500 hover:shadow-[0_40px_80px_rgba(25,33,28,0.12)] dark:hover:shadow-[0_40px_80px_rgba(30,211,106,0.1)] group/card">
                   {/* Decorative background for the card */}
                   <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-current to-transparent opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover/card:opacity-10 transition-opacity duration-500 pointer-events-none" style={{ color: exam.accentColor }} />
                   
@@ -197,17 +197,17 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                             <span
                               className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
                                 exam.available
-                                  ? "bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                                  : "bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
+                                  ? "bg-brand-green/10 text-brand-green border border-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green dark:border-brand-green/30"
+                                  : "bg-brand-text-light-secondary/10 text-brand-text-light-secondary border border-brand-text-light-secondary/20 dark:bg-brand-text-secondary/15 dark:text-brand-text-secondary dark:border-brand-text-secondary/30"
                               }`}
                             >
                               {exam.statusLabel}
                             </span>
                           </div>
-                          <h2 className="text-2xl sm:text-3xl font-semibold text-slate-800 dark:text-white tracking-tight">
+                          <h2 className="text-2xl sm:text-3xl font-semibold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight">
                             {exam.title}
                           </h2>
-                          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+                          <p className="mt-1.5 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                             {exam.description}
                           </p>
                         </div>
@@ -216,7 +216,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                       {/* Price Badge */}
                       <div className="flex flex-col items-end">
                         {exam.discount && (
-                          <span className="text-sm text-slate-400 line-through">
+                          <span className="text-sm text-brand-text-light-secondary/70 line-through">
                             ₹{exam.originalPrice}
                           </span>
                         )}
@@ -225,7 +225,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                             ₹{exam.price}
                           </span>
                           {exam.discount && (
-                            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                            <span className="text-xs font-medium text-brand-green">
                               Save {exam.discount}%
                             </span>
                           )}
@@ -235,37 +235,37 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-3 gap-4 mb-8">
-                      <div className="group/stat rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                      <div className="group/stat rounded-2xl bg-brand-light-secondary/80 dark:bg-white/5 p-4 border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
                         <div className="relative z-10 flex items-center gap-2 mb-2">
-                          <svg className="w-4 h-4 text-slate-400 group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <svg className="w-4 h-4 text-brand-text-light-secondary group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
-                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Questions</span>
+                          <span className="text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">Questions</span>
                         </div>
-                        <p className="relative z-10 text-xl font-bold text-slate-700 dark:text-white transform group-hover/stat:scale-105 transition-transform origin-left">{exam.questions}</p>
+                        <p className="relative z-10 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary transform group-hover/stat:scale-105 transition-transform origin-left">{exam.questions}</p>
                       </div>
 
-                      <div className="group/stat rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                      <div className="group/stat rounded-2xl bg-brand-light-secondary/80 dark:bg-white/5 p-4 border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
                         <div className="relative z-10 flex items-center gap-2 mb-2">
-                          <svg className="w-4 h-4 text-slate-400 group-hover/stat:text-cyan-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <svg className="w-4 h-4 text-brand-text-light-secondary group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Duration</span>
+                          <span className="text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">Duration</span>
                         </div>
-                        <p className="relative z-10 text-xl font-bold text-slate-700 dark:text-white transform group-hover/stat:scale-105 transition-transform origin-left">{exam.duration}</p>
+                        <p className="relative z-10 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary transform group-hover/stat:scale-105 transition-transform origin-left">{exam.duration}</p>
                       </div>
 
-                      <div className="group/stat rounded-2xl bg-slate-50/80 dark:bg-white/5 p-4 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                      <div className="group/stat rounded-2xl bg-brand-light-secondary/80 dark:bg-white/5 p-4 border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
                         <div className="relative z-10 flex items-center gap-2 mb-2">
-                          <svg className="w-4 h-4 text-slate-400 group-hover/stat:text-purple-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <svg className="w-4 h-4 text-brand-text-light-secondary group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                           </svg>
-                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Certificate</span>
+                          <span className="text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">Certificate</span>
                         </div>
-                        <p className="relative z-10 text-xl font-bold text-slate-700 dark:text-white transform group-hover/stat:scale-105 transition-transform origin-left">Yes</p>
+                        <p className="relative z-10 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary transform group-hover/stat:scale-105 transition-transform origin-left">Yes</p>
                       </div>
                     </div>
 
@@ -274,7 +274,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                       {exam.tags.map((tag, i) => (
                         <span
                           key={tag}
-                          className="rounded-lg bg-slate-100/80 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/10 hover:-translate-y-0.5 transition-all duration-300 cursor-default"
+                          className="rounded-lg bg-brand-light-secondary/80 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:border-brand-light-tertiary dark:hover:border-white/10 hover:-translate-y-0.5 transition-all duration-300 cursor-default"
                           style={{ animationDelay: `${i * 100}ms` }}
                         >
                           {tag}
@@ -287,7 +287,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
                       <button
                         type="button"
                         onClick={() => onSelectExam(exam)}
-                        className="flex-1 group/btn inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-6 py-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:shadow-md active:scale-95"
+                        className="flex-1 group/btn inline-flex items-center justify-center gap-2 rounded-xl border border-brand-light-tertiary dark:border-white/10 px-6 py-3.5 text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-secondary transition-all duration-300 hover:bg-brand-light-secondary dark:hover:bg-white/5 hover:border-brand-light-tertiary dark:hover:border-white/20 hover:shadow-md active:scale-95"
                       >
                         <svg className="w-4 h-4 transform group-hover/btn:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -338,7 +338,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
         <button
           type="button"
           onClick={handlePrev}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-white dark:bg-[#1a231e] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light-primary dark:bg-brand-dark-secondary border border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-brand-text-secondary shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
           aria-label="Previous exam"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -355,7 +355,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
               onClick={() => setActiveIndex(index)}
               className={`
                 h-2 rounded-full transition-all duration-300
-                ${index === activeIndex ? "w-8" : "w-2 bg-slate-300 dark:bg-slate-600 hover:bg-slate-400"}
+                ${index === activeIndex ? "w-8" : "w-2 bg-brand-light-tertiary dark:bg-brand-dark-tertiary hover:bg-brand-text-light-secondary"}
               `}
               style={{
                 backgroundColor: index === activeIndex ? exam.accentColor : undefined,
@@ -368,7 +368,7 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
         <button
           type="button"
           onClick={handleNext}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-white dark:bg-[#1a231e] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light-primary dark:bg-brand-dark-secondary border border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-brand-text-secondary shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
           aria-label="Next exam"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -379,8 +379,8 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
 
       {/* Progress Indicator */}
       <div className="flex justify-center mt-4">
-        <span className="text-sm font-medium text-slate-400 dark:text-slate-500">
-          {activeIndex + 1} <span className="text-slate-300 dark:text-slate-600">/</span> {exams.length}
+        <span className="text-sm font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">
+          {activeIndex + 1} <span className="text-brand-light-tertiary dark:text-brand-dark-tertiary">/</span> {exams.length}
         </span>
       </div>
     </div>
