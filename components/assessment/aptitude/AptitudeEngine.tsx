@@ -202,7 +202,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             {formatTime(timeLeft)}
                         </p>
                     </div>
-                    <div className="scale-90">
+                    <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
                     <button 
@@ -389,10 +389,15 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         >
                             <div className="flex h-full flex-col">
                                 <div className="flex items-center justify-between border-b border-brand-green/5 p-6 dark:border-white/10">
-                                    <h2 className="text-sm font-bold uppercase tracking-widest text-[#17201b] dark:text-white">Navigator</h2>
+                                    <div className="flex items-center gap-4">
+                                        <h2 className="text-sm font-bold uppercase tracking-widest text-[#17201b] dark:text-white">Navigator</h2>
+                                        <div className="scale-75 origin-left">
+                                            <ThemeToggle />
+                                        </div>
+                                    </div>
                                     <button 
                                         onClick={() => setIsSidebarOpen(false)}
-                                        className="rounded-lg p-2 text-[#17201b]/40 hover:bg-brand-green/10 hover:text-brand-green dark:text-white/40"
+                                        className="rounded-lg p-2 text-[#17201b] hover:bg-brand-green/10 hover:text-brand-green dark:text-white"
                                     >
                                         <X size={20} />
                                     </button>
@@ -429,7 +434,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             </div>
                             
                             <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
-                            <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/40">Review your assessment summary before finalizing your submission.</p>
+                            <p className="mt-2 text-sm text-[#17201b] dark:text-white">Review your assessment summary before finalizing your submission.</p>
                             
                             <div className="mt-8 grid w-full grid-cols-3 gap-4">
                                 <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
@@ -451,7 +456,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                                     <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
                                     <div>
                                         <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions Detected</p>
-                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600/70 dark:text-amber-400/60">
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
                                             You have {navigatorQuestions.filter(q => !q.isAnswered).length} questions left. We recommend reviewing them before final submission.
                                         </p>
                                     </div>

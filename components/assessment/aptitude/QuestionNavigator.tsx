@@ -63,17 +63,17 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                 <div className="grid grid-cols-3 gap-1.5">
                     <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-3 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
                         <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green/70 dark:text-brand-green/60">Answered</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green dark:text-brand-green">Answered</span>
                     </div>
 
                     <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-3 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
                         <span className="text-lg font-black text-amber-500 leading-none">{markedCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500/70 dark:text-amber-500/60">Review</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-500">Review</span>
                     </div>
 
                     <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-3 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
-                        <span className="text-lg font-black text-slate-500 dark:text-white/80 leading-none">{leftCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-500/70 dark:text-white/40">Left</span>
+                        <span className="text-lg font-black text-slate-700 dark:text-white leading-none">{leftCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-700 dark:text-white">Left</span>
                     </div>
                 </div>
             </div>

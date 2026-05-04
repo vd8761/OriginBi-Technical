@@ -9,6 +9,7 @@ import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
 import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from "../icons";
+import AssessmentCard from "./AssessmentCard";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
 type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
@@ -595,7 +596,7 @@ const AssessmentPortal: React.FC = () => {
       />
 
       <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
-        {currentView === "dashboard" || currentView === "assessment" ? (
+        {currentView === "dashboard" ? (
           <>
             {/* Command Deck */}
             <section className="relative overflow-hidden rounded-[2.75rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#101814]/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(15,23,42,0.12)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.55)] p-8 sm:p-12 lg:p-14">
@@ -1013,6 +1014,58 @@ const AssessmentPortal: React.FC = () => {
               </div>
             </section>
           </>
+        ) : currentView === "assessment" ? (
+          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
+              </div>
+              
+              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        (isActive
+                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <AssessmentCard
+                  key={exam.id}
+                  title={exam.title}
+                  description={exam.description}
+                  statusLabel={exam.statusLabel}
+                  statusTone={exam.available ? "success" : "warning"}
+                  totalQuestions={exam.questions}
+                  duration={exam.duration}
+                  price={`₹${exam.price}`}
+                  tags={exam.tags}
+                  icon={exam.icon}
+                  available={exam.available}
+                  level={exam.difficulty}
+                  insight={exam.statusLabel}
+                  onDetailsClick={() => handleSelectExam(exam)}
+                  onStartClick={() => handleStartExam(exam)}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-white/80 dark:bg-[#111a15]/80 backdrop-blur-xl border border-slate-200/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400">
