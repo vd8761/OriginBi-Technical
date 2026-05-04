@@ -6,12 +6,16 @@ import Header from "./Header";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
+import PaymentModal from "../payments/PaymentModal";
+import LanguageSelectModal from "../payments/LanguageSelectModal";
 import { ArrowLeftIcon, LockIcon } from "../icons";
 import {
     type AssessmentId,
     type ExamDetailData,
     type ExtendedExam,
+    type CodingLanguage,
 } from "@/lib/exams";
+import { codingPaymentKey, usePaidAssessments, type PaymentKey } from "@/lib/payments";
 
 interface ExploreDetailViewProps {
     exam: ExtendedExam;
@@ -20,26 +24,94 @@ interface ExploreDetailViewProps {
 
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
+    const { isPaid, markPaid } = usePaidAssessments();
+
     const [showAptitudeModal, setShowAptitudeModal] = useState(false);
     const [showCommunicationModal, setShowCommunicationModal] = useState(false);
     const [showRoleModal, setShowRoleModal] = useState(false);
+    const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [paymentTarget, setPaymentTarget] = useState<
+        | { kind: "exam"; key: PaymentKey; title: string; subtitle: string }
+        | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string }
+        | null
+    >(null);
 
     const isReady = exam.available;
     const accent = exam.accentColor;
     const gradient = exam.gradient;
 
-    const handleStart = () => {
-        if (!isReady) return;
+    const isCoding = exam.id === "coding";
+    const examPaid = !isCoding && isPaid(exam.id as PaymentKey);
+
+    const startNonCodingAssessment = () => {
         if (exam.id === "aptitude") setShowAptitudeModal(true);
         else if (exam.id === "communication") setShowCommunicationModal(true);
         else if (exam.id === "role") setShowRoleModal(true);
     };
 
+    const handlePrimaryClick = () => {
+        if (!isReady) return;
+
+        if (isCoding) {
+            setShowLanguageModal(true);
+            return;
+        }
+
+        if (examPaid) {
+            startNonCodingAssessment();
+            return;
+        }
+
+        setPaymentTarget({
+            kind: "exam",
+            key: exam.id as PaymentKey,
+            title: `Pay for ${exam.title}`,
+            subtitle: `One-time access. Unlocks the full ${exam.shortTitle} assessment for you.`,
+        });
+    };
+
+    const handleLanguagePick = (language: CodingLanguage) => {
+        const key = codingPaymentKey(language.id);
+        if (isPaid(key)) {
+            setShowLanguageModal(false);
+            router.push(`/assessment/coding?lang=${language.id}`);
+            return;
+        }
+        setPaymentTarget({
+            kind: "coding",
+            key,
+            language,
+            title: `Pay for Coding (${language.name})`,
+            subtitle: `Unlocks the coding assessment in ${language.name}. Each language is paid separately.`,
+        });
+    };
+
+    const handlePaymentSuccess = () => {
+        if (!paymentTarget) return;
+        markPaid(paymentTarget.key);
+
+        if (paymentTarget.kind === "coding") {
+            const lang = paymentTarget.language;
+            setPaymentTarget(null);
+            setShowLanguageModal(false);
+            router.push(`/assessment/coding?lang=${lang.id}`);
+            return;
+        }
+
+        setPaymentTarget(null);
+    };
+
     const handleTrial = () => {
-        // Placeholder: trial assessment is not wired up yet.
         if (!isReady) return;
         alert("Trial assessment coming soon.");
     };
+
+    const primaryLabel = (() => {
+        if (!isReady) return "Coming Soon";
+        if (isCoding) return `Pick Language & Pay`;
+        if (examPaid) return "Start Assessment";
+        return `Pay ₹${exam.price}`;
+    })();
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f5fbf7] dark:bg-[#0f1712] font-sans transition-colors duration-500">
@@ -108,6 +180,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                 <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400">
                                     {exam.difficulty}
                                 </span>
+                                {!isCoding && examPaid && (
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+                                        style={{ background: `${accent}1f`, color: accent }}
+                                    >
+                                        Paid &middot; Unlocked
+                                    </span>
+                                )}
                             </div>
                             <h1 className="text-[clamp(28px,3.4vw,42px)] font-bold text-slate-900 dark:text-white tracking-tight leading-[1.05]">
                                 {exam.title}
@@ -123,8 +203,28 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         <Stat label="Questions" value={String(exam.questions)} />
                         <Stat label="Duration" value={exam.duration} />
                         <Stat label="Difficulty" value={exam.difficulty} />
-                        <Stat label="Price" value={`₹${exam.price}`} accent={accent} />
+                        <Stat
+                            label={isCoding ? "Per language" : "Price"}
+                            value={`₹${exam.price}`}
+                            accent={accent}
+                        />
                     </div>
+
+                    {isCoding && (
+                        <div
+                            className="mt-6 rounded-2xl border border-dashed p-4 text-[12.5px] leading-relaxed"
+                            style={{
+                                borderColor: `${accent}55`,
+                                background: `${accent}0d`,
+                                color: accent,
+                            }}
+                        >
+                            <span className="font-bold uppercase tracking-wider">Note:</span>{" "}
+                            <span className="text-slate-600 dark:text-gray-300">
+                                Coding is paid per language. Each language unlocks separately &mdash; you can come back and pay for another language any time.
+                            </span>
+                        </div>
+                    )}
                 </section>
 
                 {/* What this exam is about */}
@@ -255,7 +355,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             <p className="text-[18px] font-bold text-slate-900 dark:text-white">
                                 ₹{exam.price}
                                 <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-gray-500">
-                                    fixed price
+                                    {isCoding ? "per language" : examPaid ? "paid" : "fixed price"}
                                 </span>
                             </p>
                         </div>
@@ -275,14 +375,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         </button>
                         <button
                             type="button"
-                            onClick={handleStart}
+                            onClick={handlePrimaryClick}
                             disabled={!isReady}
                             className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady
                                     ? "bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-md shadow-[#1ED36A]/30"
                                     : "bg-slate-100 dark:bg-white/[0.04] text-slate-400 dark:text-gray-500 cursor-not-allowed"
                                 }`}
                         >
-                            {isReady ? "Start Assessment" : "Coming Soon"}
+                            {primaryLabel}
                         </button>
                     </div>
                 </div>
@@ -305,6 +405,27 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <RolePreTest
                     onStart={() => router.push("/assessment/role")}
                     onClose={() => setShowRoleModal(false)}
+                />
+            )}
+
+            {showLanguageModal && (
+                <LanguageSelectModal
+                    accent={accent}
+                    price={exam.price}
+                    isPaid={isPaid}
+                    onClose={() => setShowLanguageModal(false)}
+                    onPick={handleLanguagePick}
+                />
+            )}
+
+            {paymentTarget && (
+                <PaymentModal
+                    title={paymentTarget.title}
+                    subtitle={paymentTarget.subtitle}
+                    amount={exam.price}
+                    accent={accent}
+                    onCancel={() => setPaymentTarget(null)}
+                    onSuccess={handlePaymentSuccess}
                 />
             )}
         </div>

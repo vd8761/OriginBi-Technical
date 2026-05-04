@@ -11,6 +11,21 @@ import {
 export type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
 export type AssessmentTrack = "core" | "technical" | "career";
 
+export interface CodingLanguage {
+  id: string;
+  name: string;
+  description: string;
+  accent: string;
+}
+
+export const CODING_LANGUAGES: CodingLanguage[] = [
+  { id: "python", name: "Python", description: "Clean syntax, great for logic and data tasks.", accent: "#3776AB" },
+  { id: "java", name: "Java", description: "Strict typing, dominant in enterprise interviews.", accent: "#E76F00" },
+  { id: "cpp", name: "C++", description: "Performance-focused, common in product company rounds.", accent: "#00599C" },
+  { id: "javascript", name: "JavaScript", description: "Flexible scripting, widely used for web roles.", accent: "#F7DF1E" },
+  { id: "c", name: "C", description: "Foundational language used in core CS curriculums.", accent: "#A8B9CC" },
+];
+
 export interface ExtendedExam extends Exam {
   track: AssessmentTrack;
 }
@@ -84,8 +99,8 @@ export const EXAMS: ExtendedExam[] = [
     price: 199,
     tags: ["Logic", "Strings", "Arrays", "Simulation"],
     icon: <CodingIcon className="w-7 h-7" />,
-    available: false,
-    statusLabel: "Coming Soon",
+    available: true,
+    statusLabel: "Ready",
     accentColor: "#f59e0b",
     gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
     track: "technical",
@@ -250,6 +265,6 @@ export const ASSESSMENT_RUN_PATH: Record<AssessmentId, string | null> = {
   aptitude: "/assessment/aptitude",
   communication: "/assessment/communication",
   role: "/assessment/role",
-  coding: null,
+  coding: "/assessment/coding",
   mnc: null,
 };

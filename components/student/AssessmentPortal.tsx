@@ -9,6 +9,7 @@ import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
+import AssessmentCard from "./AssessmentCard";
 import { ProfileIcon } from "../icons";
 import {
   EXAMS,
@@ -44,6 +45,7 @@ const AssessmentPortal: React.FC = () => {
   const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
+  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const router = useRouter();
 
   const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
@@ -237,13 +239,17 @@ const AssessmentPortal: React.FC = () => {
       console.log(`Processing payment for ${exam.title} - ${tier.name} tier: ₹${tier.price}`);
     }
 
-    // Show appropriate pre-test modal
+    // Show appropriate pre-test modal or navigate directly
     if (exam.id === "aptitude") {
       setShowAptitudeModal(true);
     } else if (exam.id === "communication") {
       setShowCommunicationModal(true);
     } else if (exam.id === "role") {
       setShowRoleModal(true);
+    } else if (exam.id === "coding") {
+      router.push("/assessment/coding");
+    } else if (exam.id === "mnc") {
+      router.push("/assessment/mnc");
     }
   };
 
@@ -264,6 +270,57 @@ const AssessmentPortal: React.FC = () => {
         onLogout={() => console.log("Logging out...")}
       />
 
+      {/* Next Step Notification Alert */}
+      {showNextStepAlert && currentView === "dashboard" && (
+        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
+          <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-tight">
+                  Aptitude Cleared!
+                </h4>
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Excellent work on Logic. Start the{" "}
+                  <strong className="text-slate-800 dark:text-white">Communication Assessment</strong>{" "}
+                  next to unlock Technical Groupings and discover your true Role-Fit.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setShowNextStepAlert(false);
+                      setCurrentView("assessment");
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"
+                  >
+                    View Assessments
+                  </button>
+                  <button
+                    onClick={() => setShowNextStepAlert(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowNextStepAlert(false)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
         {currentView === "explore" ? (
           <ExploreView
@@ -271,7 +328,59 @@ const AssessmentPortal: React.FC = () => {
             examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => router.push(`/explore/${exam.id}`)}
           />
-        ) : currentView === "dashboard" || currentView === "assessment" ? (
+        ) : currentView === "assessment" ? (
+          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Assessments</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
+              </div>
+
+              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        (isActive
+                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <AssessmentCard
+                  key={exam.id}
+                  title={exam.title}
+                  description={exam.description}
+                  statusLabel={exam.statusLabel}
+                  statusTone={exam.available ? "success" : "warning"}
+                  totalQuestions={exam.questions}
+                  duration={exam.duration}
+                  price={`₹${exam.price}`}
+                  tags={exam.tags}
+                  icon={exam.icon}
+                  available={exam.available}
+                  level={exam.difficulty}
+                  insight={exam.statusLabel}
+                  onDetailsClick={() => handleSelectExam(exam)}
+                  onStartClick={() => handleStartExam(exam)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : currentView === "dashboard" ? (
           <>
             {/* Command Deck */}
             <section className="relative overflow-hidden rounded-[2.75rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#101814]/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(15,23,42,0.12)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.55)] p-8 sm:p-12 lg:p-14">

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowRightIcon, LockIcon } from '../icons';
 import type { Exam } from './ExamCarousel';
+import { usePaidAssessments, codingPaymentKey, type PaymentKey } from '@/lib/payments';
+import { CODING_LANGUAGES } from '@/lib/exams';
 
 type Track = 'core' | 'technical' | 'career';
 type ExploreFilter = 'all' | Track;
@@ -52,6 +54,7 @@ const TRACK_ORDER: Track[] = ['core', 'technical', 'career'];
 
 const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onNavigateToDetails }) => {
     const [filter, setFilter] = useState<ExploreFilter>('all');
+    const { isPaid } = usePaidAssessments();
 
     const grouped = useMemo(() => {
         const map: Record<Track, ExploreExam[]> = { core: [], technical: [], career: [] };
@@ -129,15 +132,19 @@ const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onN
                             </div>
 
                             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                                {exams.map((exam) => (
-                                    <ExploreAssessmentCard
-                                        key={exam.id}
-                                        exam={exam}
-                                        outcomes={examDetails[exam.id]?.outcomes ?? []}
-                                        focus={examDetails[exam.id]?.focus}
-                                        onKnowMore={() => onNavigateToDetails(exam)}
-                                    />
-                                ))}
+                                {exams.map((exam) => {
+                                    const paidStatus = computePaidStatus(exam.id, isPaid);
+                                    return (
+                                        <ExploreAssessmentCard
+                                            key={exam.id}
+                                            exam={exam}
+                                            outcomes={examDetails[exam.id]?.outcomes ?? []}
+                                            focus={examDetails[exam.id]?.focus}
+                                            paidStatus={paidStatus}
+                                            onKnowMore={() => onNavigateToDetails(exam)}
+                                        />
+                                    );
+                                })}
                             </div>
                         </section>
                     );
@@ -173,14 +180,30 @@ const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onN
     );
 };
 
+type PaidStatus = { kind: 'none' } | { kind: 'paid' } | { kind: 'partial'; count: number; total: number };
+
+const computePaidStatus = (
+    examId: string,
+    isPaid: (key: PaymentKey) => boolean,
+): PaidStatus => {
+    if (examId === 'coding') {
+        const total = CODING_LANGUAGES.length;
+        const count = CODING_LANGUAGES.filter((lang) => isPaid(codingPaymentKey(lang.id))).length;
+        if (count === 0) return { kind: 'none' };
+        return { kind: 'partial', count, total };
+    }
+    return isPaid(examId as PaymentKey) ? { kind: 'paid' } : { kind: 'none' };
+};
+
 interface ExploreAssessmentCardProps {
     exam: ExploreExam;
     outcomes: string[];
     focus?: string;
+    paidStatus: PaidStatus;
     onKnowMore: () => void;
 }
 
-const ExploreAssessmentCard: React.FC<ExploreAssessmentCardProps> = ({ exam, outcomes, focus, onKnowMore }) => {
+const ExploreAssessmentCard: React.FC<ExploreAssessmentCardProps> = ({ exam, outcomes, focus, paidStatus, onKnowMore }) => {
     const isReady = exam.available;
     const accent = exam.accentColor || '#1ED36A';
     const gradient = exam.gradient || `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`;
@@ -202,10 +225,28 @@ const ExploreAssessmentCard: React.FC<ExploreAssessmentCardProps> = ({ exam, out
                     {exam.icon}
                 </div>
                 {isReady ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                        Ready
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                            Ready
+                        </span>
+                        {paidStatus.kind === 'paid' && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                                style={{ background: `${accent}1f`, color: accent }}
+                            >
+                                Paid
+                            </span>
+                        )}
+                        {paidStatus.kind === 'partial' && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                                style={{ background: `${accent}1f`, color: accent }}
+                            >
+                                {paidStatus.count}/{paidStatus.total} languages
+                            </span>
+                        )}
+                    </div>
                 ) : (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
                         <LockIcon className="w-3 h-3" />
