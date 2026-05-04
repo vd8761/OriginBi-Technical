@@ -1,107 +1,134 @@
-import React from 'react';
+import React from "react";
 
 interface AptitudePreTestProps {
     onStart: () => void;
     onClose: () => void;
 }
 
-const CustomTimeIcon = () => (
-    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-);
+const metrics = [
+    { label: "Questions", value: "60" },
+    { label: "Duration", value: "60 min" },
+    { label: "Sections", value: "4" },
+    { label: "Attempts", value: "1 out of 2" },
 
-const CustomQuestionIcon = () => (
-    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-);
+];
+
+const checklist = [
+    "Keep one uninterrupted 60 minute window ready.",
+    "Use a laptop or desktop for the most stable test layout.",
+    "Avoid refreshing the browser after the assessment begins.",
+    "Submit only when you are confident with your selected answers.",
+];
+
+const skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"];
 
 const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) => {
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 sm:px-6">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-brand-dark-primary/60 backdrop-blur-sm transition-opacity animate-fade-in"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
+            <button
+                type="button"
+                className="absolute inset-0 bg-[#0f1712]/70 backdrop-blur-sm"
                 onClick={onClose}
+                aria-label="Close aptitude assessment intro"
             />
 
-            {/* Modal Content */}
-            <div className="relative w-full max-w-xl bg-white dark:bg-brand-dark-primary rounded-3xl shadow-2xl border border-brand-light-tertiary dark:border-white/10 flex flex-col max-h-[90vh] animate-notice-pop overflow-hidden transition-colors duration-300">
-                <div className="overflow-y-auto custom-scrollbar flex-1 p-6 sm:p-8">
-                    <div className="flex justify-between items-start mb-4">
-                        <p className="text-[10px] sm:text-xs text-black dark:text-white font-medium max-w-[250px] leading-relaxed uppercase tracking-wider">
-                            The mind is not a vessel to be filled, but a fire to be kindled.
-                        </p>
-                    </div>
+            <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="aptitude-pretest-title"
+                className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
+            >
+                <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
 
-                    <h2 className="text-[clamp(18px,2vw,28px)] font-semibold text-black dark:text-white mb-2 leading-tight tracking-tight">
-                        Aptitude Assessment
-                    </h2>
-
-                    <p className="text-black dark:text-white text-[clamp(11px,0.9vw,14px)] leading-relaxed mb-6 font-medium">
-                        Challenge your logical, numerical, and verbal reasoning through this comprehensive test designed to measure job-readiness.
-                    </p>
-
-                    {/* Meta Info Box */}
-                    <div className="bg-brand-light-primary dark:bg-white/5 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 sm:gap-8 border border-brand-light-tertiary dark:border-white/5 mb-6">
-                        <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
-                            <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center shrink-0">
-                                <CustomQuestionIcon />
-                            </div>
-                            <span className="text-[clamp(11px,0.9vw,14px)] font-medium text-black dark:text-white">
-                                Total of <strong className="text-black dark:text-white font-bold">60 Questions</strong>
-                            </span>
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2Z" />
+                            </svg>
                         </div>
+                        <div>
+                            <p className="text-sm font-bold text-brand-green">Ready assessment</p>
+                            <h2 id="aptitude-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-[#17201b] dark:text-white">
+                                Aptitude Assessment
+                            </h2>
+                            <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
 
-                        <div className="w-full h-px sm:w-px sm:h-10 bg-brand-light-tertiary dark:bg-white/10 block"></div>
-
-                        <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
-                            <div className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center shrink-0">
-                                <CustomTimeIcon />
-                            </div>
-                            <span className="text-[clamp(11px,0.9vw,14px)] font-medium text-black dark:text-white">
-                                Allotted time is <strong className="text-black dark:text-white font-bold">60 Minutes</strong>
-                            </span>
+                                Benchmark problem-solving speed, numerical accuracy, logical reasoning, and data interpretation in one structured session.
+                            </p>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b]/40 transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white/40"
 
-                    <h4 className="text-black dark:text-white font-bold mb-3 text-[clamp(12px,1vw,15px)]">Please Read Carefully</h4>
-                    <ul className="space-y-3 mb-2">
-                        {[
-                            "Each question has a specific time limit based on its difficulty level.",
-                            "You cannot go back to previous questions once they are submitted or timed out.",
-                            "Ensure you have a stable internet connection before beginning the test.",
-                            "The assessment will automatically submit when the total time expires."
-                        ].map((point, i) => (
-                            <li key={i} className="text-[clamp(10px,0.8vw,13px)] text-black dark:text-white flex items-start gap-3 font-medium">
-                                <span className="block w-1.5 h-1.5 rounded-full bg-brand-green mt-1.5 shrink-0"></span>
-                                {point}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
+                        aria-label="Close"
+                    >
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fillRule="evenodd" d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 1 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                        </svg>
+                    </button>
+                </header>
 
-                {/* Footer Actions */}
-                <div className="p-5 sm:p-6 border-t border-brand-light-tertiary dark:border-white/10 bg-gray-50 dark:bg-white/5">
-                    <div className="flex justify-end gap-3 sm:gap-4">
-                        <button
-                            onClick={onClose}
-                            className="px-6 py-2.5 rounded-full border border-gray-200 dark:border-white/20 text-black dark:text-white/80 font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                        >
-                            Go Back
-                        </button>
-                        <button
-                            onClick={onStart}
-                            className="px-10 py-2.5 rounded-full bg-brand-green text-white text-sm font-medium hover:bg-[#1bb85c] transition-all active:scale-95 shadow-md shadow-brand-green/10"
-                        >
-                            Begin Assessment
-                        </button>
+                <div className="overflow-y-auto p-5 sm:p-6">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+                        <div>
+                            <h3 className="text-base font-bold text-[#17201b] dark:text-white">What this test covers</h3>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                {skills.map((skill) => (
+                                    <div key={skill} className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-3 text-sm font-medium text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
+
+                                        {skill}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <h3 className="mt-6 text-base font-bold text-[#17201b] dark:text-white">Start checklist</h3>
+                            <div className="mt-4 space-y-3">
+                                {checklist.map((point) => (
+                                    <div key={point} className="flex items-start gap-3">
+                                        <span className="mt-2 h-2 w-2 shrink-0 rounded-sm bg-brand-green" />
+                                        <p className="text-sm font-medium leading-6 text-[#17201b]/80 dark:text-white/80">{point}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <aside className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-4 dark:border-white/10 dark:bg-white/5">
+                            <h3 className="text-sm font-bold text-[#17201b] dark:text-white">Session snapshot</h3>
+                            <div className="mt-4 divide-y divide-brand-green/10 dark:divide-white/10">
+                                {metrics.map((metric) => (
+                                    <div key={metric.label} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                                        <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">{metric.label}</span>
+                                        <strong className="text-sm font-bold text-[#17201b] dark:text-white">{metric.value}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                        </aside>
+
                     </div>
                 </div>
-            </div>
+
+                <footer className="flex flex-col gap-3 border-t border-brand-green/5 bg-brand-green/5 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:bg-transparent dark:text-white"
+                    >
+                        Go back
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onStart}
+                        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-green px-6 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                    >
+                        Begin test
+                    </button>
+                </footer>
+            </section>
         </div>
     );
 };
 
 export default AptitudePreTest;
+

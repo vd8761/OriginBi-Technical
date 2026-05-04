@@ -1,39 +1,21 @@
 "use client";
 
 import React from 'react';
-import CommunicationEngine from '../../../components/assessment/communication/CommunicationEngine';
+import CommunicationEngine, { type CommunicationAnswers } from '../../../components/assessment/communication/CommunicationEngine';
 import { useRouter } from 'next/navigation';
-
-import SubmissionSuccess from '../../../components/ui/SubmissionSuccess';
-import { useState } from 'react';
 
 export default function CommunicationAssessmentPage() {
     const router = useRouter();
-    const [isSubmitted, setIsSubmitted] = useState(false);
 
-    const handleComplete = (answers: Record<string, any>) => {
+    const handleComplete = (answers: CommunicationAnswers) => {
         console.log("Communication Assessment Completed. Answers:", answers);
-        // Here you would typically send data to backend
-        setIsSubmitted(true);
+        alert("Assessment Completed successfully! Responses are saved.");
+        router.push('/'); // Route back to portal
     };
 
-    if (isSubmitted) {
-        return (
-            <SubmissionSuccess 
-                onAction={() => router.push('/')}
-                message="Assessment submitted! Check your dashboard to view your detailed performance score."
-            />
-        );
-    }
-
     return (
-        <div className="min-h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary transition-colors duration-500 font-sans flex flex-col relative overflow-hidden">
-            {/* Background layer */}
-            <div className="absolute inset-0 portal-bg opacity-100 pointer-events-none" />
-            
-            <main className="flex-1 flex flex-col relative z-10 w-full">
-                <CommunicationEngine onComplete={handleComplete} />
-            </main>
+        <div className="min-h-screen w-full">
+            <CommunicationEngine onComplete={handleComplete} />
         </div>
     );
 }
