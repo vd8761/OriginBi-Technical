@@ -26,6 +26,7 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
                     </span>
                 </div>
                 <h2 className="text-lg font-bold leading-8 text-[#17201b] dark:text-white">
+
                     {question.text}
                 </h2>
             </section>
@@ -54,6 +55,7 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
                                 {labels[index]}
                             </span>
                             <span className={`text-sm font-semibold leading-6 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
+
                                 {option.text}
                             </span>
                         </button>
@@ -65,3 +67,4 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
 };
 
 export default ConceptualQuestionComponent;
+

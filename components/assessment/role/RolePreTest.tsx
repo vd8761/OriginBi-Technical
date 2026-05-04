@@ -10,6 +10,7 @@ const metrics = [
     { label: "Duration", value: "30 min" },
     { label: "Format", value: "MCQ + scenario" },
     { label: "Attempts", value: "1 out of 2" },
+
 ];
 
 const checklist = [
@@ -38,6 +39,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                 className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
             >
                 <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
+
                     <div className="flex items-start gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
                             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -50,6 +52,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                                 Role-Based Assessment
                             </h2>
                             <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
+
                                 Check role-fit through concept questions and work scenarios that test judgement, prioritization, and practical decisions.
                             </p>
                         </div>
@@ -62,6 +65,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                     >
                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fillRule="evenodd" d="M5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 1 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+
                         </svg>
                     </button>
                 </header>
@@ -73,17 +77,20 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                                 {skills.map((skill) => (
                                     <div key={skill} className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-3 text-sm font-medium text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
+
                                         {skill}
                                     </div>
                                 ))}
                             </div>
 
                             <h3 className="mt-6 text-base font-bold text-[#17201b] dark:text-white">Start checklist</h3>
+
                             <div className="mt-4 space-y-3">
                                 {checklist.map((point) => (
                                     <div key={point} className="flex items-start gap-3">
                                         <span className="mt-2 h-2 w-2 shrink-0 rounded-sm bg-brand-green" />
                                         <p className="text-sm font-medium leading-6 text-[#17201b]/80 dark:text-white/80">{point}</p>
+
                                     </div>
                                 ))}
                             </div>
@@ -96,6 +103,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                                     <div key={metric.label} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                                         <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">{metric.label}</span>
                                         <strong className="text-sm font-bold text-[#17201b] dark:text-white">{metric.value}</strong>
+
                                     </div>
                                 ))}
                             </div>
@@ -103,11 +111,11 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-brand-green/5 bg-brand-green/5 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
+                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:bg-transparent dark:text-white"
+                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:text-white"
                     >
                         Go back
                     </button>
@@ -125,3 +133,4 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
 };
 
 export default RolePreTest;
+

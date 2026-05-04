@@ -1,472 +1,1078 @@
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Header from './Header';
-import AssessmentCard from './AssessmentCard';
-import AptitudePreTest from '../assessment/aptitude/AptitudePreTest';
-import CommunicationPreTest from '../assessment/communication/CommunicationPreTest';
-import RolePreTest from '../assessment/role/RolePreTest';
-import AptitudeDashboard from './AptitudeDashboard';
-import ExploreView from './ExploreView';
-import ProfileView from './ProfileView';
-import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from '../icons';
+"use client";
+
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Header from "./Header";
+import ExamCarousel, { Exam } from "./ExamCarousel";
+import ExamDetailModal from "./ExamDetailModal";
+import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
+import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
+import RolePreTest from "../assessment/role/RolePreTest";
+import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from "../icons";
+
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
+type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
+type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
+
+interface PricingTier {
+  id: string;
+  name: string;
+  price: number;
+  originalPrice?: number;
+  discount?: number;
+  features: string[];
+  badge?: string;
+  popular?: boolean;
+}
+
+interface ExtendedExam extends Exam {
+  track: Exclude<AssessmentFilter, "all" | "ready">;
+}
+
+interface ExamDetailData {
+  focus: string;
+  skills: { title: string; description: string }[];
+  sections: { name: string; detail: string; weight: string }[];
+  outcomes: string[];
+  requirements: string[];
+  pricingTiers: PricingTier[];
+}
+
+const EXAMS: ExtendedExam[] = [
+  {
+    id: "aptitude",
+    title: "Aptitude Assessment",
+    shortTitle: "Aptitude",
+    description: "Evaluate numerical agility, logical structure, data interpretation, and pattern recognition under timed conditions.",
+    duration: "60 min",
+    questions: 60,
+    difficulty: "Intermediate",
+    price: 99,
+    tags: ["Quantitative", "Logical", "Data", "Abstract"],
+    icon: <AptitudeIcon className="w-7 h-7" />,
+    available: true,
+    statusLabel: "Ready",
+    accentColor: "#10b981",
+    gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    track: "core",
+  },
+  {
+    id: "communication",
+    title: "Communication Assessment",
+    shortTitle: "Communication",
+    description: "Measure listening, speaking, reading, and writing performance through workplace-style tasks.",
+    duration: "30 min",
+    questions: 40,
+    difficulty: "Beginner",
+    price: 149,
+    tags: ["Listening", "Speaking", "Reading", "Writing"],
+    icon: <CommunicationIcon className="w-7 h-7" />,
+    available: true,
+    statusLabel: "Ready",
+    accentColor: "#06b6d4",
+    gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+    track: "core",
+  },
+  {
+    id: "coding",
+    title: "Coding Assessment",
+    shortTitle: "Coding",
+    description: "Validate programming fundamentals with number logic, strings, arrays, and simulation-driven exercises.",
+    duration: "90 min",
+    questions: 30,
+    difficulty: "Intermediate",
+    price: 199,
+    originalPrice: 299,
+    discount: 33,
+    tags: ["Logic", "Strings", "Arrays", "Simulation"],
+    icon: <CodingIcon className="w-7 h-7" />,
+    available: false,
+    statusLabel: "Coming Soon",
+    accentColor: "#f59e0b",
+    gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    track: "technical",
+  },
+  {
+    id: "mnc",
+    title: "MNC Based Questions",
+    shortTitle: "MNC Prep",
+    description: "Practice high-frequency interview patterns across arrays, trees, dynamic programming, graphs, and systems thinking.",
+    duration: "60 min",
+    questions: 25,
+    difficulty: "Advanced",
+    price: 249,
+    originalPrice: 399,
+    discount: 38,
+    tags: ["Arrays", "Trees", "DP", "Graphs"],
+    icon: <MNCIcon className="w-7 h-7" />,
+    available: false,
+    statusLabel: "Coming Soon",
+    accentColor: "#6366f1",
+    gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+    track: "technical",
+  },
+  {
+    id: "role",
+    title: "Role Based Questions",
+    shortTitle: "Role Based",
+    description: "Assess role-fit through conceptual MCQs and scenario decisions designed around practical job responsibilities.",
+    duration: "45 min",
+    questions: 20,
+    difficulty: "Intermediate",
+    price: 299,
+    tags: ["Concepts", "Scenarios", "Judgement", "Role fit"],
+    icon: <RoleIcon className="w-7 h-7" />,
+    available: true,
+    statusLabel: "Ready",
+    accentColor: "#84cc16",
+    gradient: "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)",
+    track: "career",
+  },
+];
+
+const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
+  aptitude: {
+    focus: "A balanced cognitive benchmark for early career candidates and campus hiring preparation.",
+    skills: [
+      { title: "Numerical accuracy", description: "Speed and correctness across arithmetic, ratios, percentages, and business math." },
+      { title: "Structured reasoning", description: "Ability to decode patterns, relationships, and constraints without guesswork." },
+      { title: "Data interpretation", description: "Reading tables, charts, and comparisons with clear analytical judgement." },
+      { title: "Abstract logic", description: "Visual and non-verbal reasoning for unfamiliar problem formats." },
+    ],
+    sections: [
+      { name: "Quantitative Aptitude", detail: "Percentages, profit and loss, time and work, averages, mixtures, and SI/CI.", weight: "30%" },
+      { name: "Logical Reasoning", detail: "Series, seating, blood relations, syllogisms, directions, and coding-decoding.", weight: "30%" },
+      { name: "Data Interpretation", detail: "Bar charts, line graphs, pie charts, tables, and comparison sets.", weight: "25%" },
+      { name: "Abstract Reasoning", detail: "Matrix figures, visual series, odd-one-out, and spatial patterns.", weight: "15%" },
+    ],
+    outcomes: ["Accuracy heatmap by section", "Time-per-question distribution", "Strength and gap summary", "Recommended practice plan"],
+    requirements: ["Stable internet connection", "Quiet workspace", "Desktop or laptop preferred", "One uninterrupted 60 minute session"],
+    pricingTiers: [
+      {
+        id: "basic",
+        name: "Basic",
+        price: 99,
+        features: ["Full exam access", "Basic score report", "Section-wise breakdown"],
+        badge: "Starter",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        price: 149,
+        originalPrice: 199,
+        discount: 25,
+        features: ["Full exam access", "Detailed analytics", "Skill gap analysis", "Practice recommendations"],
+        popular: true,
+      },
+      {
+        id: "premium",
+        name: "Premium",
+        price: 249,
+        originalPrice: 349,
+        discount: 29,
+        features: ["Everything in Standard", "1-on-1 expert review", "Personalized study plan", "Mock interview session"],
+      },
+    ],
+  },
+  communication: {
+    focus: "A practical language benchmark for interviews, client calls, workplace writing, and professional collaboration.",
+    skills: [
+      { title: "Listening comprehension", description: "Extracting intent, facts, and tone from short business audio prompts." },
+      { title: "Speaking clarity", description: "Pronunciation, pacing, structure, and confidence during recorded responses." },
+      { title: "Reading judgement", description: "Understanding passages, inferences, summaries, and professional context." },
+      { title: "Writing quality", description: "Grammar, organization, tone, and concise workplace expression." },
+    ],
+    sections: [
+      { name: "Listening", detail: "Audio prompts followed by comprehension and inference questions.", weight: "25%" },
+      { name: "Speaking", detail: "Recorded responses for introductions, opinions, and scenario explanations.", weight: "25%" },
+      { name: "Reading", detail: "Passage-based questions built around workplace communication.", weight: "25%" },
+      { name: "Writing", detail: "Short-form professional writing prompts and structured responses.", weight: "25%" },
+    ],
+    outcomes: ["Fluency and clarity score", "Comprehension profile", "Writing improvement notes", "Interview communication guidance"],
+    requirements: ["Working microphone", "Audio playback enabled", "Quiet environment", "Browser permission for recording"],
+    pricingTiers: [
+      {
+        id: "basic",
+        name: "Basic",
+        price: 149,
+        features: ["Full exam access", "Basic score report", "Section-wise breakdown"],
+        badge: "Starter",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        price: 199,
+        originalPrice: 249,
+        discount: 20,
+        features: ["Full exam access", "Detailed analytics", "Fluency metrics", "Improvement tips"],
+        popular: true,
+      },
+      {
+        id: "premium",
+        name: "Premium",
+        price: 299,
+        originalPrice: 399,
+        discount: 25,
+        features: ["Everything in Standard", "Speaking coach review", "Personalized exercises", "Video feedback session"],
+      },
+    ],
+  },
+  coding: {
+    focus: "A fundamentals-first programming screen for candidates building confidence before harder technical interviews.",
+    skills: [
+      { title: "Problem decomposition", description: "Breaking a prompt into inputs, constraints, logic, and edge cases." },
+      { title: "Core syntax thinking", description: "Using loops, conditionals, functions, and collections with control." },
+      { title: "Debugging judgement", description: "Spotting off-by-one mistakes, invalid states, and missed cases." },
+      { title: "Simulation logic", description: "Translating small real-world flows into reliable code steps." },
+    ],
+    sections: [
+      { name: "Number Logic", detail: "Parity, digit operations, ranges, divisibility, and mathematical sequences.", weight: "25%" },
+      { name: "Strings", detail: "Search, transform, compare, validate, and count text patterns.", weight: "25%" },
+      { name: "Arrays", detail: "Traversal, frequency, pair logic, sorting basics, and window-style thinking.", weight: "30%" },
+      { name: "Simulation", detail: "State updates, rule-based flows, and scenario implementation.", weight: "20%" },
+    ],
+    outcomes: ["Topic readiness profile", "Edge-case awareness", "Debugging focus areas", "Next technical practice path"],
+    requirements: ["Desktop or laptop", "Code editor area inside the test", "Stable internet connection", "90 minute focus window"],
+    pricingTiers: [
+      {
+        id: "basic",
+        name: "Basic",
+        price: 199,
+        originalPrice: 249,
+        discount: 20,
+        features: ["Full exam access", "Basic score report", "Test cases passed"],
+        badge: "Early Access",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        price: 249,
+        originalPrice: 349,
+        discount: 29,
+        features: ["Full exam access", "Time complexity analysis", "Code quality score", "Solution explanations"],
+        popular: true,
+      },
+      {
+        id: "premium",
+        name: "Premium",
+        price: 349,
+        originalPrice: 499,
+        discount: 30,
+        features: ["Everything in Standard", "Mentor code review", "Algorithm suggestions", "Practice problem set"],
+      },
+    ],
+  },
+  mnc: {
+    focus: "A sharper interview-practice track for candidates targeting larger product, service, and consulting companies.",
+    skills: [
+      { title: "Pattern recognition", description: "Identifying when to use two pointers, hashing, trees, graphs, or DP." },
+      { title: "Complexity thinking", description: "Reasoning about time and space before choosing an approach." },
+      { title: "DSA fluency", description: "Applying data structures to common interview problem families." },
+      { title: "Round strategy", description: "Prioritizing correctness, explanation, and tradeoffs under interview pressure." },
+    ],
+    sections: [
+      { name: "Arrays and Hashing", detail: "Frequency maps, pairs, subarrays, sorting, and search patterns.", weight: "30%" },
+      { name: "Trees and Graphs", detail: "Traversal, shortest paths, connected components, and hierarchy questions.", weight: "25%" },
+      { name: "Dynamic Programming", detail: "State definition, recurrence, memoization, and tabulation basics.", weight: "25%" },
+      { name: "Mixed Interview Set", detail: "Company-style combinations of logic, DSA, and constraints.", weight: "20%" },
+    ],
+    outcomes: ["Interview topic map", "Problem family gaps", "Complexity reasoning notes", "Company-round practice priorities"],
+    requirements: ["DSA fundamentals", "Desktop or laptop", "Stable internet connection", "One uninterrupted 60 minute session"],
+    pricingTiers: [
+      {
+        id: "basic",
+        name: "Basic",
+        price: 249,
+        originalPrice: 349,
+        discount: 29,
+        features: ["Full exam access", "Basic score report", "Difficulty rating"],
+        badge: "Early Access",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        price: 299,
+        originalPrice: 449,
+        discount: 33,
+        features: ["Full exam access", "Company-wise trends", "Time analysis", "Weak area identification"],
+        popular: true,
+      },
+      {
+        id: "premium",
+        name: "Premium",
+        price: 399,
+        originalPrice: 599,
+        discount: 33,
+        features: ["Everything in Standard", "Mock interview", "Company-specific tips", "Study roadmap"],
+      },
+    ],
+  },
+  role: {
+    focus: "A role-fit diagnostic that tests conceptual knowledge and decision-making in realistic work situations.",
+    skills: [
+      { title: "Domain concepts", description: "Understanding of core terminology, workflows, and role-specific fundamentals." },
+      { title: "Scenario judgement", description: "Choosing practical actions when requirements, constraints, or people conflict." },
+      { title: "Professional reasoning", description: "Explaining tradeoffs and recognizing business impact." },
+      { title: "Role alignment", description: "Matching your thinking patterns against expectations for the target path." },
+    ],
+    sections: [
+      { name: "Conceptual MCQs", detail: "Role-specific fundamentals, tools, principles, and common workflows.", weight: "45%" },
+      { name: "Scenario Decisions", detail: "Realistic workplace cases with best-action selection.", weight: "35%" },
+      { name: "Priority Calls", detail: "Questions that test judgement under constraints.", weight: "10%" },
+      { name: "Reflection Prompts", detail: "Short responses that reveal communication and reasoning style.", weight: "10%" },
+    ],
+    outcomes: ["Role-fit summary", "Concept confidence map", "Scenario judgement notes", "Career path recommendations"],
+    requirements: ["Choose your target role before starting", "Quiet workspace", "Stable internet connection", "30 minute focus window"],
+    pricingTiers: [
+      {
+        id: "basic",
+        name: "Basic",
+        price: 299,
+        features: ["Full exam access", "Basic role-fit report", "Top 3 role matches"],
+        badge: "Starter",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        price: 349,
+        originalPrice: 449,
+        discount: 22,
+        features: ["Full exam access", "Detailed role analysis", "Skill-to-role mapping", "Career suggestions"],
+        popular: true,
+      },
+      {
+        id: "premium",
+        name: "Premium",
+        price: 499,
+        originalPrice: 699,
+        discount: 29,
+        features: ["Everything in Standard", "Career coach session", "Personalized roadmap", "Industry insights"],
+      },
+    ],
+  },
+};
+
+const FILTERS: { label: string; value: AssessmentFilter }[] = [
+  { label: "All", value: "all" },
+  { label: "Ready now", value: "ready" },
+  { label: "Core skills", value: "core" },
+  { label: "Tech hiring", value: "technical" },
+  { label: "Career fit", value: "career" },
+];
+
+const TRACK_PALETTE = {
+  core: "#10b981",
+  technical: "#f59e0b",
+  career: "#06b6d4",
+} as const;
 
 const AssessmentPortal: React.FC = () => {
-    const [showAptitudeModal, setShowAptitudeModal] = useState(false);
-    const [showCommunicationModal, setShowCommunicationModal] = useState(false);
-    const [showRoleModal, setShowRoleModal] = useState(false);
-    const [currentView, setCurrentView] = useState<"dashboard" | "assessment" | "profile" | "details" | "counsellor" | "roadmaps">("counsellor");
-    const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
-    const router = useRouter();
+  const [showAptitudeModal, setShowAptitudeModal] = useState(false);
+  const [showCommunicationModal, setShowCommunicationModal] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
+  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+  const [filter, setFilter] = useState<AssessmentFilter>("all");
+  const router = useRouter();
 
-    const assessments = [
-        {
-            title: "Aptitude Assessment",
-            description: "Evaluate logical thinking, numerical problem-solving, data interpretation, and abstract reasoning skills.",
-            progress: 100,
-            totalQuestions: 60,
-            completedQuestions: 60,
-            status: "completed" as const,
-            icon: <AptitudeIcon />,
-            price: "₹99.00",
-            tags: ["Quantitative", "Logical", "DI", "Abstract"],
-            duration: "60 Mins",
-            isPurchased: true
-        },
-        {
-            title: "Communication Assessment",
-            description: "Measure proficiency across Listening, Speaking, Reading, and Writing to simulate real-world workplace scenarios.",
-            progress: 0,
-            totalQuestions: 40,
-            completedQuestions: 0,
-            status: "not-started" as const,
-            icon: <CommunicationIcon />,
-            price: "₹149.00",
-            tags: ["Listening", "Speaking", "Reading", "Writing"],
-            duration: "45 Mins",
-            isPurchased: true
-        },
-        {
-            title: "Coding Assessment",
-            description: "Showcase fundamental programming ability through number logic, string manipulation, and real-world simulations.",
-            progress: 0,
-            totalQuestions: 30,
-            completedQuestions: 0,
-            status: "not-started" as const,
-            icon: <CodingIcon />,
-            price: "₹199.00",
-            tags: ["Number Logic", "Strings", "Simulation", "Arrays"],
-            duration: "90 Mins",
-            isPurchased: false
-        },
-        {
-            title: "MNC Based Questions",
-            description: "Advanced DSA assessment covering core topics like Arrays, Trees, and DP frequently asked in top-tier tech companies.",
-            progress: 0,
-            totalQuestions: 25,
-            completedQuestions: 0,
-            status: "not-started" as const,
-            icon: <MNCIcon />,
-            price: "₹249.00",
-            tags: ["Arrays", "Trees", "DP", "Graphs"],
-            duration: "60 Mins",
-            isPurchased: false
-        },
-        {
-            title: "Role Based Questions",
-            description: "Domain-specific evaluation featuring conceptual MCQ and scenario-based problem solving for your target role.",
-            progress: 0,
-            totalQuestions: 20,
-            completedQuestions: 0,
-            status: "not-started" as const,
-            icon: <RoleIcon />,
-            price: "₹299.00",
-            tags: ["Conceptual", "Scenario-Based"],
-            duration: "45 Mins",
-            isPurchased: false
-        }
-    ];
+  const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
 
+  const filteredExams = useMemo(() => {
+    if (filter === "ready") {
+      return EXAMS.filter((exam) => exam.available);
+    }
+    if (filter === "all") {
+      return EXAMS;
+    }
+    return EXAMS.filter((exam) => (exam as ExtendedExam).track === filter);
+  }, [filter]);
 
-    return (
-        <div className="min-h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary transition-colors duration-500 font-sans">
-            {/* Background Layer */}
-            <div className="fixed inset-0 portal-bg opacity-100 dark:opacity-40 pointer-events-none z-0"></div>
+  const totalQuestions = useMemo(() => EXAMS.reduce((sum, exam) => sum + exam.questions, 0), []);
+  const totalDuration = useMemo(
+    () => EXAMS.reduce((sum, exam) => sum + (parseInt(exam.duration, 10) || 0), 0),
+    [],
+  );
 
-            <Header
-                currentView={currentView}
-                onNavigate={(view) => setCurrentView(view)}
-                onLogout={() => console.log("Logging out...")}
-            />
+  const readinessScore = useMemo(() => {
+    if (!EXAMS.length) {
+      return 0;
+    }
+    return Math.round((readyExams.length / EXAMS.length) * 100);
+  }, [readyExams.length]);
 
-            <div className="relative z-10 pt-24 sm:pt-28 pb-12 px-4 sm:px-6 lg:px-8">
-                {currentView === "assessment" ? (
-                    <>
-                        {/* Hero Section */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                            <div className="flex-1 w-full">
-                                <h1 className="text-[clamp(24px,2.5vw,32px)] font-semibold text-slate-800 dark:text-white mb-2 transition-colors tracking-tight">
-                                    Your Assessments
-                                </h1>
-                                <p className="text-slate-600 dark:text-gray-300 text-[clamp(12px,0.9vw,14px)] max-w-2xl font-normal transition-colors leading-relaxed">
-                                    Manage and track your purchased assessments. Start your journey toward MNC readiness by completing your assigned modules.
-                                </p>
-                            </div>
-                        </div>
+  const avgDuration = useMemo(
+    () => Math.round(totalDuration / Math.max(EXAMS.length, 1)),
+    [totalDuration],
+  );
 
-                        {/* Grid - Only Purchased */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                            {assessments.filter(a => a.isPurchased).map((item, idx) => (
-                                <AssessmentCard
-                                    key={idx}
-                                    {...item}
-                                    onDetailsClick={() => {
-                                        setSelectedAssessment(item);
-                                        setCurrentView("details");
-                                    }}
-                                    onClick={() => {
-                                        if (item.title === "Aptitude Assessment") {
-                                            setShowAptitudeModal(true);
-                                        } else if (item.title === "Communication Assessment") {
-                                            setShowCommunicationModal(true);
-                                        } else if (item.title === "Role Based Questions") {
-                                            setShowRoleModal(true);
-                                        } else {
-                                            console.log(`Starting ${item.title}`);
-                                        }
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    </>
-                ) : currentView === "details" && selectedAssessment ? (
-                    <div className="animate-fade-in">
-                        {/* Breadcrumbs */}
-                        <div className="flex items-center text-[12px] text-black dark:text-white mb-6 font-normal flex-wrap">
-                            <button
-                                onClick={() => setCurrentView("dashboard")}
-                                className="hover:text-gray-700 dark:hover:text-[#1ED36A] transition-colors cursor-pointer"
-                            >
-                                Dashboard
-                            </button>
-                            <span className="mx-2 text-black dark:text-white">
-                                <svg width="6" height="11" viewBox="0 0 8 15" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="text-black dark:text-white">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M0.858619 13.974C0.662243 14.1708 0.343861 14.1708 0.147484 13.974C-0.0488759 13.7771 -0.0488759 13.458 0.147484 13.2612L6.33311 7.06091L0.147281 0.860465C-0.049095 0.663641 -0.0490951 0.344505 0.147281 0.147665C0.343658 -0.0491765 0.662041 -0.0491766 0.8584 0.147665L7.3525 6.65711C7.46243 6.7673 7.51082 6.91578 7.49769 7.0597C7.51152 7.20431 7.4632 7.35375 7.35272 7.4645L0.858619 13.974Z" />
-                                </svg>
-                            </span>
-                            <button
-                                onClick={() => setCurrentView("assessment")}
-                                className="text-black dark:text-white hover:text-brand-green dark:hover:text-brand-green transition-colors cursor-pointer"
-                            >
-                                Your Assessments
-                            </button>
-                            <span className="mx-2 text-black dark:text-white">
-                                <svg width="6" height="11" viewBox="0 0 8 15" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="text-black dark:text-white">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M0.858619 13.974C0.662243 14.1708 0.343861 14.1708 0.147484 13.974C-0.0488759 13.7771 -0.0488759 13.458 0.147484 13.2612L6.33311 7.06091L0.147281 0.860465C-0.049095 0.663641 -0.0490951 0.344505 0.147281 0.147665C0.343658 -0.0491765 0.662041 -0.0491766 0.8584 0.147665L7.3525 6.65711C7.46243 6.7673 7.51082 6.91578 7.49769 7.0597C7.51152 7.20431 7.4632 7.35375 7.35272 7.4645L0.858619 13.974Z" />
-                                </svg>
-                            </span>
-                            <span className="text-brand-green font-medium">{selectedAssessment.title}</span>
-                        </div>
+  const avgPrice = useMemo(
+    () => Math.round(EXAMS.reduce((sum, exam) => sum + exam.price, 0) / Math.max(EXAMS.length, 1)),
+    [],
+  );
 
-                        <div className="flex flex-col gap-6 lg:gap-8">
-                            {/* Hero Section */}
-                            <div className="relative overflow-hidden bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-3xl">
+  const maxPrice = useMemo(
+    () => EXAMS.reduce((max, exam) => Math.max(max, exam.price), 0),
+    [],
+  );
 
-                                <div className="relative z-10 p-7 lg:p-10 flex flex-col lg:flex-row gap-8 items-stretch">
-                                    <div className="flex-1 flex flex-col justify-center">
+  const largestExam = useMemo(
+    () => EXAMS.reduce((prev, exam) => (exam.questions > prev.questions ? exam : prev), EXAMS[0]),
+    [],
+  );
 
+  const trackCounts = useMemo(() => {
+    const counts: Record<Exclude<AssessmentFilter, "all" | "ready">, number> = {
+      core: 0,
+      technical: 0,
+      career: 0,
+    };
 
-                                        <h1 className="text-[clamp(26px,3vw,40px)] font-bold text-slate-900 dark:text-white mb-2 tracking-tight leading-[1.1]">
-                                            {selectedAssessment.title}
-                                        </h1>
+    EXAMS.forEach((exam) => {
+      const track = (exam as ExtendedExam).track;
+      if (track) {
+        counts[track] += 1;
+      }
+    });
 
-                                        <p className="text-[clamp(13px,0.95vw,15px)] text-slate-600 dark:text-gray-300 max-w-2xl leading-relaxed mb-6 font-normal">
-                                            {selectedAssessment.description}
-                                        </p>
+    return counts;
+  }, []);
 
-                                        <div className="flex flex-wrap gap-8 items-center">
-                                            <div className="flex items-center gap-4 group">
-                                                <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 flex items-center justify-center transition-colors">
-                                                    <svg className="w-6 h-6 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1.5">Duration</p>
-                                                    <p className="text-[15px] font-semibold text-slate-800 dark:text-white leading-none">{selectedAssessment.duration}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4 group">
-                                                <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 flex items-center justify-center transition-colors">
-                                                    <svg className="w-6 h-6 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1.5">Questions</p>
-                                                    <p className="text-[15px] font-semibold text-slate-800 dark:text-white leading-none">{selectedAssessment.totalQuestions} Questions</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4 group">
-                                                <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 flex items-center justify-center transition-colors">
-                                                    <svg className="w-6 h-6 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1.5">Level</p>
-                                                    <p className="text-[15px] font-semibold text-slate-800 dark:text-white leading-none">Intermediate</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+  const spotlightExam = (readyExams[0] ?? EXAMS[0]) as Exam;
 
-                                    <div className="w-full lg:w-[320px] flex flex-col justify-center">
-                                        <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-[1.5rem] p-6 relative overflow-hidden">
-                                            <p className="text-[11px] font-medium text-slate-800 dark:text-white mb-1.5 relative z-10">Access Lifetime Report</p>
-                                            <div className="flex items-baseline gap-2 mb-6 relative z-10">
-                                                <span className="text-3xl font-black text-brand-green leading-none">{selectedAssessment.price}</span>
-                                                <span className="text-xs text-slate-500 dark:text-white font-medium">One-time</span>
-                                            </div>
+  const trackLanes = [
+    {
+      id: "core",
+      label: "Core skills",
+      description: "Quant, logic, and communication drills.",
+      count: trackCounts.core,
+      accent: TRACK_PALETTE.core,
+    },
+    {
+      id: "technical",
+      label: "Tech hiring",
+      description: "Coding, DSA, and interview patterns.",
+      count: trackCounts.technical,
+      accent: TRACK_PALETTE.technical,
+    },
+    {
+      id: "career",
+      label: "Career fit",
+      description: "Role-fit judgement and scenarios.",
+      count: trackCounts.career,
+      accent: TRACK_PALETTE.career,
+    },
+  ];
 
-                                            <button className="w-full py-3.5 bg-brand-green hover:bg-[#1bb85c] text-white rounded-xl font-medium text-sm transition-all active:scale-95 mb-5 relative z-10 cursor-pointer">
-                                                Unlock Full Access
-                                            </button>
+  const queueExams = readyExams.slice(0, 3);
 
-                                            <div className="space-y-2.5 relative z-10">
-                                                <div className="flex items-center gap-2 text-[10px] font-medium text-slate-800 dark:text-white">
-                                                    <svg className="w-4 h-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                    Lifetime Dashboard Access
-                                                </div>
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-black dark:text-white uppercase tracking-wider">
-                                                    <svg className="w-4 h-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                    Verified Certificate
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+  const momentumTrend = [36, 48, 42, 58, 66, 72, 68];
 
-                            {/* Content Grid */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <div className="lg:col-span-2 flex flex-col gap-8">
-                                    {/* Trial Assessment Card */}
-                                    <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                                        <div className="flex-1">
-                                            <div className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-brand-green/10 text-brand-green border border-brand-green/20 mb-3">
-                                                Limited Access
-                                            </div>
-                                            <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">Experience a Trial Assessment</h2>
-                                            <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                Get a preview of the question types and difficulty level. Try our 10-minute mini-assessment to calibrate your readiness before unlocking the full comprehensive report.
-                                            </p>
-                                        </div>
-                                        <button className="w-full md:w-auto px-8 py-3 bg-brand-green hover:bg-[#1bb85c] text-white rounded-xl font-bold text-[12px] shadow-lg shadow-brand-green/10 transition-all active:scale-95 cursor-pointer whitespace-nowrap">
-                                            Start Trial Test
-                                        </button>
-                                    </div>
+  const insightMetrics = [
+    {
+      label: "Career readiness",
+      value: `${readinessScore}%`,
+      detail: "skills verified",
+    },
+    {
+      label: "Skill coverage",
+      value: "12+",
+      detail: "core competencies",
+    },
+    {
+      label: "Industry aligned",
+      value: "5",
+      detail: "sectors covered",
+    },
+    {
+      label: "Learning paths",
+      value: "3",
+      detail: "career tracks",
+    },
+  ];
 
-                                    {/* Skills Assessed */}
-                                    <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8">
-                                        <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-6">Skills Assessed</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {selectedAssessment.title === "Aptitude Assessment" ? (
-                                                <>
-                                                    {[
-                                                        { title: "Quantitative Aptitude", desc: "Evaluate your numerical problem-solving speed, understanding of ratios, and advanced arithmetic capability." },
-                                                        { title: "Logical Reasoning", desc: "Benchmark your logical thinking through complex patterns, seating puzzles, and structured reasoning." },
-                                                        { title: "Data Interpretation", desc: "Test your ability to accurately analyze and extract actionable insights from complex data sets." },
-                                                        { title: "Abstract Reasoning", desc: "Measure your pattern recognition and non-verbal spatial reasoning skills under time pressure." }
-                                                    ].map((item, i) => (
-                                                        <div key={i} className="flex gap-3">
-                                                            <svg className="w-5 h-5 text-brand-green shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                            </svg>
-                                                            <div>
-                                                                <p className="font-semibold text-[13px] text-slate-800 dark:text-white mb-1">{item.title}</p>
-                                                                <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">{item.desc}</p>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </>
-                                            ) : (
-                                                <p className="text-slate-500 dark:text-gray-400 italic text-[12px] font-normal">Specific assessment dimensions coming soon...</p>
-                                            )}
-                                        </div>
-                                    </div>
+  const signalHighlights = [
+    {
+      label: "Recommended start",
+      value: "Aptitude",
+      detail: "foundational skills first",
+    },
+    {
+      label: "Growth potential",
+      value: "High",
+      detail: "based on skill gaps",
+    },
+    {
+      label: "Certification path",
+      value: "Available",
+      detail: "completion badge ready",
+    },
+  ];
 
-                                    {/* Assessment Instructions */}
-                                    <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8">
-                                        <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-6">Instructions & Guidelines</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-4">
-                                                <div className="flex gap-3">
-                                                    <div className="w-5 h-5 rounded-full bg-brand-green/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div>
-                                                    </div>
-                                                    <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                        <strong className="text-slate-800 dark:text-white font-semibold">Multiple Choice:</strong> All questions are in MCQ format with only one correct answer.
-                                                    </p>
-                                                </div>
-                                                <div className="flex gap-3">
-                                                    <div className="w-5 h-5 rounded-full bg-brand-green/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div>
-                                                    </div>
-                                                    <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                        <strong className="text-slate-800 dark:text-white font-semibold">Marking Scheme:</strong> 0.25 mark will be reduced for every wrong answer.
-                                                    </p>
-                                                </div>
-                                                <div className="flex gap-3">
-                                                    <div className="w-5 h-5 rounded-full bg-brand-green/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div>
-                                                    </div>
-                                                    <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                        <strong className="text-slate-800 dark:text-white font-semibold">Duration:</strong> The test must be completed within the allotted time. The timer cannot be paused.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-4">
-                                                <div className="flex gap-3">
-                                                    <div className="w-5 h-5 rounded-full bg-brand-green/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div>
-                                                    </div>
-                                                    <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                        <strong className="text-slate-800 dark:text-white font-semibold">Device:</strong> We recommend using a desktop or laptop for the best experience. Mobile is not recommended.
-                                                    </p>
-                                                </div>
-                                                <div className="flex gap-3">
-                                                    <div className="w-5 h-5 rounded-full bg-brand-green/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div>
-                                                    </div>
-                                                    <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                        <strong className="text-slate-800 dark:text-white font-semibold">Anti-Cheating:</strong> Switching tabs or browser windows during the test may lead to disqualification.
-                                                    </p>
-                                                </div>
-                                                <div className="flex gap-3">
-                                                    <div className="w-5 h-5 rounded-full bg-brand-green/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div>
-                                                    </div>
-                                                    <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                                        <strong className="text-slate-800 dark:text-white font-semibold">Connectivity:</strong> Ensure a stable internet connection. Use Chrome or Edge browsers.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+  const focusSignals = [
+    {
+      label: "Recommended start",
+      value: spotlightExam.shortTitle,
+      detail: `${spotlightExam.duration} - ${spotlightExam.questions} Qs`,
+    },
+    {
+      label: "Core lane depth",
+      value: `${trackCounts.core} exams`,
+      detail: "quant + logic coverage",
+    },
+    {
+      label: "Tech lane depth",
+      value: `${trackCounts.technical} exams`,
+      detail: "coding + MNC focus",
+    },
+    {
+      label: "Career lane depth",
+      value: `${trackCounts.career} exams`,
+      detail: "role-fit diagnostics",
+    },
+  ];
 
-                                <div className="flex flex-col gap-8">
-                                    {/* Assessment Overview Video */}
-                                    <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8">
-                                        <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Assessment Overview</h2>
-                                        <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-100 dark:border-white/10">
-                                            <iframe
-                                                width="100%"
-                                                height="100%"
-                                                src="https://www.youtube.com/embed/Y0Bc6YW9txo?si=av5GIZQjafOcOqy9"
-                                                title="YouTube video player"
-                                                frameBorder="0"
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                                referrerPolicy="strict-origin-when-cross-origin"
-                                                allowFullScreen
-                                                className="absolute inset-0"
-                                            ></iframe>
-                                        </div>
-                                        <p className="text-[12px] text-slate-500 dark:text-gray-400 mt-3 font-normal">Methodology, sections, and scoring system overview.</p>
-                                    </div>
+  const updateFeed = [
+    {
+      title: "Aptitude benchmark refreshed",
+      detail: "New logic patterns added to reasoning set.",
+      time: "2h ago",
+    },
+    {
+      title: "Communication tasks upgraded",
+      detail: "Listening cues now graded for nuance.",
+      time: "Yesterday",
+    },
+    {
+      title: "Role-fit rubric expanded",
+      detail: "Scenario variants for product roles.",
+      time: "2 days ago",
+    },
+  ];
 
-                                    {/* Certificate Card */}
-                                    <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 lg:p-8 flex flex-col items-center text-center">
-                                        <div className="w-14 h-14 bg-brand-green/10 rounded-full flex items-center justify-center mb-4 text-brand-green border border-brand-green/20">
-                                            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Verified Certification</h3>
-                                        <p className="text-[12px] text-slate-600 dark:text-gray-300 leading-relaxed font-normal">
-                                            Assessment completion certificate will be provided by <span className="font-bold text-brand-green">OriginBI</span> upon successful completion of this evaluation.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ) : currentView === "counsellor" ? (
-                    <ExploreView 
-                        assessments={assessments}
-                        onNavigateToDetails={(assessment) => {
-                            setSelectedAssessment(assessment);
-                            setCurrentView("details");
-                        }}
-                        onStartAssessment={(assessment) => {
-                            if (assessment.title === "Aptitude Assessment") {
-                                setShowAptitudeModal(true);
-                            } else if (assessment.title === "Communication Assessment") {
-                                setShowCommunicationModal(true);
-                            } else if (assessment.title === "Role Based Questions") {
-                                setShowRoleModal(true);
-                            } else {
-                                console.log(`Starting ${assessment.title}`);
-                            }
-                        }}
-                    />
-                ) : currentView === "dashboard" ? (
-                    <AptitudeDashboard onBack={() => setCurrentView("assessment")} />
-                ) : currentView === "profile" ? (
-                    <ProfileView onNavigate={(view) => setCurrentView(view)} />
-                ) : (
-                    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-brand-light-secondary dark:bg-brand-dark-secondary rounded-3xl border border-brand-light-tertiary dark:border-brand-dark-tertiary shadow-xl">
-                        <div className="w-20 h-20 bg-brand-green/10 rounded-full flex items-center justify-center mb-6">
-                            <ProfileIcon className="w-10 h-10 text-brand-green" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-brand-text-light-primary dark:text-white mb-2">
-                            Your Road Map
-                        </h2>
-                        <p className="text-brand-text-light-secondary dark:text-brand-text-secondary max-w-md">
-                            Personalized learning roadmaps based on your performance will be generated here.
+  const handleSelectExam = (exam: Exam) => {
+    setSelectedExam(exam);
+    setShowDetailModal(true);
+  };
+
+  const handleStartExam = (exam: Exam, tier?: PricingTier) => {
+    if (!exam.available) {
+      setSelectedExam(exam);
+      setShowDetailModal(true);
+      return;
+    }
+
+    // If a tier was selected, we could handle payment here
+    if (tier) {
+      console.log(`Processing payment for ${exam.title} - ${tier.name} tier: ₹${tier.price}`);
+    }
+
+    // Show appropriate pre-test modal
+    if (exam.id === "aptitude") {
+      setShowAptitudeModal(true);
+    } else if (exam.id === "communication") {
+      setShowCommunicationModal(true);
+    } else if (exam.id === "role") {
+      setShowRoleModal(true);
+    }
+  };
+
+  const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
+
+  return (
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#f5fbf7] dark:bg-[#0f1712] font-sans transition-colors duration-500">
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-gradient-to-br from-emerald-400/25 via-cyan-300/10 to-transparent blur-[90px] animate-float-slow opacity-80" />
+        <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-amber-300/20 via-emerald-300/10 to-transparent blur-[100px] animate-float-slower opacity-70" />
+        <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
+        <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
+      </div>
+
+      <Header
+        currentView={currentHeaderView}
+        onNavigate={(view) => setCurrentView(view)}
+        onLogout={() => console.log("Logging out...")}
+      />
+
+      <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
+        {currentView === "dashboard" || currentView === "assessment" ? (
+          <>
+            {/* Command Deck */}
+            <section className="relative overflow-hidden rounded-[2.75rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#101814]/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(15,23,42,0.12)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.55)] p-8 sm:p-12 lg:p-14">
+              <div className="absolute inset-0">
+                <div className="absolute -top-16 left-[-8%] h-72 w-72 rounded-full bg-gradient-to-br from-emerald-400/20 to-transparent blur-[60px] animate-float-slow" />
+                <div className="absolute bottom-[-25%] right-[-6%] h-80 w-80 rounded-full bg-gradient-to-tr from-cyan-400/20 to-transparent blur-[70px] animate-float-slower" />
+                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(15,23,42,0.03),rgba(15,23,42,0))] dark:bg-[linear-gradient(120deg,rgba(255,255,255,0.06),rgba(255,255,255,0))]" />
+              </div>
+
+              <div className="relative z-10 grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
+                <div className="animate-slide-up" style={{ animationDelay: "80ms" }}>
+                  <div className="inline-flex items-center gap-3 rounded-full border border-emerald-200/70 dark:border-emerald-500/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-5 py-2.5 text-emerald-700 dark:text-emerald-300 text-sm font-semibold tracking-wide shadow-sm">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    {readyExams.length} live assessments ready
+                  </div>
+
+                  <h1 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-[1.05]">
+                    Your career compass
+                    <span className="block mt-2 bg-gradient-to-r from-emerald-500 via-brand-green to-cyan-500 bg-clip-text text-transparent">
+                      discover, validate, and accelerate.
+                    </span>
+                  </h1>
+
+                  <p className="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
+                    Identify your strengths, bridge skill gaps, and align with industry expectations. Each assessment unlocks personalized insights for your professional journey.
+                  </p>
+
+                  <div className="mt-8 flex flex-wrap gap-4">
+                    <button className="px-7 py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold shadow-xl shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                      Explore library
+                    </button>
+                    <button className="px-7 py-4 rounded-2xl bg-white/80 dark:bg-white/5 text-slate-700 dark:text-white font-semibold border border-slate-200/70 dark:border-white/10 shadow-sm hover:bg-white hover:-translate-y-1 transition-all duration-300">
+                      Run quick scan
+                    </button>
+                  </div>
+
+                  <div className="mt-8 flex flex-wrap gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    {["AI proctored", "Instant reports", "Role fit mapping"].map((item) => (
+                      <span key={item} className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 shadow-sm">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 animate-slide-up" style={{ animationDelay: "160ms" }}>
+                  <div className="sm:col-span-2 relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Readiness index</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-800 dark:text-white">
+                          {readinessScore}% ready
                         </p>
-                        <button
-                            onClick={() => setCurrentView("assessment")}
-                            className="mt-8 px-6 py-2 bg-brand-green text-slate-900 font-bold rounded-xl hover:bg-green-400 transition-all active:scale-95"
-                        >
-                            Back to Assessments
-                        </button>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                          Based on live assessments and total question volume.
+                        </p>
+                      </div>
+                      <div
+                        className="relative h-24 w-24 rounded-full [--ring-track:rgba(15,23,42,0.08)] dark:[--ring-track:rgba(255,255,255,0.16)]"
+                        style={{ background: `conic-gradient(#1ed36a ${readinessScore * 3.6}deg, var(--ring-track) 0deg)` }}
+                      >
+                        <span className="absolute inset-0 rounded-full border border-emerald-500/20 animate-pulse-ring" />
+                        <div className="absolute inset-2 rounded-full bg-white/90 dark:bg-[#0f1712] border border-white/80 dark:border-white/10 flex items-center justify-center text-sm font-bold text-slate-800 dark:text-white">
+                          {readinessScore}%
+                        </div>
+                      </div>
                     </div>
-                )}
+                    <div className="mt-6 grid grid-cols-3 gap-4 text-center">
+                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Exams</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-white">{EXAMS.length}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Live</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-white">{readyExams.length}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Avg time</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-white">{avgDuration} min</p>
+                      </div>
+                    </div>
+                  </div>
 
-                {/* Footer */}
-                <footer className="mt-12 mb-6 text-center text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.4em] opacity-40 transition-colors">
-                    &copy; {new Date().getFullYear()} Origin BI &bull; Powered by Beyond Intelligence
-                </footer>
+                  <div className="relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Spotlight</p>
+                      <span
+                        className={
+                          "text-[10px] font-bold px-2.5 py-1 rounded-full " +
+                          (spotlightExam.available
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-300")
+                        }
+                      >
+                        {spotlightExam.statusLabel}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                      <div
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                        style={{ background: `${spotlightExam.accentColor}1a`, color: spotlightExam.accentColor }}
+                      >
+                        {spotlightExam.icon}
+                      </div>
+                      <div>
+                        <p className="text-base font-bold text-slate-800 dark:text-white">{spotlightExam.shortTitle}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {spotlightExam.duration} - {spotlightExam.questions} questions
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleStartExam(spotlightExam)}
+                      className="mt-5 w-full rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 py-2.5 text-sm font-semibold text-slate-700 dark:text-white hover:bg-white hover:shadow-md transition-all"
+                    >
+                      {spotlightExam.available ? "Start now" : "View details"}
+                    </button>
+                  </div>
+
+                  <div className="relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Track mix</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Live</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {trackLanes.map((lane) => (
+                        <div key={lane.id}>
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <span>{lane.label}</span>
+                            <span>{lane.count}</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.max(18, Math.round((lane.count / Math.max(EXAMS.length, 1)) * 100))}%`,
+                                background: lane.accent,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Signal Board */}
+            <section
+              className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] animate-slide-up"
+              style={{ animationDelay: "240ms" }}
+            >
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.1)]">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Assessment flight plan</p>
+                    <h3 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Build mastery lanes</h3>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md">
+                      Stack the right mix of core, technical, and career signals for your target role.
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Live track map
+                  </div>
+                </div>
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  {trackLanes.map((lane) => (
+                    <div
+                      key={lane.id}
+                      className="relative overflow-hidden rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm"
+                    >
+                      <div
+                        className="absolute inset-0 opacity-70"
+                        style={{ background: `linear-gradient(135deg, ${lane.accent}1f, transparent 60%)` }}
+                      />
+                      <div className="relative">
+                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">{lane.label}</p>
+                        <p className="mt-3 text-2xl font-bold" style={{ color: lane.accent }}>
+                          {lane.count}
+                        </p>
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{lane.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.1)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Launch queue</p>
+                    <h3 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Ready to start now</h3>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      Jump into the next best assessment while your momentum is high.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFilter("ready")}
+                    className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-white transition-all"
+                  >
+                    Show ready
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  {queueExams.length ? (
+                    queueExams.map((exam) => (
+                      <div
+                        key={exam.id}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                            style={{ background: `${exam.accentColor}1a`, color: exam.accentColor }}
+                          >
+                            {exam.icon}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-white">{exam.shortTitle}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {exam.duration} - {exam.questions} questions
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleStartExam(exam)}
+                          className="rounded-xl bg-slate-900 dark:bg-white px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-all"
+                        >
+                          Start
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400">
+                      All tracks are prepping. Check back soon.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Track Filters */}
+            <section
+              className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 animate-slide-up"
+              style={{ animationDelay: "320ms" }}
+            >
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment orbit</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Choose a lane to shape the library.</p>
+              </div>
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-transparent to-cyan-500/20 blur-lg opacity-70" />
+                <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                  {FILTERS.map((item) => {
+                    const isActive = filter === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setFilter(item.value)}
+                        className={
+                          "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                          (isActive
+                            ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                        }
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            {/* Assessment Library */}
+            <section className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment library</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Swipe or use the arrows to explore.</p>
+                </div>
+                <div className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  Showing {filteredExams.length} exams
+                </div>
+              </div>
+              <ExamCarousel
+                exams={filteredExams}
+                onSelectExam={handleSelectExam}
+                onStartExam={handleStartExam}
+              />
+            </section>
+
+            {/* Intelligence Brief */}
+            <section className="py-12 border-t border-slate-200/60 dark:border-white/10 mt-4 animate-slide-up" style={{ animationDelay: "520ms" }}>
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Intelligence brief</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Advanced signals distilled from the full assessment stack.</p>
+                </div>
+                <div className="text-xs font-semibold text-slate-400 dark:text-slate-500">Live snapshot</div>
+              </div>
+
+              <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.12)]">
+                  <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_55%)]" />
+                  <div className="relative">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Signal density</p>
+                        <h4 className="mt-2 text-2xl font-bold text-slate-800 dark:text-white">Library performance pulse</h4>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-xl">
+                          A high-level look at scale, runtime, and pricing intensity across the assessment library.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {["Refreshed hourly", "AI-scored", "Multi-track"].map((chip) => (
+                          <span
+                            key={chip}
+                            className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {insightMetrics.map((metric) => (
+                        <div
+                          key={metric.label}
+                          className="rounded-2xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm"
+                        >
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{metric.label}</p>
+                          <p className="mt-2 text-lg font-bold text-slate-800 dark:text-white">{metric.value}</p>
+                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{metric.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 rounded-3xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Momentum trend</p>
+                          <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly readiness velocity</p>
+                        </div>
+                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">+14% vs last week</span>
+                      </div>
+                      <div className="mt-4 flex h-20 items-end gap-2">
+                        {momentumTrend.map((value, index) => (
+                          <div key={value + index} className="flex-1 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15">
+                            <div
+                              className="w-full rounded-xl bg-gradient-to-t from-emerald-500 to-cyan-400"
+                              style={{ height: `${Math.max(value, 18)}%` }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        {signalHighlights.map((item) => (
+                          <div key={item.label} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-3">
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{item.label}</p>
+                            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-white">{item.value}</p>
+                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{item.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-6">
+                  <div className="rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Focus signals</p>
+                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">Live</span>
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      {focusSignals.map((signal) => (
+                        <div key={signal.label} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{signal.label}</p>
+                          <p className="mt-2 text-sm font-bold text-slate-800 dark:text-white">{signal.value}</p>
+                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{signal.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Update feed</p>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Recent</span>
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      {updateFeed.map((update) => (
+                        <div key={update.title} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-800 dark:text-white">{update.title}</p>
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">{update.time}</span>
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{update.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-white/80 dark:bg-[#111a15]/80 backdrop-blur-xl border border-slate-200/60 dark:border-white/10">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400">
+              <ProfileIcon className="h-10 w-10" />
             </div>
+            <h2 className="mt-6 text-2xl font-medium text-slate-800 dark:text-white">Profile & Settings</h2>
+            <p className="mt-3 max-w-md text-slate-500 dark:text-slate-400 leading-relaxed">
+              Your profile area is being prepared. You can continue exploring assessments and start any available test from the library.
+            </p>
+            <button
+              type="button"
+              onClick={() => setCurrentView("assessment")}
+              className="mt-6 px-6 py-3 rounded-xl bg-slate-800 dark:bg-white text-white dark:text-slate-900 text-sm font-medium transition-all hover:opacity-90"
+            >
+              View assessments
+            </button>
+          </section>
+        )}
 
-            {/* Modals */}
-            {showAptitudeModal && (
-                <AptitudePreTest
-                    onStart={() => router.push('/assessment/aptitude')}
-                    onClose={() => setShowAptitudeModal(false)}
-                />
-            )}
+        <footer className="py-8 text-center">
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            &copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence
+          </p>
+        </footer>
+      </main>
 
-            {showCommunicationModal && (
-                <CommunicationPreTest
-                    onStart={() => router.push('/assessment/communication')}
-                    onClose={() => setShowCommunicationModal(false)}
-                />
-            )}
+      {/* Modals */}
+      <ExamDetailModal
+        exam={selectedExam}
+        detail={selectedExam ? EXAM_DETAILS[selectedExam.id as AssessmentId] : null}
+        isOpen={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        onStart={(exam, tier) => {
+          setShowDetailModal(false);
+          handleStartExam(exam, tier);
+        }}
+      />
 
-            {showRoleModal && (
-                <RolePreTest
-                    onStart={() => router.push('/assessment/role')}
-                    onClose={() => setShowRoleModal(false)}
-                />
-            )}
-        </div>
-    );
+      {showAptitudeModal && (
+        <AptitudePreTest
+          onStart={() => router.push("/assessment/aptitude")}
+          onClose={() => setShowAptitudeModal(false)}
+        />
+      )}
+
+      {showCommunicationModal && (
+        <CommunicationPreTest
+          onStart={() => router.push("/assessment/communication")}
+          onClose={() => setShowCommunicationModal(false)}
+        />
+      )}
+
+      {showRoleModal && (
+        <RolePreTest
+          onStart={() => router.push("/assessment/role")}
+          onClose={() => setShowRoleModal(false)}
+        />
+      )}
+    </div>
+  );
 };
 
 export default AssessmentPortal;

@@ -66,7 +66,6 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
 
             return () => window.clearInterval(timer);
         }
-
     }, [isRecording, prepTimeLeft, recordingComplete]);
 
     useEffect(() => {

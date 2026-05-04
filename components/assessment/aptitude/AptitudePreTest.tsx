@@ -10,6 +10,7 @@ const metrics = [
     { label: "Duration", value: "60 min" },
     { label: "Sections", value: "4" },
     { label: "Attempts", value: "1 out of 2" },
+
 ];
 
 const checklist = [
@@ -38,6 +39,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                 className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
             >
                 <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
+
                     <div className="flex items-start gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
                             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -50,6 +52,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                                 Aptitude Assessment
                             </h2>
                             <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
+
                                 Benchmark problem-solving speed, numerical accuracy, logical reasoning, and data interpretation in one structured session.
                             </p>
                         </div>
@@ -58,6 +61,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                         type="button"
                         onClick={onClose}
                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b]/40 transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white/40"
+
                         aria-label="Close"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -73,6 +77,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                                 {skills.map((skill) => (
                                     <div key={skill} className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-3 text-sm font-medium text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
+
                                         {skill}
                                     </div>
                                 ))}
@@ -100,6 +105,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                                 ))}
                             </div>
                         </aside>
+
                     </div>
                 </div>
 
@@ -125,3 +131,4 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
 };
 
 export default AptitudePreTest;
+

@@ -1,29 +1,35 @@
 interface AssessmentCardProps {
     title: string;
     description: string;
-    progress: number;
+    statusLabel: string;
+    statusTone: string;
     totalQuestions: number;
-    completedQuestions: number;
-    status: 'not-started' | 'in-progress' | 'completed';
+    duration: string;
+    price: string;
+    tags: string[];
     icon: React.ReactNode;
-    price?: string;
-    tags?: string[];
-    duration?: string;
-    onDetailsClick?: () => void;
-    onClick?: () => void;
+    available: boolean;
+    level: string;
+    insight: string;
+    onDetailsClick: () => void;
+    onStartClick: () => void;
 }
 
 const AssessmentCard: React.FC<AssessmentCardProps> = ({
     title,
     description,
+    statusLabel,
+    statusTone,
     totalQuestions,
-    completedQuestions,
-    duration = "45 Mins",
+    duration,
+    price,
+    tags,
     icon,
-    price = "₹0.00",
-    tags = [],
+    available,
+    level,
+    insight,
     onDetailsClick,
-    onClick
+    onStartClick,
 }) => {
     return (
         <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] hover:border-brand-green/40">
@@ -81,14 +87,15 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                         Details
                     </button>
                     <button 
-                        onClick={onClick} 
+                        onClick={onStartClick}
                         className={`px-6 py-2 text-[11px] font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
-                            status === 'completed' 
-                                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90' 
-                                : 'bg-brand-green text-white hover:bg-[#1bb85c]'
+                            available 
+                                ? 'bg-brand-green text-white hover:bg-[#1bb85c]' 
+                                : 'bg-slate-400 text-white cursor-not-allowed'
                         }`}
+                        disabled={!available}
                     >
-                        {status === 'completed' ? 'View Results' : status === 'in-progress' ? 'Resume' : 'Start Test'}
+                        {available ? 'Start Test' : 'Coming Soon'}
                     </button>
                 </div>
             </div>

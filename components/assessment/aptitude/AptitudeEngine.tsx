@@ -92,6 +92,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const isQuestionAnswered = !!answers[currentQuestion.id];
     const isQuestionMarked = markedForReview.has(currentQuestion.id);
 
+
     useEffect(() => {
         if (timeLeft <= 0) {
             onComplete(answers);
@@ -175,6 +176,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     <div className="min-w-0">
                         <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Aptitude Assessment</p>
                         <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
+
                             Test workspace
                         </h1>
                     </div>
@@ -192,6 +194,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     <div className="scale-90">
                         <ThemeToggle />
                     </div>
+
                 </div>
             </header>
 
@@ -250,6 +253,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                                     Clear response
                                 </button>
                             </div>
+
                         </div>
                     </div>
 
@@ -348,8 +352,10 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     />
                 </aside>
             </main>
+
         </div>
     );
 };
 
 export default AptitudeEngine;
+

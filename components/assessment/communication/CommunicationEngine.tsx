@@ -202,6 +202,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
         background: `conic-gradient(#1ed36a ${safeProgress}%, rgba(148, 163, 184, 0.24) 0)`,
     };
 
+
     const handleSubmit = useCallback(() => {
         onComplete(answers);
     }, [answers, onComplete]);
@@ -230,6 +231,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             setCurrentIndex((prev) => prev - 1);
         }
     };
+
 
     const updateAnswer = (taskId: string, answerData: CommunicationAnswer) => {
         setAnswers((prev) => ({
@@ -330,6 +332,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     <div className="scale-90">
                         <ThemeToggle />
                     </div>
+
                 </div>
             </header>
 
@@ -347,6 +350,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                             </p>
                             <p className="mt-1 text-2xl font-bold text-[#17201b] dark:text-white">{completedCount}/{totalTasks}</p>
                             <p className="text-xs font-medium text-[#17201b] dark:text-white">tasks complete</p>
+
                         </div>
                     </div>
 
@@ -362,6 +366,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     </div>
 
                     <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
+
                         <div className="flex items-center gap-3">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
                                 {renderTaskIcon(currentTask.type, "h-5 w-5")}
@@ -371,6 +376,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                     Active task
                                 </p>
                                 <p className="mt-1 text-base font-bold text-[#17201b] dark:text-white">{taskCopy[currentTask.type].accent}</p>
+
                             </div>
                         </div>
                         <p className="mt-3 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
@@ -462,6 +468,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                         </div>
                     </div>
 
+
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
                         {renderTaskContent()}
                     </div>
@@ -548,3 +555,4 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
 };
 
 export default CommunicationEngine;
+

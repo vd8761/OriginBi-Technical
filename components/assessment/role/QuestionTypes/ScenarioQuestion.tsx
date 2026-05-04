@@ -9,6 +9,7 @@ interface ScenarioQuestionProps {
 
 const labels = ["A", "B", "C", "D"];
 
+
 const getPriorityColor = (priority?: string) => {
     switch (priority) {
         case "Critical":
@@ -58,6 +59,7 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
                             </span>
                         )}
                     </div>
+
                 </div>
 
                 <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -83,6 +85,7 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
                 </div>
             </section>
 
+
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {question.options.map((option, index) => {
                     const isSelected = selectedOptionId === option.id;
@@ -107,6 +110,7 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
                                 {labels[index]}
                             </span>
                             <span className={`text-sm font-semibold leading-6 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
+
                                 {option.text}
                             </span>
                         </button>
@@ -118,3 +122,4 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
 };
 
 export default ScenarioQuestionComponent;
+

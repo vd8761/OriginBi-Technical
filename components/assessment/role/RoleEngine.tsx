@@ -104,6 +104,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(30 * 60);
 
+
     const currentQuestion = MOCK_ROLE_QUESTIONS[currentIndex];
     const totalQuestions = MOCK_ROLE_QUESTIONS.length;
     const answeredCount = Object.keys(answers).length;
@@ -215,6 +216,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     <div className="min-w-0">
                         <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Role-Based Assessment</p>
                         <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
+
                             {roleName} decision workspace
                         </h1>
                     </div>
@@ -232,6 +234,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     <div className="scale-90">
                         <ThemeToggle />
                     </div>
+
                 </div>
             </header>
 
@@ -249,6 +252,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                             </p>
                             <p className="mt-1 text-2xl font-bold text-[#17201b] dark:text-white">{answeredCount}/{totalQuestions}</p>
                             <p className="text-xs font-medium text-[#17201b] dark:text-white">answered</p>
+
                         </div>
                     </div>
 
@@ -269,12 +273,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                         </p>
                         <p className="mt-2 text-lg font-bold text-[#17201b] dark:text-white">Question {currentIndex + 1}</p>
                         <p className="mt-1 text-sm font-medium capitalize text-[#17201b] dark:text-white">
+
                             {currentQuestion.type}
                         </p>
                     </div>
 
                     <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
+
                             Assessment mix
                         </p>
                         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -285,6 +291,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                             <div>
                                 <p className="text-xl font-bold text-[#17201b] dark:text-white">{totalQuestions - scenarioCount}</p>
                                 <p className="text-xs font-medium text-[#17201b] dark:text-white">concepts</p>
+
                             </div>
                         </div>
                     </div>
@@ -292,6 +299,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     <div className="mt-auto rounded-lg bg-[#17201b] p-4 text-white dark:bg-white dark:text-[#17201b]">
                         <p className="text-sm font-bold text-white dark:text-[#17201b]">Decision rule</p>
                         <p className="mt-2 text-xs font-medium leading-5">
+
                             Choose the action that reduces risk, clarifies ownership, and restores user impact fastest.
                         </p>
                     </div>
@@ -350,6 +358,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                 </button>
                             </div>
                         </div>
+
                     </div>
 
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
@@ -358,6 +367,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
 
                     <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-4 dark:border-white/10 dark:bg-white/5">
                         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
+
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <button
                                     type="button"
@@ -366,6 +376,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                         isQuestionMarked
                                             ? "border-amber-400 bg-amber-400/15 text-amber-700 dark:text-amber-300"
                                             : "border-brand-green/20 bg-white text-[#17201b] hover:border-brand-green hover:text-brand-green dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
+
                                     }`}
                                 >
                                     {isQuestionMarked ? "Unmark review" : "Mark for review"}
@@ -375,6 +386,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                     onClick={handleClear}
                                     disabled={!isQuestionAnswered}
                                     className="min-h-11 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-red-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
+
                                 >
                                     Clear answer
                                 </button>
@@ -386,6 +398,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                     onClick={handlePrev}
                                     disabled={currentIndex === 0}
                                     className="min-h-11 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
+
                                 >
                                     Previous
                                 </button>
@@ -394,6 +407,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                         type="button"
                                         onClick={handleSubmit}
                                         className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+
                                     >
                                         Submit test
                                     </button>
@@ -402,6 +416,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                         type="button"
                                         onClick={handleNext}
                                         className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+
                                     >
                                         Save and next
                                     </button>
@@ -415,6 +430,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     <div className="flex h-full flex-col">
                         <h3 className="text-base font-bold text-[#17201b] dark:text-white">Decision map</h3>
                         <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#17201b]/40 dark:text-white/40">
+
                             Jump between concepts and scenarios.
                         </p>
 
@@ -427,6 +443,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                 let stateClass = "border-brand-green/10 bg-white text-[#17201b]/60 hover:border-brand-green hover:text-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white/60";
                                 if (isAnswered) stateClass = "border-brand-green bg-brand-green text-white";
                                 if (isMarked) stateClass = "border-amber-400 bg-amber-400 text-white";
+
                                 if (isActive) stateClass = "border-[#17201b] bg-[#17201b] text-white dark:border-white dark:bg-white dark:text-[#17201b]";
 
                                 return (
@@ -437,6 +454,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                         aria-current={isActive ? "step" : undefined}
                                         title={`${question.type} question ${index + 1}`}
                                         className={`flex h-10 items-center justify-center rounded-lg border text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${stateClass}`}
+
                                     >
                                         {index + 1}
                                     </button>
@@ -465,13 +483,16 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                         </div>
 
                         <div className="mt-auto hidden border-t border-brand-green/5 pt-4 text-[10px] font-medium leading-5 text-[#17201b]/40 dark:border-white/10 dark:text-white/40 lg:block">
+
                             Mark anything uncertain, then return from this decision map before submitting.
                         </div>
                     </div>
                 </aside>
             </main>
+
         </div>
     );
 };
 
 export default RoleEngine;
+
