@@ -87,15 +87,10 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const totalQuestions = MOCK_QUESTIONS.length;
     const answeredCount = Object.keys(answers).length;
     const markedCount = markedForReview.size;
-    const remainingCount = totalQuestions - answeredCount;
-    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
-    const safeProgress = Math.min(100, Math.max(0, progressPercent));
+    const safeProgress = Math.round((answeredCount / totalQuestions) * 100);
     const isLastQuestion = currentIndex === totalQuestions - 1;
     const isQuestionAnswered = !!answers[currentQuestion.id];
     const isQuestionMarked = markedForReview.has(currentQuestion.id);
-    const progressRingStyle = {
-        background: `conic-gradient(#1ed36a ${safeProgress}%, rgba(148, 163, 184, 0.24) 0)`,
-    };
 
 
     useEffect(() => {
@@ -203,80 +198,34 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1500px] gap-4 px-4 py-4 lg:h-[calc(100dvh-64px)] lg:grid-cols-[260px_minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
-                <aside className="test-panel flex flex-col gap-4 rounded-lg border border-brand-green/10 bg-white p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0">
-                    <div className="flex items-center gap-4">
-                        <div className="h-20 w-20 rounded-full p-1" style={progressRingStyle}>
-                            <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
-                                <span className="text-xl font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                                Progress
-                            </p>
-                            <p className="mt-1 text-2xl font-bold text-[#17201b] dark:text-white">{answeredCount}/{totalQuestions}</p>
-                            <p className="text-xs font-medium text-[#17201b] dark:text-white">answered</p>
-
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-3 dark:border-white/10 dark:bg-white/5">
-                            <p className="text-xs font-medium text-[#17201b] dark:text-white">Remaining</p>
-                            <p className="mt-1 text-xl font-bold text-[#17201b] dark:text-white">{remainingCount}</p>
-                        </div>
-                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-3 dark:border-white/10 dark:bg-white/5">
-                            <p className="text-xs font-medium text-[#17201b] dark:text-white">Review</p>
-                            <p className="mt-1 text-xl font-bold text-amber-600">{markedCount}</p>
-                        </div>
-                    </div>
-
-                    <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Current focus
-                        </p>
-                        <p className="mt-2 text-lg font-bold text-[#17201b] dark:text-white">Question {currentIndex + 1}</p>
-                        <p className="mt-1 text-sm font-medium capitalize text-[#17201b] dark:text-white">
-
-                            {currentQuestion.category} module
-                        </p>
-                    </div>
-
-                    <div className="mt-auto rounded-lg bg-[#17201b] p-4 text-white dark:bg-white dark:text-[#17201b]">
-                        <p className="text-sm font-bold">Aptitude guidance</p>
-                        <p className="mt-2 text-xs font-medium leading-5">
-                            Work through logical patterns methodically. If stuck, mark for review and move to the next item.
-
-                        </p>
-                    </div>
-                </aside>
+            <main className="relative z-10 mx-auto grid max-w-[1500px] gap-6 px-4 py-4 lg:h-[calc(100dvh-64px)] lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden lg:px-6">
 
                 <section className="flex min-h-[600px] flex-col rounded-lg border border-brand-green/10 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
-                    <div className="border-b border-brand-green/5 p-4 sm:p-5 dark:border-white/10">
+                    <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="rounded-md bg-brand-green/10 px-3 py-1.5 text-xs font-bold text-brand-green">
-                                        Question {currentIndex + 1}
-                                    </span>
-                                    <span className="rounded-md bg-brand-green/5 px-3 py-1.5 text-xs font-bold capitalize text-[#17201b] dark:bg-white/10 dark:text-white">
-                                        {currentQuestion.category}
-                                    </span>
-                                    {isQuestionMarked && (
-                                        <span className="rounded-md bg-amber-400/15 px-3 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300">
-                                            Marked for review
-                                        </span>
-                                    )}
-                                    {isQuestionAnswered && (
-                                        <span className="rounded-md bg-brand-green/10 px-3 py-1.5 text-xs font-bold text-brand-green">
-                                            Answer selected
-                                        </span>
-                                    )}
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green shadow-inner">
+                                    <span className="text-lg font-bold">{currentIndex + 1}</span>
                                 </div>
-                                <p className="mt-3 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
-                                    Select the most logical answer based on the sequence or problem statement provided.
-                                </p>
+                                <div>
+                                    <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
+                                        {currentQuestion.category} Module
+                                    </h2>
+                                    <div className="mt-0.5 flex items-center gap-2">
+                                        {isQuestionMarked && (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                                                <div className="h-1 w-1 rounded-full bg-current" />
+                                                Marked for review
+                                            </span>
+                                        )}
+                                        {isQuestionAnswered && (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-brand-green uppercase">
+                                                <div className="h-1 w-1 rounded-full bg-current" />
+                                                Saved
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -393,54 +342,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     </div>
                 </section>
 
-                <aside className="rounded-lg border border-brand-green/10 bg-white p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0">
-                    <div className="flex h-full flex-col">
-                        <h3 className="text-base font-bold text-[#17201b] dark:text-white">Question map</h3>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Jump, review, or finish from here.
-                        </p>
-
-                        <div className="mt-5 grid grid-cols-2 gap-3">
-                            <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-3 dark:border-white/10 dark:bg-white/5">
-                                <p className="text-xs font-medium text-[#17201b] dark:text-white">Answered</p>
-                                <p className="mt-1 text-xl font-bold text-[#17201b] dark:text-white">{answeredCount}</p>
-                            </div>
-                            <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-3 dark:border-white/10 dark:bg-white/5">
-                                <p className="text-xs font-medium text-[#17201b] dark:text-white">Review</p>
-                                <p className="mt-1 text-xl font-bold text-amber-600">{markedCount}</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 grid grid-cols-4 gap-2">
-                            {MOCK_QUESTIONS.map((question, index) => {
-                                const isActive = index === currentIndex;
-                                const isAnswered = !!answers[question.id];
-                                const isMarked = markedForReview.has(question.id);
-
-                                let stateClass = "border-brand-green/10 bg-white text-[#17201b] hover:border-brand-green hover:text-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white";
-                                if (isAnswered) stateClass = "border-brand-green bg-brand-green text-white";
-                                if (isMarked) stateClass = "border-amber-400 bg-amber-400 text-white";
-                                if (isActive) stateClass = "border-[#17201b] bg-[#17201b] text-white dark:border-white dark:bg-white dark:text-[#17201b]";
-
-                                return (
-                                    <button
-                                        key={question.id}
-                                        type="button"
-                                        onClick={() => setCurrentIndex(index)}
-                                        aria-current={isActive ? "step" : undefined}
-                                        title={`${question.category} question ${index + 1}`}
-                                        className={`flex h-10 items-center justify-center rounded-lg border text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${stateClass}`}
-                                    >
-                                        {index + 1}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="mt-auto hidden border-t border-brand-green/5 pt-4 text-[10px] font-bold leading-5 text-[#17201b] dark:border-white/10 dark:text-white lg:block">
-                            Green means answered, amber means marked for review, and dark shows your current question.
-                        </div>
-                    </div>
+                <aside className="rounded-xl border border-brand-green/10 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0">
+                    <QuestionNavigator
+                        questions={navigatorQuestions}
+                        currentIndex={currentIndex}
+                        onSelect={setCurrentIndex}
+                        progressPercent={safeProgress}
+                        guidanceText="Work through logical patterns methodically. If stuck, mark for review and move to the next item."
+                    />
                 </aside>
             </main>
 
