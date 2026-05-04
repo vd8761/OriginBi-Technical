@@ -16,16 +16,17 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
 }) => {
     return (
         <div className="flex flex-col gap-4">
-            <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
+            <section className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="rounded-md bg-brand-green/10 px-3 py-1.5 text-xs font-extrabold text-brand-green">
+                    <span className="rounded-md bg-brand-green/10 px-3 py-1.5 text-xs font-bold text-brand-green">
                         Conceptual knowledge
                     </span>
-                    <span className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                    <span className="rounded-md bg-brand-green/5 px-3 py-1.5 text-xs font-bold text-[#17201b] dark:bg-white/10 dark:text-white">
                         Core fundamentals
                     </span>
                 </div>
-                <h2 className="text-lg font-extrabold leading-8 text-[#17201b] dark:text-white">
+                <h2 className="text-lg font-bold leading-8 text-[#17201b] dark:text-white">
+
                     {question.text}
                 </h2>
             </section>
@@ -42,18 +43,19 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
                             aria-pressed={isSelected}
                             className={`group flex min-h-20 items-center gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
                                 isSelected
-                                    ? "border-brand-green bg-brand-green/10 shadow-[0_12px_30px_rgba(30,211,106,0.16)]"
-                                    : "border-slate-200 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712]"
+                                    ? "border-brand-green bg-brand-green/10"
+                                    : "border-brand-green/20 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712]"
                             }`}
                         >
-                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-extrabold ${
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
                                 isSelected
                                     ? "bg-brand-green text-[#0f1712]"
-                                    : "bg-slate-100 text-slate-500 group-hover:bg-brand-green/10 group-hover:text-brand-green dark:bg-white/10 dark:text-slate-300"
+                                    : "bg-brand-green/10 text-brand-green"
                             }`}>
                                 {labels[index]}
                             </span>
-                            <span className="text-sm font-bold leading-6 text-slate-700 dark:text-slate-300">
+                            <span className={`text-sm font-semibold leading-6 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
+
                                 {option.text}
                             </span>
                         </button>
@@ -65,3 +67,4 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
 };
 
 export default ConceptualQuestionComponent;
+

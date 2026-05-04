@@ -470,42 +470,42 @@ const AssessmentPortal: React.FC = () => {
 
   const insightMetrics = [
     {
-      label: "Total questions",
-      value: totalQuestions.toLocaleString(),
-      detail: "across all exams",
+      label: "Career readiness",
+      value: `${readinessScore}%`,
+      detail: "skills verified",
     },
     {
-      label: "Total minutes",
-      value: `${totalDuration} min`,
-      detail: "full library runtime",
+      label: "Skill coverage",
+      value: "12+",
+      detail: "core competencies",
     },
     {
-      label: "Average price",
-      value: `₹${avgPrice}`,
-      detail: "entry tier avg",
+      label: "Industry aligned",
+      value: "5",
+      detail: "sectors covered",
     },
     {
-      label: "Highest price",
-      value: `₹${maxPrice}`,
-      detail: "premium tier max",
+      label: "Learning paths",
+      value: "3",
+      detail: "career tracks",
     },
   ];
 
   const signalHighlights = [
     {
-      label: "Largest exam",
-      value: `${largestExam.shortTitle} (${largestExam.questions} Qs)`,
-      detail: "highest question volume",
+      label: "Recommended start",
+      value: "Aptitude",
+      detail: "foundational skills first",
     },
     {
-      label: "Fastest win",
-      value: `${Math.min(...EXAMS.map((exam) => parseInt(exam.duration, 10) || 0))} min`,
-      detail: "shortest exam runtime",
+      label: "Growth potential",
+      value: "High",
+      detail: "based on skill gaps",
     },
     {
-      label: "Live readiness",
-      value: `${readinessScore}%`,
-      detail: "assessments available",
+      label: "Certification path",
+      value: "Available",
+      detail: "completion badge ready",
     },
   ];
 
@@ -616,14 +616,14 @@ const AssessmentPortal: React.FC = () => {
                   </div>
 
                   <h1 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-[1.05]">
-                    Your assessment command deck
+                    Your career compass
                     <span className="block mt-2 bg-gradient-to-r from-emerald-500 via-brand-green to-cyan-500 bg-clip-text text-transparent">
-                      plan, launch, and level up.
+                      discover, validate, and accelerate.
                     </span>
                   </h1>
 
                   <p className="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
-                    Turn every assessment into a signal. Track readiness, choose the right lane, and unlock a tailored growth path.
+                    Identify your strengths, bridge skill gaps, and align with industry expectations. Each assessment unlocks personalized insights for your professional journey.
                   </p>
 
                   <div className="mt-8 flex flex-wrap gap-4">

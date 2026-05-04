@@ -67,6 +67,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                         </span>
                     ))}
                 </div>
+            </div>
 
             {/* Thin Line Separator */}
             <div className="h-[1px] w-full bg-black/10 dark:bg-white/10 mb-5"></div>
@@ -86,18 +87,19 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                         Details
                     </button>
                     <button 
-                        onClick={onClick} 
+                        onClick={onStartClick}
                         className={`px-6 py-2 text-[11px] font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
-                            status === 'completed' 
-                                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90' 
-                                : 'bg-brand-green text-white hover:bg-[#1bb85c]'
+                            available 
+                                ? 'bg-brand-green text-white hover:bg-[#1bb85c]' 
+                                : 'bg-slate-400 text-white cursor-not-allowed'
                         }`}
+                        disabled={!available}
                     >
-                        {status === 'completed' ? 'View Results' : status === 'in-progress' ? 'Resume' : 'Start Test'}
+                        {available ? 'Start Test' : 'Coming Soon'}
                     </button>
                 </div>
             </div>
-        </article>
+        </div>
     );
 };
 
