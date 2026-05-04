@@ -9,10 +9,11 @@ import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
 import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from "../icons";
+import AssessmentCard from "./AssessmentCard";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
-type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
-type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
+type AssessmentId = "aptitude" | "communication" | "role" | "coding" | "mnc";
+type AssessmentFilter = "all" | "ready" | "core" | "career" | "technical";
 
 interface PricingTier {
   id: string;
@@ -217,96 +218,6 @@ const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
       },
     ],
   },
-  coding: {
-    focus: "A fundamentals-first programming screen for candidates building confidence before harder technical interviews.",
-    skills: [
-      { title: "Problem decomposition", description: "Breaking a prompt into inputs, constraints, logic, and edge cases." },
-      { title: "Core syntax thinking", description: "Using loops, conditionals, functions, and collections with control." },
-      { title: "Debugging judgement", description: "Spotting off-by-one mistakes, invalid states, and missed cases." },
-      { title: "Simulation logic", description: "Translating small real-world flows into reliable code steps." },
-    ],
-    sections: [
-      { name: "Number Logic", detail: "Parity, digit operations, ranges, divisibility, and mathematical sequences.", weight: "25%" },
-      { name: "Strings", detail: "Search, transform, compare, validate, and count text patterns.", weight: "25%" },
-      { name: "Arrays", detail: "Traversal, frequency, pair logic, sorting basics, and window-style thinking.", weight: "30%" },
-      { name: "Simulation", detail: "State updates, rule-based flows, and scenario implementation.", weight: "20%" },
-    ],
-    outcomes: ["Topic readiness profile", "Edge-case awareness", "Debugging focus areas", "Next technical practice path"],
-    requirements: ["Desktop or laptop", "Code editor area inside the test", "Stable internet connection", "90 minute focus window"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 199,
-        originalPrice: 249,
-        discount: 20,
-        features: ["Full exam access", "Basic score report", "Test cases passed"],
-        badge: "Early Access",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Full exam access", "Time complexity analysis", "Code quality score", "Solution explanations"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 349,
-        originalPrice: 499,
-        discount: 30,
-        features: ["Everything in Standard", "Mentor code review", "Algorithm suggestions", "Practice problem set"],
-      },
-    ],
-  },
-  mnc: {
-    focus: "A sharper interview-practice track for candidates targeting larger product, service, and consulting companies.",
-    skills: [
-      { title: "Pattern recognition", description: "Identifying when to use two pointers, hashing, trees, graphs, or DP." },
-      { title: "Complexity thinking", description: "Reasoning about time and space before choosing an approach." },
-      { title: "DSA fluency", description: "Applying data structures to common interview problem families." },
-      { title: "Round strategy", description: "Prioritizing correctness, explanation, and tradeoffs under interview pressure." },
-    ],
-    sections: [
-      { name: "Arrays and Hashing", detail: "Frequency maps, pairs, subarrays, sorting, and search patterns.", weight: "30%" },
-      { name: "Trees and Graphs", detail: "Traversal, shortest paths, connected components, and hierarchy questions.", weight: "25%" },
-      { name: "Dynamic Programming", detail: "State definition, recurrence, memoization, and tabulation basics.", weight: "25%" },
-      { name: "Mixed Interview Set", detail: "Company-style combinations of logic, DSA, and constraints.", weight: "20%" },
-    ],
-    outcomes: ["Interview topic map", "Problem family gaps", "Complexity reasoning notes", "Company-round practice priorities"],
-    requirements: ["DSA fundamentals", "Desktop or laptop", "Stable internet connection", "One uninterrupted 60 minute session"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Full exam access", "Basic score report", "Difficulty rating"],
-        badge: "Early Access",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 299,
-        originalPrice: 449,
-        discount: 33,
-        features: ["Full exam access", "Company-wise trends", "Time analysis", "Weak area identification"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 399,
-        originalPrice: 599,
-        discount: 33,
-        features: ["Everything in Standard", "Mock interview", "Company-specific tips", "Study roadmap"],
-      },
-    ],
-  },
   role: {
     focus: "A role-fit diagnostic that tests conceptual knowledge and decision-making in realistic work situations.",
     skills: [
@@ -348,6 +259,46 @@ const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
         discount: 29,
         features: ["Everything in Standard", "Career coach session", "Personalized roadmap", "Industry insights"],
       },
+    ],
+  },
+  coding: {
+    focus: "Validate core programming proficiency with logic, data structures, and simulation-based problem solving.",
+    skills: [
+      { title: "Number Logic", description: "Solving mathematical and logical puzzles through code." },
+      { title: "String Manipulation", description: "Parsing, cleaning, and transforming text data efficiently." },
+      { title: "Array Operations", description: "Managing collections and implementing search/sort algorithms." },
+      { title: "Simulation", description: "Modeling real-world logic and process flows in a digital environment." },
+    ],
+    sections: [
+      { name: "Logic & Fundamentals", detail: "Core programming syntax and simple logical puzzles.", weight: "25%" },
+      { name: "Strings & Arrays", detail: "Complex manipulation and searching within collections.", weight: "40%" },
+      { name: "Simulation Tasks", detail: "Larger problem sets requiring end-to-end process logic.", weight: "35%" },
+    ],
+    outcomes: ["Algorithm efficiency report", "Logic accuracy heatmap", "Code quality feedback", "Technical readiness score"],
+    requirements: ["Browser-based IDE access", "Stable internet", "60-90 minute focus window"],
+    pricingTiers: [
+      { id: "basic", name: "Basic", price: 199, features: ["Full exam access", "Automated score"] },
+      { id: "standard", name: "Standard", price: 299, originalPrice: 399, discount: 25, features: ["Everything in Basic", "Detailed logic breakdown", "Optimization tips"], popular: true },
+    ],
+  },
+  mnc: {
+    focus: "Advanced interview preparation covering high-frequency patterns used by top-tier technical companies.",
+    skills: [
+      { title: "Trees & Graphs", description: "Navigating complex hierarchical and networked data structures." },
+      { title: "Dynamic Programming", description: "Solving optimization problems through recursive sub-problems." },
+      { title: "System Thinking", description: "Understanding architectural trade-offs and scaling constraints." },
+      { title: "Algorithm Design", description: "Crafting efficient solutions with minimal time and space complexity." },
+    ],
+    sections: [
+      { name: "Data Structures", detail: "Trees, Graphs, and Heaps implementation and traversal.", weight: "30%" },
+      { name: "Advanced Algorithms", detail: "Dynamic Programming, Greedy approach, and Backtracking.", weight: "40%" },
+      { name: "Systems & Design", detail: "Conceptual questions on scalability and architecture.", weight: "30%" },
+    ],
+    outcomes: ["MNC-ready profile report", "Advanced skill mapping", "Pattern recognition score", "Architectural feedback"],
+    requirements: ["Advanced coding knowledge", "90 minute uninterrupted session"],
+    pricingTiers: [
+      { id: "basic", name: "Basic", price: 249, features: ["Full exam access", "Score report"] },
+      { id: "premium", name: "Premium", price: 499, originalPrice: 799, discount: 38, features: ["Everything in Basic", "Video explanation of solutions", "Mock interview credit"], popular: true },
     ],
   },
 };
@@ -425,8 +376,8 @@ const AssessmentPortal: React.FC = () => {
   const trackCounts = useMemo(() => {
     const counts: Record<Exclude<AssessmentFilter, "all" | "ready">, number> = {
       core: 0,
-      technical: 0,
       career: 0,
+      technical: 0,
     };
 
     EXAMS.forEach((exam) => {
@@ -528,6 +479,16 @@ const AssessmentPortal: React.FC = () => {
       content: "Your data interpretation skills directly correlate with system design potential. Consider the Architecture track.",
       icon: "✨",
       color: "#f59e0b"
+    },
+    {
+      label: "Industry aligned",
+      value: "5",
+      detail: "sectors covered",
+    },
+    {
+      label: "Learning paths",
+      value: "2",
+      detail: "career tracks",
     },
     { 
       type: "milestone", 
@@ -657,11 +618,6 @@ const AssessmentPortal: React.FC = () => {
       detail: "quant + logic coverage",
     },
     {
-      label: "Tech lane depth",
-      value: `${trackCounts.technical} exams`,
-      detail: "coding + MNC focus",
-    },
-    {
       label: "Career lane depth",
       value: `${trackCounts.career} exams`,
       detail: "role-fit diagnostics",
@@ -784,7 +740,7 @@ const AssessmentPortal: React.FC = () => {
       )}
 
       <main className="relative z-10 mx-auto flex max-w-[1600px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-12 xl:px-16">
-        {currentView === "dashboard" || currentView === "assessment" ? (
+        {currentView === "dashboard" ? (
           <>
             {/* Command Deck */}
             {currentView === "dashboard" && (
@@ -1491,6 +1447,58 @@ const AssessmentPortal: React.FC = () => {
               </div>
             </section>
           </>
+        ) : currentView === "assessment" ? (
+          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
+              </div>
+              
+              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        (isActive
+                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <AssessmentCard
+                  key={exam.id}
+                  title={exam.title}
+                  description={exam.description}
+                  statusLabel={exam.statusLabel}
+                  statusTone={exam.available ? "success" : "warning"}
+                  totalQuestions={exam.questions}
+                  duration={exam.duration}
+                  price={`₹${exam.price}`}
+                  tags={exam.tags}
+                  icon={exam.icon}
+                  available={exam.available}
+                  level={exam.difficulty}
+                  insight={exam.statusLabel}
+                  onDetailsClick={() => handleSelectExam(exam)}
+                  onStartClick={() => handleStartExam(exam)}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
