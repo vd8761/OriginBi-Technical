@@ -63,7 +63,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                 <div className="grid grid-cols-3 gap-1.5">
                     <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-3 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
                         <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green/70 dark:text-brand-green/60">Done</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green/70 dark:text-brand-green/60">Answered</span>
                     </div>
 
                     <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-3 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">

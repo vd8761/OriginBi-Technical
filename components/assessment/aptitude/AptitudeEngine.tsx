@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 interface Option {
     id: string;
@@ -84,6 +85,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(3600);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const currentQuestion = MOCK_QUESTIONS[currentIndex];
     const totalQuestions = MOCK_QUESTIONS.length;
@@ -203,7 +205,13 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     <div className="scale-90">
                         <ThemeToggle />
                     </div>
-
+                    <button 
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
+                        title="Question Map"
+                    >
+                        <LayoutGrid size={20} className="text-brand-green" />
+                    </button>
                 </div>
             </header>
 
@@ -214,9 +222,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green shadow-inner">
-                                    <span className="text-lg font-bold">{currentIndex + 1}</span>
-                                </div>
                                 <div>
                                     <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
                                         {currentQuestion.category} Module
@@ -268,11 +273,9 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     </div>
 
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
-                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                                Problem
-                            </p>
-                            <h2 className="mt-3 text-lg font-bold leading-8 text-[#17201b] dark:text-white">
+                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
+                            <h2 className="text-base font-bold leading-relaxed text-[#17201b] dark:text-white md:text-lg">
+                                <span className="mr-3">{currentIndex + 1}.</span>
                                 {currentQuestion.text}
                             </h2>
                             {currentQuestion.imageUrl && (
@@ -352,15 +355,64 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     </div>
                 </section>
 
-                <aside className="rounded-xl border border-brand-green/10 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0">
+                {/* Sidebar (Desktop only) */}
+                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
                     <QuestionNavigator
                         questions={navigatorQuestions}
                         currentIndex={currentIndex}
-                        onSelect={setCurrentIndex}
+                        onSelect={(idx) => {
+                            setCurrentIndex(idx);
+                            setIsSidebarOpen(false);
+                        }}
                         progressPercent={safeProgress}
                     />
                 </aside>
             </main>
+
+            {/* Mobile Drawer */}
+            <AnimatePresence>
+                {isSidebarOpen && (
+                    <div className="fixed inset-0 z-[110] lg:hidden">
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsSidebarOpen(false)}
+                            className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-sm"
+                        />
+                        <motion.div 
+                            initial={{ x: "100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="absolute inset-y-0 right-0 w-full max-w-[320px] border-l border-brand-green/10 bg-[#f6f8f5] shadow-2xl dark:bg-[#111a15]"
+                        >
+                            <div className="flex h-full flex-col">
+                                <div className="flex items-center justify-between border-b border-brand-green/5 p-6 dark:border-white/10">
+                                    <h2 className="text-sm font-bold uppercase tracking-widest text-[#17201b] dark:text-white">Navigator</h2>
+                                    <button 
+                                        onClick={() => setIsSidebarOpen(false)}
+                                        className="rounded-lg p-2 text-[#17201b]/40 hover:bg-brand-green/10 hover:text-brand-green dark:text-white/40"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    <QuestionNavigator
+                                        questions={navigatorQuestions}
+                                        currentIndex={currentIndex}
+                                        onSelect={(idx) => {
+                                            setCurrentIndex(idx);
+                                            setIsSidebarOpen(false);
+                                        }}
+                                        progressPercent={safeProgress}
+                                    />
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Submit Confirmation Modal */}
             {showSubmitModal && (
@@ -382,7 +434,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             <div className="mt-8 grid w-full grid-cols-3 gap-4">
                                 <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
                                     <span className="text-xl font-black text-brand-green">{navigatorQuestions.filter(q => q.isAnswered).length}</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green/60">Done</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green/60">Answered</span>
                                 </div>
                                 <div className="flex flex-col items-center rounded-xl bg-amber-400/[0.05] p-4 border border-amber-400/10">
                                     <span className="text-xl font-black text-amber-500">{navigatorQuestions.filter(q => q.isMarked).length}</span>
