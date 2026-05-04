@@ -374,6 +374,7 @@ const AssessmentPortal: React.FC = () => {
   const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
+  const [showNextStepAlert, setShowNextStepAlert] = useState(true); // Default true to simulate completion of Aptitude
   const router = useRouter();
 
   const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
@@ -443,24 +444,31 @@ const AssessmentPortal: React.FC = () => {
   const trackLanes = [
     {
       id: "core",
-      label: "Core Skills",
-      description: "Quantitative, logical reasoning, and communication assessments.",
-      count: trackCounts.core,
+      label: "Aptitude+ Core",
+      description: "Quantitative, Logical, Data Interpretation, and Visual Reasoning.",
+      count: 1, // Visual adjustment for demo
       accent: TRACK_PALETTE.core,
     },
     {
-      id: "technical",
-      label: "Technical",
-      description: "Coding challenges, DSA problems, and interview prep.",
-      count: trackCounts.technical,
+      id: "communication",
+      label: "Business Linguistics",
+      description: "Corporate Etiquette, Grammar, Syntax, and Reading Comprehension.",
+      count: 1,
       accent: TRACK_PALETTE.technical,
     },
     {
-      id: "career",
-      label: "Career",
-      description: "Role-fit analysis and professional scenario assessments.",
-      count: trackCounts.career,
+      id: "technical",
+      label: "Technical Groupings",
+      description: "Programming Foundations, Web Tech, Backend, Database & Cloud.",
+      count: 2,
       accent: TRACK_PALETTE.career,
+    },
+    {
+      id: "career",
+      label: "Role-Based Specialization",
+      description: "Full Stack Developer, Data Scientist, UI/UX Architect, DevOps.",
+      count: 4,
+      accent: "#2563eb",
     },
   ];
 
@@ -470,23 +478,23 @@ const AssessmentPortal: React.FC = () => {
 
   // Career Identity - Professional persona
   const careerIdentity = {
-    archetype: "Strategic Architect",
-    level: "Level 7 Professional",
-    xp: 2847,
-    xpToNext: 3000,
-    badges: ["Fast Learner", "Problem Solver", "Consistent"],
-    quote: "Your analytical precision is your superpower. Keep building.",
+    archetype: "Full Stack Developer",
+    level: "Technical Grouping: Pending",
+    xp: 850,
+    xpToNext: 2000,
+    badges: ["Aptitude Clear", "Logic Elite"],
+    quote: "Strong performance in High-End Data Interpretation suggests backend architecture potential.",
   };
 
   // Skill Constellation - Interactive skill visualization
   const skillGalaxy = [
-    { name: "Logic", level: 85, connections: ["Patterns", "Analysis"], x: 20, y: 30 },
-    { name: "Patterns", level: 78, connections: ["Logic", "Abstraction"], x: 45, y: 20 },
-    { name: "Analysis", level: 82, connections: ["Logic", "Data"], x: 25, y: 55 },
-    { name: "Data", level: 71, connections: ["Analysis", "Visualization"], x: 50, y: 60 },
-    { name: "Visualization", level: 68, connections: ["Data"], x: 75, y: 55 },
-    { name: "Abstraction", level: 76, connections: ["Patterns", "Architecture"], x: 70, y: 25 },
-    { name: "Architecture", level: 64, connections: ["Abstraction"], x: 85, y: 40 },
+    { name: "Quantitative", level: 92, connections: ["Logic", "Data"], x: 20, y: 30 },
+    { name: "Logic & Analytical", level: 88, connections: ["Quantitative"], x: 45, y: 20 },
+    { name: "Data Interpretation", level: 85, connections: ["Data", "Visualization"], x: 25, y: 55 },
+    { name: "Visual Reasoning", level: 75, connections: ["Web Tech"], x: 50, y: 60 },
+    { name: "Web Tech", level: 60, connections: ["Architecture"], x: 75, y: 55 },
+    { name: "Backend Systems", level: 45, connections: ["Logic"], x: 70, y: 25 },
+    { name: "Database & Cloud", level: 40, connections: ["Backend Systems"], x: 85, y: 40 },
   ];
 
   // Energy Zones - Focus distribution across categories
@@ -532,10 +540,10 @@ const AssessmentPortal: React.FC = () => {
 
   // Career Timeline - Professional journey phases
   const careerTimeline = [
-    { phase: "Foundation", status: "completed", date: "2 weeks ago", achievement: "Core Skills Complete" },
-    { phase: "Growth", status: "active", date: "Current", achievement: "Technical Skills Building" },
-    { phase: "Mastery", status: "upcoming", date: "In 3 weeks", achievement: "Advanced Assessment" },
-    { phase: "Leadership", status: "locked", date: "Future", achievement: "Career Role Ready" },
+    { phase: "Aptitude+", status: "completed", date: "Just now", achievement: "Quantitative & Logic Clear" },
+    { phase: "Communication", status: "active", date: "Next Step", achievement: "Linguistics & Articulation" },
+    { phase: "Technical Grouping", status: "locked", date: "Pending", achievement: "Programming Foundations" },
+    { phase: "Role-Based", status: "locked", date: "Future", achievement: "Software Engineering Fitment" },
   ];
 
   const signalHighlights = [
@@ -725,6 +733,55 @@ const AssessmentPortal: React.FC = () => {
         onNavigate={(view) => setCurrentView(view)}
         onLogout={() => console.log("Logging out...")}
       />
+
+      {/* Top Right Notification Alert */}
+      {showNextStepAlert && currentView === "dashboard" && (
+        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
+          <div className="relative overflow-hidden rounded-2xl border border-brand-green/30 bg-white/95 dark:bg-brand-dark-secondary/95 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green shadow-[0_0_15px_rgba(30,211,106,0.3)]">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-brand-text-light-primary dark:text-brand-text-primary leading-tight">
+                  Aptitude Cleared!
+                </h4>
+                <p className="mt-1.5 text-xs text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed">
+                  Excellent work on Logic. Start the <strong className="text-brand-text-light-primary dark:text-brand-text-primary">Communication Assessment</strong> next to unlock Technical Groupings algorithms and discover your true Role-Fit.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setShowNextStepAlert(false);
+                      setCurrentView("assessment");
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-brand-green rounded-xl hover:bg-brand-green/90 shadow-sm transition-colors"
+                  >
+                    Set Navigation
+                  </button>
+                  <button
+                    onClick={() => setShowNextStepAlert(false)}
+                    className="px-4 py-2 text-xs font-bold text-brand-text-light-secondary hover:text-brand-text-light-primary dark:text-brand-text-secondary dark:hover:text-brand-text-primary transition-colors"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowNextStepAlert(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="relative z-10 mx-auto flex max-w-[1600px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-12 xl:px-16">
         {currentView === "dashboard" || currentView === "assessment" ? (
@@ -1397,49 +1454,36 @@ const AssessmentPortal: React.FC = () => {
                     </div>
 
                     {/* Current focus */}
-                    <div className="p-4 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-4">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-4 transform transition-all hover:scale-[1.02]">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-500" />
-                        <p className="text-sm font-medium text-brand-text-light-primary dark:text-brand-text-primary">Data Visualization</p>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">In Progress</span>
+                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        <p className="text-sm font-medium text-brand-text-light-primary dark:text-brand-text-primary">Communication Assessment</p>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">Next Action</span>
                       </div>
                       <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary mb-3">
-                        Complete the Data Interpretation assessment to strengthen this skill and unlock Architecture patterns.
+                        Complete Business Linguistics and Reading Comprehension to unlock your Technical Groupings funnel.
                       </p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
-                          <div className="h-full rounded-full bg-blue-500" style={{ width: '68%' }} />
-                        </div>
-                        <span className="text-xs text-brand-text-light-secondary">68%</span>
-                      </div>
+                      <button 
+                        onClick={() => handleStartExam(EXAMS.find(e => e.id === 'communication') || EXAMS[1])}
+                        className="w-full mt-2 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-100 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                      >
+                        Start Communication Module
+                      </button>
                     </div>
 
                     {/* Next up */}
-                    <div className="p-4 rounded-2xl border border-slate-200 dark:border-white/10">
-                      <div className="flex items-center gap-3 mb-2">
+                    <div className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-slate-50/50 dark:bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                        <span className="bg-white/80 dark:bg-black/60 px-3 py-1 rounded-full text-[10px] font-bold text-slate-500 dark:text-slate-400 backdrop-blur-md border border-slate-200 dark:border-white/10">Requires Comm Score</span>
+                      </div>
+                      <div className="flex items-center gap-3 mb-2 opacity-60">
                         <div className="w-2 h-2 rounded-full bg-slate-400" />
-                        <p className="text-sm font-medium text-brand-text-light-primary dark:text-brand-text-primary">Architecture Patterns</p>
+                        <p className="text-sm font-medium text-brand-text-light-primary dark:text-brand-text-primary">Backend & Systems</p>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400">Locked</span>
                       </div>
-                      <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary">
-                        Requires Data Visualization at 75%. Complete 1 more assessment to unlock.
+                      <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary opacity-60">
+                        Algorithms, Data Structures (Advanced Trees, Graphs), and Dynamic Programming.
                       </p>
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
-                      <div>
-                        <p className="text-lg font-semibold text-brand-text-light-primary dark:text-brand-text-primary">78%</p>
-                        <p className="text-[10px] text-brand-text-light-secondary">Average</p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold text-brand-text-light-primary dark:text-brand-text-primary">3</p>
-                        <p className="text-[10px] text-brand-text-light-secondary">At 80%+</p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold text-brand-text-light-primary dark:text-brand-text-primary">2</p>
-                        <p className="text-[10px] text-brand-text-light-secondary">Growing</p>
-                      </div>
                     </div>
                   </div>
 
