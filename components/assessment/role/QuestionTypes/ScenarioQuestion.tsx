@@ -95,7 +95,7 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
                             aria-pressed={isSelected}
                             className={`group flex min-h-20 items-center gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
                                 isSelected
-                                    ? "border-brand-green bg-brand-green/10 shadow-[0_12px_30px_rgba(30,211,106,0.16)]"
+                                    ? "border-brand-green bg-brand-green/10"
                                     : "border-slate-200 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712]"
                             }`}
                         >

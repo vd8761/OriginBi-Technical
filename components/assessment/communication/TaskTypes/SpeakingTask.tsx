@@ -117,7 +117,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                         <>
                             <div className="relative flex h-24 w-24 items-center justify-center">
                                 <span className="absolute inset-0 rounded-full border-4 border-red-500/20 animate-ping" />
-                                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-[0_0_24px_rgba(239,68,68,0.45)]">
+                                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white">
                                     <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 0 1-7 7m0 0a7 7 0 0 1-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 0 1-3-3V5a3 3 0 1 1 6 0v6a3 3 0 0 1-3 3Z" />
                                     </svg>

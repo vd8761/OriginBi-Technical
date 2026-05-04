@@ -281,29 +281,31 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             <div className="absolute inset-0 assessment-communication-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-wave opacity-25" aria-hidden="true" />
 
-            <header className="assessment-header sticky top-0 z-50 flex min-h-16 items-center justify-between gap-4 px-4 py-3 md:px-6">
+            <header className="assessment-header sticky top-0 z-50 flex min-h-14 items-center justify-between gap-4 px-4 py-2 md:px-6">
                 <div className="flex min-w-0 items-center gap-3">
-                    <div className="hidden origin-left scale-75 sm:block">
+                    <div className="hidden origin-left scale-[0.7] sm:block">
                         <Logo />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs font-bold text-brand-green">Communication Assessment</p>
-                        <h1 className="truncate text-base font-extrabold text-[#17201b] dark:text-white">
+                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Communication Assessment</p>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
                             Multi-skill test workspace
                         </h1>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-right shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/40 dark:text-white/40">
                             Time left
                         </p>
-                        <p className={`font-mono text-sm font-extrabold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
+                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
                             {formatTime(timeLeft)}
                         </p>
                     </div>
-                    <ThemeToggle />
+                    <div className="scale-90">
+                        <ThemeToggle />
+                    </div>
                 </div>
             </header>
 

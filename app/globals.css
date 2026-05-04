@@ -317,43 +317,31 @@
 
   .assessment-aptitude-bg {
     background:
-      radial-gradient(880px circle at 12% 12%, rgba(30, 211, 106, 0.2), transparent 55%),
-      radial-gradient(720px circle at 85% 18%, rgba(22, 160, 98, 0.16), transparent 55%),
       linear-gradient(180deg, #f6fff8 0%, #f2fbf7 55%, #ffffff 100%);
   }
 
   .dark .assessment-aptitude-bg {
     background:
-      radial-gradient(880px circle at 12% 12%, rgba(30, 211, 106, 0.24), transparent 55%),
-      radial-gradient(720px circle at 85% 18%, rgba(10, 90, 58, 0.32), transparent 55%),
       linear-gradient(180deg, rgba(15, 23, 18, 0.98), rgba(15, 23, 18, 1));
   }
 
   .assessment-communication-bg {
     background:
-      radial-gradient(820px circle at 10% 80%, rgba(30, 211, 106, 0.2), transparent 55%),
-      radial-gradient(680px circle at 88% 65%, rgba(20, 150, 90, 0.18), transparent 55%),
       linear-gradient(180deg, #f7fffb 0%, #f4fcf8 60%, #ffffff 100%);
   }
 
   .dark .assessment-communication-bg {
     background:
-      radial-gradient(820px circle at 10% 80%, rgba(30, 211, 106, 0.24), transparent 55%),
-      radial-gradient(680px circle at 88% 65%, rgba(12, 90, 58, 0.3), transparent 55%),
       linear-gradient(180deg, rgba(15, 23, 18, 0.98), rgba(15, 23, 18, 1));
   }
 
   .assessment-role-bg {
     background:
-      radial-gradient(920px circle at 18% 15%, rgba(30, 211, 106, 0.16), transparent 60%),
-      radial-gradient(560px circle at 78% 85%, rgba(16, 120, 74, 0.2), transparent 55%),
       linear-gradient(180deg, #f6fffb 0%, #f3fbf7 55%, #ffffff 100%);
   }
 
   .dark .assessment-role-bg {
     background:
-      radial-gradient(920px circle at 18% 15%, rgba(30, 211, 106, 0.24), transparent 60%),
-      radial-gradient(560px circle at 78% 85%, rgba(8, 70, 45, 0.36), transparent 55%),
       linear-gradient(180deg, rgba(15, 23, 18, 0.98), rgba(15, 23, 18, 1));
   }
 
