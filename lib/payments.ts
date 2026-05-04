@@ -3,14 +3,20 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AssessmentId } from "./exams";
 
-const STORAGE_KEY = "originbi:paid-assessments";
-
 export type PaymentKey = AssessmentId | `coding:${string}`;
 
-const readPaid = (): Set<string> => {
+export const codingPaymentKey = (languageId: string): PaymentKey =>
+    `coding:${languageId}` as PaymentKey;
+
+const PAID_KEY = "originbi:paid-assessments";
+const PAID_EVENT = "originbi:paid-changed";
+const COMPLETED_KEY = "originbi:completed-assessments";
+const COMPLETED_EVENT = "originbi:completed-changed";
+
+const readSet = (storageKey: string): Set<string> => {
     if (typeof window === "undefined") return new Set();
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const raw = window.localStorage.getItem(storageKey);
         if (!raw) return new Set();
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return new Set(parsed);
@@ -20,46 +26,57 @@ const readPaid = (): Set<string> => {
     }
 };
 
-const writePaid = (set: Set<string>) => {
+const writeSet = (storageKey: string, eventName: string, set: Set<string>) => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
-    window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
+    window.localStorage.setItem(storageKey, JSON.stringify(Array.from(set)));
+    window.dispatchEvent(new CustomEvent(eventName));
 };
 
-export const codingPaymentKey = (languageId: string): PaymentKey =>
-    `coding:${languageId}` as PaymentKey;
-
-export function usePaidAssessments() {
-    const [paid, setPaid] = useState<Set<string>>(() => readPaid());
+const useKeyedSet = (storageKey: string, eventName: string) => {
+    const [set, setLocal] = useState<Set<string>>(() => new Set());
 
     useEffect(() => {
-        const sync = () => setPaid(readPaid());
+        setLocal(readSet(storageKey));
+        const sync = () => setLocal(readSet(storageKey));
         window.addEventListener("storage", sync);
-        window.addEventListener("originbi:paid-changed", sync);
+        window.addEventListener(eventName, sync);
         return () => {
             window.removeEventListener("storage", sync);
-            window.removeEventListener("originbi:paid-changed", sync);
+            window.removeEventListener(eventName, sync);
         };
-    }, []);
+    }, [storageKey, eventName]);
 
-    const isPaid = useCallback(
-        (key: PaymentKey) => paid.has(key),
-        [paid],
+    const has = useCallback((key: PaymentKey) => set.has(key), [set]);
+
+    const add = useCallback(
+        (key: PaymentKey) => {
+            const next = readSet(storageKey);
+            next.add(key);
+            writeSet(storageKey, eventName, next);
+            setLocal(next);
+        },
+        [storageKey, eventName],
     );
 
-    const markPaid = useCallback((key: PaymentKey) => {
-        const next = readPaid();
-        next.add(key);
-        writePaid(next);
-        setPaid(next);
-    }, []);
+    const remove = useCallback(
+        (key: PaymentKey) => {
+            const next = readSet(storageKey);
+            next.delete(key);
+            writeSet(storageKey, eventName, next);
+            setLocal(next);
+        },
+        [storageKey, eventName],
+    );
 
-    const clearPaid = useCallback((key: PaymentKey) => {
-        const next = readPaid();
-        next.delete(key);
-        writePaid(next);
-        setPaid(next);
-    }, []);
+    return { has, add, remove };
+};
 
-    return { isPaid, markPaid, clearPaid };
+export function usePaidAssessments() {
+    const { has, add, remove } = useKeyedSet(PAID_KEY, PAID_EVENT);
+    return { isPaid: has, markPaid: add, clearPaid: remove };
+}
+
+export function useCompletedAssessments() {
+    const { has, add, remove } = useKeyedSet(COMPLETED_KEY, COMPLETED_EVENT);
+    return { isCompleted: has, markCompleted: add, clearCompleted: remove };
 }
