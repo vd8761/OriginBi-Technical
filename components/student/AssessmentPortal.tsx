@@ -472,7 +472,7 @@ const AssessmentPortal: React.FC = () => {
           <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
               <div>
-                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Assessments</h1>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
               </div>
 
@@ -1231,58 +1231,6 @@ const AssessmentPortal: React.FC = () => {
               </div>
             </section>
           </>
-        ) : currentView === "assessment" ? (
-          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-              <div>
-                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
-              </div>
-              
-              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
-                {FILTERS.map((item) => {
-                  const isActive = filter === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => setFilter(item.value)}
-                      className={
-                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
-                        (isActive
-                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
-                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
-                      }
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredExams.map((exam) => (
-                <AssessmentCard
-                  key={exam.id}
-                  title={exam.title}
-                  description={exam.description}
-                  statusLabel={exam.statusLabel}
-                  statusTone={exam.available ? "success" : "warning"}
-                  totalQuestions={exam.questions}
-                  duration={exam.duration}
-                  price={`₹${exam.price}`}
-                  tags={exam.tags}
-                  icon={exam.icon}
-                  available={exam.available}
-                  level={exam.difficulty}
-                  insight={exam.statusLabel}
-                  onDetailsClick={() => handleSelectExam(exam)}
-                  onStartClick={() => handleStartExam(exam)}
-                />
-              ))}
-            </div>
-          </div>
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
