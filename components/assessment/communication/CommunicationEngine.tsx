@@ -64,16 +64,6 @@ const MOCK_TASKS: AssessmentTask[] = [
                     { id: "opt_4", text: "Software update schedule" },
                 ],
             },
-            {
-                id: "q2",
-                text: "What action are employees asked to take by Friday?",
-                options: [
-                    { id: "opt_1", text: "Submit expense reports" },
-                    { id: "opt_2", text: "Update their passwords" },
-                    { id: "opt_3", text: "RSVP to the event" },
-                    { id: "opt_4", text: "Complete the survey" },
-                ],
-            },
         ],
     },
     {
@@ -90,16 +80,6 @@ const MOCK_TASKS: AssessmentTask[] = [
                     { id: "opt_2", text: "The client has an upcoming product launch." },
                     { id: "opt_3", text: "Sarah Jensen is going on leave." },
                     { id: "opt_4", text: "There was an error in the original contract." },
-                ],
-            },
-            {
-                id: "q4",
-                text: "When is the new deadline for Phase 1?",
-                options: [
-                    { id: "opt_1", text: "November 1st" },
-                    { id: "opt_2", text: "EOD tomorrow" },
-                    { id: "opt_3", text: "October 15th" },
-                    { id: "opt_4", text: "Thursday morning" },
                 ],
             },
         ],
@@ -371,15 +351,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     </div>
 
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
-                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
-                            <h2 className="text-sm font-semibold leading-relaxed text-[#17201b] dark:text-white sm:text-base">
-                                <span className="mr-3 font-bold">{currentIndex + 1}.</span>
-                                {currentTask.instructions}
-                            </h2>
-                            <div className="mt-6">
-                                {renderTaskContent()}
-                            </div>
-                        </div>
+                        {renderTaskContent()}
                     </div>
 
                     <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-4 dark:border-white/10 dark:bg-white/5">

@@ -449,6 +449,17 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f1712]/95 backdrop-blur-md p-4 sm:p-10"
                         onClick={() => setZoomedImage(null)}
                     >
+                        {/* Fixed Close Button for reliable visibility on all screens */}
+                        <button
+                            onClick={() => setZoomedImage(null)}
+                            className="absolute right-6 top-6 z-[210] flex items-center gap-2 text-white/70 hover:text-white transition-all active:scale-95"
+                        >
+                            <span className="hidden text-xs font-bold uppercase tracking-widest sm:block">Close</span>
+                            <div className="rounded-full bg-white/10 p-3 backdrop-blur-md transition-colors hover:bg-white/20">
+                                <X size={24} />
+                            </div>
+                        </button>
+
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
@@ -457,15 +468,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             className="relative h-full w-full max-w-6xl"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <button
-                                onClick={() => setZoomedImage(null)}
-                                className="absolute -top-12 right-0 flex items-center gap-2 text-white/70 hover:text-white sm:-right-12 sm:top-0"
-                            >
-                                <span className="hidden text-xs font-bold uppercase tracking-widest sm:block">Close</span>
-                                <div className="rounded-full bg-white/10 p-2 backdrop-blur-md">
-                                    <X size={24} />
-                                </div>
-                            </button>
                             <div className="flex h-full w-full items-center justify-center">
                                 <img
                                     src={zoomedImage}
