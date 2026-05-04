@@ -12,8 +12,8 @@ import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, Role
 import AssessmentCard from "./AssessmentCard";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
-type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
-type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
+type AssessmentId = "aptitude" | "communication" | "role" | "coding" | "mnc";
+type AssessmentFilter = "all" | "ready" | "core" | "career" | "technical";
 
 interface PricingTier {
   id: string;
@@ -218,96 +218,6 @@ const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
       },
     ],
   },
-  coding: {
-    focus: "A fundamentals-first programming screen for candidates building confidence before harder technical interviews.",
-    skills: [
-      { title: "Problem decomposition", description: "Breaking a prompt into inputs, constraints, logic, and edge cases." },
-      { title: "Core syntax thinking", description: "Using loops, conditionals, functions, and collections with control." },
-      { title: "Debugging judgement", description: "Spotting off-by-one mistakes, invalid states, and missed cases." },
-      { title: "Simulation logic", description: "Translating small real-world flows into reliable code steps." },
-    ],
-    sections: [
-      { name: "Number Logic", detail: "Parity, digit operations, ranges, divisibility, and mathematical sequences.", weight: "25%" },
-      { name: "Strings", detail: "Search, transform, compare, validate, and count text patterns.", weight: "25%" },
-      { name: "Arrays", detail: "Traversal, frequency, pair logic, sorting basics, and window-style thinking.", weight: "30%" },
-      { name: "Simulation", detail: "State updates, rule-based flows, and scenario implementation.", weight: "20%" },
-    ],
-    outcomes: ["Topic readiness profile", "Edge-case awareness", "Debugging focus areas", "Next technical practice path"],
-    requirements: ["Desktop or laptop", "Code editor area inside the test", "Stable internet connection", "90 minute focus window"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 199,
-        originalPrice: 249,
-        discount: 20,
-        features: ["Full exam access", "Basic score report", "Test cases passed"],
-        badge: "Early Access",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Full exam access", "Time complexity analysis", "Code quality score", "Solution explanations"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 349,
-        originalPrice: 499,
-        discount: 30,
-        features: ["Everything in Standard", "Mentor code review", "Algorithm suggestions", "Practice problem set"],
-      },
-    ],
-  },
-  mnc: {
-    focus: "A sharper interview-practice track for candidates targeting larger product, service, and consulting companies.",
-    skills: [
-      { title: "Pattern recognition", description: "Identifying when to use two pointers, hashing, trees, graphs, or DP." },
-      { title: "Complexity thinking", description: "Reasoning about time and space before choosing an approach." },
-      { title: "DSA fluency", description: "Applying data structures to common interview problem families." },
-      { title: "Round strategy", description: "Prioritizing correctness, explanation, and tradeoffs under interview pressure." },
-    ],
-    sections: [
-      { name: "Arrays and Hashing", detail: "Frequency maps, pairs, subarrays, sorting, and search patterns.", weight: "30%" },
-      { name: "Trees and Graphs", detail: "Traversal, shortest paths, connected components, and hierarchy questions.", weight: "25%" },
-      { name: "Dynamic Programming", detail: "State definition, recurrence, memoization, and tabulation basics.", weight: "25%" },
-      { name: "Mixed Interview Set", detail: "Company-style combinations of logic, DSA, and constraints.", weight: "20%" },
-    ],
-    outcomes: ["Interview topic map", "Problem family gaps", "Complexity reasoning notes", "Company-round practice priorities"],
-    requirements: ["DSA fundamentals", "Desktop or laptop", "Stable internet connection", "One uninterrupted 60 minute session"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Full exam access", "Basic score report", "Difficulty rating"],
-        badge: "Early Access",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 299,
-        originalPrice: 449,
-        discount: 33,
-        features: ["Full exam access", "Company-wise trends", "Time analysis", "Weak area identification"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 399,
-        originalPrice: 599,
-        discount: 33,
-        features: ["Everything in Standard", "Mock interview", "Company-specific tips", "Study roadmap"],
-      },
-    ],
-  },
   role: {
     focus: "A role-fit diagnostic that tests conceptual knowledge and decision-making in realistic work situations.",
     skills: [
@@ -349,6 +259,46 @@ const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
         discount: 29,
         features: ["Everything in Standard", "Career coach session", "Personalized roadmap", "Industry insights"],
       },
+    ],
+  },
+  coding: {
+    focus: "Validate core programming proficiency with logic, data structures, and simulation-based problem solving.",
+    skills: [
+      { title: "Number Logic", description: "Solving mathematical and logical puzzles through code." },
+      { title: "String Manipulation", description: "Parsing, cleaning, and transforming text data efficiently." },
+      { title: "Array Operations", description: "Managing collections and implementing search/sort algorithms." },
+      { title: "Simulation", description: "Modeling real-world logic and process flows in a digital environment." },
+    ],
+    sections: [
+      { name: "Logic & Fundamentals", detail: "Core programming syntax and simple logical puzzles.", weight: "25%" },
+      { name: "Strings & Arrays", detail: "Complex manipulation and searching within collections.", weight: "40%" },
+      { name: "Simulation Tasks", detail: "Larger problem sets requiring end-to-end process logic.", weight: "35%" },
+    ],
+    outcomes: ["Algorithm efficiency report", "Logic accuracy heatmap", "Code quality feedback", "Technical readiness score"],
+    requirements: ["Browser-based IDE access", "Stable internet", "60-90 minute focus window"],
+    pricingTiers: [
+      { id: "basic", name: "Basic", price: 199, features: ["Full exam access", "Automated score"] },
+      { id: "standard", name: "Standard", price: 299, originalPrice: 399, discount: 25, features: ["Everything in Basic", "Detailed logic breakdown", "Optimization tips"], popular: true },
+    ],
+  },
+  mnc: {
+    focus: "Advanced interview preparation covering high-frequency patterns used by top-tier technical companies.",
+    skills: [
+      { title: "Trees & Graphs", description: "Navigating complex hierarchical and networked data structures." },
+      { title: "Dynamic Programming", description: "Solving optimization problems through recursive sub-problems." },
+      { title: "System Thinking", description: "Understanding architectural trade-offs and scaling constraints." },
+      { title: "Algorithm Design", description: "Crafting efficient solutions with minimal time and space complexity." },
+    ],
+    sections: [
+      { name: "Data Structures", detail: "Trees, Graphs, and Heaps implementation and traversal.", weight: "30%" },
+      { name: "Advanced Algorithms", detail: "Dynamic Programming, Greedy approach, and Backtracking.", weight: "40%" },
+      { name: "Systems & Design", detail: "Conceptual questions on scalability and architecture.", weight: "30%" },
+    ],
+    outcomes: ["MNC-ready profile report", "Advanced skill mapping", "Pattern recognition score", "Architectural feedback"],
+    requirements: ["Advanced coding knowledge", "90 minute uninterrupted session"],
+    pricingTiers: [
+      { id: "basic", name: "Basic", price: 249, features: ["Full exam access", "Score report"] },
+      { id: "premium", name: "Premium", price: 499, originalPrice: 799, discount: 38, features: ["Everything in Basic", "Video explanation of solutions", "Mock interview credit"], popular: true },
     ],
   },
 };
@@ -426,8 +376,8 @@ const AssessmentPortal: React.FC = () => {
   const trackCounts = useMemo(() => {
     const counts: Record<Exclude<AssessmentFilter, "all" | "ready">, number> = {
       core: 0,
-      technical: 0,
       career: 0,
+      technical: 0,
     };
 
     EXAMS.forEach((exam) => {
@@ -529,6 +479,16 @@ const AssessmentPortal: React.FC = () => {
       content: "Your data interpretation skills directly correlate with system design potential. Consider the Architecture track.",
       icon: "✨",
       color: "#f59e0b"
+    },
+    {
+      label: "Industry aligned",
+      value: "5",
+      detail: "sectors covered",
+    },
+    {
+      label: "Learning paths",
+      value: "2",
+      detail: "career tracks",
     },
     { 
       type: "milestone", 
@@ -658,11 +618,6 @@ const AssessmentPortal: React.FC = () => {
       detail: "quant + logic coverage",
     },
     {
-      label: "Tech lane depth",
-      value: `${trackCounts.technical} exams`,
-      detail: "coding + MNC focus",
-    },
-    {
       label: "Career lane depth",
       value: `${trackCounts.career} exams`,
       detail: "role-fit diagnostics",
@@ -735,7 +690,56 @@ const AssessmentPortal: React.FC = () => {
         onLogout={() => console.log("Logging out...")}
       />
 
-      <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
+      {/* Top Right Notification Alert */}
+      {showNextStepAlert && currentView === "dashboard" && (
+        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
+          <div className="relative overflow-hidden rounded-2xl border border-brand-green/30 bg-white/95 dark:bg-brand-dark-secondary/95 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green shadow-[0_0_15px_rgba(30,211,106,0.3)]">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-brand-text-light-primary dark:text-brand-text-primary leading-tight">
+                  Aptitude Cleared!
+                </h4>
+                <p className="mt-1.5 text-xs text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed">
+                  Excellent work on Logic. Start the <strong className="text-brand-text-light-primary dark:text-brand-text-primary">Communication Assessment</strong> next to unlock Technical Groupings algorithms and discover your true Role-Fit.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setShowNextStepAlert(false);
+                      setCurrentView("assessment");
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-brand-green rounded-xl hover:bg-brand-green/90 shadow-sm transition-colors"
+                  >
+                    Set Navigation
+                  </button>
+                  <button
+                    onClick={() => setShowNextStepAlert(false)}
+                    className="px-4 py-2 text-xs font-bold text-brand-text-light-secondary hover:text-brand-text-light-primary dark:text-brand-text-secondary dark:hover:text-brand-text-primary transition-colors"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowNextStepAlert(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <main className="relative z-10 mx-auto flex max-w-[1600px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-12 xl:px-16">
         {currentView === "dashboard" ? (
           <>
             {/* Command Deck */}

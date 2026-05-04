@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, ZoomIn, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface Option {
@@ -45,7 +45,7 @@ const MOCK_QUESTIONS: Question[] = [
         id: "q3",
         category: "DI",
         text: "Based on the chart below, what was the total revenue in Q3?",
-        imageUrl: "https://via.placeholder.com/600x300.png?text=Sample+Bar+Chart",
+        imageUrl: "/assessment/q3_chart.png",
         options: [
             { id: "o1", text: "$45,000" },
             { id: "o2", text: "$50,000" },
@@ -57,7 +57,7 @@ const MOCK_QUESTIONS: Question[] = [
         id: "q4",
         category: "AR",
         text: "Which of the following figures is the odd one out?",
-        imageUrl: "https://via.placeholder.com/600x200.png?text=Abstract+Figures",
+        imageUrl: "/assessment/q4_figures.png",
         options: [
             { id: "o1", text: "Figure A" },
             { id: "o2", text: "Figure B" },
@@ -86,6 +86,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const [timeLeft, setTimeLeft] = useState(3600);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
     const currentQuestion = MOCK_QUESTIONS[currentIndex];
     const totalQuestions = MOCK_QUESTIONS.length;
@@ -219,6 +220,13 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
 
                 {/* Question Area */}
                 <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                    {/* Top Progress Bar */}
+                    <div className="h-1 w-full bg-brand-green/5">
+                        <div 
+                            className="h-full bg-brand-green transition-all duration-700 ease-out" 
+                            style={{ width: `${safeProgress}%` }}
+                        />
+                    </div>
                     <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
@@ -274,18 +282,30 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
 
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
                         <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
-                            <h2 className="text-base font-bold leading-relaxed text-[#17201b] dark:text-white md:text-lg">
-                                <span className="mr-3">{currentIndex + 1}.</span>
+                            <h2 className="text-sm font-semibold leading-relaxed text-[#17201b] dark:text-white sm:text-base">
+                                <span className="mr-3 font-bold">{currentIndex + 1}.</span>
                                 {currentQuestion.text}
                             </h2>
                             {currentQuestion.imageUrl && (
                                 <div className="mt-4 overflow-hidden rounded-lg border border-brand-green/10 bg-white p-2 dark:border-white/10 dark:bg-[#0f1712]">
-                                    <div
-                                        role="img"
-                                        aria-label="Question reference"
-                                        className="mx-auto h-56 w-full max-w-2xl rounded-md bg-contain bg-center bg-no-repeat"
-                                        style={{ backgroundImage: `url(${currentQuestion.imageUrl})` }}
-                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setZoomedImage(currentQuestion.imageUrl!)}
+                                        className="group relative block w-full overflow-hidden rounded-md focus:outline-none focus:ring-2 focus:ring-brand-green/40"
+                                        title="Click to enlarge"
+                                    >
+                                        <div
+                                            role="img"
+                                            aria-label="Question reference"
+                                            className="mx-auto h-56 w-full max-w-2xl bg-contain bg-center bg-no-repeat transition-transform duration-500 group-hover:scale-105"
+                                            style={{ backgroundImage: `url(${currentQuestion.imageUrl})` }}
+                                        />
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                            <div className="rounded-full bg-white/90 p-2 opacity-0 shadow-lg transition-all group-hover:scale-110 group-hover:opacity-100 dark:bg-black/80">
+                                                <Search size={20} className="text-brand-green" />
+                                            </div>
+                                        </div>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -419,23 +439,80 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 )}
             </AnimatePresence>
 
+            {/* Image Zoom Modal */}
+            <AnimatePresence>
+                {zoomedImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f1712]/95 backdrop-blur-md p-4 sm:p-10"
+                        onClick={() => setZoomedImage(null)}
+                    >
+                        {/* Fixed Close Button for reliable visibility on all screens */}
+                        <button
+                            onClick={() => setZoomedImage(null)}
+                            className="absolute right-6 top-6 z-[210] flex items-center gap-2 text-white/70 hover:text-white transition-all active:scale-95"
+                        >
+                            <span className="hidden text-xs font-bold uppercase tracking-widest sm:block">Close</span>
+                            <div className="rounded-full bg-white/10 p-3 backdrop-blur-md transition-colors hover:bg-white/20">
+                                <X size={24} />
+                            </div>
+                        </button>
+
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="relative h-full w-full max-w-6xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex h-full w-full items-center justify-center">
+                                <img
+                                    src={zoomedImage}
+                                    alt="Enlarged question reference"
+                                    className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+                                />
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Submit Confirmation Modal */}
             {showSubmitModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div 
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-md transition-opacity" 
                         onClick={() => setShowSubmitModal(false)}
                     />
                     
-                    <div className="relative w-full max-w-lg transform overflow-hidden rounded-2xl border border-brand-green/20 bg-white p-8 shadow-2xl transition-all dark:border-white/10 dark:bg-[#111a15]">
-                        <div className="flex flex-col items-center text-center">
-                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+                    <motion.div 
+                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        className="relative w-full max-w-lg transform overflow-hidden rounded-2xl border border-brand-green/20 bg-white p-8 shadow-2xl transition-all dark:border-white/10 dark:bg-[#111a15]"
+                    >
+
+                        <div className="relative flex flex-col items-center text-center">
+                            <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
                                 <CheckCircle2 size={40} />
                             </div>
                             
                             <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
-                            <p className="mt-2 text-sm text-[#17201b] dark:text-white">Review your assessment summary before finalizing your submission.</p>
+                            <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/60">Review your assessment summary before finalizing your submission.</p>
+
+                            <div className="mt-4 flex items-center gap-2 rounded-full border border-brand-green/10 bg-brand-green/[0.03] px-4 py-1.5 dark:border-white/5 dark:bg-white/5">
+                                <div className="h-2 w-2 animate-pulse rounded-full bg-brand-green" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-brand-green">
+                                    Time Remaining: {formatTime(timeLeft)}
+                                </span>
+                            </div>
                             
+                            {/* Summary Cards */}
                             <div className="mt-8 grid w-full grid-cols-3 gap-4">
                                 <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
                                     <span className="text-xl font-black text-brand-green">{navigatorQuestions.filter(q => q.isAnswered).length}</span>
@@ -452,12 +529,12 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             </div>
 
                             {navigatorQuestions.some(q => !q.isAnswered) && (
-                                <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
+                                <div className="mt-6 flex w-full items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
                                     <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
                                     <div>
-                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions Detected</p>
-                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
-                                            You have {navigatorQuestions.filter(q => !q.isAnswered).length} questions left. We recommend reviewing them before final submission.
+                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions</p>
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600/70 dark:text-amber-400/70">
+                                            We recommend attempting all questions before final submission.
                                         </p>
                                     </div>
                                 </div>
@@ -474,14 +551,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                                 <button
                                     type="button"
                                     onClick={confirmSubmit}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e]"
+                                    className="group flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition-all hover:bg-[#19be5e]"
                                 >
                                     Yes, Submit Test
-                                    <ArrowRight size={18} />
+                                    <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
             )}
         </div>
