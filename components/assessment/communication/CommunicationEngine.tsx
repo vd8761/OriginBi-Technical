@@ -5,6 +5,9 @@ import AudioTaskComponent from "./TaskTypes/AudioTask";
 import SpeakingTaskComponent from "./TaskTypes/SpeakingTask";
 import ReadingTaskComponent from "./TaskTypes/ReadingTask";
 import WritingTaskComponent from "./TaskTypes/WritingTask";
+import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 export type TaskType = "audio" | "speaking" | "reading" | "writing";
 
@@ -136,49 +139,14 @@ const formatTime = (seconds: number) => {
     return `${minutes}:${remainingSeconds}`;
 };
 
-const renderTaskIcon = (type: TaskType, className = "h-4 w-4") => {
-    switch (type) {
-        case "audio":
-            return (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm12-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z" />
-                </svg>
-            );
-        case "reading":
-            return (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16h8M8 12h8m-6 8h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z" />
-                </svg>
-            );
-        case "speaking":
-            return (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 0 1-7 7m0 0a7 7 0 0 1-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 0 1-3-3V5a3 3 0 1 1 6 0v6a3 3 0 0 1-3 3Z" />
-                </svg>
-            );
-        case "writing":
-        default:
-            return (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
-                </svg>
-            );
-    }
-};
-
 const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | undefined) => {
     if (!answer) return false;
-
     if (task.type === "audio" || task.type === "reading") {
         return task.questions.every((question) => Boolean((answer as Record<string, string>)[question.id]));
     }
-
     if (task.type === "speaking") {
         return "audioBlobUrl" in answer && Boolean(answer.audioBlobUrl);
     }
-
     return "text" in answer && answer.text.trim().length > 0;
 };
 
@@ -187,38 +155,56 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     const [timeLeft, setTimeLeft] = useState(45 * 60);
     const [answers, setAnswers] = useState<CommunicationAnswers>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const currentTask = MOCK_TASKS[currentIndex];
     const totalTasks = MOCK_TASKS.length;
+    
     const completedCount = useMemo(
         () => MOCK_TASKS.filter((task) => isTaskComplete(task, answers[task.id])).length,
         [answers],
     );
-    const remainingTasks = totalTasks - completedCount;
     const progressPercent = Math.round((completedCount / totalTasks) * 100);
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const isLastTask = currentIndex === totalTasks - 1;
-    const progressRingStyle = {
-        background: `conic-gradient(#1ed36a ${safeProgress}%, rgba(148, 163, 184, 0.24) 0)`,
-    };
 
+    const navigatorTasks: NavigatorQuestion[] = MOCK_TASKS.map((task, index) => {
+        const isAnswered = isTaskComplete(task, answers[task.id]);
+        const isMarked = markedForReview.has(task.id);
 
-    const handleSubmit = useCallback(() => {
+        let state: QuestionState = "unanswered";
+        if (isAnswered) state = "answered";
+        if (isMarked) state = "marked";
+
+        return {
+            id: task.id,
+            number: index + 1,
+            state,
+            category: task.type.toUpperCase(),
+            isAnswered,
+            isMarked,
+        };
+    });
+
+    const confirmSubmit = useCallback(() => {
         onComplete(answers);
     }, [answers, onComplete]);
 
+    const handleConfirmSubmit = () => {
+        setShowSubmitModal(true);
+    };
+
     useEffect(() => {
         if (timeLeft <= 0) {
-            handleSubmit();
+            confirmSubmit();
             return;
         }
-
         const timer = window.setInterval(() => {
             setTimeLeft((prev) => prev - 1);
         }, 1000);
-
         return () => window.clearInterval(timer);
-    }, [handleSubmit, timeLeft]);
+    }, [confirmSubmit, timeLeft]);
 
     const handleNext = () => {
         if (!isLastTask) {
@@ -231,7 +217,6 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             setCurrentIndex((prev) => prev - 1);
         }
     };
-
 
     const updateAnswer = (taskId: string, answerData: CommunicationAnswer) => {
         setAnswers((prev) => ({
@@ -254,7 +239,6 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
         const newAnswers = { ...answers };
         delete newAnswers[currentTask.id];
         setAnswers(newAnswers);
-        
         const newMarked = new Set(markedForReview);
         newMarked.delete(currentTask.id);
         setMarkedForReview(newMarked);
@@ -304,9 +288,6 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
-            <div className="absolute inset-0 assessment-communication-bg" aria-hidden="true" />
-            <div className="absolute inset-0 assessment-wave opacity-25" aria-hidden="true" />
-
             <header className="assessment-header sticky top-0 z-50 flex min-h-14 items-center justify-between gap-4 px-4 py-2 md:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                     <div className="hidden origin-left scale-[0.7] sm:block">
@@ -314,107 +295,53 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     </div>
                     <div className="min-w-0">
                         <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Communication Assessment</p>
-                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
-                            Multi-skill test workspace
-                        </h1>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">Multi-skill test workspace</h1>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Time left
-                        </p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">Time left</p>
                         <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
                             {formatTime(timeLeft)}
                         </p>
                     </div>
-                    <div className="scale-90">
+                    <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
-
+                    <button 
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
+                    >
+                        <LayoutGrid size={20} className="text-brand-green" />
+                    </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1500px] gap-4 px-4 py-4 lg:h-[calc(100dvh-64px)] lg:grid-cols-[260px_minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
-                <aside className="flex flex-col gap-4 rounded-lg border border-brand-green/10 bg-white p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0">
-                    <div className="flex items-center gap-4">
-                        <div className="h-20 w-20 rounded-full p-1" style={progressRingStyle}>
-                            <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
-                                <span className="text-xl font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                                Progress
-                            </p>
-                            <p className="mt-1 text-2xl font-bold text-[#17201b] dark:text-white">{completedCount}/{totalTasks}</p>
-                            <p className="text-xs font-medium text-[#17201b] dark:text-white">tasks complete</p>
-
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-3 dark:border-white/10 dark:bg-white/5">
-                            <p className="text-xs font-medium text-[#17201b] dark:text-white">Remaining</p>
-                            <p className="mt-1 text-xl font-bold text-[#17201b] dark:text-white">{remainingTasks}</p>
-                        </div>
-                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-3 dark:border-white/10 dark:bg-white/5">
-                            <p className="text-xs font-medium text-[#17201b] dark:text-white">Current</p>
-                            <p className="mt-1 text-xl font-bold text-[#17201b] dark:text-white">{currentIndex + 1}</p>
-                        </div>
-                    </div>
-
-                    <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
-
-                        <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
-                                {renderTaskIcon(currentTask.type, "h-5 w-5")}
-                            </span>
+            <main className="relative z-10 mx-auto grid max-w-[1600px] gap-8 px-6 py-8 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden lg:px-8">
+                <section className="flex min-h-[600px] flex-col rounded-lg border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                    <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                                    Active task
-                                </p>
-                                <p className="mt-1 text-base font-bold text-[#17201b] dark:text-white">{taskCopy[currentTask.type].accent}</p>
-
-                            </div>
-                        </div>
-                        <p className="mt-3 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
-                            {taskCopy[currentTask.type].hint}
-                        </p>
-                    </div>
-
-                    <div className="mt-auto rounded-lg bg-[#17201b] p-4 text-white dark:bg-white dark:text-[#17201b]">
-                        <p className="text-sm font-bold text-white dark:text-[#17201b]">Communication scoring</p>
-                        <p className="mt-2 text-xs font-medium leading-5">
-                            Accuracy, clarity, structure, and response quality are tracked across all task types.
-                        </p>
-                    </div>
-                </aside>
-
-                <section className="flex min-h-[600px] flex-col rounded-lg border border-brand-green/10 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
-                    <div className="border-b border-brand-green/5 p-4 sm:p-5 dark:border-white/10">
-                        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="rounded-md bg-brand-green/10 px-3 py-1.5 text-xs font-bold text-brand-green">
-                                        Task {currentIndex + 1}
-                                    </span>
-                                    <span className="rounded-md bg-brand-green/5 px-3 py-1.5 text-xs font-bold text-[#17201b] dark:bg-white/10 dark:text-white">
-                                        {taskCopy[currentTask.type].label}
-                                    </span>
+                                <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
+                                    {taskCopy[currentTask.type].label}
+                                </h2>
+                                <div className="mt-0.5 flex items-center gap-2">
                                     {isQuestionMarked && (
-                                        <span className="rounded-md bg-amber-400/15 px-3 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300">
+                                        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                                            <div className="h-1 w-1 rounded-full bg-current" />
                                             Marked for review
                                         </span>
                                     )}
+                                    {isQuestionAnswered && (
+                                        <span className="flex items-center gap-1 text-[10px] font-bold text-brand-green uppercase">
+                                            <div className="h-1 w-1 rounded-full bg-current" />
+                                            Saved
+                                        </span>
+                                    )}
                                 </div>
-                                <p className="mt-3 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
-                                    {taskCopy[currentTask.type].hint}
-                                </p>
                             </div>
 
-                            <div className="flex flex-col items-end gap-3">
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={handleMarkReview}
@@ -424,53 +351,31 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                                 : "border-brand-green/20 bg-white text-[#17201b] hover:border-amber-400 hover:text-amber-600 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-amber-400"
                                         }`}
                                     >
-                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
-                                        </svg>
-                                        {isQuestionMarked ? "Unmark" : "Review"}
+                                        <Flag size={14} className={isQuestionMarked ? "fill-current" : ""} />
+                                        {isQuestionMarked ? "Marked" : "Mark for review"}
                                     </button>
                                     <button
                                         onClick={handleClear}
                                         disabled={!isQuestionAnswered}
                                         className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-xs font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400"
                                     >
-                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                        Clear
+                                        <RotateCcw size={14} />
+                                        Clear response
                                     </button>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {MOCK_TASKS.map((task, index) => {
-                                        const isActive = index === currentIndex;
-                                        const isComplete = isTaskComplete(task, answers[task.id]);
-
-                                        return (
-                                            <button
-                                                key={task.id}
-                                                type="button"
-                                                onClick={() => setCurrentIndex(index)}
-                                                aria-current={isActive ? "step" : undefined}
-                                                className={`inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-[10px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
-                                                    isActive
-                                                        ? "border-[#17201b] bg-[#17201b] text-white dark:border-white dark:bg-white dark:text-[#17201b]"
-                                                        : isComplete
-                                                            ? "border-brand-green bg-brand-green/10 text-brand-green"
-                                                            : "border-brand-green/10 bg-white text-[#17201b] hover:border-brand-green hover:text-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white"
-                                                }`}
-                                            >
-                                                {index + 1}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
                         </div>
                     </div>
 
-
-                    <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
-                        {renderTaskContent()}
+                    <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
+                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
+                            <h2 className="text-base font-bold leading-relaxed text-[#17201b] dark:text-white md:text-lg">
+                                <span className="mr-3">{currentIndex + 1}.</span>
+                                {currentTask.instructions}
+                            </h2>
+                            <div className="mt-6">
+                                {renderTaskContent()}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-4 dark:border-white/10 dark:bg-white/5">
@@ -479,15 +384,15 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                 type="button"
                                 onClick={handlePrev}
                                 disabled={currentIndex === 0}
-                                className="min-h-11 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
+                                className="min-h-11 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
                             >
                                 Previous
                             </button>
                             {isLastTask ? (
                                 <button
                                     type="button"
-                                    onClick={handleSubmit}
-                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                                    onClick={handleConfirmSubmit}
+                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] shadow-sm"
                                 >
                                     Submit assessment
                                 </button>
@@ -495,7 +400,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                 <button
                                     type="button"
                                     onClick={handleNext}
-                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e]"
                                 >
                                     Save and next
                                 </button>
@@ -504,55 +409,72 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     </div>
                 </section>
 
-                <aside className="rounded-lg border border-brand-green/10 bg-white p-4 shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0">
-                    <div className="flex h-full flex-col">
-                        <h3 className="text-base font-bold text-[#17201b] dark:text-white">Task map</h3>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Move between communication sections.
-                        </p>
-
-                        <div className="mt-5 flex flex-col gap-3">
-                            {MOCK_TASKS.map((task, index) => {
-                                const isActive = index === currentIndex;
-                                const isComplete = isTaskComplete(task, answers[task.id]);
-
-                                return (
-                                    <button
-                                        key={task.id}
-                                        type="button"
-                                        onClick={() => setCurrentIndex(index)}
-                                        aria-current={isActive ? "step" : undefined}
-                                        className={`flex min-h-16 items-center gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
-                                            isActive
-                                                ? "border-[#17201b] bg-[#17201b] text-white dark:border-white dark:bg-white dark:text-[#17201b]"
-                                                : isComplete
-                                                    ? "border-brand-green bg-brand-green/10 text-brand-green"
-                                                    : "border-brand-green/10 bg-brand-green/[0.03] text-[#17201b] hover:border-brand-green hover:text-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white"
-                                        }`}
-                                    >
-                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
-                                            {renderTaskIcon(task.type, "h-5 w-5")}
-                                        </span>
-                                        <span>
-                                            <span className="block text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                                                Task {index + 1}
-                                            </span>
-                                            <span className="mt-1 block text-sm font-semibold">{taskCopy[task.type].label}</span>
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="mt-auto hidden border-t border-brand-green/5 pt-4 text-[10px] font-bold leading-5 text-[#17201b] dark:border-white/10 dark:text-white lg:block">
-                            Completed tasks turn green. You can return to earlier tasks before submitting.
-                        </div>
-                    </div>
+                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
+                    <QuestionNavigator
+                        questions={navigatorTasks}
+                        currentIndex={currentIndex}
+                        onSelect={(idx) => setCurrentIndex(idx)}
+                        progressPercent={safeProgress}
+                    />
                 </aside>
             </main>
+
+            <AnimatePresence>
+                {isSidebarOpen && (
+                    <div className="fixed inset-0 z-[110] lg:hidden">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-sm" />
+                        <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="absolute inset-y-0 right-0 w-full max-w-[320px] bg-[#f6f8f5] dark:bg-[#111a15]">
+                            <div className="flex h-full flex-col">
+                                <div className="flex items-center justify-between border-b p-6 dark:border-white/10">
+                                    <div className="flex items-center gap-4">
+                                        <h2 className="text-sm font-bold uppercase text-[#17201b] dark:text-white">Navigator</h2>
+                                        <ThemeToggle />
+                                    </div>
+                                    <button onClick={() => setIsSidebarOpen(false)}><X size={20} /></button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    <QuestionNavigator questions={navigatorTasks} currentIndex={currentIndex} onSelect={(idx) => { setCurrentIndex(idx); setIsSidebarOpen(false); }} progressPercent={safeProgress} />
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showSubmitModal && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-md" onClick={() => setShowSubmitModal(false)} />
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white p-8 shadow-2xl dark:bg-[#111a15]">
+                            <div className="flex flex-col items-center text-center">
+                                <CheckCircle2 size={40} className="text-brand-green mb-4" />
+                                <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
+                                <p className="mt-2 text-sm text-[#17201b] dark:text-white">Review your communication assessment summary before finalizing.</p>
+                                <div className="mt-8 grid w-full grid-cols-3 gap-4">
+                                    <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
+                                        <span className="text-xl font-black text-brand-green">{navigatorTasks.filter(q => q.isAnswered).length}</span>
+                                        <span className="text-[10px] font-bold uppercase text-brand-green">Answered</span>
+                                    </div>
+                                    <div className="flex flex-col items-center rounded-xl bg-amber-400/[0.05] p-4 border border-amber-400/10">
+                                        <span className="text-xl font-black text-amber-500">{navigatorTasks.filter(q => q.isMarked).length}</span>
+                                        <span className="text-[10px] font-bold uppercase text-amber-500">Review</span>
+                                    </div>
+                                    <div className="flex flex-col items-center rounded-xl bg-slate-100 p-4 dark:bg-white/5">
+                                        <span className="text-xl font-black text-slate-700 dark:text-white">{navigatorTasks.filter(q => !q.isAnswered).length}</span>
+                                        <span className="text-[10px] font-bold uppercase text-slate-700 dark:text-white">Left</span>
+                                    </div>
+                                </div>
+                                <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
+                                    <button onClick={() => setShowSubmitModal(false)} className="flex-1 rounded-xl border py-3.5 text-sm font-bold dark:text-white">Review Tasks</button>
+                                    <button onClick={confirmSubmit} className="flex-1 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white">Yes, Submit Test</button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
 
 export default CommunicationEngine;
-
