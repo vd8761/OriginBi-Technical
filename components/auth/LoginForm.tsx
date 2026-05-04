@@ -29,28 +29,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const emailErr = validateEmail(values.email);
-    const passErr = validatePassword(values.password);
-
-    if (emailErr || passErr) {
-      setErrors({ email: emailErr, password: passErr });
-      return;
-    }
-
-    setIsSubmitting(true);
-    setGeneralError("");
-
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // For now, let's just succeed
-      onLoginSuccess();
-    } catch (err) {
-      setGeneralError("Login failed. Please check your credentials.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    onLoginSuccess();
   };
 
   return (
