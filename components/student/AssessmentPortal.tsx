@@ -12,8 +12,8 @@ import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, Role
 import AssessmentCard from "./AssessmentCard";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
-type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
-type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
+type AssessmentId = "aptitude" | "communication" | "role";
+type AssessmentFilter = "all" | "ready" | "core" | "career";
 
 interface PricingTier {
   id: string;
@@ -73,44 +73,6 @@ const EXAMS: ExtendedExam[] = [
     accentColor: "#06b6d4",
     gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
     track: "core",
-  },
-  {
-    id: "coding",
-    title: "Coding Assessment",
-    shortTitle: "Coding",
-    description: "Validate programming fundamentals with number logic, strings, arrays, and simulation-driven exercises.",
-    duration: "90 min",
-    questions: 30,
-    difficulty: "Intermediate",
-    price: 199,
-    originalPrice: 299,
-    discount: 33,
-    tags: ["Logic", "Strings", "Arrays", "Simulation"],
-    icon: <CodingIcon className="w-7 h-7" />,
-    available: false,
-    statusLabel: "Coming Soon",
-    accentColor: "#f59e0b",
-    gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-    track: "technical",
-  },
-  {
-    id: "mnc",
-    title: "MNC Based Questions",
-    shortTitle: "MNC Prep",
-    description: "Practice high-frequency interview patterns across arrays, trees, dynamic programming, graphs, and systems thinking.",
-    duration: "60 min",
-    questions: 25,
-    difficulty: "Advanced",
-    price: 249,
-    originalPrice: 399,
-    discount: 38,
-    tags: ["Arrays", "Trees", "DP", "Graphs"],
-    icon: <MNCIcon className="w-7 h-7" />,
-    available: false,
-    statusLabel: "Coming Soon",
-    accentColor: "#6366f1",
-    gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-    track: "technical",
   },
   {
     id: "role",
@@ -218,96 +180,6 @@ const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
       },
     ],
   },
-  coding: {
-    focus: "A fundamentals-first programming screen for candidates building confidence before harder technical interviews.",
-    skills: [
-      { title: "Problem decomposition", description: "Breaking a prompt into inputs, constraints, logic, and edge cases." },
-      { title: "Core syntax thinking", description: "Using loops, conditionals, functions, and collections with control." },
-      { title: "Debugging judgement", description: "Spotting off-by-one mistakes, invalid states, and missed cases." },
-      { title: "Simulation logic", description: "Translating small real-world flows into reliable code steps." },
-    ],
-    sections: [
-      { name: "Number Logic", detail: "Parity, digit operations, ranges, divisibility, and mathematical sequences.", weight: "25%" },
-      { name: "Strings", detail: "Search, transform, compare, validate, and count text patterns.", weight: "25%" },
-      { name: "Arrays", detail: "Traversal, frequency, pair logic, sorting basics, and window-style thinking.", weight: "30%" },
-      { name: "Simulation", detail: "State updates, rule-based flows, and scenario implementation.", weight: "20%" },
-    ],
-    outcomes: ["Topic readiness profile", "Edge-case awareness", "Debugging focus areas", "Next technical practice path"],
-    requirements: ["Desktop or laptop", "Code editor area inside the test", "Stable internet connection", "90 minute focus window"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 199,
-        originalPrice: 249,
-        discount: 20,
-        features: ["Full exam access", "Basic score report", "Test cases passed"],
-        badge: "Early Access",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Full exam access", "Time complexity analysis", "Code quality score", "Solution explanations"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 349,
-        originalPrice: 499,
-        discount: 30,
-        features: ["Everything in Standard", "Mentor code review", "Algorithm suggestions", "Practice problem set"],
-      },
-    ],
-  },
-  mnc: {
-    focus: "A sharper interview-practice track for candidates targeting larger product, service, and consulting companies.",
-    skills: [
-      { title: "Pattern recognition", description: "Identifying when to use two pointers, hashing, trees, graphs, or DP." },
-      { title: "Complexity thinking", description: "Reasoning about time and space before choosing an approach." },
-      { title: "DSA fluency", description: "Applying data structures to common interview problem families." },
-      { title: "Round strategy", description: "Prioritizing correctness, explanation, and tradeoffs under interview pressure." },
-    ],
-    sections: [
-      { name: "Arrays and Hashing", detail: "Frequency maps, pairs, subarrays, sorting, and search patterns.", weight: "30%" },
-      { name: "Trees and Graphs", detail: "Traversal, shortest paths, connected components, and hierarchy questions.", weight: "25%" },
-      { name: "Dynamic Programming", detail: "State definition, recurrence, memoization, and tabulation basics.", weight: "25%" },
-      { name: "Mixed Interview Set", detail: "Company-style combinations of logic, DSA, and constraints.", weight: "20%" },
-    ],
-    outcomes: ["Interview topic map", "Problem family gaps", "Complexity reasoning notes", "Company-round practice priorities"],
-    requirements: ["DSA fundamentals", "Desktop or laptop", "Stable internet connection", "One uninterrupted 60 minute session"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Full exam access", "Basic score report", "Difficulty rating"],
-        badge: "Early Access",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 299,
-        originalPrice: 449,
-        discount: 33,
-        features: ["Full exam access", "Company-wise trends", "Time analysis", "Weak area identification"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 399,
-        originalPrice: 599,
-        discount: 33,
-        features: ["Everything in Standard", "Mock interview", "Company-specific tips", "Study roadmap"],
-      },
-    ],
-  },
   role: {
     focus: "A role-fit diagnostic that tests conceptual knowledge and decision-making in realistic work situations.",
     skills: [
@@ -357,13 +229,11 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
   { label: "Ready now", value: "ready" },
   { label: "Core skills", value: "core" },
-  { label: "Tech hiring", value: "technical" },
   { label: "Career fit", value: "career" },
 ];
 
 const TRACK_PALETTE = {
   core: "#10b981",
-  technical: "#f59e0b",
   career: "#06b6d4",
 } as const;
 
@@ -425,7 +295,6 @@ const AssessmentPortal: React.FC = () => {
   const trackCounts = useMemo(() => {
     const counts: Record<Exclude<AssessmentFilter, "all" | "ready">, number> = {
       core: 0,
-      technical: 0,
       career: 0,
     };
 
@@ -448,13 +317,6 @@ const AssessmentPortal: React.FC = () => {
       description: "Quant, logic, and communication drills.",
       count: trackCounts.core,
       accent: TRACK_PALETTE.core,
-    },
-    {
-      id: "technical",
-      label: "Tech hiring",
-      description: "Coding, DSA, and interview patterns.",
-      count: trackCounts.technical,
-      accent: TRACK_PALETTE.technical,
     },
     {
       id: "career",
@@ -487,7 +349,7 @@ const AssessmentPortal: React.FC = () => {
     },
     {
       label: "Learning paths",
-      value: "3",
+      value: "2",
       detail: "career tracks",
     },
   ];
@@ -520,11 +382,6 @@ const AssessmentPortal: React.FC = () => {
       label: "Core lane depth",
       value: `${trackCounts.core} exams`,
       detail: "quant + logic coverage",
-    },
-    {
-      label: "Tech lane depth",
-      value: `${trackCounts.technical} exams`,
-      detail: "coding + MNC focus",
     },
     {
       label: "Career lane depth",

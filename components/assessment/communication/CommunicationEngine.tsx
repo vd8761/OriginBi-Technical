@@ -351,15 +351,19 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                                 : "border-brand-green/20 bg-white text-[#17201b] hover:border-amber-400 hover:text-amber-600 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-amber-400"
                                         }`}
                                     >
-                                        <Flag size={14} className={isQuestionMarked ? "fill-current" : ""} />
-                                        {isQuestionMarked ? "Marked" : "Mark for review"}
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                        {isQuestionMarked ? "Unmark review" : "Mark for review"}
                                     </button>
                                     <button
                                         onClick={handleClear}
                                         disabled={!isQuestionAnswered}
                                         className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-xs font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400"
                                     >
-                                        <RotateCcw size={14} />
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
                                         Clear response
                                     </button>
                                 </div>
@@ -368,8 +372,8 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
 
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
                         <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
-                            <h2 className="text-base font-bold leading-relaxed text-[#17201b] dark:text-white md:text-lg">
-                                <span className="mr-3">{currentIndex + 1}.</span>
+                            <h2 className="text-sm font-semibold leading-relaxed text-[#17201b] dark:text-white sm:text-base">
+                                <span className="mr-3 font-bold">{currentIndex + 1}.</span>
                                 {currentTask.instructions}
                             </h2>
                             <div className="mt-6">
