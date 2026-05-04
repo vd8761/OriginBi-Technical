@@ -1,0 +1,390 @@
+"use client";
+
+import React, { useState, useCallback, useRef, useEffect } from "react";
+
+export interface Exam {
+  id: string;
+  title: string;
+  shortTitle: string;
+  description: string;
+  duration: string;
+  questions: number;
+  difficulty: "Beginner" | "Intermediate" | "Advanced";
+  price: number;
+  originalPrice?: number;
+  discount?: number;
+  tags: string[];
+  icon: React.ReactNode;
+  available: boolean;
+  statusLabel: string;
+  accentColor: string;
+  gradient: string;
+  track?: string;
+}
+
+interface ExamCarouselProps {
+  exams: Exam[];
+  onSelectExam: (exam: Exam) => void;
+  onStartExam: (exam: Exam) => void;
+}
+
+const getDifficultyColor = (difficulty: string) => {
+  switch (difficulty) {
+    case "Beginner":
+      return "bg-brand-green/10 text-brand-green border-brand-green/20";
+    case "Intermediate":
+      return "bg-brand-text-light-secondary/10 text-brand-text-light-secondary border-brand-text-light-secondary/20";
+    case "Advanced":
+      return "bg-brand-dark-primary/10 text-brand-dark-primary border-brand-dark-primary/20";
+    default:
+      return "bg-brand-light-tertiary/50 text-brand-text-light-secondary border-brand-light-tertiary";
+  }
+};
+
+const getDifficultyDarkColor = (difficulty: string) => {
+  switch (difficulty) {
+    case "Beginner":
+      return "dark:bg-brand-green/15 dark:text-brand-green dark:border-brand-green/30";
+    case "Intermediate":
+      return "dark:bg-brand-text-secondary/15 dark:text-brand-text-secondary dark:border-brand-text-secondary/30";
+    case "Advanced":
+      return "dark:bg-brand-text-primary/15 dark:text-brand-text-primary dark:border-brand-text-primary/30";
+    default:
+      return "dark:bg-brand-dark-tertiary/30 dark:text-brand-text-secondary dark:border-white/10";
+  }
+};
+
+const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStartExam }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [translateX, setTranslateX] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handlePrev = useCallback(() => {
+    setActiveIndex((prev) => (prev === 0 ? exams.length - 1 : prev - 1));
+  }, [exams.length]);
+
+  const handleNext = useCallback(() => {
+    setActiveIndex((prev) => (prev === exams.length - 1 ? 0 : prev + 1));
+  }, [exams.length]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setStartX(e.clientX);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const diff = e.clientX - startX;
+    setTranslateX(diff);
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (translateX > 50) {
+      handlePrev();
+    } else if (translateX < -50) {
+      handleNext();
+    }
+    setTranslateX(0);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    setStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const diff = e.touches[0].clientX - startX;
+    setTranslateX(diff);
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (translateX > 50) {
+      handlePrev();
+    } else if (translateX < -50) {
+      handleNext();
+    }
+    setTranslateX(0);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") handlePrev();
+      if (e.key === "ArrowRight") handleNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handlePrev, handleNext]);
+
+  return (
+    <div className="relative w-full">
+      {/* Background Glow */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] opacity-30 blur-3xl transition-all duration-700"
+          style={{
+            background: exams[activeIndex]?.gradient || "radial-gradient(circle, rgba(30,211,106,0.2), transparent 70%)",
+          }}
+        />
+      </div>
+
+      {/* Carousel Container */}
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div
+          className="flex transition-transform duration-500 ease-out cursor-grab active:cursor-grabbing"
+          style={{
+            transform: `translateX(calc(-${activeIndex * 100}% + ${translateX}px))`,
+          }}
+        >
+          {exams.map((exam, index) => (
+            <div
+              key={exam.id}
+              className="w-full flex-shrink-0 px-4 sm:px-8"
+              onClick={() => index !== activeIndex && setActiveIndex(index)}
+            >
+              <div
+                className={`
+                  relative mx-auto max-w-4xl transform transition-all duration-500
+                  ${index === activeIndex ? "scale-100 opacity-100" : "scale-95 opacity-50"}
+                `}
+              >
+                {/* Card */}
+                <div className="relative overflow-hidden rounded-[2rem] bg-brand-light-primary/90 dark:bg-brand-dark-secondary/90 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10 shadow-[0_32px_64px_rgba(25,33,28,0.1)] dark:shadow-[0_32px_64px_rgba(0,0,0,0.4)] transition-all duration-500 hover:shadow-[0_40px_80px_rgba(25,33,28,0.12)] dark:hover:shadow-[0_40px_80px_rgba(30,211,106,0.1)] group/card">
+                  {/* Decorative background for the card */}
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-current to-transparent opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover/card:opacity-10 transition-opacity duration-500 pointer-events-none" style={{ color: exam.accentColor }} />
+                  
+                  {/* Top Gradient Bar */}
+                  <div
+                    className="h-1.5 w-full"
+                    style={{ background: exam.gradient }}
+                  />
+
+                  <div className="p-6 sm:p-10">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+                      <div className="flex items-start gap-5">
+                        {/* Icon Container */}
+                        <div
+                          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl"
+                          style={{ background: `${exam.accentColor}15`, color: exam.accentColor }}
+                        >
+                          {exam.icon}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border ${getDifficultyColor(exam.difficulty)} ${getDifficultyDarkColor(exam.difficulty)}`}
+                            >
+                              {exam.difficulty}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                                exam.available
+                                  ? "bg-brand-green/10 text-brand-green border border-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green dark:border-brand-green/30"
+                                  : "bg-brand-text-light-secondary/10 text-brand-text-light-secondary border border-brand-text-light-secondary/20 dark:bg-brand-text-secondary/15 dark:text-brand-text-secondary dark:border-brand-text-secondary/30"
+                              }`}
+                            >
+                              {exam.statusLabel}
+                            </span>
+                          </div>
+                          <h2 className="text-2xl sm:text-3xl font-semibold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight">
+                            {exam.title}
+                          </h2>
+                          <p className="mt-1.5 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
+                            {exam.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Price Badge */}
+                      <div className="flex flex-col items-end">
+                        {exam.discount && (
+                          <span className="text-sm text-brand-text-light-secondary/70 line-through">
+                            ₹{exam.originalPrice}
+                          </span>
+                        )}
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-semibold" style={{ color: exam.accentColor }}>
+                            ₹{exam.price}
+                          </span>
+                          {exam.discount && (
+                            <span className="text-xs font-medium text-brand-green">
+                              Save {exam.discount}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-3 gap-4 mb-8">
+                      <div className="group/stat rounded-2xl bg-brand-light-secondary/80 dark:bg-white/5 p-4 border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
+                        <div className="relative z-10 flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-brand-text-light-secondary group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <span className="text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">Questions</span>
+                        </div>
+                        <p className="relative z-10 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary transform group-hover/stat:scale-105 transition-transform origin-left">{exam.questions}</p>
+                      </div>
+
+                      <div className="group/stat rounded-2xl bg-brand-light-secondary/80 dark:bg-white/5 p-4 border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
+                        <div className="relative z-10 flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-brand-text-light-secondary group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">Duration</span>
+                        </div>
+                        <p className="relative z-10 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary transform group-hover/stat:scale-105 transition-transform origin-left">{exam.duration}</p>
+                      </div>
+
+                      <div className="group/stat rounded-2xl bg-brand-light-secondary/80 dark:bg-white/5 p-4 border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-md transition-all duration-300 cursor-default relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5 opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300" />
+                        <div className="relative z-10 flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-brand-text-light-secondary group-hover/stat:text-brand-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          </svg>
+                          <span className="text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">Certificate</span>
+                        </div>
+                        <p className="relative z-10 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary transform group-hover/stat:scale-105 transition-transform origin-left">Yes</p>
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-2 mb-8">
+                      {exam.tags.map((tag, i) => (
+                        <span
+                          key={tag}
+                          className="rounded-lg bg-brand-light-secondary/80 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-brand-text-light-secondary dark:text-brand-text-secondary border border-brand-light-tertiary/50 dark:border-white/5 hover:bg-brand-light-tertiary/50 dark:hover:bg-white/10 hover:border-brand-light-tertiary dark:hover:border-white/10 hover:-translate-y-0.5 transition-all duration-300 cursor-default"
+                          style={{ animationDelay: `${i * 100}ms` }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button
+                        type="button"
+                        onClick={() => onSelectExam(exam)}
+                        className="flex-1 group/btn inline-flex items-center justify-center gap-2 rounded-xl border border-brand-light-tertiary dark:border-white/10 px-6 py-3.5 text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-secondary transition-all duration-300 hover:bg-brand-light-secondary dark:hover:bg-white/5 hover:border-brand-light-tertiary dark:hover:border-white/20 hover:shadow-md active:scale-95"
+                      >
+                        <svg className="w-4 h-4 transform group-hover/btn:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        View Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onStartExam(exam)}
+                        disabled={!exam.available}
+                        className="relative overflow-hidden flex-1 group/btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg active:scale-95"
+                        style={{ background: exam.gradient }}
+                      >
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 -translate-x-full group-hover/btn:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12" />
+                        
+                        {exam.available ? (
+                          <>
+                            <span className="relative z-10 flex items-center gap-2">
+                              Start Exam
+                              <svg className="w-4 h-4 transform group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="relative z-10 flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Coming Soon
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-center gap-4 mt-8">
+        <button
+          type="button"
+          onClick={handlePrev}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light-primary dark:bg-brand-dark-secondary border border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-brand-text-secondary shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          aria-label="Previous exam"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        {/* Dots */}
+        <div className="flex items-center gap-2">
+          {exams.map((exam, index) => (
+            <button
+              key={exam.id}
+              type="button"
+              onClick={() => setActiveIndex(index)}
+              className={`
+                h-2 rounded-full transition-all duration-300
+                ${index === activeIndex ? "w-8" : "w-2 bg-brand-light-tertiary dark:bg-brand-dark-tertiary hover:bg-brand-text-light-secondary"}
+              `}
+              style={{
+                backgroundColor: index === activeIndex ? exam.accentColor : undefined,
+              }}
+              aria-label={`Go to exam ${index + 1}`}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleNext}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light-primary dark:bg-brand-dark-secondary border border-brand-light-tertiary dark:border-white/10 text-brand-text-light-secondary dark:text-brand-text-secondary shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          aria-label="Next exam"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Progress Indicator */}
+      <div className="flex justify-center mt-4">
+        <span className="text-sm font-medium text-brand-text-light-secondary dark:text-brand-text-secondary">
+          {activeIndex + 1} <span className="text-brand-light-tertiary dark:text-brand-dark-tertiary">/</span> {exams.length}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export default ExamCarousel;

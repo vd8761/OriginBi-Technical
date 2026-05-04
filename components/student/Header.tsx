@@ -23,7 +23,7 @@ import {
 
 interface HeaderProps {
     onLogout?: () => void;
-    currentView?: "dashboard" | "assessment" | "profile" | "details" | "aptitude-results" | "roadmaps" | "counsellor" | "debrief";
+    currentView?: "dashboard" | "assessment" | "profile" | "details" | "aptitude-results" | "roadmaps" | "counsellor" | "debrief" | "explore";
     onNavigate?: (view: any) => void;
 }
 
@@ -163,6 +163,7 @@ const Header: React.FC<HeaderProps> = ({
     const isAssessmentActive = currentView === 'assessment';
     const isRoadmapsActive = currentView === 'roadmaps';
     const isCounsellorActive = currentView === 'counsellor';
+    const isExploreActive = currentView === 'explore';
     const isDebriefActive = currentView === 'debrief';
     const isProfileSettingsActive = currentView === 'profile';
 
@@ -178,9 +179,9 @@ const Header: React.FC<HeaderProps> = ({
             <NavItem
                 icon={<Brain className="w-4 h-4" />}
                 label="Explore"
-                active={isCounsellorActive}
+                active={isExploreActive}
                 isMobile={isMobile}
-                onClick={() => handleNavClick("counsellor")}
+                onClick={() => handleNavClick("explore")}
             />
             <NavItem
                 icon={<JobsIcon />}

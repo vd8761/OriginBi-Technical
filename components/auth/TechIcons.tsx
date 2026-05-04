@@ -29,8 +29,8 @@ import { HiOutlineChatBubbleLeftRight, HiOutlineLightBulb } from "react-icons/hi
 import { MdOutlinePsychology } from "react-icons/md";
 
 /* ═══════════════════════════════════════════════════════════════
-   Infinite Tech Marquee — a smooth, vertical scrolling cloud of icons
-   on the left and right sides of the screen.
+   Infinite Tech Marquee — Vertical scrolling columns on left/right
+   Creates elegant side-mounted tech cloud animations
    ═══════════════════════════════════════════════════════════════ */
 
 const leftIcons = [
@@ -76,7 +76,7 @@ function MarqueeColumn({
         className={`flex flex-col gap-12 shrink-0 ${animationClass}`}
         style={{ animationDuration: speed }}
       >
-        {/* Render icons twice for seamless loop */}
+        {/* Render icons multiple times for seamless loop */}
         {[...icons, ...icons, ...icons].map((item, i) => (
           <div 
             key={i} 

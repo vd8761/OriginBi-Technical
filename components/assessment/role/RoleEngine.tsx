@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import Logo from '../../ui/Logo';
-import ThemeToggle from '../../ui/ThemeToggle';
-import ConceptualQuestionComponent from './QuestionTypes/ConceptualQuestion';
-import ScenarioQuestionComponent from './QuestionTypes/ScenarioQuestion';
+import React, { useCallback, useEffect, useState } from "react";
+import Logo from "../../ui/Logo";
+import ThemeToggle from "../../ui/ThemeToggle";
+import ConceptualQuestionComponent from "./QuestionTypes/ConceptualQuestion";
+import ScenarioQuestionComponent from "./QuestionTypes/ScenarioQuestion";
+import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
-// Mock Data Types
-export type RoleQuestionType = 'conceptual' | 'scenario';
+export type RoleQuestionType = "conceptual" | "scenario";
 
 export interface Option {
     id: string;
@@ -20,14 +22,14 @@ export interface BaseRoleQuestion {
 }
 
 export interface ConceptualQuestion extends BaseRoleQuestion {
-    type: 'conceptual';
+    type: "conceptual";
 }
 
 export interface ScenarioQuestion extends BaseRoleQuestion {
-    type: 'scenario';
+    type: "scenario";
     scenarioContext: string;
     ticketId?: string;
-    priority?: 'Low' | 'Medium' | 'High' | 'Critical';
+    priority?: "Low" | "Medium" | "High" | "Critical";
     reportedBy?: string;
 }
 
@@ -42,8 +44,8 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
             { id: "o1", text: "PATCH" },
             { id: "o2", text: "FETCH" },
             { id: "o3", text: "OPTIONS" },
-            { id: "o4", text: "DELETE" }
-        ]
+            { id: "o4", text: "DELETE" },
+        ],
     },
     {
         id: "rq2",
@@ -57,8 +59,8 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
             { id: "o1", text: "Increase the memory limit of the user's browser via settings." },
             { id: "o2", text: "Implement virtualization/windowing to only render visible rows." },
             { id: "o3", text: "Move the rendering logic to a Web Worker." },
-            { id: "o4", text: "Debounce the API call that fetches the 10,000 records." }
-        ]
+            { id: "o4", text: "Debounce the API call that fetches the 10,000 records." },
+        ],
     },
     {
         id: "rq3",
@@ -68,8 +70,8 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
             { id: "o1", text: "React immediately re-renders after every call." },
             { id: "o2", text: "React throws an infinite loop error." },
             { id: "o3", text: "React batches the updates and performs a single re-render." },
-            { id: "o4", text: "Only the first setState() call is executed." }
-        ]
+            { id: "o4", text: "Only the first setState() call is executed." },
+        ],
     },
     {
         id: "rq4",
@@ -81,48 +83,83 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
         text: "As a Backend Engineer investigating the issue, what is the most likely root cause?",
         options: [
             { id: "o1", text: "The database connection string is permanently incorrect." },
-            { id: "o2", text: "A reverse proxy (like Nginx) is timing out or failing to communicate with the upstream application servers." },
+            { id: "o2", text: "A reverse proxy, like Nginx, is timing out or failing to communicate with the upstream application servers." },
             { id: "o3", text: "The client-side JavaScript is sending malformed JSON payloads." },
-            { id: "o4", text: "A recent CSS deployment broke the checkout button." }
-        ]
-    }
+            { id: "o4", text: "A recent CSS deployment broke the checkout button." },
+        ],
+    },
 ];
-
-import ConfirmationModal from '../../ui/ConfirmationModal';
 
 interface RoleEngineProps {
     onComplete: (answers: Record<string, string>) => void;
     roleName?: string;
 }
 
+const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${remainingSeconds}`;
+};
+
 const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full Stack Engineer" }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(30 * 60); // 30 minutes in seconds
+    const [timeLeft, setTimeLeft] = useState(30 * 60);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
 
     const currentQuestion = MOCK_ROLE_QUESTIONS[currentIndex];
+    const totalQuestions = MOCK_ROLE_QUESTIONS.length;
+    const answeredCount = Object.keys(answers).length;
+    const markedCount = markedForReview.size;
+    const remainingCount = totalQuestions - answeredCount;
+    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+    const safeProgress = Math.min(100, Math.max(0, progressPercent));
+    const isLastQuestion = currentIndex === totalQuestions - 1;
+    const isQuestionAnswered = !!answers[currentQuestion.id];
+    const isQuestionMarked = markedForReview.has(currentQuestion.id);
+    const scenarioCount = MOCK_ROLE_QUESTIONS.filter((question) => question.type === "scenario").length;
 
-    // Timer Logic
+    const navigatorQuestions: NavigatorQuestion[] = MOCK_ROLE_QUESTIONS.map((question, index) => {
+        const isAnswered = !!answers[question.id];
+        const isMarked = markedForReview.has(question.id);
+
+        let state: QuestionState = "unanswered";
+        if (isAnswered) state = "answered";
+        if (isMarked) state = "marked";
+
+        return {
+            id: question.id,
+            number: index + 1,
+            state,
+            category: question.type.toUpperCase(),
+            isAnswered,
+            isMarked,
+        };
+    });
+
+    const completeAssessment = useCallback(() => {
+        onComplete(answers);
+    }, [answers, onComplete]);
+
     useEffect(() => {
         if (timeLeft <= 0) {
-            confirmSubmit();
+            completeAssessment();
             return;
         }
-        const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-        return () => clearInterval(timer);
-    }, [timeLeft]);
 
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
-    };
+        const timer = window.setInterval(() => {
+            setTimeLeft((prev) => prev - 1);
+        }, 1000);
+
+        return () => window.clearInterval(timer);
+    }, [completeAssessment, timeLeft]);
 
     const handleOptionSelect = (optionId: string) => {
-        setAnswers(prev => ({ ...prev, [currentQuestion.id]: optionId }));
-        // Automatically unmark if answered
+        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
+
         if (markedForReview.has(currentQuestion.id)) {
             const newMarked = new Set(markedForReview);
             newMarked.delete(currentQuestion.id);
@@ -147,14 +184,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const handleNext = () => {
-        if (currentIndex < MOCK_ROLE_QUESTIONS.length - 1) {
-            setCurrentIndex(prev => prev + 1);
+        if (!isLastQuestion) {
+            setCurrentIndex((prev) => prev + 1);
         }
     };
 
     const handlePrev = () => {
         if (currentIndex > 0) {
-            setCurrentIndex(prev => prev - 1);
+            setCurrentIndex((prev) => prev - 1);
         }
     };
 
@@ -163,237 +200,292 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const confirmSubmit = () => {
-        setShowSubmitModal(false);
-        onComplete(answers);
+        completeAssessment();
     };
 
     const renderQuestionContent = () => {
         const selectedOption = answers[currentQuestion.id];
-        if (currentQuestion.type === 'conceptual') {
+
+        if (currentQuestion.type === "conceptual") {
             return (
-                <ConceptualQuestionComponent 
-                    question={currentQuestion as ConceptualQuestion} 
-                    selectedOptionId={selectedOption}
-                    onSelectOption={handleOptionSelect}
-                />
-            );
-        } else if (currentQuestion.type === 'scenario') {
-            return (
-                <ScenarioQuestionComponent 
-                    question={currentQuestion as ScenarioQuestion} 
+                <ConceptualQuestionComponent
+                    question={currentQuestion}
                     selectedOptionId={selectedOption}
                     onSelectOption={handleOptionSelect}
                 />
             );
         }
-        return null;
+
+        return (
+            <ScenarioQuestionComponent
+                question={currentQuestion}
+                selectedOptionId={selectedOption}
+                onSelectOption={handleOptionSelect}
+            />
+        );
     };
 
     return (
-        <div className="h-screen w-full bg-brand-light-primary dark:bg-brand-dark-primary flex flex-col font-sans transition-colors duration-500 overflow-hidden">
-            {/* Top Bar */}
-            <header className="h-14 border-b border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary flex items-center justify-between px-6 sticky top-0 z-50">
-                <div className="flex items-center gap-4">
-                    <div className="scale-75 origin-left">
+        <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
+            <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
+            <div className="absolute inset-0 assessment-scan opacity-25" aria-hidden="true" />
+
+            <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-6 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-8">
+                <div className="flex min-w-0 items-center gap-3">
+                    <div className="hidden origin-left scale-[0.7] sm:block">
                         <Logo />
                     </div>
-                    <div className="h-4 w-px bg-brand-light-tertiary dark:bg-white/10 hidden md:block"></div>
-                    
-                    {/* Role Badge */}
-                    <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-brand-green/10 border border-brand-green/20 rounded-md">
-                        <svg className="w-3.5 h-3.5 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        <span className="text-[10px] font-bold text-brand-green uppercase tracking-wider">
-                            {roleName}
-                        </span>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Role-Based Assessment</p>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
+                            {roleName} decision workspace
+                        </h1>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6">
-                    {/* Timer */}
-                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft < 300 ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400 animate-pulse' : 'bg-black/5 dark:bg-white/5 border-transparent text-black dark:text-white'}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-bold font-mono text-[13px] tracking-wider">{formatTime(timeLeft)}</span>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
+                            Time left
+                        </p>
+                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
+                            {formatTime(timeLeft)}
+                        </p>
                     </div>
-
-                    <ThemeToggle />
+                    <div className="hidden scale-90 lg:block">
+                        <ThemeToggle />
+                    </div>
+                    <button 
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
+                        title="Question Map"
+                    >
+                        <LayoutGrid size={20} className="text-brand-green" />
+                    </button>
                 </div>
             </header>
 
-            {/* Main Content - Flex-1 with overflow hidden to allow internal scrolling */}
-            <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                
-                {/* Left Area: Question content */}
-                <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar p-4 md:p-8 relative">
-                    
-                    {/* Header: Question Number */}
-                    <div className="flex items-center mb-4">
-                        <div className="text-[10px] font-bold text-brand-green uppercase tracking-widest bg-brand-green/10 px-2.5 py-1 rounded-md">
-                            Question {currentIndex + 1} of {MOCK_ROLE_QUESTIONS.length}
+            <main className="relative z-10 mx-auto grid max-w-[1600px] gap-8 px-6 py-8 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden lg:px-8">
+
+                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                    <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                                <div>
+                                    <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
+                                        Question {currentIndex + 1}
+                                    </h2>
+                                    <div className="mt-0.5 flex items-center gap-2">
+                                        {isQuestionMarked && (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                                                <div className="h-1 w-1 rounded-full bg-current" />
+                                                Marked for review
+                                            </span>
+                                        )}
+                                        {isQuestionAnswered && (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-brand-green uppercase">
+                                                <div className="h-1 w-1 rounded-full bg-current" />
+                                                Saved
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleMarkReview}
+                                    className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-4 text-xs font-bold transition ${
+                                        isQuestionMarked
+                                            ? "border-amber-400 bg-amber-400 text-[#241604]"
+                                            : "border-brand-green/20 bg-white text-[#17201b] hover:border-amber-400 hover:text-amber-600 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-amber-400"
+                                    }`}
+                                >
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
+                                    </svg>
+                                    {isQuestionMarked ? "Unmark review" : "Mark for review"}
+                                </button>
+                                <button
+                                    onClick={handleClear}
+                                    disabled={!isQuestionAnswered}
+                                    className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-xs font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400"
+                                >
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Clear response
+                                </button>
+                            </div>
+
                         </div>
                     </div>
 
-                    <div className="w-full">
+                    <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
                         {renderQuestionContent()}
                     </div>
 
-                    {/* Mobile Navigator - Only shows on mobile, at the bottom of scroll */}
-                    <div className="lg:hidden mt-8 mb-4">
-                        <div className="bg-white dark:bg-white/[0.03] border border-brand-light-tertiary dark:border-white/5 rounded-2xl p-4">
-                            <h3 className="text-xs font-bold text-black dark:text-white mb-3 flex items-center justify-between">
-                                Question Navigator
-                                <div className="flex gap-2">
-                                    <div className="flex items-center gap-1 text-[8px] uppercase tracking-tighter text-black dark:text-white">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-green"></div> Ans
-                                    </div>
-                                    <div className="flex items-center gap-1 text-[8px] uppercase tracking-tighter text-black dark:text-white">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div> Rev
-                                    </div>
-                                </div>
-                            </h3>
-                            <div className="flex flex-wrap gap-2">
-                                {MOCK_ROLE_QUESTIONS.map((q, idx) => {
-                                    const isActive = idx === currentIndex;
-                                    const isAnswered = !!answers[q.id];
-                                    const isMarked = markedForReview.has(q.id);
-                                    
-                                    let bgColorClass = 'bg-gray-50 dark:bg-white/5 text-black dark:text-white';
-                                    if (isActive) bgColorClass = 'bg-black dark:bg-white text-white dark:text-black shadow-md';
-                                    else if (isMarked) bgColorClass = 'bg-amber-500 text-white';
-                                    else if (isAnswered) bgColorClass = 'bg-brand-green text-white';
-
-                                    return (
-                                        <button
-                                            key={q.id}
-                                            onClick={() => setCurrentIndex(idx)}
-                                            className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px] transition-all ${bgColorClass}`}
-                                        >
-                                            {idx + 1}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                    <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-4 dark:border-white/10 dark:bg-white/5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={handlePrev}
+                                disabled={currentIndex === 0}
+                                className="min-h-11 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
+                            >
+                                Previous
+                            </button>
+                            {isLastQuestion ? (
+                                <button
+                                    type="button"
+                                    onClick={handleSubmit}
+                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                                >
+                                    Submit test
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleNext}
+                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                                >
+                                    Save and next
+                                </button>
+                            )}
                         </div>
                     </div>
-                </div>
+                </section>
 
-                {/* Desktop Sidebar Navigator */}
-                <div className="hidden lg:flex w-[280px] border-l border-brand-light-tertiary dark:border-white/5 bg-brand-light-primary dark:bg-brand-dark-primary flex-col p-4 shrink-0">
-                    <div className="flex-1 overflow-hidden flex flex-col h-full bg-white dark:bg-brand-dark-primary border border-brand-light-tertiary dark:border-white/5 rounded-[20px] transition-colors">
-                        <div className="p-4 border-b border-brand-light-tertiary dark:border-white/5">
-                            <h3 className="text-sm font-bold text-black dark:text-white">Navigator</h3>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
-                                <div className="flex items-center gap-1">
-                                    <div className="w-2 h-2 rounded-full bg-brand-green"></div> Answered
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <div className="w-2 h-2 rounded-full bg-amber-500"></div> Review
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <div className="w-2 h-2 rounded-full border border-gray-300 dark:border-gray-600"></div> Pending
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                            <div className="grid grid-cols-4 gap-2">
-                                {MOCK_ROLE_QUESTIONS.map((q, idx) => {
-                                    const isActive = idx === currentIndex;
-                                    const isAnswered = !!answers[q.id];
-                                    const isMarked = markedForReview.has(q.id);
-                                    
-                                    let bgColorClass = 'bg-white dark:bg-white/[0.05] border-brand-light-tertiary dark:border-white/10 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/5';
-                                    
-                                    if (isActive) {
-                                        bgColorClass = 'bg-black dark:bg-white text-white dark:text-black border-transparent scale-110 z-10 relative';
-                                    } else if (isMarked) {
-                                        bgColorClass = 'bg-amber-500 text-white border-amber-500';
-                                    } else if (isAnswered) {
-                                        bgColorClass = 'bg-brand-green text-white border-brand-green';
-                                    }
-
-                                    return (
-                                        <button
-                                            key={q.id}
-                                            onClick={() => setCurrentIndex(idx)}
-                                            className={`
-                                                w-9 h-9 rounded-lg flex items-center justify-center font-bold text-[11px] border transition-all duration-300
-                                                ${bgColorClass}
-                                            `}
-                                        >
-                                            {idx + 1}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
+                    <QuestionNavigator
+                        questions={navigatorQuestions}
+                        currentIndex={currentIndex}
+                        onSelect={(idx) => {
+                            setCurrentIndex(idx);
+                            setIsSidebarOpen(false);
+                        }}
+                        progressPercent={safeProgress}
+                    />
+                </aside>
             </main>
 
-            {/* Bottom Action Bar - Highly optimized for Mobile */}
-            <footer className="min-h-[70px] md:h-20 border-t border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary p-3 md:p-4 flex flex-col md:flex-row gap-3 items-center justify-between sticky bottom-0 z-50 transition-all">
-                
-                {/* Primary Actions Row (Mobile) / Left Side (Desktop) */}
-                <div className="flex items-center gap-2 w-full md:w-auto order-2 md:order-1">
-                    <button 
-                        onClick={handleMarkReview}
-                        className={`flex-1 md:flex-none px-4 py-2.5 rounded-xl border font-bold text-[11px] transition-all ${markedForReview.has(currentQuestion.id) ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-500' : 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/20 text-black dark:text-white'}`}
-                    >
-                        {markedForReview.has(currentQuestion.id) ? 'Unmark Review' : 'Mark Review'}
-                    </button>
-                    <button 
-                        onClick={handleClear}
-                        disabled={!answers[currentQuestion.id]}
-                        className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-white dark:bg-[#24272B] border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[11px] disabled:opacity-30"
-                    >
-                        Clear
-                    </button>
-                </div>
+            <AnimatePresence>
+                {isSidebarOpen && (
+                    <div className="fixed inset-0 z-[110] lg:hidden">
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsSidebarOpen(false)}
+                            className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-sm"
+                        />
+                        <motion.div 
+                            initial={{ x: "100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="absolute inset-y-0 right-0 w-full max-w-[320px] border-l border-brand-green/10 bg-[#f6f8f5] shadow-2xl dark:bg-[#111a15]"
+                        >
+                            <div className="flex h-full flex-col">
+                                <div className="flex items-center justify-between border-b border-brand-green/5 p-6 dark:border-white/10">
+                                    <div className="flex items-center gap-4">
+                                        <h2 className="text-sm font-bold uppercase tracking-widest text-[#17201b] dark:text-white">Navigator</h2>
+                                        <div className="scale-75 origin-left">
+                                            <ThemeToggle />
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsSidebarOpen(false)}
+                                        className="rounded-lg p-2 text-[#17201b] hover:bg-brand-green/10 hover:text-brand-green dark:text-white"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    <QuestionNavigator
+                                        questions={navigatorQuestions}
+                                        currentIndex={currentIndex}
+                                        onSelect={(idx) => {
+                                            setCurrentIndex(idx);
+                                            setIsSidebarOpen(false);
+                                        }}
+                                        progressPercent={safeProgress}
+                                    />
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
-                {/* Main Navigation Row (Mobile) / Right Side (Desktop) */}
-                <div className="flex items-center gap-3 w-full md:w-auto order-1 md:order-2">
-                    <button 
-                        onClick={handlePrev}
-                        disabled={currentIndex === 0}
-                        className="flex-1 md:flex-none px-6 py-2.5 rounded-xl border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[12px] disabled:opacity-30"
-                    >
-                        Previous
-                    </button>
+            {showSubmitModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-md transition-opacity" 
+                        onClick={() => setShowSubmitModal(false)}
+                    />
                     
-                    {currentIndex === MOCK_ROLE_QUESTIONS.length - 1 ? (
-                        <button 
-                            onClick={handleSubmit}
-                            className="flex-[2] md:flex-none px-8 py-2.5 rounded-xl bg-brand-green text-white font-bold text-[12px]"
-                        >
-                            Submit Test
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleNext}
-                            className="flex-[2] md:flex-none px-8 py-2.5 rounded-xl bg-brand-green text-white font-bold text-[12px]"
-                        >
-                            Save & Next
-                        </button>
-                    )}
-                </div>
-            </footer>
+                    <div className="relative w-full max-w-lg transform overflow-hidden rounded-2xl border border-brand-green/20 bg-white p-8 shadow-2xl transition-all dark:border-white/10 dark:bg-[#111a15]">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+                                <CheckCircle2 size={40} />
+                            </div>
+                            
+                            <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
+                            <p className="mt-2 text-sm text-[#17201b] dark:text-white">Review your assessment summary before finalizing your submission.</p>
+                            
+                            <div className="mt-8 grid w-full grid-cols-3 gap-4">
+                                <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
+                                    <span className="text-xl font-black text-brand-green">{navigatorQuestions.filter(q => q.isAnswered).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green/60">Answered</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-xl bg-amber-400/[0.05] p-4 border border-amber-400/10">
+                                    <span className="text-xl font-black text-amber-500">{navigatorQuestions.filter(q => q.isMarked).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500/60">Review</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-xl bg-slate-100 p-4 border border-slate-200 dark:bg-white/[0.03] dark:border-white/10">
+                                    <span className="text-xl font-black text-slate-500 dark:text-white/60">{navigatorQuestions.filter(q => !q.isAnswered).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500/60 dark:text-white/30">Left</span>
+                                </div>
+                            </div>
 
-            <ConfirmationModal
-                isOpen={showSubmitModal}
-                onClose={() => setShowSubmitModal(false)}
-                onConfirm={confirmSubmit}
-                title="Finish Role Assessment?"
-                message="Are you sure you want to submit your role-based assessment? All your responses will be evaluated for your target role profile."
-                confirmText="Submit Test"
-                cancelText="Review Again"
-                type="warning"
-            />
+                            {navigatorQuestions.some(q => !q.isAnswered) && (
+                                <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
+                                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                                    <div>
+                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions Detected</p>
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
+                                            You have {navigatorQuestions.filter(q => !q.isAnswered).length} questions left. We recommend reviewing them before final submission.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSubmitModal(false)}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5"
+                                >
+                                    Review Answers
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmSubmit}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e]"
+                                >
+                                    Yes, Submit Test
+                                    <ArrowRight size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
 
 export default RoleEngine;
+

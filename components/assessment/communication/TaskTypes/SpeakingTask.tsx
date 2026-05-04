@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { SpeakingTask } from '../CommunicationEngine';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { SpeakingTask } from "../CommunicationEngine";
 
 interface SpeakingTaskProps {
     task: SpeakingTask;
@@ -7,46 +7,29 @@ interface SpeakingTaskProps {
     onChange: (value: { audioBlobUrl: string }) => void;
 }
 
+const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
+};
+
 const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onChange }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [prepTimeLeft, setPrepTimeLeft] = useState(task.prepTimeSeconds);
     const [recordTimeLeft, setRecordTimeLeft] = useState(task.recordTimeSeconds);
     const [recordingComplete, setRecordingComplete] = useState(!!value?.audioBlobUrl);
-    
+
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
-    useEffect(() => {
-        // Prep timer countdown
-        if (!isRecording && !recordingComplete && prepTimeLeft > 0) {
-            const timer = setInterval(() => {
-                setPrepTimeLeft((prev) => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
+    const stopRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
         }
-        
-        // Auto-start recording when prep time finishes
-        if (!isRecording && !recordingComplete && prepTimeLeft === 0) {
-            startRecording();
-        }
-    }, [prepTimeLeft, isRecording, recordingComplete]);
+    }, []);
 
-    useEffect(() => {
-        // Record timer countdown
-        if (isRecording && recordTimeLeft > 0) {
-            const timer = setInterval(() => {
-                setRecordTimeLeft((prev) => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
-        }
-
-        // Auto-stop recording when time is up
-        if (isRecording && recordTimeLeft === 0) {
-            stopRecording();
-        }
-    }, [recordTimeLeft, isRecording]);
-
-    const startRecording = async () => {
+    const startRecording = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
@@ -60,111 +43,133 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
             };
 
             mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
                 const audioUrl = URL.createObjectURL(audioBlob);
                 onChange({ audioBlobUrl: audioUrl });
                 setRecordingComplete(true);
-                // Stop all tracks to release mic
-                stream.getTracks().forEach(track => track.stop());
+                stream.getTracks().forEach((track) => track.stop());
             };
 
             mediaRecorder.start();
             setIsRecording(true);
         } catch (error) {
-            console.error('Microphone access denied or error:', error);
-            alert('Unable to access the microphone. Please allow permissions.');
+            console.error("Microphone access denied or error:", error);
+            alert("Unable to access the microphone. Please allow permissions.");
         }
-    };
+    }, [onChange]);
 
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
+    useEffect(() => {
+        if (!isRecording && !recordingComplete && prepTimeLeft > 0) {
+            const timer = window.setInterval(() => {
+                setPrepTimeLeft((prev) => prev - 1);
+            }, 1000);
+
+            return () => window.clearInterval(timer);
         }
-    };
+    }, [isRecording, prepTimeLeft, recordingComplete]);
 
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
+    useEffect(() => {
+        if (isRecording && recordTimeLeft > 0) {
+            const timer = window.setInterval(() => {
+                setRecordTimeLeft((prev) => prev - 1);
+            }, 1000);
+
+            return () => window.clearInterval(timer);
+        }
+
+        if (isRecording && recordTimeLeft === 0) {
+            stopRecording();
+        }
+    }, [isRecording, recordTimeLeft, stopRecording]);
 
     return (
-        <div className="flex flex-col gap-6 h-full">
-            <div className="bg-brand-light-secondary dark:bg-white/[0.03] p-5 rounded-2xl border border-brand-light-tertiary dark:border-white/10 flex flex-col gap-4">
-                <p className="text-[13px] font-medium text-black dark:text-white">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
+                    Speaking prompt
+                </p>
+                <p className="mt-2 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
                     {task.instructions}
                 </p>
-                <div className="bg-white dark:bg-brand-dark-primary p-5 rounded-xl border border-brand-light-tertiary dark:border-white/5">
-                    <h3 className="text-[clamp(14px,1.2vw,18px)] font-semibold text-black dark:text-white leading-relaxed italic">
-                        "{task.prompt}"
+                <div className="mt-4 rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
+                    <h3 className="text-lg font-bold leading-8 text-[#17201b] dark:text-white">
+                        {task.prompt}
                     </h3>
                 </div>
-            </div>
+            </section>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white dark:bg-white/[0.03] rounded-[20px] border border-brand-light-tertiary dark:border-white/5 transition-colors min-h-[300px]">
-                
-                {/* Status Indicator */}
-                <div className="mb-8 flex flex-col items-center gap-2">
+            <aside className="rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
+                <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                     {recordingComplete ? (
                         <>
-                            <div className="w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center mb-2">
-                                <svg className="w-8 h-8 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
+                                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
-                            <h4 className="font-bold text-black dark:text-white">Recording Saved</h4>
-                            <p className="text-xs text-black dark:text-white">You can proceed to the next task.</p>
+                            <h4 className="mt-4 text-lg font-bold text-[#17201b] dark:text-white">Recording saved</h4>
+                            <p className="mt-2 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
+                                Review your audio or continue to the next task.
+                            </p>
                         </>
                     ) : isRecording ? (
                         <>
-                            <div className="relative flex items-center justify-center w-24 h-24 mb-2">
-                                <div className="absolute inset-0 border-4 border-red-500 rounded-full animate-ping opacity-20"></div>
-                                <div className="absolute inset-2 border-4 border-red-500 rounded-full animate-pulse opacity-40"></div>
-                                <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.5)]">
-                                    <svg className="w-8 h-8 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            <div className="relative flex h-24 w-24 items-center justify-center">
+                                <span className="absolute inset-0 rounded-full border-4 border-red-500/20 animate-ping" />
+                                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white">
+                                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 0 1-7 7m0 0a7 7 0 0 1-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 0 1-3-3V5a3 3 0 1 1 6 0v6a3 3 0 0 1-3 3Z" />
                                     </svg>
-                                </div>
+                                </span>
                             </div>
-                            <h4 className="font-bold text-red-500 animate-pulse uppercase tracking-wider text-sm">Recording</h4>
-                            <p className="text-2xl font-mono font-bold text-black dark:text-white mt-1">{formatTime(recordTimeLeft)}</p>
+                            <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-red-500">Recording</p>
+                            <p className="mt-2 font-mono text-3xl font-bold text-[#17201b] dark:text-white">
+                                {formatTime(recordTimeLeft)}
+                            </p>
                         </>
                     ) : (
                         <>
-                            <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center mb-2 border border-amber-500/20">
-                                <span className="text-2xl font-bold font-mono text-amber-500">{formatTime(prepTimeLeft)}</span>
+                            <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-amber-400/30 bg-amber-400/10">
+                                <span className="font-mono text-2xl font-bold text-amber-600">
+                                    {formatTime(prepTimeLeft)}
+                                </span>
                             </div>
-                            <h4 className="font-bold text-black dark:text-white uppercase tracking-wider text-sm">Preparation Time</h4>
-                            <p className="text-xs text-black dark:text-white">Read the prompt and prepare your response.</p>
+                            <h4 className="mt-4 text-lg font-bold text-[#17201b] dark:text-white">
+                                {prepTimeLeft === 0 ? "Ready to record" : "Prepare your answer"}
+                            </h4>
+                            <p className="mt-2 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
+                                {prepTimeLeft === 0
+                                    ? "Start when you are ready. Keep your response clear and structured."
+                                    : "Use this preparation time to organize your response."}
+                            </p>
                         </>
                     )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-4">
+                <div className="mt-4 flex flex-col gap-3">
                     {!isRecording && !recordingComplete && (
-                        <button 
-                            onClick={startRecording}
-                            className="px-8 py-3 rounded-full bg-brand-green text-white font-bold text-xs hover:bg-[#1bb85c] transition-all"
+                        <button
+                            type="button"
+                            onClick={() => void startRecording()}
+                            className="min-h-11 rounded-lg bg-brand-green px-5 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                         >
-                            Start Early
+                            Start recording now
                         </button>
                     )}
                     {isRecording && (
-                        <button 
+                        <button
+                            type="button"
                             onClick={stopRecording}
-                            className="px-8 py-3 rounded-full bg-red-500 text-white font-bold text-xs hover:bg-red-600 transition-all"
+                            className="min-h-11 rounded-lg bg-red-500 px-5 text-sm font-bold text-white transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40"
                         >
-                            Finish Recording
+                            Finish recording
                         </button>
                     )}
                     {recordingComplete && value?.audioBlobUrl && (
-                        <audio controls src={value.audioBlobUrl} className="h-10 mt-2" />
+                        <audio controls src={value.audioBlobUrl} className="h-10 w-full" />
                     )}
                 </div>
-
-            </div>
+            </aside>
         </div>
     );
 };

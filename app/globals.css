@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 /* Font Declarations at Top Level */
 @font-face {
@@ -186,6 +184,62 @@
   animation: marquee-vertical-down linear infinite;
 }
 
+/* Horizontal marquee animations for login page */
+@keyframes marquee-horizontal-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-33.33%); }
+}
+
+@keyframes marquee-horizontal-right {
+  from { transform: translateX(-33.33%); }
+  to { transform: translateX(0); }
+}
+
+.animate-marquee-horizontal-left {
+  animation: marquee-horizontal-left linear infinite;
+}
+
+.animate-marquee-horizontal-right {
+  animation: marquee-horizontal-right linear infinite;
+}
+
+/* Diagonal marquee animations for login page - 45 degree cross pattern */
+@keyframes marquee-diagonal-down-right {
+  from { transform: translate(0, 0); }
+  to { transform: translate(33.33%, 33.33%); }
+}
+
+@keyframes marquee-diagonal-up-right {
+  from { transform: translate(0, 0); }
+  to { transform: translate(33.33%, -33.33%); }
+}
+
+@keyframes marquee-diagonal-down-left {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-33.33%, 33.33%); }
+}
+
+@keyframes marquee-diagonal-up-left {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-33.33%, -33.33%); }
+}
+
+.animate-marquee-diagonal-down-right {
+  animation: marquee-diagonal-down-right linear infinite;
+}
+
+.animate-marquee-diagonal-up-right {
+  animation: marquee-diagonal-up-right linear infinite;
+}
+
+.animate-marquee-diagonal-down-left {
+  animation: marquee-diagonal-down-left linear infinite;
+}
+
+.animate-marquee-diagonal-up-left {
+  animation: marquee-diagonal-up-left linear infinite;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
@@ -264,6 +318,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -296,4 +351,89 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Assessment Specific Styles */
+@layer utilities {
+  .assessment-header {
+    @apply bg-white/85 dark:bg-[#0f1712]/90 backdrop-blur-xl border-b border-white/60 dark:border-white/10;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  }
+
+  .assessment-footer {
+    @apply bg-white/85 dark:bg-[#0f1712]/90 backdrop-blur-xl border-t border-white/60 dark:border-white/10;
+    box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.12);
+  }
+
+  .assessment-panel {
+    @apply bg-white/90 dark:bg-[#0f1712]/90 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-[0_20px_60px_rgba(15,23,42,0.14)];
+  }
+
+  .assessment-aptitude-bg {
+    background:
+      linear-gradient(180deg, #f6fff8 0%, #f2fbf7 55%, #ffffff 100%);
+  }
+
+  .dark .assessment-aptitude-bg {
+    background:
+      linear-gradient(180deg, rgba(15, 23, 18, 0.98), rgba(15, 23, 18, 1));
+  }
+
+  .assessment-communication-bg {
+    background:
+      linear-gradient(180deg, #f7fffb 0%, #f4fcf8 60%, #ffffff 100%);
+  }
+
+  .dark .assessment-communication-bg {
+    background:
+      linear-gradient(180deg, rgba(15, 23, 18, 0.98), rgba(15, 23, 18, 1));
+  }
+
+  .assessment-role-bg {
+    background:
+      linear-gradient(180deg, #f6fffb 0%, #f3fbf7 55%, #ffffff 100%);
+  }
+
+  .dark .assessment-role-bg {
+    background:
+      linear-gradient(180deg, rgba(15, 23, 18, 0.98), rgba(15, 23, 18, 1));
+  }
+
+  .assessment-grid {
+    background-image:
+      linear-gradient(to right, rgba(30, 211, 106, 0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(30, 211, 106, 0.1) 1px, transparent 1px);
+    background-size: 52px 52px;
+  }
+
+  .assessment-wave {
+    background-image:
+      repeating-linear-gradient(90deg, rgba(30, 211, 106, 0.1) 0, rgba(30, 211, 106, 0.1) 2px, transparent 2px, transparent 12px);
+    background-size: 140px 100%;
+  }
+
+  .assessment-scan {
+    background-image:
+      repeating-linear-gradient(0deg, rgba(30, 211, 106, 0.12) 0, rgba(30, 211, 106, 0.12) 1px, transparent 1px, transparent 8px);
+  }
+}
+
+@keyframes float-slow {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes float-slower {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(12px); }
+  100% { transform: translateY(0); }
+}
+
+.animate-float-slow {
+  animation: float-slow 14s ease-in-out infinite;
+}
+
+.animate-float-slower {
+  animation: float-slower 18s ease-in-out infinite;
 }

@@ -76,29 +76,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-
-    const emailError = validateEmail(values.email);
-    const passwordError = validatePassword(values.password);
-
-    setErrors({ email: emailError, password: passwordError });
-    setTouched({ email: true, password: true });
-
-    if (emailError || passwordError) return;
-
-    try {
-      setIsSubmitting(true);
-      setGeneralError('');
-
-      // Mocking the login logic for now as requested "dont add functionalities now"
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      onLoginSuccess();
-
-    } catch (err: unknown) {
-      console.error('Login error:', err);
-      setGeneralError('Login failed. Please check your credentials.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    onLoginSuccess();
   };
 
   const isEmailInvalid = touched.email && !!errors.email;
@@ -137,7 +115,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
             }`}
           style={{ padding: 'clamp(14px,1vw,20px)' }}
           placeholder="example@domain.com"
-          required
           disabled={isSubmitting}
           aria-invalid={isEmailInvalid}
         />
@@ -172,7 +149,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
               : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
               }`}
             style={{ padding: 'clamp(14px,1vw,20px)', paddingRight: '4rem' }}
-            required
             disabled={isSubmitting}
             aria-invalid={isPasswordInvalid}
           />

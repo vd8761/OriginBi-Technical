@@ -1,67 +1,106 @@
-import React from 'react';
+import React from "react";
 
-export type QuestionState = 'unanswered' | 'answered' | 'marked';
+export type QuestionState = "unanswered" | "answered" | "marked";
 
 export interface NavigatorQuestion {
     id: string;
     number: number;
     state: QuestionState;
     category: string;
+    isAnswered: boolean;
+    isMarked: boolean;
 }
 
 interface QuestionNavigatorProps {
     questions: NavigatorQuestion[];
     currentIndex: number;
     onSelect: (index: number) => void;
+    progressPercent?: number;
 }
 
-const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({ questions, currentIndex, onSelect }) => {
-    const getBgColor = (state: QuestionState, isActive: boolean) => {
-        if (isActive) return 'bg-black dark:bg-white text-white dark:text-black border-transparent scale-110';
-        
-        switch (state) {
-            case 'answered':
-                return 'bg-brand-green text-white border-brand-green';
-            case 'marked':
-                return 'bg-amber-500 text-white border-amber-500';
-            case 'unanswered':
-            default:
-                return 'bg-white dark:bg-white/[0.05] border-brand-light-tertiary dark:border-white/10 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/10';
-        }
+const stateStyles: Record<QuestionState, string> = {
+    answered: "border-brand-green bg-brand-green text-[#0f1712]",
+    marked: "border-amber-400 bg-amber-400 text-[#241604]",
+    unanswered: "border-brand-green/20 bg-white text-[#17201b] hover:border-brand-green hover:text-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white",
+};
+
+const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
+    questions,
+    currentIndex,
+    onSelect,
+    progressPercent = 0,
+}) => {
+    const answeredCount = questions.filter((q) => q.isAnswered).length;
+    const markedCount = questions.filter((q) => q.isMarked).length;
+    const leftCount = questions.filter((q) => !q.isAnswered).length;
+
+    const safeProgress = Math.min(100, Math.max(0, progressPercent));
+    const progressRingStyle = {
+        background: `conic-gradient(#1ed36a ${safeProgress}%, rgba(148, 163, 184, 0.24) 0)`,
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-brand-dark-primary border border-brand-light-tertiary dark:border-white/5 rounded-[20px] overflow-hidden transition-colors">
-            <div className="p-4 border-b border-brand-light-tertiary dark:border-white/5">
-                <h3 className="text-sm font-bold text-black dark:text-white">Question Navigator</h3>
-                
-                {/* Legend */}
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
-                    <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-brand-green"></div> Answered
+        <div className="flex h-full flex-col gap-6">
+            {/* Progress Section */}
+            <div className="flex items-center gap-4 rounded-md border border-brand-green/15 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5">
+                <div className="h-16 w-16 shrink-0 rounded-full p-1" style={progressRingStyle}>
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
+                        <span className="text-sm font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div> Review
+                </div>
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">
+                        Overall Progress
+                    </p>
+                    <p className="mt-0.5 text-xl font-bold text-[#17201b] dark:text-white">
+                        {answeredCount} <span className="text-sm font-medium text-[#17201b]/40 dark:text-white/40">/ {questions.length}</span>
+                    </p>
+                </div>
+            </div>
+            
+            {/* Status Summary Section */}
+            <div className="rounded-lg border border-brand-green/15 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
+                <div className="grid grid-cols-3 gap-1.5">
+                    <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-3 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
+                        <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green dark:text-brand-green">Answered</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full border border-gray-300 dark:border-gray-600"></div> Pending
+
+                    <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-3 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
+                        <span className="text-lg font-black text-amber-500 leading-none">{markedCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-500">Review</span>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-3 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
+                        <span className="text-lg font-black text-slate-700 dark:text-white leading-none">{leftCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-700 dark:text-white">Left</span>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                <div className="grid grid-cols-4 gap-2">
+            <div className="mx-auto h-px w-5/6 bg-brand-green/10 dark:bg-white/10" />
+
+            {/* Question Map Section */}
+            <div className="flex flex-col">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">Question Map</h3>
+                </div>
+
+                <div className="mt-4 grid grid-cols-5 gap-2 lg:grid-cols-4 px-2">
                     {questions.map((q, idx) => {
                         const isActive = idx === currentIndex;
-                        
+
                         return (
                             <button
                                 key={q.id}
+                                type="button"
                                 onClick={() => onSelect(idx)}
-                                className={`
-                                    w-9 h-9 rounded-lg flex items-center justify-center font-bold text-[11px] border transition-all duration-300
-                                    ${getBgColor(q.state, isActive)}
-                                `}
+                                title={`${q.category} - Question ${q.number}`}
+                                aria-current={isActive ? "step" : undefined}
+                                className={`flex h-10 items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
+                                        ? "z-10 border-brand-green ring-2 ring-brand-green ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15] scale-105"
+                                        : ""
+                                    } ${stateStyles[q.state]}`}
                             >
                                 {q.number}
                             </button>
