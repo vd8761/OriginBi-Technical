@@ -7,6 +7,8 @@ export interface NavigatorQuestion {
     number: number;
     state: QuestionState;
     category: string;
+    isAnswered: boolean;
+    isMarked: boolean;
 }
 
 interface QuestionNavigatorProps {
@@ -14,7 +16,6 @@ interface QuestionNavigatorProps {
     currentIndex: number;
     onSelect: (index: number) => void;
     progressPercent?: number;
-    guidanceText?: string;
 }
 
 const stateStyles: Record<QuestionState, string> = {
@@ -23,16 +24,15 @@ const stateStyles: Record<QuestionState, string> = {
     unanswered: "border-brand-green/20 bg-white text-[#17201b] hover:border-brand-green hover:text-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white",
 };
 
-const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({ 
-    questions, 
-    currentIndex, 
-    onSelect, 
+const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
+    questions,
+    currentIndex,
+    onSelect,
     progressPercent = 0,
-    guidanceText 
 }) => {
-    const answeredCount = questions.filter((q) => q.state === "answered").length;
-    const markedCount = questions.filter((q) => q.state === "marked").length;
-    const pendingCount = questions.length - answeredCount - markedCount;
+    const answeredCount = questions.filter((q) => q.isAnswered).length;
+    const markedCount = questions.filter((q) => q.isMarked).length;
+    const leftCount = questions.filter((q) => !q.isAnswered).length;
 
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const progressRingStyle = {
@@ -42,7 +42,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     return (
         <div className="flex h-full flex-col gap-6">
             {/* Progress Section */}
-            <div className="flex items-center gap-4 rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="flex items-center gap-4 rounded-md border border-brand-green/15 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5">
                 <div className="h-16 w-16 shrink-0 rounded-full p-1" style={progressRingStyle}>
                     <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
                         <span className="text-sm font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
@@ -57,6 +57,28 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                     </p>
                 </div>
             </div>
+            
+            {/* Status Summary Section */}
+            <div className="rounded-lg border border-brand-green/15 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
+                <div className="grid grid-cols-3 gap-1.5">
+                    <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-3 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
+                        <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green/70 dark:text-brand-green/60">Done</span>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-3 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
+                        <span className="text-lg font-black text-amber-500 leading-none">{markedCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500/70 dark:text-amber-500/60">Review</span>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-3 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
+                        <span className="text-lg font-black text-slate-500 dark:text-white/80 leading-none">{leftCount}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-500/70 dark:text-white/40">Left</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mx-auto h-px w-5/6 bg-brand-green/10 dark:bg-white/10" />
 
             {/* Question Map Section */}
             <div className="flex flex-col">
@@ -64,7 +86,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                     <h3 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">Question Map</h3>
                 </div>
 
-                <div className="mt-4 grid grid-cols-5 gap-2 lg:grid-cols-4">
+                <div className="mt-4 grid grid-cols-5 gap-2 lg:grid-cols-4 px-2">
                     {questions.map((q, idx) => {
                         const isActive = idx === currentIndex;
 
@@ -75,51 +97,17 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                                 onClick={() => onSelect(idx)}
                                 title={`${q.category} - Question ${q.number}`}
                                 aria-current={isActive ? "step" : undefined}
-                                className={`flex h-10 items-center justify-center rounded-lg border text-sm font-bold transition-all duration-200 focus:outline-none ${
-                                    isActive
-                                        ? "z-10 border-brand-green ring-2 ring-brand-green/50 ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15] scale-105"
+                                className={`flex h-10 items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
+                                        ? "z-10 border-brand-green ring-2 ring-brand-green ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15] scale-105"
                                         : ""
-                                } ${stateStyles[q.state]}`}
+                                    } ${stateStyles[q.state]}`}
                             >
                                 {q.number}
                             </button>
                         );
                     })}
                 </div>
-
-                <div className="mt-6 grid grid-cols-3 gap-2">
-                    <div className="flex flex-col items-center gap-1.5 rounded-lg border border-brand-green/5 bg-white/50 p-2 dark:bg-white/5">
-                        <div className="h-2 w-2 rounded-full bg-brand-green" />
-                        <span className="text-[10px] font-bold text-[#17201b]/60 dark:text-white/60 uppercase">Done</span>
-                        <span className="text-xs font-bold">{answeredCount}</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1.5 rounded-lg border border-brand-green/5 bg-white/50 p-2 dark:bg-white/5">
-                        <div className="h-2 w-2 rounded-full bg-amber-400" />
-                        <span className="text-[10px] font-bold text-[#17201b]/60 dark:text-white/60 uppercase">Review</span>
-                        <span className="text-xs font-bold">{markedCount}</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1.5 rounded-lg border border-brand-green/5 bg-white/50 p-2 dark:bg-white/5">
-                        <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-white/20" />
-                        <span className="text-[10px] font-bold text-[#17201b]/60 dark:text-white/60 uppercase">Left</span>
-                        <span className="text-xs font-bold">{pendingCount}</span>
-                    </div>
-                </div>
             </div>
-
-            {/* Guidance Section */}
-            {guidanceText && (
-                <div className="mt-auto rounded-lg bg-[#17201b] p-4 text-white dark:bg-white dark:text-[#17201b]">
-                    <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-xs font-bold uppercase tracking-wider">Pro Tip</p>
-                    </div>
-                    <p className="mt-2 text-xs font-medium leading-relaxed opacity-80">
-                        {guidanceText}
-                    </p>
-                </div>
-            )}
         </div>
     );
 };

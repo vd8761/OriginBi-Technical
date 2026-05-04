@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight } from "lucide-react";
 
 interface Option {
     id: string;
@@ -82,6 +83,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(3600);
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
 
     const currentQuestion = MOCK_QUESTIONS[currentIndex];
     const totalQuestions = MOCK_QUESTIONS.length;
@@ -107,15 +109,20 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     }, [answers, onComplete, timeLeft]);
 
     const navigatorQuestions: NavigatorQuestion[] = MOCK_QUESTIONS.map((question, index) => {
+        const isAnswered = !!answers[question.id];
+        const isMarked = markedForReview.has(question.id);
+
         let state: QuestionState = "unanswered";
-        if (answers[question.id]) state = "answered";
-        if (markedForReview.has(question.id)) state = "marked";
+        if (isAnswered) state = "answered";
+        if (isMarked) state = "marked";
 
         return {
             id: question.id,
             number: index + 1,
             state,
             category: question.category,
+            isAnswered,
+            isMarked,
         };
     });
 
@@ -158,9 +165,11 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     };
 
     const handleSubmit = () => {
-        if (window.confirm("Submit the aptitude assessment now?")) {
-            onComplete(answers);
-        }
+        setShowSubmitModal(true);
+    };
+
+    const confirmSubmit = () => {
+        onComplete(answers);
     };
 
     return (
@@ -168,7 +177,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
             <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
 
-            <header className="assessment-header sticky top-0 z-50 flex min-h-14 items-center justify-between gap-4 px-4 py-2 md:px-6">
+            <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-6 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-8">
                 <div className="flex min-w-0 items-center gap-3">
                     <div className="hidden origin-left scale-[0.7] sm:block">
                         <Logo />
@@ -198,9 +207,10 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1500px] gap-6 px-4 py-4 lg:h-[calc(100dvh-64px)] lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden lg:px-6">
+            <main className="relative z-10 mx-auto grid max-w-[1600px] gap-8 px-6 py-8 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden lg:px-8">
 
-                <section className="flex min-h-[600px] flex-col rounded-lg border border-brand-green/10 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                {/* Question Area */}
+                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
                     <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
@@ -348,11 +358,75 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         currentIndex={currentIndex}
                         onSelect={setCurrentIndex}
                         progressPercent={safeProgress}
-                        guidanceText="Work through logical patterns methodically. If stuck, mark for review and move to the next item."
                     />
                 </aside>
             </main>
 
+            {/* Submit Confirmation Modal */}
+            {showSubmitModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-md transition-opacity" 
+                        onClick={() => setShowSubmitModal(false)}
+                    />
+                    
+                    <div className="relative w-full max-w-lg transform overflow-hidden rounded-2xl border border-brand-green/20 bg-white p-8 shadow-2xl transition-all dark:border-white/10 dark:bg-[#111a15]">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+                                <CheckCircle2 size={40} />
+                            </div>
+                            
+                            <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
+                            <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/40">Review your assessment summary before finalizing your submission.</p>
+                            
+                            <div className="mt-8 grid w-full grid-cols-3 gap-4">
+                                <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
+                                    <span className="text-xl font-black text-brand-green">{navigatorQuestions.filter(q => q.isAnswered).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green/60">Done</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-xl bg-amber-400/[0.05] p-4 border border-amber-400/10">
+                                    <span className="text-xl font-black text-amber-500">{navigatorQuestions.filter(q => q.isMarked).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500/60">Review</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-xl bg-slate-100 p-4 border border-slate-200 dark:bg-white/[0.03] dark:border-white/10">
+                                    <span className="text-xl font-black text-slate-500 dark:text-white/60">{navigatorQuestions.filter(q => !q.isAnswered).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500/60 dark:text-white/30">Left</span>
+                                </div>
+                            </div>
+
+                            {navigatorQuestions.some(q => !q.isAnswered) && (
+                                <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
+                                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                                    <div>
+                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions Detected</p>
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600/70 dark:text-amber-400/60">
+                                            You have {navigatorQuestions.filter(q => !q.isAnswered).length} questions left. We recommend reviewing them before final submission.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSubmitModal(false)}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5"
+                                >
+                                    Review Answers
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmSubmit}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e]"
+                                >
+                                    Yes, Submit Test
+                                    <ArrowRight size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
