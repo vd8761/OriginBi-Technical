@@ -9,6 +9,7 @@ import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
 import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from "../icons";
+import AssessmentCard from "./AssessmentCard";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
 type AssessmentId = "aptitude" | "communication" | "coding" | "mnc" | "role";
@@ -734,56 +735,7 @@ const AssessmentPortal: React.FC = () => {
         onLogout={() => console.log("Logging out...")}
       />
 
-      {/* Top Right Notification Alert */}
-      {showNextStepAlert && currentView === "dashboard" && (
-        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
-          <div className="relative overflow-hidden rounded-2xl border border-brand-green/30 bg-white/95 dark:bg-brand-dark-secondary/95 p-5 shadow-2xl backdrop-blur-xl">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/10 rounded-full blur-2xl pointer-events-none" />
-            <div className="flex items-start gap-4 relative z-10">
-              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green shadow-[0_0_15px_rgba(30,211,106,0.3)]">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-bold text-brand-text-light-primary dark:text-brand-text-primary leading-tight">
-                  Aptitude Cleared!
-                </h4>
-                <p className="mt-1.5 text-xs text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed">
-                  Excellent work on Logic. Start the <strong className="text-brand-text-light-primary dark:text-brand-text-primary">Communication Assessment</strong> next to unlock Technical Groupings algorithms and discover your true Role-Fit.
-                </p>
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setShowNextStepAlert(false);
-                      setCurrentView("assessment");
-                    }}
-                    className="px-4 py-2 text-xs font-bold text-white bg-brand-green rounded-xl hover:bg-brand-green/90 shadow-sm transition-colors"
-                  >
-                    Set Navigation
-                  </button>
-                  <button
-                    onClick={() => setShowNextStepAlert(false)}
-                    className="px-4 py-2 text-xs font-bold text-brand-text-light-secondary hover:text-brand-text-light-primary dark:text-brand-text-secondary dark:hover:text-brand-text-primary transition-colors"
-                  >
-                    Maybe later
-                  </button>
-                </div>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowNextStepAlert(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-white"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
-      <main className="relative z-10 mx-auto flex max-w-[1600px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-12 xl:px-16">
+      <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
         {currentView === "dashboard" || currentView === "assessment" ? (
           <>
             {/* Command Deck */}
@@ -1491,6 +1443,58 @@ const AssessmentPortal: React.FC = () => {
               </div>
             </section>
           </>
+        ) : currentView === "assessment" ? (
+          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
+              </div>
+              
+              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        (isActive
+                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <AssessmentCard
+                  key={exam.id}
+                  title={exam.title}
+                  description={exam.description}
+                  statusLabel={exam.statusLabel}
+                  statusTone={exam.available ? "success" : "warning"}
+                  totalQuestions={exam.questions}
+                  duration={exam.duration}
+                  price={`₹${exam.price}`}
+                  tags={exam.tags}
+                  icon={exam.icon}
+                  available={exam.available}
+                  level={exam.difficulty}
+                  insight={exam.statusLabel}
+                  onDetailsClick={() => handleSelectExam(exam)}
+                  onStartClick={() => handleStartExam(exam)}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
