@@ -360,6 +360,12 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "Career fit", value: "career" },
 ];
 
+const TRACK_PALETTE = {
+  core: "#10b981",
+  technical: "#f59e0b",
+  career: "#06b6d4",
+} as const;
+
 const AssessmentPortal: React.FC = () => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
@@ -383,6 +389,166 @@ const AssessmentPortal: React.FC = () => {
   }, [filter]);
 
   const totalQuestions = useMemo(() => EXAMS.reduce((sum, exam) => sum + exam.questions, 0), []);
+  const totalDuration = useMemo(
+    () => EXAMS.reduce((sum, exam) => sum + (parseInt(exam.duration, 10) || 0), 0),
+    [],
+  );
+
+  const readinessScore = useMemo(() => {
+    if (!EXAMS.length) {
+      return 0;
+    }
+    return Math.round((readyExams.length / EXAMS.length) * 100);
+  }, [readyExams.length]);
+
+  const avgDuration = useMemo(
+    () => Math.round(totalDuration / Math.max(EXAMS.length, 1)),
+    [totalDuration],
+  );
+
+  const avgPrice = useMemo(
+    () => Math.round(EXAMS.reduce((sum, exam) => sum + exam.price, 0) / Math.max(EXAMS.length, 1)),
+    [],
+  );
+
+  const maxPrice = useMemo(
+    () => EXAMS.reduce((max, exam) => Math.max(max, exam.price), 0),
+    [],
+  );
+
+  const largestExam = useMemo(
+    () => EXAMS.reduce((prev, exam) => (exam.questions > prev.questions ? exam : prev), EXAMS[0]),
+    [],
+  );
+
+  const trackCounts = useMemo(() => {
+    const counts: Record<Exclude<AssessmentFilter, "all" | "ready">, number> = {
+      core: 0,
+      technical: 0,
+      career: 0,
+    };
+
+    EXAMS.forEach((exam) => {
+      const track = (exam as ExtendedExam).track;
+      if (track) {
+        counts[track] += 1;
+      }
+    });
+
+    return counts;
+  }, []);
+
+  const spotlightExam = (readyExams[0] ?? EXAMS[0]) as Exam;
+
+  const trackLanes = [
+    {
+      id: "core",
+      label: "Core skills",
+      description: "Quant, logic, and communication drills.",
+      count: trackCounts.core,
+      accent: TRACK_PALETTE.core,
+    },
+    {
+      id: "technical",
+      label: "Tech hiring",
+      description: "Coding, DSA, and interview patterns.",
+      count: trackCounts.technical,
+      accent: TRACK_PALETTE.technical,
+    },
+    {
+      id: "career",
+      label: "Career fit",
+      description: "Role-fit judgement and scenarios.",
+      count: trackCounts.career,
+      accent: TRACK_PALETTE.career,
+    },
+  ];
+
+  const queueExams = readyExams.slice(0, 3);
+
+  const momentumTrend = [36, 48, 42, 58, 66, 72, 68];
+
+  const insightMetrics = [
+    {
+      label: "Total questions",
+      value: totalQuestions.toLocaleString(),
+      detail: "across all exams",
+    },
+    {
+      label: "Total minutes",
+      value: `${totalDuration} min`,
+      detail: "full library runtime",
+    },
+    {
+      label: "Average price",
+      value: `₹${avgPrice}`,
+      detail: "entry tier avg",
+    },
+    {
+      label: "Highest price",
+      value: `₹${maxPrice}`,
+      detail: "premium tier max",
+    },
+  ];
+
+  const signalHighlights = [
+    {
+      label: "Largest exam",
+      value: `${largestExam.shortTitle} (${largestExam.questions} Qs)`,
+      detail: "highest question volume",
+    },
+    {
+      label: "Fastest win",
+      value: `${Math.min(...EXAMS.map((exam) => parseInt(exam.duration, 10) || 0))} min`,
+      detail: "shortest exam runtime",
+    },
+    {
+      label: "Live readiness",
+      value: `${readinessScore}%`,
+      detail: "assessments available",
+    },
+  ];
+
+  const focusSignals = [
+    {
+      label: "Recommended start",
+      value: spotlightExam.shortTitle,
+      detail: `${spotlightExam.duration} - ${spotlightExam.questions} Qs`,
+    },
+    {
+      label: "Core lane depth",
+      value: `${trackCounts.core} exams`,
+      detail: "quant + logic coverage",
+    },
+    {
+      label: "Tech lane depth",
+      value: `${trackCounts.technical} exams`,
+      detail: "coding + MNC focus",
+    },
+    {
+      label: "Career lane depth",
+      value: `${trackCounts.career} exams`,
+      detail: "role-fit diagnostics",
+    },
+  ];
+
+  const updateFeed = [
+    {
+      title: "Aptitude benchmark refreshed",
+      detail: "New logic patterns added to reasoning set.",
+      time: "2h ago",
+    },
+    {
+      title: "Communication tasks upgraded",
+      detail: "Listening cues now graded for nuance.",
+      time: "Yesterday",
+    },
+    {
+      title: "Role-fit rubric expanded",
+      detail: "Scenario variants for product roles.",
+      time: "2 days ago",
+    },
+  ];
 
   const handleSelectExam = (exam: Exam) => {
     setSelectedExam(exam);
@@ -414,13 +580,12 @@ const AssessmentPortal: React.FC = () => {
   const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 to-white dark:from-[#0f1712] dark:to-[#161f1a] font-sans transition-colors duration-500">
-      {/* Subtle background pattern */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.015] dark:opacity-[0.03]">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
-          backgroundSize: '40px 40px',
-        }} />
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#f5fbf7] dark:bg-[#0f1712] font-sans transition-colors duration-500">
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-gradient-to-br from-emerald-400/25 via-cyan-300/10 to-transparent blur-[90px] animate-float-slow opacity-80" />
+        <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-amber-300/20 via-emerald-300/10 to-transparent blur-[100px] animate-float-slower opacity-70" />
+        <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
+        <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
       </div>
 
       <Header
@@ -432,139 +597,299 @@ const AssessmentPortal: React.FC = () => {
       <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
         {currentView === "dashboard" || currentView === "assessment" ? (
           <>
-            {/* Hero Section - Ultra Premium Design */}
-            <section className="relative overflow-hidden rounded-[2.5rem] bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-2xl border border-white/80 dark:border-white/10 shadow-[0_20px_60px_rgba(30,211,106,0.05)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)] p-8 sm:p-12 lg:p-16 group transition-all duration-700 hover:shadow-[0_30px_80px_rgba(30,211,106,0.08)]">
-              {/* Dynamic Animated Orbs */}
-              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 animate-float-slow opacity-80 group-hover:opacity-100 transition-opacity duration-700 mix-blend-multiply dark:mix-blend-screen" />
-              <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-brand-green/10 to-teal-400/20 rounded-full blur-[60px] translate-y-1/3 -translate-x-1/4 animate-float-slower opacity-60 group-hover:opacity-90 transition-opacity duration-700 mix-blend-multiply dark:mix-blend-screen" />
-              
-              <div className="relative z-10 grid gap-12 lg:grid-cols-[1.2fr_1fr] items-center">
-                <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
-                  <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/20 mb-8 backdrop-blur-md shadow-sm transform transition-all duration-300 hover:scale-105 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/20 cursor-default">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            {/* Command Deck */}
+            <section className="relative overflow-hidden rounded-[2.75rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#101814]/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(15,23,42,0.12)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.55)] p-8 sm:p-12 lg:p-14">
+              <div className="absolute inset-0">
+                <div className="absolute -top-16 left-[-8%] h-72 w-72 rounded-full bg-gradient-to-br from-emerald-400/20 to-transparent blur-[60px] animate-float-slow" />
+                <div className="absolute bottom-[-25%] right-[-6%] h-80 w-80 rounded-full bg-gradient-to-tr from-cyan-400/20 to-transparent blur-[70px] animate-float-slower" />
+                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(15,23,42,0.03),rgba(15,23,42,0))] dark:bg-[linear-gradient(120deg,rgba(255,255,255,0.06),rgba(255,255,255,0))]" />
+              </div>
+
+              <div className="relative z-10 grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
+                <div className="animate-slide-up" style={{ animationDelay: "80ms" }}>
+                  <div className="inline-flex items-center gap-3 rounded-full border border-emerald-200/70 dark:border-emerald-500/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-5 py-2.5 text-emerald-700 dark:text-emerald-300 text-sm font-semibold tracking-wide shadow-sm">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                     </span>
-                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 tracking-wide">
-                      {readyExams.length} Premium Exams Live
-                    </span>
+                    {readyExams.length} live assessments ready
                   </div>
-                  
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-[1.1] mb-6">
-                    Elevate your career with
-                    <span className="block mt-2 bg-gradient-to-r from-emerald-500 via-brand-green to-cyan-500 bg-clip-text text-transparent pb-2 animate-pulse" style={{ animationDuration: '4s' }}>
-                      precision insights.
+
+                  <h1 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-[1.05]">
+                    Your assessment command deck
+                    <span className="block mt-2 bg-gradient-to-r from-emerald-500 via-brand-green to-cyan-500 bg-clip-text text-transparent">
+                      plan, launch, and level up.
                     </span>
                   </h1>
-                  
-                  <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl font-light leading-relaxed mb-8">
-                    Step into the future of hiring. AI-driven assessments that don't just test you—they <strong className="font-semibold text-slate-800 dark:text-slate-200">reveal your true potential</strong> and guide your growth.
+
+                  <p className="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
+                    Turn every assessment into a signal. Track readiness, choose the right lane, and unlock a tailored growth path.
                   </p>
 
-                  <div className="flex flex-wrap gap-4">
-                    <button className="px-8 py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold shadow-xl shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
-                      Explore Library
+                  <div className="mt-8 flex flex-wrap gap-4">
+                    <button className="px-7 py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold shadow-xl shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                      Explore library
                     </button>
-                    <button className="px-8 py-4 rounded-2xl bg-white dark:bg-white/5 text-slate-700 dark:text-white font-semibold border border-slate-200 dark:border-white/10 shadow-sm hover:bg-slate-50 dark:hover:bg-white/10 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Watch Demo
+                    <button className="px-7 py-4 rounded-2xl bg-white/80 dark:bg-white/5 text-slate-700 dark:text-white font-semibold border border-slate-200/70 dark:border-white/10 shadow-sm hover:bg-white hover:-translate-y-1 transition-all duration-300">
+                      Run quick scan
                     </button>
+                  </div>
+
+                  <div className="mt-8 flex flex-wrap gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    {["AI proctored", "Instant reports", "Role fit mapping"].map((item) => (
+                      <span key={item} className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 shadow-sm">
+                        {item}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
-                {/* Glassmorphic Stats Grid */}
-                <div className="grid grid-cols-2 gap-4 sm:gap-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
-                  <div className="group relative p-6 rounded-3xl bg-white/40 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-300 overflow-hidden col-span-2 sm:col-span-1">
-                    <div className="absolute inset-0 bg-gradient-to-br from-brand-green/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <div className="relative z-10 flex flex-col items-center sm:items-start text-center sm:text-left">
-                      <div className="p-3 bg-white dark:bg-white/10 rounded-2xl shadow-sm mb-4 text-brand-green">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
+                <div className="grid gap-4 sm:grid-cols-2 animate-slide-up" style={{ animationDelay: "160ms" }}>
+                  <div className="sm:col-span-2 relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Readiness index</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-800 dark:text-white">
+                          {readinessScore}% ready
+                        </p>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                          Based on live assessments and total question volume.
+                        </p>
                       </div>
-                      <p className="text-4xl font-bold text-slate-800 dark:text-white tracking-tight">{EXAMS.length}</p>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">Curated Exams</p>
-                    </div>
-                  </div>
-                  
-                  <div className="group relative p-6 rounded-3xl bg-white/40 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-300 overflow-hidden col-span-2 sm:col-span-1">
-                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <div className="relative z-10 flex flex-col items-center sm:items-start text-center sm:text-left">
-                      <div className="p-3 bg-white dark:bg-white/10 rounded-2xl shadow-sm mb-4 text-cyan-500">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      </div>
-                      <p className="text-4xl font-bold text-slate-800 dark:text-white tracking-tight">{readyExams.length}</p>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">Available Now</p>
-                    </div>
-                  </div>
-                  
-                  <div className="group relative p-6 rounded-3xl bg-white/40 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-xl shadow-lg hover:shadow-xl hover:-translate-y-2 transition-all duration-300 overflow-hidden col-span-2">
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-400/10 to-pink-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <div className="relative z-10 flex flex-col sm:flex-row items-center sm:justify-between gap-4 text-center sm:text-left">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white dark:bg-white/10 rounded-2xl shadow-sm text-purple-500">
-                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{totalQuestions}+</p>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Unique Questions</p>
-                        </div>
-                      </div>
-                      <div className="flex -space-x-3">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="w-10 h-10 rounded-full border-2 border-white dark:border-[#111a15] bg-slate-200 dark:bg-slate-700 shadow-sm" style={{ backgroundImage: `url('https://i.pravatar.cc/100?img=${i}')`, backgroundSize: 'cover' }} />
-                        ))}
-                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-[#111a15] bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm z-10">
-                          +2k
+                      <div
+                        className="relative h-24 w-24 rounded-full [--ring-track:rgba(15,23,42,0.08)] dark:[--ring-track:rgba(255,255,255,0.16)]"
+                        style={{ background: `conic-gradient(#1ed36a ${readinessScore * 3.6}deg, var(--ring-track) 0deg)` }}
+                      >
+                        <span className="absolute inset-0 rounded-full border border-emerald-500/20 animate-pulse-ring" />
+                        <div className="absolute inset-2 rounded-full bg-white/90 dark:bg-[#0f1712] border border-white/80 dark:border-white/10 flex items-center justify-center text-sm font-bold text-slate-800 dark:text-white">
+                          {readinessScore}%
                         </div>
                       </div>
                     </div>
+                    <div className="mt-6 grid grid-cols-3 gap-4 text-center">
+                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Exams</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-white">{EXAMS.length}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Live</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-white">{readyExams.length}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Avg time</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-white">{avgDuration} min</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </section>
 
-            {/* Filter Tabs */}
-            <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 animate-slide-up" style={{ animationDelay: '300ms' }}>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Browse Categories</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Find the perfect assessment for your goals</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-white/60 dark:bg-[#1a231e]/80 backdrop-blur-md rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm">
-                {FILTERS.map((item) => {
-                  const isActive = filter === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => setFilter(item.value)}
-                      className={`
-                        relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 overflow-hidden
-                        ${isActive 
-                          ? "text-white shadow-md" 
-                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-white/5"
+                  <div className="relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Spotlight</p>
+                      <span
+                        className={
+                          "text-[10px] font-bold px-2.5 py-1 rounded-full " +
+                          (spotlightExam.available
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-300")
                         }
-                      `}
+                      >
+                        {spotlightExam.statusLabel}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                      <div
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                        style={{ background: `${spotlightExam.accentColor}1a`, color: spotlightExam.accentColor }}
+                      >
+                        {spotlightExam.icon}
+                      </div>
+                      <div>
+                        <p className="text-base font-bold text-slate-800 dark:text-white">{spotlightExam.shortTitle}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {spotlightExam.duration} - {spotlightExam.questions} questions
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleStartExam(spotlightExam)}
+                      className="mt-5 w-full rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 py-2.5 text-sm font-semibold text-slate-700 dark:text-white hover:bg-white hover:shadow-md transition-all"
                     >
-                      {isActive && (
-                        <span className="absolute inset-0 bg-slate-800 dark:bg-white rounded-xl -z-10 animate-fade-in-scale" />
-                      )}
-                      <span className="relative z-10">{item.label}</span>
+                      {spotlightExam.available ? "Start now" : "View details"}
                     </button>
-                  );
-                })}
+                  </div>
+
+                  <div className="relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Track mix</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Live</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {trackLanes.map((lane) => (
+                        <div key={lane.id}>
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <span>{lane.label}</span>
+                            <span>{lane.count}</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.max(18, Math.round((lane.count / Math.max(EXAMS.length, 1)) * 100))}%`,
+                                background: lane.accent,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
 
-            {/* Exam Carousel */}
-            <section>
+            {/* Signal Board */}
+            <section
+              className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] animate-slide-up"
+              style={{ animationDelay: "240ms" }}
+            >
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.1)]">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Assessment flight plan</p>
+                    <h3 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Build mastery lanes</h3>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md">
+                      Stack the right mix of core, technical, and career signals for your target role.
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Live track map
+                  </div>
+                </div>
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  {trackLanes.map((lane) => (
+                    <div
+                      key={lane.id}
+                      className="relative overflow-hidden rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm"
+                    >
+                      <div
+                        className="absolute inset-0 opacity-70"
+                        style={{ background: `linear-gradient(135deg, ${lane.accent}1f, transparent 60%)` }}
+                      />
+                      <div className="relative">
+                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">{lane.label}</p>
+                        <p className="mt-3 text-2xl font-bold" style={{ color: lane.accent }}>
+                          {lane.count}
+                        </p>
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{lane.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.1)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Launch queue</p>
+                    <h3 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Ready to start now</h3>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      Jump into the next best assessment while your momentum is high.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFilter("ready")}
+                    className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-white transition-all"
+                  >
+                    Show ready
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  {queueExams.length ? (
+                    queueExams.map((exam) => (
+                      <div
+                        key={exam.id}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                            style={{ background: `${exam.accentColor}1a`, color: exam.accentColor }}
+                          >
+                            {exam.icon}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-white">{exam.shortTitle}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {exam.duration} - {exam.questions} questions
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleStartExam(exam)}
+                          className="rounded-xl bg-slate-900 dark:bg-white px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-all"
+                        >
+                          Start
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400">
+                      All tracks are prepping. Check back soon.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Track Filters */}
+            <section
+              className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 animate-slide-up"
+              style={{ animationDelay: "320ms" }}
+            >
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment orbit</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Choose a lane to shape the library.</p>
+              </div>
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-transparent to-cyan-500/20 blur-lg opacity-70" />
+                <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                  {FILTERS.map((item) => {
+                    const isActive = filter === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setFilter(item.value)}
+                        className={
+                          "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                          (isActive
+                            ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                        }
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            {/* Assessment Library */}
+            <section className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment library</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Swipe or use the arrows to explore.</p>
+                </div>
+                <div className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  Showing {filteredExams.length} exams
+                </div>
+              </div>
               <ExamCarousel
                 exams={filteredExams}
                 onSelectExam={handleSelectExam}
@@ -572,24 +897,119 @@ const AssessmentPortal: React.FC = () => {
               />
             </section>
 
-            {/* Trust Badges - Enhanced */}
-            <section className="py-10 border-t border-slate-200/60 dark:border-white/10 mt-4 animate-slide-up" style={{ animationDelay: '500ms' }}>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {[
-                  { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", label: "Bank-Grade Security", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-                  { icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", label: "Instant Analytics", color: "text-cyan-500", bg: "bg-cyan-500/10" },
-                  { icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253", label: "Industry Certified", color: "text-purple-500", bg: "bg-purple-500/10" },
-                  { icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15", label: "Unlimited Retakes", color: "text-amber-500", bg: "bg-amber-500/10" }
-                ].map((badge, i) => (
-                  <div key={i} className="group flex flex-col items-center justify-center p-6 rounded-3xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 text-center">
-                    <div className={`p-4 rounded-2xl ${badge.bg} ${badge.color} mb-4 transform group-hover:scale-110 transition-transform duration-300`}>
-                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d={badge.icon} />
-                      </svg>
+            {/* Intelligence Brief */}
+            <section className="py-12 border-t border-slate-200/60 dark:border-white/10 mt-4 animate-slide-up" style={{ animationDelay: "520ms" }}>
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Intelligence brief</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Advanced signals distilled from the full assessment stack.</p>
+                </div>
+                <div className="text-xs font-semibold text-slate-400 dark:text-slate-500">Live snapshot</div>
+              </div>
+
+              <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.12)]">
+                  <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_55%)]" />
+                  <div className="relative">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Signal density</p>
+                        <h4 className="mt-2 text-2xl font-bold text-slate-800 dark:text-white">Library performance pulse</h4>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-xl">
+                          A high-level look at scale, runtime, and pricing intensity across the assessment library.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {["Refreshed hourly", "AI-scored", "Multi-track"].map((chip) => (
+                          <span
+                            key={chip}
+                            className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{badge.label}</span>
+
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {insightMetrics.map((metric) => (
+                        <div
+                          key={metric.label}
+                          className="rounded-2xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm"
+                        >
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{metric.label}</p>
+                          <p className="mt-2 text-lg font-bold text-slate-800 dark:text-white">{metric.value}</p>
+                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{metric.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 rounded-3xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Momentum trend</p>
+                          <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly readiness velocity</p>
+                        </div>
+                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">+14% vs last week</span>
+                      </div>
+                      <div className="mt-4 flex h-20 items-end gap-2">
+                        {momentumTrend.map((value, index) => (
+                          <div key={value + index} className="flex-1 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15">
+                            <div
+                              className="w-full rounded-xl bg-gradient-to-t from-emerald-500 to-cyan-400"
+                              style={{ height: `${Math.max(value, 18)}%` }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        {signalHighlights.map((item) => (
+                          <div key={item.label} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-3">
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{item.label}</p>
+                            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-white">{item.value}</p>
+                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{item.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                <div className="grid gap-6">
+                  <div className="rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Focus signals</p>
+                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">Live</span>
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      {focusSignals.map((signal) => (
+                        <div key={signal.label} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{signal.label}</p>
+                          <p className="mt-2 text-sm font-bold text-slate-800 dark:text-white">{signal.value}</p>
+                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{signal.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Update feed</p>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Recent</span>
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      {updateFeed.map((update) => (
+                        <div key={update.title} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-800 dark:text-white">{update.title}</p>
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">{update.time}</span>
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{update.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
           </>
