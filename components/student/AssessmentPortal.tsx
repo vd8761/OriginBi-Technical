@@ -743,8 +743,7 @@ const AssessmentPortal: React.FC = () => {
         {currentView === "dashboard" ? (
           <>
             {/* Command Deck */}
-            {currentView === "dashboard" && (
-              <section className="relative overflow-hidden rounded-[2.75rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(25,33,28,0.08)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.5)] p-6 sm:p-10 lg:p-12">
+            <section className="relative overflow-hidden rounded-[2.75rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(25,33,28,0.08)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.5)] p-6 sm:p-10 lg:p-12">
               <div className="absolute inset-0">
                 <div className="absolute -top-16 left-[-8%] h-72 w-72 rounded-full bg-gradient-to-br from-brand-green/15 to-transparent blur-[60px] animate-float-slow" />
                 <div className="absolute bottom-[-25%] right-[-6%] h-80 w-80 rounded-full bg-gradient-to-tr from-brand-green/10 to-transparent blur-[70px] animate-float-slower" />
@@ -773,10 +772,17 @@ const AssessmentPortal: React.FC = () => {
                   </p>
 
                   <div className="mt-8 flex flex-wrap gap-4">
-                    <button className="px-7 py-4 rounded-2xl bg-brand-green text-white font-semibold shadow-xl shadow-brand-green/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                    <button 
+                      onClick={() => setCurrentView("assessment")}
+                      className="px-7 py-4 rounded-2xl bg-brand-green text-white font-semibold shadow-xl shadow-brand-green/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                       Explore library
                     </button>
-                    <button className="px-7 py-4 rounded-2xl bg-brand-light-primary/80 dark:bg-white/5 text-brand-text-light-primary dark:text-brand-text-primary font-semibold border border-brand-light-tertiary/70 dark:border-white/10 shadow-sm hover:bg-brand-light-primary hover:-translate-y-1 transition-all duration-300">
+                    <button 
+                      onClick={() => {
+                        const nextExam = EXAMS.find(e => e.available);
+                        if (nextExam) handleStartExam(nextExam);
+                      }}
+                      className="px-7 py-4 rounded-2xl bg-brand-light-primary/80 dark:bg-white/5 text-brand-text-light-primary dark:text-brand-text-primary font-semibold border border-brand-light-tertiary/70 dark:border-white/10 shadow-sm hover:bg-brand-light-primary hover:-translate-y-1 transition-all duration-300">
                       Run quick scan
                     </button>
                   </div>
@@ -893,10 +899,8 @@ const AssessmentPortal: React.FC = () => {
                 </div>
               </div>
             </section>
-            )}
 
             {/* Signal Board */}
-            {currentView === "dashboard" && (
             <section
               className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] animate-slide-up"
               style={{ animationDelay: "240ms" }}
@@ -984,10 +988,13 @@ const AssessmentPortal: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setFilter("ready")}
+                    onClick={() => {
+                      setCurrentView("assessment");
+                      setFilter("ready");
+                    }}
                     className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary hover:bg-brand-light-primary transition-all"
                   >
-                    Show ready
+                    View all assessments
                   </button>
                 </div>
 
@@ -1029,10 +1036,8 @@ const AssessmentPortal: React.FC = () => {
                 </div>
               </div>
             </section>
-            )}
 
             {/* Career Timeline */}
-            {currentView === "dashboard" && (
             <section
               className="animate-slide-up"
               style={{ animationDelay: "400ms" }}
@@ -1083,7 +1088,6 @@ const AssessmentPortal: React.FC = () => {
                 </div>
               </div>
             </section>
-            )}
 
             {/* Assessment Library with Filters */}
             <section className="space-y-6 animate-slide-up" style={{ animationDelay: "320ms" }}>
