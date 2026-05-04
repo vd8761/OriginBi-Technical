@@ -85,21 +85,21 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
 
     return (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            <section className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
                     Speaking prompt
                 </p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-300">
+                <p className="mt-2 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
                     {task.instructions}
                 </p>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
-                    <h3 className="text-lg font-extrabold leading-8 text-[#17201b] dark:text-white">
+                <div className="mt-4 rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
+                    <h3 className="text-lg font-bold leading-8 text-[#17201b] dark:text-white">
                         {task.prompt}
                     </h3>
                 </div>
             </section>
 
-            <aside className="rounded-lg border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
+            <aside className="rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
                 <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                     {recordingComplete ? (
                         <>
@@ -108,8 +108,8 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
-                            <h4 className="mt-4 text-lg font-extrabold text-[#17201b] dark:text-white">Recording saved</h4>
-                            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">
+                            <h4 className="mt-4 text-lg font-bold text-[#17201b] dark:text-white">Recording saved</h4>
+                            <p className="mt-2 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
                                 Review your audio or continue to the next task.
                             </p>
                         </>
@@ -123,22 +123,22 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     </svg>
                                 </span>
                             </div>
-                            <p className="mt-4 text-xs font-extrabold uppercase tracking-widest text-red-500">Recording</p>
-                            <p className="mt-2 font-mono text-3xl font-extrabold text-[#17201b] dark:text-white">
+                            <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-red-500">Recording</p>
+                            <p className="mt-2 font-mono text-3xl font-bold text-[#17201b] dark:text-white">
                                 {formatTime(recordTimeLeft)}
                             </p>
                         </>
                     ) : (
                         <>
                             <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-amber-400/30 bg-amber-400/10">
-                                <span className="font-mono text-2xl font-extrabold text-amber-600">
+                                <span className="font-mono text-2xl font-bold text-amber-600">
                                     {formatTime(prepTimeLeft)}
                                 </span>
                             </div>
-                            <h4 className="mt-4 text-lg font-extrabold text-[#17201b] dark:text-white">
+                            <h4 className="mt-4 text-lg font-bold text-[#17201b] dark:text-white">
                                 {prepTimeLeft === 0 ? "Ready to record" : "Prepare your answer"}
                             </h4>
-                            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">
+                            <p className="mt-2 text-sm font-medium leading-6 text-[#17201b] dark:text-white">
                                 {prepTimeLeft === 0
                                     ? "Start when you are ready. Keep your response clear and structured."
                                     : "Use this preparation time to organize your response."}
@@ -152,7 +152,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                         <button
                             type="button"
                             onClick={() => void startRecording()}
-                            className="min-h-11 rounded-lg bg-brand-green px-5 text-sm font-extrabold text-[#0f1712] transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                            className="min-h-11 rounded-lg bg-brand-green px-5 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                         >
                             Start recording now
                         </button>
@@ -161,7 +161,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                         <button
                             type="button"
                             onClick={stopRecording}
-                            className="min-h-11 rounded-lg bg-red-500 px-5 text-sm font-extrabold text-white transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40"
+                            className="min-h-11 rounded-lg bg-red-500 px-5 text-sm font-bold text-white transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40"
                         >
                             Finish recording
                         </button>
