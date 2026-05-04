@@ -1,110 +1,339 @@
-import React from 'react';
-import { ArrowRightIcon } from '../icons';
+import React, { useMemo, useState } from 'react';
+import { ArrowRightIcon, LockIcon } from '../icons';
+import type { Exam } from './ExamCarousel';
+import { usePaidAssessments, codingPaymentKey, type PaymentKey } from '@/lib/payments';
+import { CODING_LANGUAGES } from '@/lib/exams';
 
-interface ExploreViewProps {
-    assessments: any[];
-    onNavigateToDetails: (assessment: any) => void;
-    onStartAssessment: (assessment: any) => void;
+type Track = 'core' | 'technical' | 'career';
+type ExploreFilter = 'all' | Track;
+
+interface ExploreExam extends Exam {
+    track?: Track;
 }
 
-const ExploreView: React.FC<ExploreViewProps> = ({ assessments, onNavigateToDetails, onStartAssessment }) => {
+interface ExamDetail {
+    focus: string;
+    outcomes: string[];
+    skills: { title: string; description: string }[];
+    sections: { name: string; detail: string; weight: string }[];
+    requirements: string[];
+}
+
+interface ExploreViewProps {
+    assessments: ExploreExam[];
+    examDetails: Record<string, ExamDetail>;
+    onNavigateToDetails: (assessment: ExploreExam) => void;
+}
+
+const TRACK_META: Record<Track, { label: string; description: string; accent: string }> = {
+    core: {
+        label: 'Core Skills',
+        description: 'Foundational benchmarks every candidate should take first.',
+        accent: '#10b981',
+    },
+    technical: {
+        label: 'Tech Hiring',
+        description: 'Coding, DSA, and interview-style problem solving.',
+        accent: '#f59e0b',
+    },
+    career: {
+        label: 'Career Fit',
+        description: 'Role-fit diagnostics and workplace decision-making.',
+        accent: '#06b6d4',
+    },
+};
+
+const FILTER_PILLS: { value: ExploreFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'core', label: 'Core' },
+    { value: 'technical', label: 'Technical' },
+    { value: 'career', label: 'Career' },
+];
+
+const TRACK_ORDER: Track[] = ['core', 'technical', 'career'];
+
+const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onNavigateToDetails }) => {
+    const [filter, setFilter] = useState<ExploreFilter>('all');
+    const { isPaid } = usePaidAssessments();
+
+    const grouped = useMemo(() => {
+        const map: Record<Track, ExploreExam[]> = { core: [], technical: [], career: [] };
+        assessments.forEach((exam) => {
+            const track = (exam.track ?? 'core') as Track;
+            map[track].push(exam);
+        });
+        return map;
+    }, [assessments]);
+
+    const visibleTracks: Track[] = filter === 'all' ? TRACK_ORDER : [filter];
+
     return (
-        <div className="animate-fade-in flex flex-col gap-12 w-full pb-20">
-            {/* Header Section */}
-            <div className="flex flex-col gap-2 pb-4">
-                <h1 className="text-[clamp(28px,3vw,42px)] font-bold text-slate-900 dark:text-white tracking-tight leading-none">
-                    Unlock Your Potential
+        <div className="animate-fade-in flex flex-col gap-12 w-full pb-16">
+            {/* Hero */}
+            <header className="flex flex-col gap-3 max-w-3xl">
+                <span className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-200/70 dark:border-emerald-500/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                    Explore
+                </span>
+                <h1 className="text-[clamp(28px,3.4vw,44px)] font-bold text-slate-900 dark:text-white tracking-tight leading-[1.05]">
+                    Find the Assessment That Fits You
                 </h1>
-                <p className="text-slate-500 dark:text-gray-400 text-[15px] max-w-xl font-normal leading-relaxed mt-2">
-                    Explore our comprehensive suite of professional assessments designed to benchmark your skills against industry standards.
+                <p className="text-[15px] leading-relaxed text-slate-500 dark:text-gray-400 max-w-2xl">
+                    Browse five professionally designed assessments grouped by what they prepare you for. Read what each one measures and how it helps your career, then go deeper when something fits.
                 </p>
+            </header>
+
+            {/* Filter rail */}
+            <div className="flex flex-wrap items-center gap-2">
+                {FILTER_PILLS.map((pill) => {
+                    const active = filter === pill.value;
+                    return (
+                        <button
+                            key={pill.value}
+                            onClick={() => setFilter(pill.value)}
+                            className={`rounded-full px-5 py-2 text-[12px] font-semibold tracking-wide transition-all ${active
+                                    ? 'bg-[#1ED36A] text-white shadow-sm shadow-[#1ED36A]/30'
+                                    : 'bg-white/70 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 text-slate-600 dark:text-gray-300 hover:border-[#1ED36A]/40 hover:text-slate-900 dark:hover:text-white'
+                                }`}
+                        >
+                            {pill.label}
+                        </button>
+                    );
+                })}
+                <span className="ml-auto hidden md:block text-[12px] text-slate-400 dark:text-gray-500">
+                    {assessments.length} assessments &middot; {assessments.filter((e) => e.available).length} ready now
+                </span>
             </div>
 
-            {/* Assessment Cards List - All Large Style */}
-            <div className="flex flex-col gap-8 max-w-6xl mx-auto w-full">
-                {assessments.map((assessment, idx) => (
-                    <section key={idx} className="relative">
-                        <div className="relative overflow-hidden bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl transition-all duration-500 shadow-sm">
-                            <div className="relative z-10 p-6 lg:p-10 flex flex-col lg:flex-row items-center gap-10">
-                                {/* Left Side Visual */}
-                                <div className="flex-1 flex justify-center items-center relative order-1">
-                                    {/* Decorative Pattern Behind */}
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-                                        <svg width="200" height="200" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <circle cx="120" cy="120" r="100" stroke="currentColor" strokeWidth="1" strokeDasharray="8 8" className="text-brand-green" />
-                                            <circle cx="120" cy="120" r="70" stroke="currentColor" strokeWidth="0.5" className="text-brand-green" />
-                                        </svg>
-                                    </div>
-
-                                    {assessment.title === "Aptitude Assessment" ? (
-                                        <img
-                                            src="/illustration/img1.png"
-                                            alt={assessment.title}
-                                            className="relative z-10 w-full max-w-[380px] h-auto object-contain transition-all duration-700"
-                                        />
-                                    ) : assessment.title === "Communication Assessment" ? (
-                                        <img
-                                            src="/illustration/img2.png"
-                                            alt={assessment.title}
-                                            className="relative z-10 w-full max-w-[380px] h-auto object-contain transition-all duration-700"
-                                        />
-                                    ) : (
-                                        <div className="relative z-10 w-48 h-48 bg-brand-green/5 rounded-3xl flex items-center justify-center border border-brand-green/10 backdrop-blur-sm overflow-hidden">
-                                            <div className="absolute inset-0 bg-gradient-to-br from-brand-green/10 to-transparent"></div>
-                                            {React.cloneElement(assessment.icon, { className: "w-24 h-24 text-brand-green/40" })}
-                                            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-brand-green/5 rounded-full blur-2xl"></div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Right Side Content */}
-                                <div className="flex-1 text-center lg:text-left flex flex-col items-center lg:items-start order-2">
-
-                                    
-                                    <h2 className="text-[clamp(24px,2.5vw,32px)] font-black text-slate-900 dark:text-white mb-3 tracking-tighter leading-tight">
-                                        {assessment.title}
+            {/* Track sections */}
+            <div className="flex flex-col gap-14">
+                {visibleTracks.map((track) => {
+                    const exams = grouped[track];
+                    if (!exams || exams.length === 0) return null;
+                    const meta = TRACK_META[track];
+                    return (
+                        <section key={track} className="flex flex-col gap-6">
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-3">
+                                    <span
+                                        className="h-2.5 w-2.5 rounded-full"
+                                        style={{ background: meta.accent }}
+                                    />
+                                    <h2 className="text-[18px] font-bold text-slate-900 dark:text-white tracking-tight">
+                                        {meta.label}
                                     </h2>
-
-                                    <p className="text-[14px] text-slate-600 dark:text-gray-300 max-w-md mb-6 leading-relaxed font-normal">
-                                        {assessment.description} Benchmark your skills against industry standards and receive detailed insights into your performance.
-                                    </p>
-
-
-
-                                    <div className="flex flex-wrap gap-4 justify-center lg:justify-start w-full">
-                                        <button
-                                            onClick={() => onNavigateToDetails(assessment)}
-                                            className="w-full sm:w-auto px-10 py-3.5 bg-brand-green hover:bg-[#1bb85c] text-white rounded-xl font-bold text-[12px] uppercase tracking-widest transition-all active:scale-95 cursor-pointer shadow-lg shadow-brand-green/20"
-                                        >
-                                            Know More
-                                        </button>
-                                    </div>
+                                    <span className="text-[12px] font-medium text-slate-400 dark:text-gray-500">
+                                        {exams.length} {exams.length === 1 ? 'assessment' : 'assessments'}
+                                    </span>
                                 </div>
+                                <p className="text-[13px] text-slate-500 dark:text-gray-400 leading-relaxed">
+                                    {meta.description}
+                                </p>
                             </div>
-                        </div>
-                    </section>
-                ))}
+
+                            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                                {exams.map((exam) => {
+                                    const paidStatus = computePaidStatus(exam.id, isPaid);
+                                    return (
+                                        <ExploreAssessmentCard
+                                            key={exam.id}
+                                            exam={exam}
+                                            outcomes={examDetails[exam.id]?.outcomes ?? []}
+                                            focus={examDetails[exam.id]?.focus}
+                                            paidStatus={paidStatus}
+                                            onKnowMore={() => onNavigateToDetails(exam)}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    );
+                })}
             </div>
 
-            {/* Why take these assessments? */}
-            <section className="mt-8 p-8 max-w-6xl mx-auto w-full bg-gray-50 dark:bg-white/5 rounded-2xl border border-dashed border-gray-200 dark:border-white/10">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Industry Standard</h3>
-                        <p className="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed">Our questions are modeled after top MNC recruitment standards to ensure your preparation is accurate.</p>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Skill Gap Analysis</h3>
-                        <p className="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed">Receive detailed insights into your strengths and weaknesses to focus your learning effectively.</p>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Verified Reports</h3>
-                        <p className="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed">Download verified performance reports to showcase your technical readiness to potential employers.</p>
-                    </div>
+            {/* Why these assessments */}
+            <section className="mt-4 rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/[0.04] backdrop-blur-xl p-8 lg:p-10">
+                <div className="flex flex-col gap-2 mb-8 max-w-xl">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">
+                        Why These Assessments
+                    </span>
+                    <h3 className="text-[22px] font-bold text-slate-900 dark:text-white leading-tight">
+                        Built for hiring you actually face.
+                    </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <WhyItem
+                        title="Industry Standard"
+                        description="Question patterns are modeled after current MNC and product-company recruitment screens, so what you practice matches what you sit for."
+                    />
+                    <WhyItem
+                        title="Skill Gap Analysis"
+                        description="Every report breaks down strengths and gaps by topic and difficulty, so you know exactly where to put your next hour of effort."
+                    />
+                    <WhyItem
+                        title="Verified Reports"
+                        description="Share a verified score with employers and counsellors. The same report fuels your Origin BI roadmap and role recommendations."
+                    />
                 </div>
             </section>
         </div>
     );
 };
+
+type PaidStatus = { kind: 'none' } | { kind: 'paid' } | { kind: 'partial'; count: number; total: number };
+
+const computePaidStatus = (
+    examId: string,
+    isPaid: (key: PaymentKey) => boolean,
+): PaidStatus => {
+    if (examId === 'coding') {
+        const total = CODING_LANGUAGES.length;
+        const count = CODING_LANGUAGES.filter((lang) => isPaid(codingPaymentKey(lang.id))).length;
+        if (count === 0) return { kind: 'none' };
+        return { kind: 'partial', count, total };
+    }
+    return isPaid(examId as PaymentKey) ? { kind: 'paid' } : { kind: 'none' };
+};
+
+interface ExploreAssessmentCardProps {
+    exam: ExploreExam;
+    outcomes: string[];
+    focus?: string;
+    paidStatus: PaidStatus;
+    onKnowMore: () => void;
+}
+
+const ExploreAssessmentCard: React.FC<ExploreAssessmentCardProps> = ({ exam, outcomes, focus, paidStatus, onKnowMore }) => {
+    const isReady = exam.available;
+    const accent = exam.accentColor || '#1ED36A';
+    const gradient = exam.gradient || `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`;
+    const helpfulFor = outcomes.slice(0, 3);
+
+    return (
+        <article
+            className={`group relative flex flex-col rounded-3xl border bg-white/80 dark:bg-white/[0.04] backdrop-blur-xl border-slate-200/70 dark:border-white/[0.08] p-6 transition-all duration-300 ${isReady
+                    ? 'hover:-translate-y-0.5 hover:border-[#1ED36A]/40 hover:shadow-[0_20px_40px_rgba(30,211,106,0.08)]'
+                    : 'opacity-70'
+                }`}
+        >
+            {/* Top: icon + status */}
+            <div className="flex items-start justify-between mb-5">
+                <div
+                    className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-md [&_svg]:h-7 [&_svg]:w-7"
+                    style={{ background: gradient }}
+                >
+                    {exam.icon}
+                </div>
+                {isReady ? (
+                    <div className="flex flex-col items-end gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                            Ready
+                        </span>
+                        {paidStatus.kind === 'paid' && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                                style={{ background: `${accent}1f`, color: accent }}
+                            >
+                                Paid
+                            </span>
+                        )}
+                        {paidStatus.kind === 'partial' && (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                                style={{ background: `${accent}1f`, color: accent }}
+                            >
+                                {paidStatus.count}/{paidStatus.total} languages
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                        <LockIcon className="w-3 h-3" />
+                        Coming Soon
+                    </span>
+                )}
+            </div>
+
+            {/* Title + one-line focus */}
+            <h3 className="text-[20px] font-bold text-slate-900 dark:text-white tracking-tight leading-snug mb-2">
+                {exam.title}
+            </h3>
+            <p className="text-[13px] text-slate-500 dark:text-gray-400 leading-relaxed mb-5 line-clamp-3">
+                {focus || exam.description}
+            </p>
+
+            {/* Tags */}
+            <div className="flex flex-wrap gap-1.5 mb-5">
+                {exam.tags.slice(0, 4).map((tag) => (
+                    <span
+                        key={tag}
+                        className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-slate-600 dark:text-gray-300"
+                    >
+                        {tag}
+                    </span>
+                ))}
+            </div>
+
+            {/* How this helps */}
+            {helpfulFor.length > 0 && (
+                <div className="mb-5">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-gray-500 mb-2.5">
+                        How This Helps You
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                        {helpfulFor.map((item) => (
+                            <li
+                                key={item}
+                                className="flex items-start gap-2 text-[12.5px] text-slate-600 dark:text-gray-300 leading-relaxed"
+                            >
+                                <span
+                                    className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                                    style={{ background: accent }}
+                                />
+                                <span>{item}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {/* Meta + CTA */}
+            <div className="mt-auto flex items-center justify-between pt-5 border-t border-slate-200/60 dark:border-white/[0.06]">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold text-slate-700 dark:text-white">
+                        {exam.duration} &middot; {exam.questions} Q
+                    </span>
+                    <span className="text-[10px] text-slate-400 dark:text-gray-500 uppercase tracking-wider">
+                        {exam.difficulty}
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    onClick={onKnowMore}
+                    disabled={!isReady}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[11.5px] font-bold uppercase tracking-wider transition-all ${isReady
+                            ? 'bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-sm shadow-[#1ED36A]/30'
+                            : 'bg-slate-100 dark:bg-white/[0.04] text-slate-400 dark:text-gray-500 cursor-not-allowed'
+                        }`}
+                >
+                    {isReady ? 'Know More' : 'Notify Me'}
+                    {isReady && <ArrowRightIcon className="w-3 h-3" />}
+                </button>
+            </div>
+        </article>
+    );
+};
+
+const WhyItem: React.FC<{ title: string; description: string }> = ({ title, description }) => (
+    <div className="flex flex-col gap-2">
+        <h4 className="text-[12px] font-bold uppercase tracking-[0.14em] text-slate-900 dark:text-white">
+            {title}
+        </h4>
+        <p className="text-[13px] text-slate-500 dark:text-gray-400 leading-relaxed">
+            {description}
+        </p>
+    </div>
+);
 
 export default ExploreView;

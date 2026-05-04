@@ -5,303 +5,23 @@ import { useRouter } from "next/navigation";
 import Header from "./Header";
 import ExamCarousel, { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
+import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
-import { ProfileIcon, AptitudeIcon, CommunicationIcon, CodingIcon, MNCIcon, RoleIcon } from "../icons";
 import AssessmentCard from "./AssessmentCard";
+import { ProfileIcon } from "../icons";
+import {
+  EXAMS,
+  EXAM_DETAILS,
+  type AssessmentId,
+  type ExtendedExam,
+  type PricingTier,
+} from "@/lib/exams";
 
-type AssessmentView = "dashboard" | "assessment" | "profile" | "details";
-type AssessmentId = "aptitude" | "communication" | "role" | "coding" | "mnc";
-type AssessmentFilter = "all" | "ready" | "core" | "career" | "technical";
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
+type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
 
-interface PricingTier {
-  id: string;
-  name: string;
-  price: number;
-  originalPrice?: number;
-  discount?: number;
-  features: string[];
-  badge?: string;
-  popular?: boolean;
-}
-
-interface ExtendedExam extends Exam {
-  track: Exclude<AssessmentFilter, "all" | "ready">;
-}
-
-interface ExamDetailData {
-  focus: string;
-  skills: { title: string; description: string }[];
-  sections: { name: string; detail: string; weight: string }[];
-  outcomes: string[];
-  requirements: string[];
-  pricingTiers: PricingTier[];
-}
-
-const EXAMS: ExtendedExam[] = [
-  {
-    id: "aptitude",
-    title: "Aptitude Assessment",
-    shortTitle: "Aptitude",
-    description: "Evaluate numerical agility, logical structure, data interpretation, and pattern recognition under timed conditions.",
-    duration: "60 min",
-    questions: 60,
-    difficulty: "Intermediate",
-    price: 99,
-    tags: ["Quantitative", "Logical", "Data", "Abstract"],
-    icon: <AptitudeIcon className="w-7 h-7" />,
-    available: true,
-    statusLabel: "Ready",
-    accentColor: "#1ed36a",
-    gradient: "linear-gradient(135deg, #1ed36a 0%, #19b35a 100%)",
-    track: "core",
-  },
-  {
-    id: "communication",
-    title: "Communication Assessment",
-    shortTitle: "Communication",
-    description: "Measure listening, speaking, reading, and writing performance through workplace-style tasks.",
-    duration: "30 min",
-    questions: 40,
-    difficulty: "Beginner",
-    price: 149,
-    tags: ["Listening", "Speaking", "Reading", "Writing"],
-    icon: <CommunicationIcon className="w-7 h-7" />,
-    available: true,
-    statusLabel: "Ready",
-    accentColor: "#1ed36a",
-    gradient: "linear-gradient(135deg, #1ed36a 0%, #17a050 100%)",
-    track: "core",
-  },
-  {
-    id: "coding",
-    title: "Coding Assessment",
-    shortTitle: "Coding",
-    description: "Validate programming fundamentals with number logic, strings, arrays, and simulation-driven exercises.",
-    duration: "90 min",
-    questions: 30,
-    difficulty: "Intermediate",
-    price: 199,
-    originalPrice: 299,
-    discount: 33,
-    tags: ["Logic", "Strings", "Arrays", "Simulation"],
-    icon: <CodingIcon className="w-7 h-7" />,
-    available: false,
-    statusLabel: "Coming Soon",
-    accentColor: "#1ed36a",
-    gradient: "linear-gradient(135deg, #1ed36a 0%, #148a3c 100%)",
-    track: "technical",
-  },
-  {
-    id: "mnc",
-    title: "MNC Based Questions",
-    shortTitle: "MNC Prep",
-    description: "Practice high-frequency interview patterns across arrays, trees, dynamic programming, graphs, and systems thinking.",
-    duration: "60 min",
-    questions: 25,
-    difficulty: "Advanced",
-    price: 249,
-    originalPrice: 399,
-    discount: 38,
-    tags: ["Arrays", "Trees", "DP", "Graphs"],
-    icon: <MNCIcon className="w-7 h-7" />,
-    available: false,
-    statusLabel: "Coming Soon",
-    accentColor: "#1ed36a",
-    gradient: "linear-gradient(135deg, #1ed36a 0%, #0f7a32 100%)",
-    track: "technical",
-  },
-  {
-    id: "role",
-    title: "Role Based Questions",
-    shortTitle: "Role Based",
-    description: "Assess role-fit through conceptual MCQs and scenario decisions designed around practical job responsibilities.",
-    duration: "45 min",
-    questions: 20,
-    difficulty: "Intermediate",
-    price: 299,
-    tags: ["Concepts", "Scenarios", "Judgement", "Role fit"],
-    icon: <RoleIcon className="w-7 h-7" />,
-    available: true,
-    statusLabel: "Ready",
-    accentColor: "#1ed36a",
-    gradient: "linear-gradient(135deg, #1ed36a 0%, #16a348 100%)",
-    track: "career",
-  },
-];
-
-const EXAM_DETAILS: Record<AssessmentId, ExamDetailData> = {
-  aptitude: {
-    focus: "A balanced cognitive benchmark for early career candidates and campus hiring preparation.",
-    skills: [
-      { title: "Numerical accuracy", description: "Speed and correctness across arithmetic, ratios, percentages, and business math." },
-      { title: "Structured reasoning", description: "Ability to decode patterns, relationships, and constraints without guesswork." },
-      { title: "Data interpretation", description: "Reading tables, charts, and comparisons with clear analytical judgement." },
-      { title: "Abstract logic", description: "Visual and non-verbal reasoning for unfamiliar problem formats." },
-    ],
-    sections: [
-      { name: "Quantitative Aptitude", detail: "Percentages, profit and loss, time and work, averages, mixtures, and SI/CI.", weight: "30%" },
-      { name: "Logical Reasoning", detail: "Series, seating, blood relations, syllogisms, directions, and coding-decoding.", weight: "30%" },
-      { name: "Data Interpretation", detail: "Bar charts, line graphs, pie charts, tables, and comparison sets.", weight: "25%" },
-      { name: "Abstract Reasoning", detail: "Matrix figures, visual series, odd-one-out, and spatial patterns.", weight: "15%" },
-    ],
-    outcomes: ["Accuracy heatmap by section", "Time-per-question distribution", "Strength and gap summary", "Recommended practice plan"],
-    requirements: ["Stable internet connection", "Quiet workspace", "Desktop or laptop preferred", "One uninterrupted 60 minute session"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 99,
-        features: ["Full exam access", "Basic score report", "Section-wise breakdown"],
-        badge: "Starter",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 149,
-        originalPrice: 199,
-        discount: 25,
-        features: ["Full exam access", "Detailed analytics", "Skill gap analysis", "Practice recommendations"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 249,
-        originalPrice: 349,
-        discount: 29,
-        features: ["Everything in Standard", "1-on-1 expert review", "Personalized study plan", "Mock interview session"],
-      },
-    ],
-  },
-  communication: {
-    focus: "A practical language benchmark for interviews, client calls, workplace writing, and professional collaboration.",
-    skills: [
-      { title: "Listening comprehension", description: "Extracting intent, facts, and tone from short business audio prompts." },
-      { title: "Speaking clarity", description: "Pronunciation, pacing, structure, and confidence during recorded responses." },
-      { title: "Reading judgement", description: "Understanding passages, inferences, summaries, and professional context." },
-      { title: "Writing quality", description: "Grammar, organization, tone, and concise workplace expression." },
-    ],
-    sections: [
-      { name: "Listening", detail: "Audio prompts followed by comprehension and inference questions.", weight: "25%" },
-      { name: "Speaking", detail: "Recorded responses for introductions, opinions, and scenario explanations.", weight: "25%" },
-      { name: "Reading", detail: "Passage-based questions built around workplace communication.", weight: "25%" },
-      { name: "Writing", detail: "Short-form professional writing prompts and structured responses.", weight: "25%" },
-    ],
-    outcomes: ["Fluency and clarity score", "Comprehension profile", "Writing improvement notes", "Interview communication guidance"],
-    requirements: ["Working microphone", "Audio playback enabled", "Quiet environment", "Browser permission for recording"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 149,
-        features: ["Full exam access", "Basic score report", "Section-wise breakdown"],
-        badge: "Starter",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 199,
-        originalPrice: 249,
-        discount: 20,
-        features: ["Full exam access", "Detailed analytics", "Fluency metrics", "Improvement tips"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 299,
-        originalPrice: 399,
-        discount: 25,
-        features: ["Everything in Standard", "Speaking coach review", "Personalized exercises", "Video feedback session"],
-      },
-    ],
-  },
-  role: {
-    focus: "A role-fit diagnostic that tests conceptual knowledge and decision-making in realistic work situations.",
-    skills: [
-      { title: "Domain concepts", description: "Understanding of core terminology, workflows, and role-specific fundamentals." },
-      { title: "Scenario judgement", description: "Choosing practical actions when requirements, constraints, or people conflict." },
-      { title: "Professional reasoning", description: "Explaining tradeoffs and recognizing business impact." },
-      { title: "Role alignment", description: "Matching your thinking patterns against expectations for the target path." },
-    ],
-    sections: [
-      { name: "Conceptual MCQs", detail: "Role-specific fundamentals, tools, principles, and common workflows.", weight: "45%" },
-      { name: "Scenario Decisions", detail: "Realistic workplace cases with best-action selection.", weight: "35%" },
-      { name: "Priority Calls", detail: "Questions that test judgement under constraints.", weight: "10%" },
-      { name: "Reflection Prompts", detail: "Short responses that reveal communication and reasoning style.", weight: "10%" },
-    ],
-    outcomes: ["Role-fit summary", "Concept confidence map", "Scenario judgement notes", "Career path recommendations"],
-    requirements: ["Choose your target role before starting", "Quiet workspace", "Stable internet connection", "30 minute focus window"],
-    pricingTiers: [
-      {
-        id: "basic",
-        name: "Basic",
-        price: 299,
-        features: ["Full exam access", "Basic role-fit report", "Top 3 role matches"],
-        badge: "Starter",
-      },
-      {
-        id: "standard",
-        name: "Standard",
-        price: 349,
-        originalPrice: 449,
-        discount: 22,
-        features: ["Full exam access", "Detailed role analysis", "Skill-to-role mapping", "Career suggestions"],
-        popular: true,
-      },
-      {
-        id: "premium",
-        name: "Premium",
-        price: 499,
-        originalPrice: 699,
-        discount: 29,
-        features: ["Everything in Standard", "Career coach session", "Personalized roadmap", "Industry insights"],
-      },
-    ],
-  },
-  coding: {
-    focus: "Validate core programming proficiency with logic, data structures, and simulation-based problem solving.",
-    skills: [
-      { title: "Number Logic", description: "Solving mathematical and logical puzzles through code." },
-      { title: "String Manipulation", description: "Parsing, cleaning, and transforming text data efficiently." },
-      { title: "Array Operations", description: "Managing collections and implementing search/sort algorithms." },
-      { title: "Simulation", description: "Modeling real-world logic and process flows in a digital environment." },
-    ],
-    sections: [
-      { name: "Logic & Fundamentals", detail: "Core programming syntax and simple logical puzzles.", weight: "25%" },
-      { name: "Strings & Arrays", detail: "Complex manipulation and searching within collections.", weight: "40%" },
-      { name: "Simulation Tasks", detail: "Larger problem sets requiring end-to-end process logic.", weight: "35%" },
-    ],
-    outcomes: ["Algorithm efficiency report", "Logic accuracy heatmap", "Code quality feedback", "Technical readiness score"],
-    requirements: ["Browser-based IDE access", "Stable internet", "60-90 minute focus window"],
-    pricingTiers: [
-      { id: "basic", name: "Basic", price: 199, features: ["Full exam access", "Automated score"] },
-      { id: "standard", name: "Standard", price: 299, originalPrice: 399, discount: 25, features: ["Everything in Basic", "Detailed logic breakdown", "Optimization tips"], popular: true },
-    ],
-  },
-  mnc: {
-    focus: "Advanced interview preparation covering high-frequency patterns used by top-tier technical companies.",
-    skills: [
-      { title: "Trees & Graphs", description: "Navigating complex hierarchical and networked data structures." },
-      { title: "Dynamic Programming", description: "Solving optimization problems through recursive sub-problems." },
-      { title: "System Thinking", description: "Understanding architectural trade-offs and scaling constraints." },
-      { title: "Algorithm Design", description: "Crafting efficient solutions with minimal time and space complexity." },
-    ],
-    sections: [
-      { name: "Data Structures", detail: "Trees, Graphs, and Heaps implementation and traversal.", weight: "30%" },
-      { name: "Advanced Algorithms", detail: "Dynamic Programming, Greedy approach, and Backtracking.", weight: "40%" },
-      { name: "Systems & Design", detail: "Conceptual questions on scalability and architecture.", weight: "30%" },
-    ],
-    outcomes: ["MNC-ready profile report", "Advanced skill mapping", "Pattern recognition score", "Architectural feedback"],
-    requirements: ["Advanced coding knowledge", "90 minute uninterrupted session"],
-    pricingTiers: [
-      { id: "basic", name: "Basic", price: 249, features: ["Full exam access", "Score report"] },
-      { id: "premium", name: "Premium", price: 499, originalPrice: 799, discount: 38, features: ["Everything in Basic", "Video explanation of solutions", "Mock interview credit"], popular: true },
-    ],
-  },
-};
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
@@ -325,7 +45,7 @@ const AssessmentPortal: React.FC = () => {
   const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
-  const [showNextStepAlert, setShowNextStepAlert] = useState(true); // Default true to simulate completion of Aptitude
+  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const router = useRouter();
 
   const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
@@ -690,23 +410,25 @@ const AssessmentPortal: React.FC = () => {
         onLogout={() => console.log("Logging out...")}
       />
 
-      {/* Top Right Notification Alert */}
+      {/* Next Step Notification Alert */}
       {showNextStepAlert && currentView === "dashboard" && (
         <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
-          <div className="relative overflow-hidden rounded-2xl border border-brand-green/30 bg-white/95 dark:bg-brand-dark-secondary/95 p-5 shadow-2xl backdrop-blur-xl">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-start gap-4 relative z-10">
-              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green shadow-[0_0_15px_rgba(30,211,106,0.3)]">
+              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-bold text-brand-text-light-primary dark:text-brand-text-primary leading-tight">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-tight">
                   Aptitude Cleared!
                 </h4>
-                <p className="mt-1.5 text-xs text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed">
-                  Excellent work on Logic. Start the <strong className="text-brand-text-light-primary dark:text-brand-text-primary">Communication Assessment</strong> next to unlock Technical Groupings algorithms and discover your true Role-Fit.
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Excellent work on Logic. Start the{" "}
+                  <strong className="text-slate-800 dark:text-white">Communication Assessment</strong>{" "}
+                  next to unlock Technical Groupings and discover your true Role-Fit.
                 </p>
                 <div className="mt-4 flex items-center gap-3">
                   <button
@@ -714,22 +436,22 @@ const AssessmentPortal: React.FC = () => {
                       setShowNextStepAlert(false);
                       setCurrentView("assessment");
                     }}
-                    className="px-4 py-2 text-xs font-bold text-white bg-brand-green rounded-xl hover:bg-brand-green/90 shadow-sm transition-colors"
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"
                   >
-                    Set Navigation
+                    View Assessments
                   </button>
                   <button
                     onClick={() => setShowNextStepAlert(false)}
-                    className="px-4 py-2 text-xs font-bold text-brand-text-light-secondary hover:text-brand-text-light-primary dark:text-brand-text-secondary dark:hover:text-brand-text-primary transition-colors"
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors"
                   >
                     Maybe later
                   </button>
                 </div>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setShowNextStepAlert(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-white"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -739,8 +461,66 @@ const AssessmentPortal: React.FC = () => {
         </div>
       )}
 
-      <main className="relative z-10 mx-auto flex max-w-[1600px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-12 xl:px-16">
-        {currentView === "dashboard" ? (
+      <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
+        {currentView === "explore" ? (
+          <ExploreView
+            assessments={EXAMS}
+            examDetails={EXAM_DETAILS}
+            onNavigateToDetails={(exam) => router.push(`/explore/${exam.id}`)}
+          />
+        ) : currentView === "assessment" ? (
+          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Assessments</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
+              </div>
+
+              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        (isActive
+                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <AssessmentCard
+                  key={exam.id}
+                  title={exam.title}
+                  description={exam.description}
+                  statusLabel={exam.statusLabel}
+                  statusTone={exam.available ? "success" : "warning"}
+                  totalQuestions={exam.questions}
+                  duration={exam.duration}
+                  price={`₹${exam.price}`}
+                  tags={exam.tags}
+                  icon={exam.icon}
+                  available={exam.available}
+                  level={exam.difficulty}
+                  insight={exam.statusLabel}
+                  onDetailsClick={() => handleSelectExam(exam)}
+                  onStartClick={() => handleStartExam(exam)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : currentView === "dashboard" ? (
           <>
             {/* Command Deck */}
             <section className="relative overflow-hidden rounded-[2.75rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(25,33,28,0.08)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.5)] p-6 sm:p-10 lg:p-12">
