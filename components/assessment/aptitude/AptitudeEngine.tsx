@@ -221,7 +221,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         </div>
                     </div>
 
-<<<<<<< HEAD
                     <div className="grid grid-cols-2 gap-3">
                         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
                             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Remaining</p>
@@ -231,19 +230,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Review</p>
                             <p className="mt-1 text-xl font-extrabold text-amber-600">{markedCount}</p>
                         </div>
-=======
-                    {/* Question Text */}
-                    <div className="bg-white dark:bg-white/[0.03] border border-brand-light-tertiary dark:border-white/5 p-5 md:p-8 rounded-[20px] mb-6 transition-colors">
-                        <h2 className="text-[clamp(14px,1.2vw,18px)] font-semibold text-black dark:text-white leading-relaxed">
-                            {currentQuestion.text}
-                        </h2>
-                        
-                        {currentQuestion.imageUrl && (
-                            <div className="mt-6 rounded-xl overflow-hidden border border-brand-light-tertiary dark:border-white/10 bg-gray-50 dark:bg-black/20 p-3 flex justify-center">
-                                <img src={currentQuestion.imageUrl} alt="Question Reference" className="max-w-full h-auto object-contain max-h-[200px]" />
-                            </div>
-                        )}
->>>>>>> origin/vikash
                     </div>
 
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
@@ -344,7 +330,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <button
-<<<<<<< HEAD
                                     type="button"
                                     onClick={handleMarkReview}
                                     className={`min-h-11 rounded-lg border px-5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
@@ -354,27 +339,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                                     }`}
                                 >
                                     {isQuestionMarked ? "Unmark review" : "Mark for review"}
-=======
-                                    key={option.id}
-                                    onClick={() => handleOptionSelect(option.id)}
-                                    className={`
-                                        flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all duration-200 group
-                                        ${isSelected 
-                                            ? 'bg-brand-green/5 border-brand-green' 
-                                            : 'bg-white dark:bg-white/[0.03] border-brand-light-tertiary dark:border-white/5 hover:border-brand-green/30'
-                                        }
-                                    `}
-                                >
-                                    <div className={`
-                                        w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-all
-                                        ${isSelected ? 'bg-brand-green text-white' : 'bg-brand-light-primary dark:bg-white/5 text-black dark:text-white group-hover:bg-brand-green/10 group-hover:text-brand-green'}
-                                    `}>
-                                        {labels[idx]}
-                                    </div>
-                                    <span className={`text-[13px] font-medium ${isSelected ? 'text-brand-green font-bold' : 'text-black dark:text-white'}`}>
-                                        {option.text}
-                                    </span>
->>>>>>> origin/vikash
                                 </button>
                                 <button
                                     type="button"
@@ -425,54 +389,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     />
                 </aside>
             </main>
-<<<<<<< HEAD
-=======
-
-            {/* Bottom Action Bar */}
-            <footer className="h-16 md:h-20 border-t border-brand-light-tertiary dark:border-white/5 bg-white dark:bg-brand-dark-primary p-4 flex flex-wrap gap-3 items-center justify-between sticky bottom-0 z-50">
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button 
-                        onClick={handleMarkReview}
-                        className={`flex-1 sm:flex-none px-5 py-2.5 rounded-full border font-bold text-[12px] transition-all ${markedForReview.has(currentQuestion.id) ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-500' : 'bg-white dark:bg-[#24272B] border-brand-light-tertiary dark:border-white/20 text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5'}`}
-                    >
-                        {markedForReview.has(currentQuestion.id) ? 'Unmark Review' : 'Mark for Review'}
-                    </button>
-                    <button 
-                        onClick={handleClear}
-                        disabled={!answers[currentQuestion.id]}
-                        className="flex-1 sm:flex-none px-5 py-2.5 rounded-full bg-white dark:bg-[#24272B] border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[12px] hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                        Clear Response
-                    </button>
-                </div>
-
-                <div className="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
-                    <button 
-                        onClick={handlePrev}
-                        disabled={currentIndex === 0}
-                        className="px-6 py-2.5 rounded-full border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white font-bold text-[12px] hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                        Previous
-                    </button>
-                    
-                    {currentIndex === MOCK_QUESTIONS.length - 1 ? (
-                        <button 
-                            onClick={handleSubmit}
-                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] transition-all active:scale-95"
-                        >
-                            Submit Test
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleNext}
-                            className="px-8 py-2.5 rounded-full bg-brand-green hover:bg-[#1bb85c] text-white font-bold text-[12px] transition-all active:scale-95"
-                        >
-                            Save & Next
-                        </button>
-                    )}
-                </div>
-            </footer>
-            
             <ConfirmationModal
                 isOpen={showSubmitModal}
                 onClose={() => setShowSubmitModal(false)}
@@ -483,7 +399,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 cancelText="Review Again"
                 type="warning"
             />
->>>>>>> origin/vikash
         </div>
     );
 };
