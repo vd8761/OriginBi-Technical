@@ -25,16 +25,16 @@ type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
-  { label: "Ready now", value: "ready" },
-  { label: "Core skills", value: "core" },
-  { label: "Tech hiring", value: "technical" },
-  { label: "Career fit", value: "career" },
+  { label: "Ready", value: "ready" },
+  { label: "Core Skills", value: "core" },
+  { label: "Technical", value: "technical" },
+  { label: "Career", value: "career" },
 ];
 
 const TRACK_PALETTE = {
-  core: "#10b981",
-  technical: "#f59e0b",
-  career: "#06b6d4",
+  core: "#1ed36a",
+  technical: "#17a050",
+  career: "#148a3c",
 } as const;
 
 const AssessmentPortal: React.FC = () => {
@@ -96,8 +96,8 @@ const AssessmentPortal: React.FC = () => {
   const trackCounts = useMemo(() => {
     const counts: Record<Exclude<AssessmentFilter, "all" | "ready">, number> = {
       core: 0,
-      technical: 0,
       career: 0,
+      technical: 0,
     };
 
     EXAMS.forEach((exam) => {
@@ -115,24 +115,31 @@ const AssessmentPortal: React.FC = () => {
   const trackLanes = [
     {
       id: "core",
-      label: "Core skills",
-      description: "Quant, logic, and communication drills.",
-      count: trackCounts.core,
+      label: "Aptitude+ Core",
+      description: "Quantitative, Logical, Data Interpretation, and Visual Reasoning.",
+      count: 1, // Visual adjustment for demo
       accent: TRACK_PALETTE.core,
     },
     {
-      id: "technical",
-      label: "Tech hiring",
-      description: "Coding, DSA, and interview patterns.",
-      count: trackCounts.technical,
+      id: "communication",
+      label: "Business Linguistics",
+      description: "Corporate Etiquette, Grammar, Syntax, and Reading Comprehension.",
+      count: 1,
       accent: TRACK_PALETTE.technical,
     },
     {
-      id: "career",
-      label: "Career fit",
-      description: "Role-fit judgement and scenarios.",
-      count: trackCounts.career,
+      id: "technical",
+      label: "Technical Groupings",
+      description: "Programming Foundations, Web Tech, Backend, Database & Cloud.",
+      count: 2,
       accent: TRACK_PALETTE.career,
+    },
+    {
+      id: "career",
+      label: "Role-Based Specialization",
+      description: "Full Stack Developer, Data Scientist, UI/UX Architect, DevOps.",
+      count: 4,
+      accent: "#2563eb",
     },
   ];
 
@@ -140,16 +147,58 @@ const AssessmentPortal: React.FC = () => {
 
   const momentumTrend = [36, 48, 42, 58, 66, 72, 68];
 
-  const insightMetrics = [
-    {
-      label: "Career readiness",
-      value: `${readinessScore}%`,
-      detail: "skills verified",
+  // Career Identity - Professional persona
+  const careerIdentity = {
+    archetype: "Full Stack Developer",
+    level: "Technical Grouping: Pending",
+    xp: 850,
+    xpToNext: 2000,
+    badges: ["Aptitude Clear", "Logic Elite"],
+    quote: "Strong performance in High-End Data Interpretation suggests backend architecture potential.",
+  };
+
+  // Skill Constellation - Interactive skill visualization
+  const skillGalaxy = [
+    { name: "Quantitative", level: 92, connections: ["Logic", "Data"], x: 20, y: 30 },
+    { name: "Logic & Analytical", level: 88, connections: ["Quantitative"], x: 45, y: 20 },
+    { name: "Data Interpretation", level: 85, connections: ["Data", "Visualization"], x: 25, y: 55 },
+    { name: "Visual Reasoning", level: 75, connections: ["Web Tech"], x: 50, y: 60 },
+    { name: "Web Tech", level: 60, connections: ["Architecture"], x: 75, y: 55 },
+    { name: "Backend Systems", level: 45, connections: ["Logic"], x: 70, y: 25 },
+    { name: "Database & Cloud", level: 40, connections: ["Backend Systems"], x: 85, y: 40 },
+  ];
+
+  // Energy Zones - Focus distribution across categories
+  const momentumZones = [
+    { name: "Deep Focus", value: 78, color: "#1ed36a", status: "Active" },
+    { name: "Quick Wins", value: 65, color: "#17a050", status: "Steady" },
+    { name: "Learning", value: 92, color: "#148a3c", status: "Surging" },
+    { name: "Review", value: 45, color: "#19b35a", status: "Building" },
+  ];
+
+  // Daily Rituals - Micro-habits
+  const dailyRituals = [
+    { id: 1, name: "Morning Calibration", duration: "5 min", streak: 12, completed: true, type: "warmup" },
+    { id: 2, name: "Deep Dive Session", duration: "25 min", streak: 7, completed: true, type: "focus" },
+    { id: 3, name: "Skill Sprint", duration: "10 min", streak: 5, completed: false, type: "practice" },
+    { id: 4, name: "Reflection & Log", duration: "5 min", streak: 9, completed: false, type: "review" },
+  ];
+
+  // Wisdom Cards - AI-generated insights
+  const wisdomCards = [
+    { 
+      type: "insight", 
+      title: "Pattern Recognition", 
+      content: "You solve logical reasoning problems 23% faster than last month. This suggests strong neural pathway formation.",
+      icon: "🧠",
+      color: "#8b5cf6"
     },
-    {
-      label: "Skill coverage",
-      value: "12+",
-      detail: "core competencies",
+    { 
+      type: "opportunity", 
+      title: "Hidden Connection", 
+      content: "Your data interpretation skills directly correlate with system design potential. Consider the Architecture track.",
+      icon: "✨",
+      color: "#f59e0b"
     },
     {
       label: "Industry aligned",
@@ -158,28 +207,124 @@ const AssessmentPortal: React.FC = () => {
     },
     {
       label: "Learning paths",
-      value: "3",
+      value: "2",
       detail: "career tracks",
     },
+    { 
+      type: "milestone", 
+      title: "Velocity Surge", 
+      content: "You've maintained 7 consecutive days of progress. Your consistency score is now in the top 15%.",
+      icon: "🚀",
+      color: "#10b981"
+    },
+  ];
+
+  // Career Timeline - Professional journey phases
+  const careerTimeline = [
+    { phase: "Aptitude+", status: "completed", date: "Just now", achievement: "Quantitative & Logic Clear" },
+    { phase: "Communication", status: "active", date: "Next Step", achievement: "Linguistics & Articulation" },
+    { phase: "Technical Grouping", status: "locked", date: "Pending", achievement: "Programming Foundations" },
+    { phase: "Role-Based", status: "locked", date: "Future", achievement: "Software Engineering Fitment" },
   ];
 
   const signalHighlights = [
     {
-      label: "Recommended start",
+      label: "Next Mission",
       value: "Aptitude",
-      detail: "foundational skills first",
+      detail: "Start with foundational skills",
     },
     {
-      label: "Growth potential",
+      label: "Growth Potential",
       value: "High",
-      detail: "based on skill gaps",
+      detail: "Based on your skill gaps",
     },
     {
-      label: "Certification path",
-      value: "Available",
-      detail: "completion badge ready",
+      label: "Certification",
+      value: "Ready",
+      detail: "Complete to earn your badge",
     },
   ];
+
+  // Performance Intelligence Layer
+  const performanceData = {
+    accuracyTrend: [65, 72, 68, 75, 82, 78, 85],
+    speedVsAccuracy: { speed: 72, accuracy: 85 },
+    difficultyBreakdown: {
+      easy: { accuracy: 92, count: 15 },
+      medium: { accuracy: 78, count: 20 },
+      hard: { accuracy: 65, count: 10 },
+    },
+    errorDistribution: {
+      concept: 35,
+      calculation: 25,
+      misinterpretation: 40,
+    },
+  };
+
+  // Skill Heatmap Data
+  const skillHeatmap = [
+    { category: "Aptitude", skills: [
+      { name: "Percentages", level: 85 },
+      { name: "Time & Work", level: 72 },
+      { name: "Data Interpretation", level: 68 },
+      { name: "Puzzles", level: 79 },
+    ]},
+    { category: "Coding", skills: [
+      { name: "Strings", level: 88 },
+      { name: "Arrays", level: 82 },
+      { name: "Logic", level: 76 },
+      { name: "Simulation", level: 70 },
+    ]},
+    { category: "Role-Based", skills: [
+      { name: "API Design", level: 75 },
+      { name: "Debugging", level: 83 },
+      { name: "Optimization", level: 69 },
+    ]},
+  ];
+
+  // AI Confidence & Reliability Score
+  const aiConfidence = {
+    score: 87,
+    reliability: "High",
+    consistency: 91,
+    accuracyStability: 84,
+    timeVariance: 12,
+  };
+
+  // Learning Recommendations
+  const learningRecommendations = [
+    {
+      priority: "high",
+      topic: "Time & Work",
+      reason: "Accuracy below threshold (72%)",
+      level: "Medium",
+      action: "Practice 20 medium-level problems",
+    },
+    {
+      priority: "medium",
+      topic: "Optimization",
+      reason: "Slow performance on complex scenarios",
+      level: "Advanced",
+      action: "Focus on algorithm efficiency patterns",
+    },
+    {
+      priority: "low",
+      topic: "Data Interpretation",
+      reason: "Minor improvement needed",
+      level: "Hard",
+      action: "Attempt 10 challenging DI sets",
+    },
+  ];
+
+  // Real-time Insight Bar
+  const realtimeInsights = {
+    questionsAttempted: 32,
+    totalQuestions: 45,
+    accuracy: 84,
+    timeLeft: "18:45",
+    currentModule: "Aptitude",
+    confidenceScore: 87,
+  };
 
   const focusSignals = [
     {
@@ -191,11 +336,6 @@ const AssessmentPortal: React.FC = () => {
       label: "Core lane depth",
       value: `${trackCounts.core} exams`,
       detail: "quant + logic coverage",
-    },
-    {
-      label: "Tech lane depth",
-      value: `${trackCounts.technical} exams`,
-      detail: "coding + MNC focus",
     },
     {
       label: "Career lane depth",
@@ -256,10 +396,10 @@ const AssessmentPortal: React.FC = () => {
   const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#f5fbf7] dark:bg-[#0f1712] font-sans transition-colors duration-500">
+    <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-gradient-to-br from-emerald-400/25 via-cyan-300/10 to-transparent blur-[90px] animate-float-slow opacity-80" />
-        <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-amber-300/20 via-emerald-300/10 to-transparent blur-[100px] animate-float-slower opacity-70" />
+        <div className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-gradient-to-br from-brand-green/20 via-brand-green/5 to-transparent blur-[90px] animate-float-slow opacity-80" />
+        <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-brand-green/15 via-brand-green/5 to-transparent blur-[100px] animate-float-slower opacity-70" />
         <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
         <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
       </div>
@@ -383,46 +523,53 @@ const AssessmentPortal: React.FC = () => {
         ) : currentView === "dashboard" ? (
           <>
             {/* Command Deck */}
-            <section className="relative overflow-hidden rounded-[2.75rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#101814]/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(15,23,42,0.12)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.55)] p-8 sm:p-12 lg:p-14">
+            <section className="relative overflow-hidden rounded-[2.75rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/80 backdrop-blur-2xl shadow-[0_28px_80px_rgba(25,33,28,0.08)] dark:shadow-[0_32px_90px_rgba(0,0,0,0.5)] p-6 sm:p-10 lg:p-12">
               <div className="absolute inset-0">
-                <div className="absolute -top-16 left-[-8%] h-72 w-72 rounded-full bg-gradient-to-br from-emerald-400/20 to-transparent blur-[60px] animate-float-slow" />
-                <div className="absolute bottom-[-25%] right-[-6%] h-80 w-80 rounded-full bg-gradient-to-tr from-cyan-400/20 to-transparent blur-[70px] animate-float-slower" />
+                <div className="absolute -top-16 left-[-8%] h-72 w-72 rounded-full bg-gradient-to-br from-brand-green/15 to-transparent blur-[60px] animate-float-slow" />
+                <div className="absolute bottom-[-25%] right-[-6%] h-80 w-80 rounded-full bg-gradient-to-tr from-brand-green/10 to-transparent blur-[70px] animate-float-slower" />
                 <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(15,23,42,0.03),rgba(15,23,42,0))] dark:bg-[linear-gradient(120deg,rgba(255,255,255,0.06),rgba(255,255,255,0))]" />
               </div>
 
-              <div className="relative z-10 grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
+              <div className="relative z-10 grid gap-8 lg:grid-cols-[1.2fr_1fr] items-center">
                 <div className="animate-slide-up" style={{ animationDelay: "80ms" }}>
-                  <div className="inline-flex items-center gap-3 rounded-full border border-emerald-200/70 dark:border-emerald-500/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-5 py-2.5 text-emerald-700 dark:text-emerald-300 text-sm font-semibold tracking-wide shadow-sm">
+                  <div className="inline-flex items-center gap-3 rounded-full border border-brand-green/30 dark:border-brand-green/30 bg-brand-green/10 dark:bg-brand-green/15 px-5 py-2.5 text-brand-green dark:text-brand-green text-sm font-semibold tracking-wide shadow-sm">
                     <span className="relative flex h-2.5 w-2.5">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-60 animate-ping"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-green"></span>
                     </span>
                     {readyExams.length} live assessments ready
                   </div>
 
-                  <h1 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-[1.05]">
+                  <h1 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight leading-[1.05]">
                     Your career compass
-                    <span className="block mt-2 bg-gradient-to-r from-emerald-500 via-brand-green to-cyan-500 bg-clip-text text-transparent">
+                    <span className="block mt-2 bg-gradient-to-r from-brand-green via-brand-green to-brand-green/70 bg-clip-text text-transparent">
                       discover, validate, and accelerate.
                     </span>
                   </h1>
 
-                  <p className="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
+                  <p className="mt-5 text-lg sm:text-xl text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed max-w-2xl">
                     Identify your strengths, bridge skill gaps, and align with industry expectations. Each assessment unlocks personalized insights for your professional journey.
                   </p>
 
                   <div className="mt-8 flex flex-wrap gap-4">
-                    <button className="px-7 py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold shadow-xl shadow-slate-900/20 dark:shadow-white/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                    <button 
+                      onClick={() => setCurrentView("assessment")}
+                      className="px-7 py-4 rounded-2xl bg-brand-green text-white font-semibold shadow-xl shadow-brand-green/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                       Explore library
                     </button>
-                    <button className="px-7 py-4 rounded-2xl bg-white/80 dark:bg-white/5 text-slate-700 dark:text-white font-semibold border border-slate-200/70 dark:border-white/10 shadow-sm hover:bg-white hover:-translate-y-1 transition-all duration-300">
+                    <button 
+                      onClick={() => {
+                        const nextExam = EXAMS.find(e => e.available);
+                        if (nextExam) handleStartExam(nextExam);
+                      }}
+                      className="px-7 py-4 rounded-2xl bg-brand-light-primary/80 dark:bg-white/5 text-brand-text-light-primary dark:text-brand-text-primary font-semibold border border-brand-light-tertiary/70 dark:border-white/10 shadow-sm hover:bg-brand-light-primary hover:-translate-y-1 transition-all duration-300">
                       Run quick scan
                     </button>
                   </div>
 
-                  <div className="mt-8 flex flex-wrap gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  <div className="mt-8 flex flex-wrap gap-3 text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">
                     {["AI proctored", "Instant reports", "Role fit mapping"].map((item) => (
-                      <span key={item} className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 shadow-sm">
+                      <span key={item} className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/70 dark:bg-white/5 px-4 py-2 shadow-sm">
                         {item}
                       </span>
                     ))}
@@ -430,52 +577,52 @@ const AssessmentPortal: React.FC = () => {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 animate-slide-up" style={{ animationDelay: "160ms" }}>
-                  <div className="sm:col-span-2 relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+                  <div className="sm:col-span-2 relative overflow-hidden rounded-3xl border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 p-6 shadow-[0_18px_50px_rgba(25,33,28,0.08)]">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Readiness index</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-800 dark:text-white">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Mission Status</p>
+                        <p className="mt-2 text-3xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">
                           {readinessScore}% ready
                         </p>
-                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        <p className="mt-2 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                           Based on live assessments and total question volume.
                         </p>
                       </div>
                       <div
-                        className="relative h-24 w-24 rounded-full [--ring-track:rgba(15,23,42,0.08)] dark:[--ring-track:rgba(255,255,255,0.16)]"
+                        className="relative h-24 w-24 rounded-full [--ring-track:rgba(226,232,240,0.5)] dark:[--ring-track:rgba(255,255,255,0.12)]"
                         style={{ background: `conic-gradient(#1ed36a ${readinessScore * 3.6}deg, var(--ring-track) 0deg)` }}
                       >
-                        <span className="absolute inset-0 rounded-full border border-emerald-500/20 animate-pulse-ring" />
-                        <div className="absolute inset-2 rounded-full bg-white/90 dark:bg-[#0f1712] border border-white/80 dark:border-white/10 flex items-center justify-center text-sm font-bold text-slate-800 dark:text-white">
+                        <span className="absolute inset-0 rounded-full border border-brand-green/30 animate-pulse-ring" />
+                        <div className="absolute inset-2 rounded-full bg-brand-light-primary/90 dark:bg-brand-dark-primary border border-brand-light-tertiary/80 dark:border-white/10 flex items-center justify-center text-sm font-bold text-brand-text-light-primary dark:text-brand-text-primary">
                           {readinessScore}%
                         </div>
                       </div>
                     </div>
                     <div className="mt-6 grid grid-cols-3 gap-4 text-center">
-                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Exams</p>
-                        <p className="text-lg font-bold text-slate-800 dark:text-white">{EXAMS.length}</p>
+                      <div className="rounded-2xl bg-brand-light-primary/70 dark:bg-white/5 border border-brand-light-tertiary/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">Exams</p>
+                        <p className="text-lg font-bold text-brand-text-light-primary dark:text-brand-text-primary">{EXAMS.length}</p>
                       </div>
-                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Live</p>
-                        <p className="text-lg font-bold text-slate-800 dark:text-white">{readyExams.length}</p>
+                      <div className="rounded-2xl bg-brand-green/5 dark:bg-brand-green/10 border border-brand-green/20 dark:border-brand-green/20 p-3">
+                        <p className="text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">Live</p>
+                        <p className="text-lg font-bold text-brand-green">{readyExams.length}</p>
                       </div>
-                      <div className="rounded-2xl bg-white/70 dark:bg-white/5 border border-white/60 dark:border-white/10 p-3">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Avg time</p>
-                        <p className="text-lg font-bold text-slate-800 dark:text-white">{avgDuration} min</p>
+                      <div className="rounded-2xl bg-brand-light-primary/70 dark:bg-white/5 border border-brand-light-tertiary/60 dark:border-white/10 p-3">
+                        <p className="text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">Avg time</p>
+                        <p className="text-lg font-bold text-brand-text-light-primary dark:text-brand-text-primary">{avgDuration} min</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                  <div className="relative overflow-hidden rounded-3xl border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 p-5 shadow-[0_18px_40px_rgba(25,33,28,0.08)]">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Spotlight</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Featured Mission</p>
                       <span
                         className={
                           "text-[10px] font-bold px-2.5 py-1 rounded-full " +
                           (spotlightExam.available
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                            : "bg-amber-500/15 text-amber-700 dark:text-amber-300")
+                            ? "bg-brand-green/15 text-brand-green dark:text-brand-green"
+                            : "bg-brand-text-light-secondary/15 text-brand-text-light-secondary dark:text-brand-text-secondary")
                         }
                       >
                         {spotlightExam.statusLabel}
@@ -489,8 +636,8 @@ const AssessmentPortal: React.FC = () => {
                         {spotlightExam.icon}
                       </div>
                       <div>
-                        <p className="text-base font-bold text-slate-800 dark:text-white">{spotlightExam.shortTitle}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-base font-bold text-brand-text-light-primary dark:text-brand-text-primary">{spotlightExam.shortTitle}</p>
+                        <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary">
                           {spotlightExam.duration} - {spotlightExam.questions} questions
                         </p>
                       </div>
@@ -498,25 +645,25 @@ const AssessmentPortal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleStartExam(spotlightExam)}
-                      className="mt-5 w-full rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 py-2.5 text-sm font-semibold text-slate-700 dark:text-white hover:bg-white hover:shadow-md transition-all"
+                      className="mt-5 w-full rounded-2xl border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 py-2.5 text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary hover:bg-brand-light-primary hover:shadow-md transition-all"
                     >
                       {spotlightExam.available ? "Start now" : "View details"}
                     </button>
                   </div>
 
-                  <div className="relative overflow-hidden rounded-3xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                  <div className="relative overflow-hidden rounded-3xl border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 p-5 shadow-[0_18px_40px_rgba(25,33,28,0.08)]">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Track mix</p>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Live</span>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Track Overview</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-brand-text-light-secondary/70 dark:text-brand-text-secondary/70">Live</span>
                     </div>
                     <div className="mt-4 space-y-3">
                       {trackLanes.map((lane) => (
                         <div key={lane.id}>
-                          <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center justify-between text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">
                             <span>{lane.label}</span>
                             <span>{lane.count}</span>
                           </div>
-                          <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                          <div className="mt-2 h-2 rounded-full bg-brand-light-tertiary/50 dark:bg-white/10 overflow-hidden">
                             <div
                               className="h-full rounded-full"
                               style={{
@@ -538,56 +685,96 @@ const AssessmentPortal: React.FC = () => {
               className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] animate-slide-up"
               style={{ animationDelay: "240ms" }}
             >
-              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.1)]">
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(25,33,28,0.08)]">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Assessment flight plan</p>
-                    <h3 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Build mastery lanes</h3>
-                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-                      Stack the right mix of core, technical, and career signals for your target role.
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Training Roadmap</p>
+                    <h3 className="mt-3 text-2xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">Build your skill pathway</h3>
+                    <p className="mt-2 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary max-w-md">
+                      Stack the right mix of core, technical, and career assessments for your target role.
                     </p>
                   </div>
-                  <div className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Live track map
+                  <div className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">
+                    Live progress
                   </div>
                 </div>
                 <div className="mt-6 grid gap-4 sm:grid-cols-3">
                   {trackLanes.map((lane) => (
                     <div
                       key={lane.id}
-                      className="relative overflow-hidden rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm"
+                      className="relative overflow-hidden rounded-2xl border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 p-4 shadow-sm hover:shadow-md transition-all"
                     >
                       <div
                         className="absolute inset-0 opacity-70"
                         style={{ background: `linear-gradient(135deg, ${lane.accent}1f, transparent 60%)` }}
                       />
                       <div className="relative">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">{lane.label}</p>
-                        <p className="mt-3 text-2xl font-bold" style={{ color: lane.accent }}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">{lane.label}</p>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-light-primary/60 dark:bg-white/10 text-brand-text-light-secondary dark:text-brand-text-secondary">
+                            {Math.round((lane.count / EXAMS.length) * 100)}%
+                          </span>
+                        </div>
+                        <p className="mt-2 text-2xl font-bold" style={{ color: lane.accent }}>
                           {lane.count}
                         </p>
-                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{lane.description}</p>
+                        <p className="mt-1 text-xs text-brand-text-light-secondary dark:text-brand-text-secondary">{lane.description}</p>
+                        <div className="mt-3 h-1.5 rounded-full bg-brand-light-tertiary/50 dark:bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(18, Math.round((lane.count / Math.max(EXAMS.length, 1)) * 100))}%`,
+                              background: lane.accent,
+                            }}
+                          />
+                        </div>
+                        <p className="mt-2 text-[10px] text-brand-text-light-secondary/70 dark:text-brand-text-secondary/70">
+                          {lane.count} of {EXAMS.length} assessments
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
+
+                {/* Additional Stats Row */}
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-xl border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/60 dark:bg-white/5 p-3 text-center">
+                    <p className="text-[10px] font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary uppercase">Total Progress</p>
+                    <p className="mt-1 text-lg font-bold text-brand-text-light-primary dark:text-brand-text-primary">{Math.round((readyExams.length / EXAMS.length) * 100)}%</p>
+                  </div>
+                  <div className="rounded-xl border border-brand-green/30 dark:border-brand-green/30 bg-brand-green/5 dark:bg-brand-green/10 p-3 text-center">
+                    <p className="text-[10px] font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary uppercase">Completed</p>
+                    <p className="mt-1 text-lg font-bold text-brand-green">{readyExams.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-blue-500/20 dark:border-blue-400/20 bg-blue-500/5 dark:bg-blue-400/10 p-3 text-center">
+                    <p className="text-[10px] font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary uppercase">In Progress</p>
+                    <p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400">{EXAMS.filter(e => !e.available).length}</p>
+                  </div>
+                  <div className="rounded-xl border border-violet-500/20 dark:border-violet-400/20 bg-violet-500/5 dark:bg-violet-400/10 p-3 text-center">
+                    <p className="text-[10px] font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary uppercase">Skill Score</p>
+                    <p className="mt-1 text-lg font-bold text-violet-600 dark:text-violet-400">87</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/70 dark:border-white/10 bg-white/70 dark:bg-[#0f1712]/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.1)]">
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(25,33,28,0.08)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Launch queue</p>
-                    <h3 className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">Ready to start now</h3>
-                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Quick Launch</p>
+                    <h3 className="mt-3 text-2xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">Ready to start now</h3>
+                    <p className="mt-2 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                       Jump into the next best assessment while your momentum is high.
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setFilter("ready")}
-                    className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-white transition-all"
+                    onClick={() => {
+                      setCurrentView("assessment");
+                      setFilter("ready");
+                    }}
+                    className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary hover:bg-brand-light-primary transition-all"
                   >
-                    Show ready
+                    View all assessments
                   </button>
                 </div>
 
@@ -596,7 +783,7 @@ const AssessmentPortal: React.FC = () => {
                     queueExams.map((exam) => (
                       <div
                         key={exam.id}
-                        className="flex flex-col gap-4 rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-4 rounded-2xl border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="flex items-center gap-3">
                           <div
@@ -606,8 +793,8 @@ const AssessmentPortal: React.FC = () => {
                             {exam.icon}
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-slate-800 dark:text-white">{exam.shortTitle}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <p className="text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary">{exam.shortTitle}</p>
+                            <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary">
                               {exam.duration} - {exam.questions} questions
                             </p>
                           </div>
@@ -615,14 +802,14 @@ const AssessmentPortal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleStartExam(exam)}
-                          className="rounded-xl bg-slate-900 dark:bg-white px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-all"
+                          className="rounded-xl bg-brand-green text-white px-4 py-2 text-xs font-semibold hover:opacity-90 transition-all"
                         >
                           Start
                         </button>
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400">
+                    <div className="rounded-2xl border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 p-4 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                       All tracks are prepping. Check back soon.
                     </div>
                   )}
@@ -630,49 +817,96 @@ const AssessmentPortal: React.FC = () => {
               </div>
             </section>
 
-            {/* Track Filters */}
+            {/* Career Timeline */}
             <section
-              className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 animate-slide-up"
-              style={{ animationDelay: "320ms" }}
+              className="animate-slide-up"
+              style={{ animationDelay: "400ms" }}
             >
-              <div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment orbit</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Choose a lane to shape the library.</p>
-              </div>
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-transparent to-cyan-500/20 blur-lg opacity-70" />
-                <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
-                  {FILTERS.map((item) => {
-                    const isActive = filter === item.value;
-                    return (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => setFilter(item.value)}
-                        className={
-                          "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
-                          (isActive
-                            ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
-                            : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
-                        }
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
+              <div className="rounded-[2.5rem] border border-brand-light-tertiary/50 dark:border-white/10 bg-gradient-to-br from-brand-light-secondary/80 via-brand-light-primary/70 to-brand-green/10 dark:from-brand-dark-secondary/70 dark:via-brand-dark-primary/60 dark:to-brand-green/5 p-6 sm:p-8 shadow-[0_18px_60px_rgba(25,33,28,0.08)]">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Career Journey</p>
+                    <h3 className="mt-2 text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">Your Professional Path</h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-gradient-to-r from-brand-green/20 to-brand-green/10 text-brand-green dark:text-brand-green">{careerTimeline.filter(t => t.status === 'completed').length}/{careerTimeline.length} Phases</span>
+                </div>
+
+                <div className="relative">
+                  {/* Timeline line - gradient from green through blue to violet */}
+                  <div className="absolute top-8 left-0 right-0 h-0.5 bg-gradient-to-r from-brand-green via-blue-500 to-violet-500 dark:from-brand-green dark:via-blue-400 dark:to-violet-400" />
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {careerTimeline.map((phase, idx) => {
+                      const colors = {
+                        completed: { bg: 'bg-brand-green/10', border: 'border-brand-green/20', text: 'text-brand-green', dot: 'bg-brand-green border-brand-green' },
+                        active: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-600 dark:text-blue-400', dot: 'bg-blue-500 border-blue-500 animate-pulse' },
+                        upcoming: { bg: 'bg-violet-500/10', border: 'border-violet-500/20', text: 'text-violet-600 dark:text-violet-400', dot: 'bg-violet-500/30 border-violet-500/50' },
+                        locked: { bg: 'bg-brand-light-secondary/50', border: 'border-brand-light-tertiary/50', text: 'text-brand-text-light-secondary dark:text-brand-text-secondary', dot: 'bg-brand-light-tertiary dark:bg-white/10 border-brand-light-tertiary dark:border-white/20' }
+                      };
+                      const color = colors[phase.status as keyof typeof colors] || colors.locked;
+                      
+                      return (
+                        <div key={phase.phase} className="relative pt-12">
+                          {/* Timeline node */}
+                          <div className={`absolute top-6 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full border-2 z-10 ${color.dot}`}>
+                            {phase.status === 'completed' && (
+                              <svg className="w-3 h-3 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                          
+                          <div className={`text-center p-4 rounded-2xl border transition-all hover:scale-105 ${color.bg} ${color.border} dark:bg-opacity-10`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${color.text}`}>{phase.phase}</p>
+                            <p className="text-xs font-bold text-brand-text-light-primary dark:text-brand-text-primary">{phase.achievement}</p>
+                            <p className="text-[9px] text-brand-text-light-secondary dark:text-brand-text-secondary mt-1">{phase.date}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </section>
 
-            {/* Assessment Library */}
-            <section className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Assessment Library with Filters */}
+            <section className="space-y-6 animate-slide-up" style={{ animationDelay: "320ms" }}>
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment library</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Swipe or use the arrows to explore.</p>
+                  <h3 className="text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight">Assessment Library</h3>
+                  <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary mt-1">Filter by category or swipe to explore all assessments.</p>
                 </div>
-                <div className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  Showing {filteredExams.length} exams
+                <div className="relative">
+                  <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-brand-green/20 via-transparent to-brand-green/10 blur-lg opacity-70" />
+                  <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 backdrop-blur-md shadow-sm">
+                    {FILTERS.map((item) => {
+                      const isActive = filter === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setFilter(item.value)}
+                          className={
+                            "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                            (isActive
+                              ? "text-white bg-brand-green shadow-md"
+                              : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
+                          }
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
+                  Showing <span className="font-semibold text-brand-text-light-primary dark:text-brand-text-primary">{filteredExams.length}</span> assessments
+                </p>
+                <div className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/70 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">
+                  {filteredExams.length} available
                 </div>
               </div>
               <ExamCarousel
@@ -682,33 +916,33 @@ const AssessmentPortal: React.FC = () => {
               />
             </section>
 
-            {/* Intelligence Brief */}
-            <section className="py-12 border-t border-slate-200/60 dark:border-white/10 mt-4 animate-slide-up" style={{ animationDelay: "520ms" }}>
+            {/* Performance Hub */}
+            <section className="py-12 border-t border-brand-light-tertiary/60 dark:border-white/10 mt-4 animate-slide-up" style={{ animationDelay: "520ms" }}>
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Intelligence brief</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Advanced signals distilled from the full assessment stack.</p>
+                  <h3 className="text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight">Performance Hub</h3>
+                  <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary mt-1">Insights and analytics from your assessment journey.</p>
                 </div>
-                <div className="text-xs font-semibold text-slate-400 dark:text-slate-500">Live snapshot</div>
+                <div className="text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">Live snapshot</div>
               </div>
 
               <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-                <div className="relative overflow-hidden rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 sm:p-8 shadow-[0_18px_60px_rgba(15,23,42,0.12)]">
-                  <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_55%)]" />
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/70 dark:bg-white/5 p-6 sm:p-8 shadow-[0_18px_60px_rgba(25,33,28,0.08)]">
+                  <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_top_left,rgba(30,211,106,0.16),transparent_55%)]" />
                   <div className="relative">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Signal density</p>
-                        <h4 className="mt-2 text-2xl font-bold text-slate-800 dark:text-white">Library performance pulse</h4>
-                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-xl">
-                          A high-level look at scale, runtime, and pricing intensity across the assessment library.
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Performance Overview</p>
+                        <h4 className="mt-2 text-2xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">Your Assessment Analytics</h4>
+                        <p className="mt-2 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary max-w-xl">
+                          A comprehensive view of your progress, skills, and readiness across all assessment tracks.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {["Refreshed hourly", "AI-scored", "Multi-track"].map((chip) => (
                           <span
                             key={chip}
-                            className="rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300"
+                            className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-brand-text-light-secondary dark:text-brand-text-secondary"
                           >
                             {chip}
                           </span>
@@ -716,101 +950,352 @@ const AssessmentPortal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      {insightMetrics.map((metric) => (
-                        <div
-                          key={metric.label}
-                          className="rounded-2xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm"
-                        >
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{metric.label}</p>
-                          <p className="mt-2 text-lg font-bold text-slate-800 dark:text-white">{metric.value}</p>
-                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{metric.detail}</p>
+                    {/* Career Identity Card */}
+                    <div className="mt-6 relative overflow-hidden rounded-3xl border border-brand-light-tertiary/50 dark:border-white/10 bg-gradient-to-br from-brand-green/10 via-brand-green/5 to-transparent p-6 sm:p-8">
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-brand-green/20 to-transparent rounded-full blur-3xl" />
+                      <div className="relative">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-green dark:text-brand-green">Your Career Identity</p>
+                            <h3 className="mt-2 text-3xl sm:text-4xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">{careerIdentity.archetype}</h3>
+                            <p className="mt-1 text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">{careerIdentity.level}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            {careerIdentity.badges.map((badge) => (
+                              <span key={badge} className="px-3 py-1.5 rounded-full bg-brand-light-primary/80 dark:bg-white/10 border border-brand-green/30 dark:border-brand-green/30 text-xs font-semibold text-brand-green dark:text-brand-green">
+                                {badge}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      ))}
+                        
+                        {/* XP Progress */}
+                        <div className="mb-6">
+                          <div className="flex items-center justify-between text-xs mb-2">
+                            <span className="text-brand-text-light-secondary dark:text-brand-text-secondary">Experience Points</span>
+                            <span className="font-bold text-brand-text-light-primary dark:text-brand-text-primary">{careerIdentity.xp} / {careerIdentity.xpToNext} XP</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-brand-light-tertiary/50 dark:bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full bg-gradient-to-r from-brand-green to-brand-green/70" style={{ width: `${(careerIdentity.xp / careerIdentity.xpToNext) * 100}%` }} />
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary italic">"{careerIdentity.quote}"</p>
+                      </div>
                     </div>
 
-                    <div className="mt-6 rounded-3xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5">
-                      <div className="flex items-start justify-between gap-4">
+                    {/* Social Sharing Hub - Share Your Achievements */}
+                    <div className="mt-6 rounded-3xl border border-brand-light-tertiary/50 dark:border-white/10 bg-gradient-to-br from-brand-light-primary/90 to-brand-green/5 dark:from-white/5 dark:to-brand-green/10 p-5">
+                      <div className="flex items-start justify-between gap-4 mb-5">
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Momentum trend</p>
-                          <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly readiness velocity</p>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Achievement Hub</p>
+                          <p className="mt-2 text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary">Share your success</p>
+                          <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary mt-1">Showcase your certifications and milestones</p>
                         </div>
-                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">+14% vs last week</span>
+                        <div className="rounded-full bg-brand-green/10 dark:bg-brand-green/20 p-2">
+                          <svg className="w-5 h-5 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                        </div>
                       </div>
-                      <div className="mt-4 flex h-20 items-end gap-2">
-                        {momentumTrend.map((value, index) => (
-                          <div key={value + index} className="flex-1 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15">
-                            <div
-                              className="w-full rounded-xl bg-gradient-to-t from-emerald-500 to-cyan-400"
-                              style={{ height: `${Math.max(value, 18)}%` }}
-                            />
+
+                      {/* Recent Achievements Cards */}
+                      <div className="space-y-3 mb-5">
+                        <div className="rounded-2xl border border-brand-green/20 dark:border-brand-green/30 bg-gradient-to-r from-brand-green/10 to-transparent p-3">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-green/20 flex items-center justify-center">
+                              <svg className="w-5 h-5 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary">Aptitude Certified</p>
+                              <p className="text-[11px] text-brand-text-light-secondary dark:text-brand-text-secondary">Completed with 92% accuracy</p>
+                              <p className="text-[10px] text-brand-green mt-1">2 days ago</p>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                        {signalHighlights.map((item) => (
-                          <div key={item.label} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-3">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{item.label}</p>
-                            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-white">{item.value}</p>
-                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{item.detail}</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/60 dark:bg-white/5 p-3">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary">7-Day Streak</p>
+                              <p className="text-[11px] text-brand-text-light-secondary dark:text-brand-text-secondary">Consistent daily practice</p>
+                              <p className="text-[10px] text-brand-green mt-1">Active now</p>
+                            </div>
                           </div>
-                        ))}
+                        </div>
                       </div>
+
+                      {/* Share Buttons */}
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-text-light-secondary dark:text-brand-text-secondary">Share to</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          <button className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-[#0077B5]/10 hover:bg-[#0077B5]/20 border border-[#0077B5]/20 transition-all group">
+                            <svg className="w-5 h-5 text-[#0077B5]" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                            </svg>
+                            <span className="text-[9px] font-medium text-brand-text-light-secondary dark:text-brand-text-secondary group-hover:text-[#0077B5]">LinkedIn</span>
+                          </button>
+                          <button className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-[#1DA1F2]/10 hover:bg-[#1DA1F2]/20 border border-[#1DA1F2]/20 transition-all group">
+                            <svg className="w-5 h-5 text-[#1DA1F2]" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                            </svg>
+                            <span className="text-[9px] font-medium text-brand-text-light-secondary dark:text-brand-text-secondary group-hover:text-[#1DA1F2]">Twitter</span>
+                          </button>
+                          <button className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 border border-gray-200 dark:border-white/10 transition-all group">
+                            <svg className="w-5 h-5 text-gray-700 dark:text-white" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+                            </svg>
+                            <span className="text-[9px] font-medium text-brand-text-light-secondary dark:text-brand-text-secondary group-hover:text-brand-text-light-primary dark:group-hover:text-white">GitHub</span>
+                          </button>
+                          <button className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-green-100 hover:bg-green-200 dark:bg-brand-green/10 dark:hover:bg-brand-green/20 border border-green-200 dark:border-brand-green/30 transition-all group">
+                            <svg className="w-5 h-5 text-green-600 dark:text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                            <span className="text-[9px] font-medium text-brand-text-light-secondary dark:text-brand-text-secondary group-hover:text-green-600 dark:group-hover:text-brand-green">Copy</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      {signalHighlights.map((item) => (
+                        <div key={item.label} className="rounded-2xl border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 p-3 hover:shadow-sm transition-all">
+                          <p className="text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary">{item.label}</p>
+                          <p className="mt-1 text-sm font-bold text-brand-text-light-primary dark:text-brand-text-primary">{item.value}</p>
+                          <p className="mt-1 text-[11px] text-brand-text-light-secondary dark:text-brand-text-secondary">{item.detail}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
 
+                {/* Right Column - Creative Sections */}
                 <div className="grid gap-6">
-                  <div className="rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Focus signals</p>
-                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">Live</span>
-                    </div>
-                    <div className="mt-4 space-y-4">
-                      {focusSignals.map((signal) => (
-                        <div key={signal.label} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{signal.label}</p>
-                          <p className="mt-2 text-sm font-bold text-slate-800 dark:text-white">{signal.value}</p>
-                          <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{signal.detail}</p>
+                  {/* Skill Constellation */}
+                  {/* Skills Overview */}
+                  <div className="rounded-[2.5rem] border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/70 dark:bg-white/5 p-6 sm:p-8 shadow-[0_18px_40px_rgba(25,33,28,0.08)] relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-green/10 to-transparent rounded-full blur-2xl" />
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Skills Constellation</p>
+                          <p className="text-[10px] text-brand-text-light-secondary dark:text-brand-text-secondary mt-1">Multi-dimensional capability map</p>
                         </div>
-                      ))}
+                        <span className="text-[10px] font-medium px-2.5 py-1 rounded-full bg-brand-green/10 border border-brand-green/20 text-brand-green">Real-time</span>
+                      </div>
+
+                      {/* Concentric Progress SVG Design */}
+                      <div className="flex flex-col xl:flex-row items-center gap-6">
+                        <div className="relative w-40 h-40 shrink-0">
+                          <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90 transform drop-shadow-lg filter">
+                            <defs>
+                              <linearGradient id="ringGrad0" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#1ed36a" />
+                                <stop offset="100%" stopColor="#15a34f" />
+                              </linearGradient>
+                              <linearGradient id="ringGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#3b82f6" />
+                                <stop offset="100%" stopColor="#1d4ed8" />
+                              </linearGradient>
+                              <linearGradient id="ringGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#8b5cf6" />
+                                <stop offset="100%" stopColor="#6d28d9" />
+                              </linearGradient>
+                              <linearGradient id="ringGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#f59e0b" />
+                                <stop offset="100%" stopColor="#b45309" />
+                              </linearGradient>
+                            </defs>
+                            {skillGalaxy.slice(0, 4).map((skill, index) => {
+                              const radius = 88 - (index * 22);
+                              const circumference = 2 * Math.PI * radius;
+                              const offset = circumference - ((skill.level > 100 ? 100 : skill.level) / 100) * circumference;
+                              
+                              return (
+                                <g key={skill.name}>
+                                  {/* Background Track */}
+                                  <circle
+                                    cx="100"
+                                    cy="100"
+                                    r={radius}
+                                    fill="none"
+                                    className="stroke-brand-light-tertiary/30 dark:stroke-white/10"
+                                    strokeWidth="12"
+                                  />
+                                  {/* Active Progress */}
+                                  <circle
+                                    cx="100"
+                                    cy="100"
+                                    r={radius}
+                                    fill="none"
+                                    className="transition-all duration-1000 ease-in-out opacity-90"
+                                    stroke={`url(#ringGrad${index})`}
+                                    strokeWidth="12"
+                                    strokeLinecap="round"
+                                    strokeDasharray={circumference}
+                                    strokeDashoffset={offset}
+                                  />
+                                </g>
+                              );
+                            })}
+                          </svg>
+                          {/* Center Element */}
+                          <div className="absolute inset-0 m-auto w-12 h-12 rounded-full border border-brand-green/20 bg-brand-green/5 dark:bg-brand-green/10 flex items-center justify-center backdrop-blur-sm">
+                            <span className="text-xs font-bold text-brand-green">87</span>
+                          </div>
+                        </div>
+
+                        {/* Legend / Stats */}
+                        <div className="w-full flex-1 space-y-3">
+                          {skillGalaxy.slice(0, 4).map((skill, index) => {
+                            const colors = ["bg-[#1ed36a]", "bg-[#3b82f6]", "bg-[#8b5cf6]", "bg-[#f59e0b]"];
+                            return (
+                              <div key={skill.name} className="group relative">
+                                <div className="flex items-center justify-between p-2 rounded-xl hover:bg-brand-light-secondary/50 dark:hover:bg-white/5 transition-colors">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${colors[index]} shadow-[0_0_8px_${colors[index]}40]`} />
+                                    <span className="text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary">{skill.name}</span>
+                                  </div>
+                                  <span className="text-sm font-bold text-brand-text-light-secondary dark:text-brand-text-primary">{skill.level}%</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Connection insight - elegant badge */}
+                      <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-brand-light-secondary/80 to-transparent dark:from-white/[0.03] dark:to-transparent border-l-2 border-brand-green">
+                        <div className="flex gap-3">
+                          <svg className="w-4 h-4 text-brand-green shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed">
+                            <span className="font-semibold text-brand-text-light-primary dark:text-brand-text-primary mr-1">Nexus Found:</span>
+                            Your interplay between <span className="font-medium text-brand-green">Logic</span> and <span className="font-medium text-blue-500">Patterns</span> indicates elite analytical bandwidth. Ready for architecture training.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="rounded-[2.5rem] border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Update feed</p>
-                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Recent</span>
+                  {/* Development Focus */}
+                  <div className="rounded-[2.5rem] border border-brand-light-tertiary/60 dark:border-white/10 bg-brand-light-primary/70 dark:bg-white/5 p-6 shadow-[0_18px_40px_rgba(25,33,28,0.08)]">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-brand-text-secondary">Development Focus</p>
                     </div>
-                    <div className="mt-4 space-y-4">
-                      {updateFeed.map((update) => (
-                        <div key={update.title} className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-800 dark:text-white">{update.title}</p>
-                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">{update.time}</span>
-                          </div>
-                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{update.detail}</p>
-                        </div>
-                      ))}
+
+                    {/* Current focus */}
+                    <div className="p-4 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-4 transform transition-all hover:scale-[1.02]">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        <p className="text-sm font-medium text-brand-text-light-primary dark:text-brand-text-primary">Communication Assessment</p>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">Next Action</span>
+                      </div>
+                      <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary mb-3">
+                        Complete Business Linguistics and Reading Comprehension to unlock your Technical Groupings funnel.
+                      </p>
+                      <button 
+                        onClick={() => handleStartExam(EXAMS.find(e => e.id === 'communication') || EXAMS[1])}
+                        className="w-full mt-2 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-100 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                      >
+                        Start Communication Module
+                      </button>
+                    </div>
+
+                    {/* Next up */}
+                    <div className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-slate-50/50 dark:bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                        <span className="bg-white/80 dark:bg-black/60 px-3 py-1 rounded-full text-[10px] font-bold text-slate-500 dark:text-slate-400 backdrop-blur-md border border-slate-200 dark:border-white/10">Requires Comm Score</span>
+                      </div>
+                      <div className="flex items-center gap-3 mb-2 opacity-60">
+                        <div className="w-2 h-2 rounded-full bg-slate-400" />
+                        <p className="text-sm font-medium text-brand-text-light-primary dark:text-brand-text-primary">Backend & Systems</p>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400">Locked</span>
+                      </div>
+                      <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary opacity-60">
+                        Algorithms, Data Structures (Advanced Trees, Graphs), and Dynamic Programming.
+                      </p>
                     </div>
                   </div>
+
                 </div>
               </div>
             </section>
           </>
+        ) : currentView === "assessment" ? (
+          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
+              </div>
+              
+              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        (isActive
+                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <AssessmentCard
+                  key={exam.id}
+                  title={exam.title}
+                  description={exam.description}
+                  statusLabel={exam.statusLabel}
+                  statusTone={exam.available ? "success" : "warning"}
+                  totalQuestions={exam.questions}
+                  duration={exam.duration}
+                  price={`₹${exam.price}`}
+                  tags={exam.tags}
+                  icon={exam.icon}
+                  available={exam.available}
+                  level={exam.difficulty}
+                  insight={exam.statusLabel}
+                  onDetailsClick={() => handleSelectExam(exam)}
+                  onStartClick={() => handleStartExam(exam)}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
-          <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-white/80 dark:bg-[#111a15]/80 backdrop-blur-xl border border-slate-200/60 dark:border-white/10">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400">
+          <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
               <ProfileIcon className="h-10 w-10" />
             </div>
-            <h2 className="mt-6 text-2xl font-medium text-slate-800 dark:text-white">Profile & Settings</h2>
-            <p className="mt-3 max-w-md text-slate-500 dark:text-slate-400 leading-relaxed">
+            <h2 className="mt-6 text-2xl font-medium text-brand-text-light-primary dark:text-brand-text-primary">Profile & Settings</h2>
+            <p className="mt-3 max-w-md text-brand-text-light-secondary dark:text-brand-text-secondary leading-relaxed">
               Your profile area is being prepared. You can continue exploring assessments and start any available test from the library.
             </p>
             <button
               type="button"
               onClick={() => setCurrentView("assessment")}
-              className="mt-6 px-6 py-3 rounded-xl bg-slate-800 dark:bg-white text-white dark:text-slate-900 text-sm font-medium transition-all hover:opacity-90"
+              className="mt-6 px-6 py-3 rounded-xl bg-brand-green text-white text-sm font-medium transition-all hover:opacity-90"
             >
               View assessments
             </button>
@@ -818,7 +1303,7 @@ const AssessmentPortal: React.FC = () => {
         )}
 
         <footer className="py-8 text-center">
-          <p className="text-sm text-slate-400 dark:text-slate-500">
+          <p className="text-sm text-brand-text-light-secondary/70 dark:text-brand-text-secondary">
             &copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence
           </p>
         </footer>

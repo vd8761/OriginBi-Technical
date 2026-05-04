@@ -184,6 +184,62 @@
   animation: marquee-vertical-down linear infinite;
 }
 
+/* Horizontal marquee animations for login page */
+@keyframes marquee-horizontal-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-33.33%); }
+}
+
+@keyframes marquee-horizontal-right {
+  from { transform: translateX(-33.33%); }
+  to { transform: translateX(0); }
+}
+
+.animate-marquee-horizontal-left {
+  animation: marquee-horizontal-left linear infinite;
+}
+
+.animate-marquee-horizontal-right {
+  animation: marquee-horizontal-right linear infinite;
+}
+
+/* Diagonal marquee animations for login page - 45 degree cross pattern */
+@keyframes marquee-diagonal-down-right {
+  from { transform: translate(0, 0); }
+  to { transform: translate(33.33%, 33.33%); }
+}
+
+@keyframes marquee-diagonal-up-right {
+  from { transform: translate(0, 0); }
+  to { transform: translate(33.33%, -33.33%); }
+}
+
+@keyframes marquee-diagonal-down-left {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-33.33%, 33.33%); }
+}
+
+@keyframes marquee-diagonal-up-left {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-33.33%, -33.33%); }
+}
+
+.animate-marquee-diagonal-down-right {
+  animation: marquee-diagonal-down-right linear infinite;
+}
+
+.animate-marquee-diagonal-up-right {
+  animation: marquee-diagonal-up-right linear infinite;
+}
+
+.animate-marquee-diagonal-down-left {
+  animation: marquee-diagonal-down-left linear infinite;
+}
+
+.animate-marquee-diagonal-up-left {
+  animation: marquee-diagonal-up-left linear infinite;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);

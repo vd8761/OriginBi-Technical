@@ -25,8 +25,7 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
                         Core fundamentals
                     </span>
                 </div>
-                <h2 className="text-lg font-bold leading-8 text-[#17201b] dark:text-white">
-
+                <h2 className="text-base font-semibold leading-relaxed text-[#17201b] dark:text-white">
                     {question.text}
                 </h2>
             </section>

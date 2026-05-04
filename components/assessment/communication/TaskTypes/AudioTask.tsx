@@ -29,15 +29,6 @@ const AudioTaskComponent: React.FC<AudioTaskProps> = ({ task, value = {}, onChan
                             {task.instructions}
                         </p>
                     </div>
-                    <div className="flex items-end gap-1" aria-hidden="true">
-                        {[8, 16, 24, 14, 20].map((height, index) => (
-                            <span
-                                key={`${height}-${index}`}
-                                className="w-1.5 rounded-full bg-brand-green/80"
-                                style={{ height: `${height}px` }}
-                            />
-                        ))}
-                    </div>
                 </div>
 
                 <div className="mt-4 rounded-lg border border-brand-green/10 bg-white p-3 dark:border-white/10 dark:bg-[#0f1712]">
@@ -55,7 +46,7 @@ const AudioTaskComponent: React.FC<AudioTaskProps> = ({ task, value = {}, onChan
             <div className="grid gap-4">
                 {task.questions.map((question, qIndex) => (
                     <section key={question.id} className="rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
-                        <h3 className="text-base font-bold leading-7 text-[#17201b] dark:text-white">
+                        <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white">
                             <span className="mr-2 text-brand-green">{qIndex + 1}.</span>
                             {question.text}
                         </h3>
@@ -83,7 +74,7 @@ const AudioTaskComponent: React.FC<AudioTaskProps> = ({ task, value = {}, onChan
                                         }`}>
                                             {labels[optionIndex]}
                                         </span>
-                                        <span className={`text-sm font-semibold leading-5 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
+                                        <span className={`text-sm font-medium leading-5 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
                                             {option.text}
                                         </span>
                                     </button>
