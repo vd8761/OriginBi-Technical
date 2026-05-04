@@ -102,23 +102,24 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:text-white"
-                    >
-                        Go back
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onStart}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-green px-6 text-sm font-extrabold text-[#0f1712] transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
-                    >
-                        Begin test
-                    </button>
-                </footer>
-            </section>
+                {/* Footer Actions */}
+                <div className="p-5 sm:p-6 border-t border-brand-light-tertiary dark:border-white/10 bg-gray-50 dark:bg-white/5">
+                    <div className="flex justify-end gap-3 sm:gap-4">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2.5 rounded-full border border-brand-light-tertiary dark:border-white/20 text-black dark:text-white text-[clamp(11px,0.9vw,14px)] font-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        >
+                            Go Back
+                        </button>
+                        <button
+                            onClick={onStart}
+                            className="px-10 py-2.5 rounded-full bg-brand-green text-white text-[clamp(11px,0.9vw,14px)] font-bold hover:bg-brand-green/90 transition-colors active:scale-95"
+                        >
+                            Begin Test
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

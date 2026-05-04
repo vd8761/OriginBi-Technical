@@ -77,6 +77,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                                 ))}
                             </div>
 
+<<<<<<< HEAD
                             <h3 className="mt-6 text-base font-extrabold text-[#17201b] dark:text-white">Start checklist</h3>
                             <div className="mt-4 space-y-3">
                                 {checklist.map((point) => (
@@ -99,6 +100,23 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                                 ))}
                             </div>
                         </aside>
+=======
+                {/* Footer Actions */}
+                <div className="p-5 sm:p-6 border-t border-brand-light-tertiary dark:border-white/10 bg-gray-50 dark:bg-white/5">
+                    <div className="flex justify-end gap-3 sm:gap-4">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2.5 rounded-full border border-gray-200 dark:border-white/20 text-black dark:text-white/80 font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        >
+                            Go Back
+                        </button>
+                        <button
+                            onClick={onStart}
+                            className="px-10 py-2.5 rounded-full bg-brand-green text-white text-sm font-medium hover:bg-[#1bb85c] transition-all active:scale-95 shadow-md shadow-brand-green/10"
+                        >
+                            Begin Assessment
+                        </button>
+>>>>>>> origin/vikash
                     </div>
                 </div>
 

@@ -22,6 +22,7 @@ const stateStyles: Record<QuestionState, string> = {
 };
 
 const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({ questions, currentIndex, onSelect }) => {
+<<<<<<< HEAD
     const answeredCount = questions.filter((q) => q.state === "answered").length;
     const markedCount = questions.filter((q) => q.state === "marked").length;
     const pendingCount = questions.length - answeredCount - markedCount;
@@ -52,6 +53,38 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({ questions, curren
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-white/5">
                     <p className="font-semibold text-slate-500 dark:text-slate-400">Pending</p>
                     <p className="mt-1 text-lg font-extrabold text-[#17201b] dark:text-white">{pendingCount}</p>
+=======
+    const getBgColor = (state: QuestionState, isActive: boolean) => {
+        if (isActive) return 'bg-black dark:bg-white text-white dark:text-black border-transparent scale-110';
+        
+        switch (state) {
+            case 'answered':
+                return 'bg-brand-green text-white border-brand-green';
+            case 'marked':
+                return 'bg-amber-500 text-white border-amber-500';
+            case 'unanswered':
+            default:
+                return 'bg-white dark:bg-white/[0.05] border-brand-light-tertiary dark:border-white/10 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/10';
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-white dark:bg-brand-dark-primary border border-brand-light-tertiary dark:border-white/5 rounded-[20px] overflow-hidden transition-colors">
+            <div className="p-4 border-b border-brand-light-tertiary dark:border-white/5">
+                <h3 className="text-sm font-bold text-black dark:text-white">Question Navigator</h3>
+                
+                {/* Legend */}
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
+                    <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-brand-green"></div> Answered
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div> Review
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full border border-gray-300 dark:border-gray-600"></div> Pending
+                    </div>
+>>>>>>> origin/vikash
                 </div>
             </div>
 

@@ -84,6 +84,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
     }, [isRecording, recordTimeLeft, stopRecording]);
 
     return (
+<<<<<<< HEAD
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
@@ -95,12 +96,29 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                 <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
                     <h3 className="text-lg font-extrabold leading-8 text-[#17201b] dark:text-white">
                         {task.prompt}
+=======
+        <div className="flex flex-col gap-6 h-full">
+            <div className="bg-brand-light-secondary dark:bg-white/[0.03] p-5 rounded-2xl border border-brand-light-tertiary dark:border-white/10 flex flex-col gap-4">
+                <p className="text-[13px] font-medium text-black dark:text-white">
+                    {task.instructions}
+                </p>
+                <div className="bg-white dark:bg-brand-dark-primary p-5 rounded-xl border border-brand-light-tertiary dark:border-white/5">
+                    <h3 className="text-[clamp(14px,1.2vw,18px)] font-semibold text-black dark:text-white leading-relaxed italic">
+                        "{task.prompt}"
+>>>>>>> origin/vikash
                     </h3>
                 </div>
             </section>
 
+<<<<<<< HEAD
             <aside className="rounded-lg border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
                 <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+=======
+            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white dark:bg-white/[0.03] rounded-[20px] border border-brand-light-tertiary dark:border-white/5 transition-colors min-h-[300px]">
+                
+                {/* Status Indicator */}
+                <div className="mb-8 flex flex-col items-center gap-2">
+>>>>>>> origin/vikash
                     {recordingComplete ? (
                         <>
                             <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
@@ -108,10 +126,15 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
+<<<<<<< HEAD
                             <h4 className="mt-4 text-lg font-extrabold text-[#17201b] dark:text-white">Recording saved</h4>
                             <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">
                                 Review your audio or continue to the next task.
                             </p>
+=======
+                            <h4 className="font-bold text-black dark:text-white">Recording Saved</h4>
+                            <p className="text-xs text-black dark:text-white">You can proceed to the next task.</p>
+>>>>>>> origin/vikash
                         </>
                     ) : isRecording ? (
                         <>
@@ -123,10 +146,15 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     </svg>
                                 </span>
                             </div>
+<<<<<<< HEAD
                             <p className="mt-4 text-xs font-extrabold uppercase tracking-widest text-red-500">Recording</p>
                             <p className="mt-2 font-mono text-3xl font-extrabold text-[#17201b] dark:text-white">
                                 {formatTime(recordTimeLeft)}
                             </p>
+=======
+                            <h4 className="font-bold text-red-500 animate-pulse uppercase tracking-wider text-sm">Recording</h4>
+                            <p className="text-2xl font-mono font-bold text-black dark:text-white mt-1">{formatTime(recordTimeLeft)}</p>
+>>>>>>> origin/vikash
                         </>
                     ) : (
                         <>
@@ -135,6 +163,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     {formatTime(prepTimeLeft)}
                                 </span>
                             </div>
+<<<<<<< HEAD
                             <h4 className="mt-4 text-lg font-extrabold text-[#17201b] dark:text-white">
                                 {prepTimeLeft === 0 ? "Ready to record" : "Prepare your answer"}
                             </h4>
@@ -143,16 +172,26 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                                     ? "Start when you are ready. Keep your response clear and structured."
                                     : "Use this preparation time to organize your response."}
                             </p>
+=======
+                            <h4 className="font-bold text-black dark:text-white uppercase tracking-wider text-sm">Preparation Time</h4>
+                            <p className="text-xs text-black dark:text-white">Read the prompt and prepare your response.</p>
+>>>>>>> origin/vikash
                         </>
                     )}
                 </div>
 
                 <div className="mt-4 flex flex-col gap-3">
                     {!isRecording && !recordingComplete && (
+<<<<<<< HEAD
                         <button
                             type="button"
                             onClick={() => void startRecording()}
                             className="min-h-11 rounded-lg bg-brand-green px-5 text-sm font-extrabold text-[#0f1712] transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+=======
+                        <button 
+                            onClick={startRecording}
+                            className="px-8 py-3 rounded-full bg-brand-green text-white font-bold text-xs hover:bg-[#1bb85c] transition-all"
+>>>>>>> origin/vikash
                         >
                             Start recording now
                         </button>
@@ -161,7 +200,11 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                         <button
                             type="button"
                             onClick={stopRecording}
+<<<<<<< HEAD
                             className="min-h-11 rounded-lg bg-red-500 px-5 text-sm font-extrabold text-white transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40"
+=======
+                            className="px-8 py-3 rounded-full bg-red-500 text-white font-bold text-xs hover:bg-red-600 transition-all"
+>>>>>>> origin/vikash
                         >
                             Finish recording
                         </button>
