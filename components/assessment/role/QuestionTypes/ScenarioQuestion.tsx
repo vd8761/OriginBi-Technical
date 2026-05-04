@@ -78,7 +78,7 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
                             </svg>
                             <span className="text-[10px] font-bold uppercase tracking-widest">Decision needed</span>
                         </div>
-                        <p className="mt-3 text-base font-bold leading-7 text-[#17201b] dark:text-white">
+                        <p className="mt-3 text-base font-semibold leading-7 text-[#17201b] dark:text-white">
                             {question.text}
                         </p>
                     </div>
