@@ -6,8 +6,10 @@ import AssessmentPortal from "@/components/student/AssessmentPortal";
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState<string>("Student");
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (name?: string) => {
+    if (name) setUserName(name);
     setIsLoggedIn(true);
   };
 
@@ -16,7 +18,7 @@ export default function Home() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal />
+        <AssessmentPortal userName={userName} />
       )}
     </main>
   );

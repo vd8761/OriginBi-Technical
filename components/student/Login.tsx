@@ -12,7 +12,7 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import { AnimatePresence, motion } from "motion/react";
 
 interface LoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (userName?: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
@@ -119,7 +119,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   exit={{ opacity: 0, scale: 0.98, y: -10 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
-                  <LoginForm onLoginSuccess={onLoginSuccess} />
+                  <LoginForm onLoginSuccess={(name) => onLoginSuccess(name)} />
                   <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
                     <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                       Don&apos;t have an account?{" "}

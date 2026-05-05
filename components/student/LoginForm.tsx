@@ -10,7 +10,7 @@ import { EyeIcon, EyeOffIcon } from '../icons';
 // configureAmplify(); // ensure Amplify is configured
 
 interface LoginFormProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (userName?: string) => void;
   buttonClass?: string;
   portalMode?: 'student' | 'corporate' | 'admin';
 }
@@ -76,7 +76,11 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    onLoginSuccess();
+    const emailPart = values.email.split('@')[0];
+    const formattedName = emailPart
+      .replace(/[._-]/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+    onLoginSuccess(formattedName);
   };
 
   const isEmailInvalid = touched.email && !!errors.email;
