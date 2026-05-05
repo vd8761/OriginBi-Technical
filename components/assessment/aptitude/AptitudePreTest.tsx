@@ -57,7 +57,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                             </svg>
                         </div>
                         <div>
-                            <p className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: accentColor }}>Ready assessment</p>
+
                             <h2 id="aptitude-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight">
                                 Aptitude Assessment
                             </h2>
@@ -129,8 +129,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                     <button
                         type="button"
                         onClick={onStart}
-                        className="inline-flex min-h-11 items-center justify-center rounded-full px-8 text-[13px] font-bold text-white transition active:scale-95 shadow-lg"
-                        style={{ background: gradient || accentColor, boxShadow: `0 8px 20px ${accentColor}33` }}
+                        className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand-green px-8 text-[13px] font-bold text-white transition hover:bg-[#1bb85c] active:scale-95"
                     >
                         Begin test
                     </button>
