@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(cp \"C:\\\\Users\\\\Sriharan\\\\.claude\\\\projects\\\\D--Folders-TouchMark-OriginBi-Technical\\\\863275a4-196e-4ff1-830f-5545317b4ce0\\\\tool-results\\\\webfetch-1777918926230-yi1854.bin\" /tmp/design.tar.gz)",
+      "Bash(mkdir -p /tmp/design)",
+      "Bash(tar -xzf /tmp/design.tar.gz -C /tmp/design)",
+      "Read(//tmp/**)"
     ]
   }
 }

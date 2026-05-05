@@ -1,29 +1,17 @@
-"use client";
-
-import React, { use } from "react";
-import { notFound } from "next/navigation";
-import ExploreDetailView from "@/components/student/ExploreDetailView";
-import { EXAMS, EXAM_DETAILS, type AssessmentId } from "@/lib/exams";
+import { type AssessmentId } from "@/lib/exams";
+import ExploreDetailClient from "./ExploreDetailClient";
 
 const VALID_IDS: AssessmentId[] = ["aptitude", "communication", "coding", "mnc", "role"];
 
-export default function ExploreDetailPage({
+export function generateStaticParams() {
+    return VALID_IDS.map((id) => ({ id }));
+}
+
+export default async function ExploreDetailPage({
     params,
 }: {
     params: Promise<{ id: string }>;
 }) {
-    const { id } = use(params);
-
-    if (!VALID_IDS.includes(id as AssessmentId)) {
-        notFound();
-    }
-
-    const exam = EXAMS.find((e) => e.id === id);
-    const detail = EXAM_DETAILS[id as AssessmentId];
-
-    if (!exam || !detail) {
-        notFound();
-    }
-
-    return <ExploreDetailView exam={exam} detail={detail} />;
+    const { id } = await params;
+    return <ExploreDetailClient id={id} />;
 }
