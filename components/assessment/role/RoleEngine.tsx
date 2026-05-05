@@ -23,10 +23,13 @@ export interface BaseRoleQuestion {
 
 export interface ConceptualQuestion extends BaseRoleQuestion {
     type: "conceptual";
+    category?: string;
+    subCategory?: string;
 }
 
 export interface ScenarioQuestion extends BaseRoleQuestion {
     type: "scenario";
+    title: string;
     scenarioContext: string;
     ticketId?: string;
     priority?: "Low" | "Medium" | "High" | "Critical";
@@ -39,6 +42,8 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     {
         id: "rq1",
         type: "conceptual",
+        category: "API Design",
+        subCategory: "REST Fundamentals",
         text: "Which of the following is NOT a valid HTTP method used in RESTful APIs?",
         options: [
             { id: "o1", text: "PATCH" },
@@ -50,6 +55,7 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     {
         id: "rq2",
         type: "scenario",
+        title: "Frontend Optimization",
         scenarioContext: "The UI freezes for 3-5 seconds when rendering a table containing 10,000 user records at once.",
         ticketId: "INC-8942",
         priority: "High",
@@ -65,6 +71,8 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     {
         id: "rq3",
         type: "conceptual",
+        category: "Frontend Core",
+        subCategory: "React State Management",
         text: "In React, what happens when you call setState() multiple times synchronously in the same event handler?",
         options: [
             { id: "o1", text: "React immediately re-renders after every call." },
@@ -76,6 +84,7 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     {
         id: "rq4",
         type: "scenario",
+        title: "API Reliability",
         scenarioContext: "A critical e-commerce checkout API is returning a 502 Bad Gateway error intermittently during peak traffic hours.",
         ticketId: "INC-9011",
         priority: "Critical",

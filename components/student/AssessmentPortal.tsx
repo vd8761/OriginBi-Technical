@@ -117,28 +117,28 @@ const AssessmentPortal: React.FC = () => {
       id: "core",
       label: "Aptitude+ Core",
       description: "Quantitative, Logical, Data Interpretation, and Visual Reasoning.",
-      count: 1, // Visual adjustment for demo
+      count: trackCounts.core,
       accent: TRACK_PALETTE.core,
     },
     {
       id: "communication",
       label: "Business Linguistics",
       description: "Corporate Etiquette, Grammar, Syntax, and Reading Comprehension.",
-      count: 1,
+      count: trackCounts.core, // Communication is currently in core track
       accent: TRACK_PALETTE.technical,
     },
     {
       id: "technical",
       label: "Technical Groupings",
       description: "Programming Foundations, Web Tech, Backend, Database & Cloud.",
-      count: 2,
+      count: trackCounts.technical,
       accent: TRACK_PALETTE.career,
     },
     {
       id: "career",
       label: "Role-Based Specialization",
       description: "Full Stack Developer, Data Scientist, UI/UX Architect, DevOps.",
-      count: 4,
+      count: trackCounts.career,
       accent: "#2563eb",
     },
   ];
