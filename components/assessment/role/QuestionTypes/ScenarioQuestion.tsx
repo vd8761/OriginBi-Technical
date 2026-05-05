@@ -32,56 +32,16 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
 }) => {
     return (
         <div className="flex flex-col gap-4">
-            <section className="overflow-hidden rounded-lg border border-brand-green/10 bg-white dark:border-white/10 dark:bg-[#0f1712]">
-                <div className="flex flex-col gap-3 border-b border-brand-green/5 bg-brand-green/[0.02] px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:bg-white/5">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Scenario case
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-[#17201b] dark:text-white">
-                            Incident decision dashboard
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {question.ticketId && (
-                            <span className="rounded-md bg-brand-green/10 px-2.5 py-1 text-xs font-bold text-brand-green">
-                                {question.ticketId}
-                            </span>
-                        )}
-                        {question.priority && (
-                            <span className={`rounded-md border px-2.5 py-1 text-xs font-bold ${getPriorityColor(question.priority)}`}>
-                                {question.priority}
-                            </span>
-                        )}
-                        {question.reportedBy && (
-                            <span className="rounded-md bg-brand-green/5 px-2.5 py-1 text-xs font-bold text-[#17201b] dark:bg-white/10 dark:text-white">
-                                {question.reportedBy}
-                            </span>
-                        )}
-                    </div>
-
+            <section className="flex flex-col gap-6 rounded-lg border border-brand-green/10 bg-white p-6 dark:border-white/10 dark:bg-[#0f1712]">
+                <div className="space-y-3">
+                    <p className="text-sm font-medium leading-7 text-[#17201b] dark:text-white opacity-80">
+                        {question.scenarioContext}
+                    </p>
                 </div>
-
-                <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                    <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Context
-                        </p>
-                        <p className="mt-3 text-sm font-medium leading-7 text-[#17201b] dark:text-white">
-                            {question.scenarioContext}
-                        </p>
-                    </div>
-                    <div className="rounded-lg border border-brand-green/20 bg-brand-green/10 p-4">
-                        <div className="flex items-center gap-2 text-brand-green">
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
-                            <span className="text-[10px] font-bold uppercase tracking-widest">Decision needed</span>
-                        </div>
-                        <p className="mt-3 text-base font-semibold leading-7 text-[#17201b] dark:text-white">
-                            {question.text}
-                        </p>
-                    </div>
+                <div className="rounded-lg border border-brand-green/20 bg-brand-green/5 p-5">
+                    <p className="text-base font-bold leading-relaxed text-[#17201b] dark:text-white">
+                        {question.text}
+                    </p>
                 </div>
             </section>
 

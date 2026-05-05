@@ -1,6 +1,6 @@
 import React from "react";
 
-interface AptitudePreTestProps {
+interface MNCPreTestProps {
     onStart: () => void;
     onClose: () => void;
     accentColor?: string;
@@ -8,23 +8,22 @@ interface AptitudePreTestProps {
 }
 
 const metrics = [
-    { label: "Questions", value: "60" },
-    { label: "Duration", value: "60 min" },
-    { label: "Sections", value: "4" },
-    { label: "Attempts", value: "1 out of 2" },
-
+    { label: "Questions", value: "30" },
+    { label: "Duration", value: "45 min" },
+    { label: "Format", value: "Technical MCQ" },
+    { label: "Attempts", value: "1 out of 1" },
 ];
 
 const checklist = [
-    "Keep one uninterrupted 60 minute window ready.",
-    "Use a laptop or desktop for the most stable test layout.",
-    "Avoid refreshing the browser after the assessment begins.",
-    "Ensure all questions are answered before submission.",
+    "Technical questions cover DSA, System Design, and Core CS.",
+    "No negative marking for incorrect answers.",
+    "Ensure a stable internet connection throughout.",
+    "Auto-submission will occur if the timer expires.",
 ];
 
-const skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"];
+const skills = ["Data Structures", "Algorithms", "System Design", "Networking & OS"];
 
-const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ 
+const MNCPreTest: React.FC<MNCPreTestProps> = ({ 
     onStart, 
     onClose,
     accentColor = '#1ED36A',
@@ -36,33 +35,31 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                 type="button"
                 className="absolute inset-0 bg-[#0f1712]/70 backdrop-blur-sm"
                 onClick={onClose}
-                aria-label="Close aptitude assessment intro"
+                aria-label="Close MNC assessment intro"
             />
 
             <section
                 role="dialog"
                 aria-modal="true"
-                aria-labelledby="aptitude-pretest-title"
+                aria-labelledby="mnc-pretest-title"
                 className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
             >
                 <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:px-6 sm:py-5 dark:border-white/10">
-
                     <div className="flex items-start gap-5">
                         <div 
                             className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg [&_svg]:h-7 [&_svg]:w-7"
                             style={{ background: gradient || accentColor }}
                         >
                             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2Z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                             </svg>
                         </div>
                         <div>
-
-                            <h2 id="aptitude-pretest-title" className="text-xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight sm:text-2xl">
-                                Aptitude Assessment
+                            <h2 id="mnc-pretest-title" className="text-xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight sm:text-2xl">
+                                MNC Career Assessment
                             </h2>
                             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-slate-500 dark:text-white/60 sm:text-sm">
-                                Benchmark problem-solving speed, numerical accuracy, logical reasoning, and data interpretation in one structured session.
+                                Standardized technical screening for MNC roles focusing on fundamental computer science concepts and problem-solving.
                             </p>
                         </div>
                     </div>
@@ -70,7 +67,6 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                         type="button"
                         onClick={onClose}
                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b]/40 transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white/40"
-
                         aria-label="Close"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -86,7 +82,6 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {skills.map((skill) => (
                                     <div key={skill} className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-3 text-sm font-medium text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
-
                                         {skill}
                                     </div>
                                 ))}
@@ -114,7 +109,6 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                                 ))}
                             </div>
                         </aside>
-
                     </div>
                 </div>
 
@@ -139,5 +133,4 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
     );
 };
 
-export default AptitudePreTest;
-
+export default MNCPreTest;

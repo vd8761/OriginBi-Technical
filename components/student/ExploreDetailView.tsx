@@ -7,6 +7,7 @@ import Header from "./Header";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
+import MNCPreTest from "../assessment/mnc/MNCPreTest";
 import PaymentModal from "../payments/PaymentModal";
 import LanguageSelectModal from "../payments/LanguageSelectModal";
 import CodingPreTest from "../assessment/coding/CodingPreTest";
@@ -70,6 +71,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const [showAptitudeModal, setShowAptitudeModal] = useState(false);
     const [showCommunicationModal, setShowCommunicationModal] = useState(false);
     const [showRoleModal, setShowRoleModal] = useState(false);
+    const [showMncModal, setShowMncModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
     const [pendingCodingLang, setPendingCodingLang] = useState<CodingLanguage | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<
@@ -90,6 +92,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         if (exam.id === "aptitude") setShowAptitudeModal(true);
         else if (exam.id === "communication") setShowCommunicationModal(true);
         else if (exam.id === "role") setShowRoleModal(true);
+        else if (exam.id === "mnc") setShowMncModal(true);
     };
 
     const handlePrimaryClick = () => {
@@ -482,6 +485,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <RolePreTest
                     onStart={() => router.push("/assessment/role")}
                     onClose={() => setShowRoleModal(false)}
+                />
+            )}
+            {showMncModal && (
+                <MNCPreTest
+                    onStart={() => router.push("/assessment/mnc")}
+                    onClose={() => setShowMncModal(false)}
                 />
             )}
 
