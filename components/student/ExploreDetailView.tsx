@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Header from "./Header";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
@@ -8,28 +9,69 @@ import CommunicationPreTest from "../assessment/communication/CommunicationPreTe
 import RolePreTest from "../assessment/role/RolePreTest";
 import PaymentModal from "../payments/PaymentModal";
 import LanguageSelectModal from "../payments/LanguageSelectModal";
+import CodingPreTest from "../assessment/coding/CodingPreTest";
 import { ArrowLeftIcon, LockIcon } from "../icons";
 import {
-    type AssessmentId,
+    CODING_LANGUAGES,
     type ExamDetailData,
     type ExtendedExam,
     type CodingLanguage,
 } from "@/lib/exams";
-import { codingPaymentKey, usePaidAssessments, type PaymentKey } from "@/lib/payments";
+import {
+    codingPaymentKey,
+    usePaidAssessments,
+    useCompletedAssessments,
+    type PaymentKey,
+} from "@/lib/payments";
+import { readableTextOn } from "@/lib/colors";
 
 interface ExploreDetailViewProps {
     exam: ExtendedExam;
     detail: ExamDetailData;
 }
 
+type CodingLangStatus = "ready" | "completed" | "locked";
+
+const codingStatusRank: Record<CodingLangStatus, number> = {
+    ready: 0,
+    completed: 1,
+    locked: 2,
+};
+
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
     const { isPaid, markPaid } = usePaidAssessments();
+    const { isCompleted } = useCompletedAssessments();
+
+    const codingEntries = useMemo(() => {
+        if (exam.id !== "coding") return [];
+        return CODING_LANGUAGES
+            .map((lang) => {
+                const key = codingPaymentKey(lang.id);
+                const paid = isPaid(key);
+                const completed = isCompleted(key);
+                const status: CodingLangStatus = completed
+                    ? "completed"
+                    : paid
+                        ? "ready"
+                        : "locked";
+                return { lang, paid, completed, status };
+            })
+            .sort((a, b) => codingStatusRank[a.status] - codingStatusRank[b.status]);
+    }, [exam.id, isPaid, isCompleted]);
+
+    const codingSummary = useMemo(() => {
+        const completed = codingEntries.filter((e) => e.status === "completed").length;
+        const ready = codingEntries.filter((e) => e.status === "ready").length;
+        const locked = codingEntries.filter((e) => e.status === "locked").length;
+        return { completed, ready, locked };
+    }, [codingEntries]);
 
     const [showAptitudeModal, setShowAptitudeModal] = useState(false);
     const [showCommunicationModal, setShowCommunicationModal] = useState(false);
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [pendingCodingLang, setPendingCodingLang] = useState<CodingLanguage | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<
         | { kind: "exam"; key: PaymentKey; title: string; subtitle: string }
         | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string }
@@ -42,6 +84,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const isCoding = exam.id === "coding";
     const examPaid = !isCoding && isPaid(exam.id as PaymentKey);
+    const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey);
 
     const startNonCodingAssessment = () => {
         if (exam.id === "aptitude") setShowAptitudeModal(true);
@@ -74,7 +117,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         const key = codingPaymentKey(language.id);
         if (isPaid(key)) {
             setShowLanguageModal(false);
-            router.push(`/assessment/coding?lang=${language.id}`);
+            setPendingCodingLang(language);
             return;
         }
         setPaymentTarget({
@@ -89,15 +132,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const handlePaymentSuccess = () => {
         if (!paymentTarget) return;
         markPaid(paymentTarget.key);
-
-        if (paymentTarget.kind === "coding") {
-            const lang = paymentTarget.language;
-            setPaymentTarget(null);
-            setShowLanguageModal(false);
-            router.push(`/assessment/coding?lang=${lang.id}`);
-            return;
-        }
-
         setPaymentTarget(null);
     };
 
@@ -180,7 +214,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                 <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400">
                                     {exam.difficulty}
                                 </span>
-                                {!isCoding && examPaid && (
+                                {!isCoding && examCompleted && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                                        Completed
+                                    </span>
+                                )}
+                                {!isCoding && examPaid && !examCompleted && (
                                     <span
                                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                                         style={{ background: `${accent}1f`, color: accent }}
@@ -226,6 +265,44 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         </div>
                     )}
                 </section>
+
+                {/* Per-language status (coding only) */}
+                {isCoding && (
+                    <Section eyebrow="Your Languages" title="Languages and progress">
+                        <div className="flex flex-wrap items-center gap-2 mb-4">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                                {codingSummary.ready} ready
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                                {codingSummary.completed} completed
+                            </span>
+                            <span
+                                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+                                style={{ background: `${accent}18`, color: accent }}
+                            >
+                                {codingSummary.locked} unpaid
+                            </span>
+                        </div>
+
+                        <div className="grid gap-2.5 sm:grid-cols-2">
+                            {codingEntries.map(({ lang, status }) => (
+                                <CodingLanguageRow
+                                    key={lang.id}
+                                    lang={lang}
+                                    status={status}
+                                    price={exam.price}
+                                    onAction={() => {
+                                        if (status === "ready" || status === "completed") {
+                                            setPendingCodingLang(lang);
+                                        } else {
+                                            handleLanguagePick(lang);
+                                        }
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </Section>
+                )}
 
                 {/* What this exam is about */}
                 <Section eyebrow="About" title="What this assessment is about">
@@ -413,8 +490,21 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     accent={accent}
                     price={exam.price}
                     isPaid={isPaid}
+                    isCompleted={isCompleted}
                     onClose={() => setShowLanguageModal(false)}
                     onPick={handleLanguagePick}
+                />
+            )}
+
+            {pendingCodingLang && (
+                <CodingPreTest
+                    language={pendingCodingLang}
+                    onStart={() => {
+                        const langId = pendingCodingLang.id;
+                        setPendingCodingLang(null);
+                        router.push(`/assessment/coding?lang=${langId}`);
+                    }}
+                    onClose={() => setPendingCodingLang(null)}
                 />
             )}
 
@@ -428,6 +518,73 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     onSuccess={handlePaymentSuccess}
                 />
             )}
+        </div>
+    );
+};
+
+interface CodingLanguageRowProps {
+    lang: CodingLanguage;
+    status: CodingLangStatus;
+    price: number;
+    onAction: () => void;
+}
+
+const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, price, onAction }) => {
+    const statusBadge =
+        status === "completed" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                Completed
+            </span>
+        ) : status === "ready" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                Ready to start
+            </span>
+        ) : (
+            <span
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                style={{ background: `${lang.accent}18`, color: lang.accent }}
+            >
+                ₹{price}
+            </span>
+        );
+
+    const ctaLabel =
+        status === "completed" ? "Retake" : status === "ready" ? "Start" : "Pay & Unlock";
+
+    return (
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
+            <div
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: `${lang.accent}1a` }}
+            >
+                <Image
+                    src={lang.icon}
+                    alt={`${lang.name} logo`}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 object-contain"
+                />
+            </div>
+            <div className="flex flex-1 flex-col min-w-0">
+                <div className="flex items-center gap-2">
+                    <p className="text-[14px] font-bold text-slate-900 dark:text-white">{lang.name}</p>
+                    {statusBadge}
+                </div>
+                <p className="text-[11.5px] text-slate-500 dark:text-gray-400 truncate">
+                    {lang.description}
+                </p>
+            </div>
+            <button
+                type="button"
+                onClick={onAction}
+                className="shrink-0 rounded-full px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-all active:scale-95 hover:opacity-95"
+                style={{
+                    background: status === "locked" ? `${lang.accent}18` : lang.accent,
+                    color: status === "locked" ? lang.accent : readableTextOn(lang.accent),
+                }}
+            >
+                {ctaLabel}
+            </button>
         </div>
     );
 };
