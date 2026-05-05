@@ -43,17 +43,17 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
         <div className="flex h-full flex-col gap-4">
             {/* Progress Section */}
             <div className="flex items-center gap-4 rounded-md border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5">
-                <div className="h-12 w-12 shrink-0 rounded-full p-1" style={progressRingStyle}>
+                <div className="h-16 w-16 shrink-0 rounded-full p-1.5" style={progressRingStyle}>
                     <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
-                        <span className="text-[11px] font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
+                        <span className="text-sm font-black text-[#17201b] dark:text-white">{safeProgress}%</span>
                     </div>
                 </div>
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">
                         Overall Progress
                     </p>
-                    <p className="mt-0.5 text-xl font-bold text-[#17201b] dark:text-white">
-                        {answeredCount} <span className="text-sm font-medium text-[#17201b]/40 dark:text-white/40">/ {questions.length}</span>
+                    <p className="mt-0.5 text-2xl font-black text-[#17201b] dark:text-white">
+                        {answeredCount} <span className="text-base font-bold text-[#17201b]/40 dark:text-white/40">/ {questions.length}</span>
                     </p>
                 </div>
             </div>

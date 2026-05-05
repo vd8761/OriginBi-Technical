@@ -64,25 +64,25 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                     className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors group/arrow self-start -mt-2 -mr-2"
                     title="View Details"
                 >
-                    <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover/arrow:text-slate-600 dark:group-hover/arrow:text-white transition-colors" />
+                    <ArrowRightIcon className="w-5 h-5 text-slate-600 group-hover/arrow:text-slate-900 dark:text-slate-300 dark:group-hover/arrow:text-white transition-colors" />
                 </button>
             </div>
 
             <div className="flex-1 flex flex-col">
-                <p className="text-[13px] text-slate-600 dark:text-gray-300 line-clamp-2 leading-relaxed mb-4 font-normal">{description}</p>
+                <p className="text-[13px] text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed mb-4 font-normal">{description}</p>
 
                 {/* Stats Row */}
                 <div className="flex items-center gap-5 mb-4">
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Questions</span>
+                        <span className="text-[9px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Questions</span>
                         <span className="text-xs font-semibold text-slate-800 dark:text-white">{totalQuestions} Qs</span>
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Duration</span>
+                        <span className="text-[9px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Duration</span>
                         <span className="text-xs font-semibold text-slate-800 dark:text-white">{duration}</span>
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Attempts</span>
+                        <span className="text-[9px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Attempts</span>
                         <span className="text-xs font-semibold text-slate-800 dark:text-white">2 Main / 5 Trial</span>
                     </div>
                 </div>
@@ -90,7 +90,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                 {/* Badges/Tags - Now at the bottom after para */}
                 <div className="flex flex-wrap gap-2 mb-6 mt-auto">
                     {tags.map((tag, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-[9px] font-semibold text-slate-600 dark:text-gray-300 uppercase tracking-wider">
+                        <span key={idx} className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-[9px] font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                             {tag}
                         </span>
                     ))}

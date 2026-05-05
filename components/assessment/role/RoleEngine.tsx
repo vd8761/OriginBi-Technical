@@ -240,10 +240,11 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
             <div className="absolute inset-0 assessment-scan opacity-25" aria-hidden="true" />
 
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
-                <div className="flex min-w-0 items-center gap-3">
-                    <div className="hidden origin-left scale-[0.7] sm:block">
-                        <Logo />
+                <div className="flex min-w-0 items-center">
+                    <div className="hidden sm:block">
+                        <Logo className="h-7" />
                     </div>
+                    <div className="mx-4 hidden h-8 w-px bg-slate-300 dark:bg-white/10 sm:block" />
                     <div className="min-w-0">
                         <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Role-Based Assessment</p>
                         <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
