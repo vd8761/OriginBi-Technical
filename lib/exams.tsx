@@ -16,14 +16,15 @@ export interface CodingLanguage {
   name: string;
   description: string;
   accent: string;
+  icon: string;
 }
 
 export const CODING_LANGUAGES: CodingLanguage[] = [
-  { id: "python", name: "Python", description: "Clean syntax, great for logic and data tasks.", accent: "#3776AB" },
-  { id: "java", name: "Java", description: "Strict typing, dominant in enterprise interviews.", accent: "#E76F00" },
-  { id: "cpp", name: "C++", description: "Performance-focused, common in product company rounds.", accent: "#00599C" },
-  { id: "javascript", name: "JavaScript", description: "Flexible scripting, widely used for web roles.", accent: "#F7DF1E" },
-  { id: "c", name: "C", description: "Foundational language used in core CS curriculums.", accent: "#A8B9CC" },
+  { id: "python", name: "Python", description: "Clean syntax, great for logic and data tasks.", accent: "#3776AB", icon: "/python.webp" },
+  { id: "java", name: "Java", description: "Strict typing, dominant in enterprise interviews.", accent: "#E76F00", icon: "/java.webp" },
+  { id: "cpp", name: "C++", description: "Performance-focused, common in product company rounds.", accent: "#00599C", icon: "/cpp.webp" },
+  { id: "javascript", name: "JavaScript", description: "Flexible scripting, widely used for web roles.", accent: "#F7DF1E", icon: "/js.webp" },
+  { id: "c", name: "C", description: "Foundational language used in core CS curriculums.", accent: "#A8B9CC", icon: "/c.webp" },
 ];
 
 export interface ExtendedExam extends Exam {
@@ -107,21 +108,21 @@ export const EXAMS: ExtendedExam[] = [
   },
   {
     id: "mnc",
-    title: "MNC Based Questions",
-    shortTitle: "MNC Prep",
+    title: "MNC Career Assessment",
+    shortTitle: "MNC Career",
     description:
-      "Practice high-frequency interview patterns across arrays, trees, dynamic programming, graphs, and systems thinking.",
+      "Master high-frequency interview patterns and professional expectations for top-tier MNC roles.",
     duration: "60 min",
     questions: 25,
     difficulty: "Advanced",
     price: 249,
-    tags: ["Arrays", "Trees", "DP", "Graphs"],
+    tags: ["DSA", "System Design", "Culture", "HR Prep"],
     icon: <MNCIcon className="w-7 h-7" />,
-    available: false,
-    statusLabel: "Coming Soon",
+    available: true,
+    statusLabel: "Ready",
     accentColor: "#6366f1",
     gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-    track: "technical",
+    track: "career",
   },
   {
     id: "role",
@@ -266,5 +267,5 @@ export const ASSESSMENT_RUN_PATH: Record<AssessmentId, string | null> = {
   communication: "/assessment/communication",
   role: "/assessment/role",
   coding: "/assessment/coding",
-  mnc: null,
+  mnc: "/assessment/mnc",
 };

@@ -9,6 +9,7 @@ import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
+import MNCPreTest from "../assessment/mnc/MNCPreTest";
 import AssessmentCard from "./AssessmentCard";
 import { ProfileIcon } from "../icons";
 import {
@@ -19,6 +20,7 @@ import {
   type PricingTier,
 } from "@/lib/exams";
 import DashboardContent from "./dashboard/DashboardContent";
+import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -39,22 +41,23 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showMncModal, setShowMncModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
+  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
+  const { isPaid } = usePaidAssessments();
   const router = useRouter();
 
   const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
 
   const filteredExams = useMemo(() => {
-    if (filter === "ready") {
-      return EXAMS.filter((exam) => exam.available);
+    const baseExams = EXAMS.filter((exam) => exam.available);
+    if (filter === "ready" || filter === "all") {
+      return baseExams;
     }
-    if (filter === "all") {
-      return EXAMS;
-    }
-    return EXAMS.filter((exam) => (exam as ExtendedExam).track === filter);
+    return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
   }, [filter]);
 
   const handleSelectExam = (exam: Exam) => {
@@ -82,7 +85,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     } else if (exam.id === "coding") {
       router.push("/assessment/coding");
     } else if (exam.id === "mnc") {
-      router.push("/assessment/mnc");
+      setShowMncModal(true);
     }
   };
 
@@ -91,8 +94,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-gradient-to-br from-brand-green/20 via-brand-green/5 to-transparent blur-[90px] animate-float-slow opacity-80" />
-        <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-brand-green/15 via-brand-green/5 to-transparent blur-[100px] animate-float-slower opacity-70" />
         <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
         <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
       </div>
@@ -102,6 +103,57 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         onNavigate={(view) => setCurrentView(view)}
         onLogout={() => console.log("Logging out...")}
       />
+
+      {/* Next Step Notification Alert */}
+      {showNextStepAlert && currentView === "dashboard" && (
+        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
+          <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="flex w-10 h-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-tight">
+                  Aptitude Cleared!
+                </h4>
+                <p className="mt-1.5 text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
+                  Excellent work on Logic. Start the{" "}
+                  <strong className="text-slate-800 dark:text-white">Communication Assessment</strong>{" "}
+                  next to unlock Technical Groupings and discover your true Role-Fit.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setShowNextStepAlert(false);
+                      setCurrentView("assessment");
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"
+                  >
+                    View Assessments
+                  </button>
+                  <button
+                    onClick={() => setShowNextStepAlert(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowNextStepAlert(false)}
+              className="absolute top-3 right-3 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[100px] sm:pt-[108px]">
         {currentView === "explore" ? (
@@ -130,28 +182,25 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </button>
             </div>
 
-            <div className="relative">
-              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-brand-green/20 via-transparent to-brand-green/10 blur-lg opacity-70" />
-              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/70 dark:bg-brand-dark-secondary/70 backdrop-blur-md shadow-sm">
-                {FILTERS.map((item) => {
-                  const isActive = filter === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => setFilter(item.value)}
-                      className={
-                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
-                        (isActive
-                          ? "text-white bg-brand-green shadow-md"
-                          : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
-                      }
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="relative flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+              {FILTERS.map((item) => {
+                const isActive = filter === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setFilter(item.value)}
+                    className={
+                      "relative px-5 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 border " +
+                      (isActive
+                        ? "text-white bg-brand-green shadow-md"
+                        : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
+                    }
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -170,6 +219,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                   available={exam.available}
                   level={exam.difficulty}
                   insight={exam.statusLabel}
+                  accentColor={exam.accentColor}
+                  gradient={exam.gradient}
                   onDetailsClick={() => handleSelectExam(exam)}
                   onStartClick={() => handleStartExam(exam)}
                 />
@@ -223,6 +274,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         <AptitudePreTest
           onStart={() => router.push("/assessment/aptitude")}
           onClose={() => setShowAptitudeModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'aptitude')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'aptitude')?.gradient}
         />
       )}
 
@@ -230,6 +283,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         <CommunicationPreTest
           onStart={() => router.push("/assessment/communication")}
           onClose={() => setShowCommunicationModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'communication')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'communication')?.gradient}
         />
       )}
 
@@ -237,6 +292,17 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         <RolePreTest
           onStart={() => router.push("/assessment/role")}
           onClose={() => setShowRoleModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'role')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'role')?.gradient}
+        />
+      )}
+
+      {showMncModal && (
+        <MNCPreTest
+          onStart={() => router.push("/assessment/mnc")}
+          onClose={() => setShowMncModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'mnc')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'mnc')?.gradient}
         />
       )}
     </div>

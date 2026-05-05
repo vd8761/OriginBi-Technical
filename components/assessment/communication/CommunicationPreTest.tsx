@@ -3,6 +3,8 @@ import React from "react";
 interface CommunicationPreTestProps {
     onStart: () => void;
     onClose: () => void;
+    accentColor?: string;
+    gradient?: string;
 }
 
 const metrics = [
@@ -17,12 +19,17 @@ const checklist = [
     "Allow microphone access when the browser asks.",
     "Use headphones or a quiet room for speaking tasks.",
     "Keep audio playback enabled before beginning.",
-    "Do not refresh the page during recording or writing tasks.",
+    "Ensure all tasks are completed before submission.",
 ];
 
 const skills = ["Listening", "Speaking", "Reading", "Writing"];
 
-const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ onStart, onClose }) => {
+const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ 
+    onStart, 
+    onClose,
+    accentColor = '#1ED36A',
+    gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)'
+}) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
             <button
@@ -38,21 +45,23 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ onStart, on
                 aria-labelledby="communication-pretest-title"
                 className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
             >
-                <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:px-6 sm:py-5 dark:border-white/10">
 
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <div className="flex items-start gap-5">
+                        <div 
+                            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg [&_svg]:h-7 [&_svg]:w-7"
+                            style={{ background: gradient || accentColor }}
+                        >
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 0 1-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8Z" />
                             </svg>
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-brand-green">Ready assessment</p>
-                            <h2 id="communication-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-[#17201b] dark:text-white">
+
+                            <h2 id="communication-pretest-title" className="text-xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight sm:text-2xl">
                                 Communication Assessment
                             </h2>
-                            <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
-
+                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-slate-500 dark:text-white/60 sm:text-sm">
                                 Evaluate workplace communication through listening prompts, speaking responses, reading tasks, and writing exercises.
                             </p>
                         </div>
@@ -70,11 +79,11 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ onStart, on
                     </button>
                 </header>
 
-                <div className="overflow-y-auto p-5 sm:p-6">
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+                <div className="overflow-y-auto p-4 sm:p-5">
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
                         <div>
                             <h3 className="text-base font-bold text-[#17201b] dark:text-white">What this test covers</h3>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {skills.map((skill) => (
                                     <div key={skill} className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-3 text-sm font-medium text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
 
@@ -83,14 +92,12 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ onStart, on
                                 ))}
                             </div>
 
-                            <h3 className="mt-6 text-base font-bold text-[#17201b] dark:text-white">Start checklist</h3>
-
-                            <div className="mt-4 space-y-3">
+                            <h3 className="mt-5 text-base font-bold text-[#17201b] dark:text-white">Start checklist</h3>
+                            <div className="mt-3 space-y-2.5">
                                 {checklist.map((point) => (
                                     <div key={point} className="flex items-start gap-3">
-                                        <span className="mt-2 h-2 w-2 shrink-0 rounded-sm bg-brand-green" />
-                                        <p className="text-sm font-medium leading-6 text-[#17201b]/80 dark:text-white/80">{point}</p>
-
+                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-sm bg-brand-green" />
+                                        <p className="text-[13px] font-medium leading-5 text-[#17201b]/80 dark:text-white/80 sm:text-sm">{point}</p>
                                     </div>
                                 ))}
                             </div>
@@ -98,9 +105,9 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ onStart, on
 
                         <aside className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-4 dark:border-white/10 dark:bg-white/5">
                             <h3 className="text-sm font-bold text-[#17201b] dark:text-white">Session snapshot</h3>
-                            <div className="mt-4 divide-y divide-brand-green/10 dark:divide-white/10">
+                            <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
                                 {metrics.map((metric) => (
-                                    <div key={metric.label} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                                    <div key={metric.label} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
                                         <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">{metric.label}</span>
                                         <strong className="text-sm font-bold text-[#17201b] dark:text-white">{metric.value}</strong>
 
@@ -111,18 +118,18 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ onStart, on
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
+                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-end sm:px-6 dark:border-white/10 dark:bg-[#111a15]">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:text-white"
+                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-[13px] font-bold text-slate-600 transition hover:bg-slate-50 focus:outline-none dark:border-white/15 dark:bg-transparent dark:text-white"
                     >
                         Go back
                     </button>
                     <button
                         type="button"
                         onClick={onStart}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-green px-6 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                        className="inline-flex min-h-10 items-center justify-center rounded-full bg-brand-green px-8 text-[13px] font-bold text-white transition hover:bg-[#1bb85c] active:scale-95"
                     >
                         Begin test
                     </button>

@@ -68,10 +68,10 @@
   --color-brand-dark-primary: #19211c;
   --color-brand-dark-secondary: #24272b;
   --color-brand-dark-tertiary: #303438;
-  --color-brand-text-light-primary: #2d3748;
-  --color-brand-text-light-secondary: #718096;
+  --color-brand-text-light-primary: #0f172a;
+  --color-brand-text-light-secondary: #334155;
   --color-brand-text-primary: #ffffff;
-  --color-brand-text-secondary: #a0aec0;
+  --color-brand-text-secondary: #e2e8f0;
 
   /* Setting the default sans font */
   --font-sans: 'Haskoy', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -653,4 +653,257 @@
   syntax: "<angle>";
   initial-value: 0deg;
   inherits: false;
+}
+
+/* ───────────────────── Coding Assessment scope ─────────────────────
+   Plus Jakarta Sans + dark exam shell. The body has font-family: Haskoy
+   !important globally, so we scope everything under .coding-exam-root
+   to override.
+*/
+.coding-exam-root,
+.coding-exam-root * {
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif !important;
+  box-sizing: border-box;
+}
+.coding-exam-root pre,
+.coding-exam-root code,
+.coding-exam-root .font-mono,
+.coding-exam-root textarea.code-textarea {
+  font-family: 'Cascadia Code', 'Fira Code', ui-monospace, monospace !important;
+}
+
+.coding-exam-root .hl-keyword { color: #AC96FF; font-weight: 600; }
+.coding-exam-root .hl-string  { color: #1ED36A; }
+.coding-exam-root .hl-number  { color: #FFB703; }
+.coding-exam-root .hl-comment { color: rgba(255,255,255,0.3); font-style: italic; }
+
+.coding-exam-root.coding-theme-light .hl-keyword { color: #5337BC; }
+.coding-exam-root.coding-theme-light .hl-string  { color: #157A45; }
+.coding-exam-root.coding-theme-light .hl-number  { color: #B5710F; }
+.coding-exam-root.coding-theme-light .hl-comment { color: rgba(15,23,18,0.45); font-style: italic; }
+
+.coding-exam-root .resizer {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: rgba(255,255,255,0.05);
+  transition: background 0.2s;
+  position: relative;
+}
+.coding-exam-root .resizer:hover,
+.coding-exam-root .resizer.active { background: rgba(30,211,106,0.3); }
+.coding-exam-root .resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 1px; height: 40px;
+  background: rgba(30,211,106,0.4);
+  border-radius: 1px;
+}
+
+@keyframes coding-spin { to { transform: rotate(360deg); } }
+@keyframes coding-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes coding-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes coding-slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.coding-exam-root .animate-spin-fast { animation: coding-spin 0.6s linear infinite; }
+.coding-exam-root .animate-pulse-soft { animation: coding-pulse 1s ease-in-out infinite; }
+.coding-exam-root .animate-fade-in { animation: coding-fade-in 0.3s ease-out both; }
+.coding-exam-root .animate-slide-up { animation: coding-slide-up 0.35s cubic-bezier(0.18,0.89,0.32,1.28) both; }
+
+.coding-exam-root *::-webkit-scrollbar { width: 5px; height: 5px; }
+.coding-exam-root *::-webkit-scrollbar-track { background: transparent; }
+.coding-exam-root *::-webkit-scrollbar-thumb { background: rgba(30,211,106,0.3); border-radius: 3px; }
+.coding-exam-root *::-webkit-scrollbar-thumb:hover { background: rgba(30,211,106,0.5); }
+
+.coding-exam-root textarea.code-textarea {
+  caret-color: #1ED36A;
+  tab-size: 4;
+}
+
+/* ───────────────────── Theme tokens ───────────────────── */
+.coding-exam-root.coding-theme-dark {
+  --c-bg: #19211C;
+  --c-surface: #0F1712;
+  --c-surface-2: #111814;
+  --c-surface-raised: rgba(255, 255, 255, 0.04);
+  --c-surface-raised-hover: rgba(255, 255, 255, 0.08);
+  --c-border: rgba(255, 255, 255, 0.08);
+  --c-border-strong: rgba(255, 255, 255, 0.14);
+  --c-text: #FFFFFF;
+  --c-text-strong: #FFFFFF;
+  --c-text-soft: rgba(255, 255, 255, 0.7);
+  --c-text-muted: rgba(255, 255, 255, 0.45);
+  --c-text-faint: rgba(255, 255, 255, 0.3);
+  --c-chip-bg: rgba(255, 255, 255, 0.05);
+  --c-chip-border: rgba(255, 255, 255, 0.1);
+  --c-chip-text: rgba(255, 255, 255, 0.7);
+  --c-thumb: #FFFFFF;
+  --c-thumb-shadow: rgba(0, 0, 0, 0.3);
+  --c-track-off: rgba(255, 255, 255, 0.18);
+  --c-ok: #1ED36A;
+  --c-warn: #FFB703;
+  --c-danger: #F17074;
+  --c-card: #1B1F23;
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
+.coding-exam-root.coding-theme-light {
+  --c-bg: #F2F6F3;
+  --c-surface: #FFFFFF;
+  --c-surface-2: #F8FBF9;
+  --c-surface-raised: rgba(15, 23, 18, 0.04);
+  --c-surface-raised-hover: rgba(15, 23, 18, 0.08);
+  --c-border: rgba(15, 23, 18, 0.12);
+  --c-border-strong: rgba(15, 23, 18, 0.22);
+  --c-text: #111814;
+  --c-text-strong: #0A0F0C;
+  --c-text-soft: rgba(15, 23, 18, 0.72);
+  --c-text-muted: rgba(15, 23, 18, 0.55);
+  --c-text-faint: rgba(15, 23, 18, 0.4);
+  --c-chip-bg: rgba(15, 23, 18, 0.05);
+  --c-chip-border: rgba(15, 23, 18, 0.14);
+  --c-chip-text: rgba(15, 23, 18, 0.78);
+  --c-thumb: #FFFFFF;
+  --c-thumb-shadow: rgba(15, 23, 18, 0.25);
+  --c-track-off: rgba(15, 23, 18, 0.22);
+  --c-ok: #0FA255;
+  --c-warn: #B5710F;
+  --c-danger: #C12027;
+  --c-card: #FFFFFF;
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
+.coding-exam-root .coding-header {
+  background: color-mix(in srgb, var(--c-surface) 95%, transparent);
+  border-color: var(--c-border);
+}
+
+.coding-exam-root .coding-question-pane {
+  background: var(--c-bg);
+  border-color: var(--c-border);
+}
+
+.coding-exam-root .coding-sidebar {
+  background: var(--c-surface-2);
+  border-color: var(--c-border);
+}
+
+.coding-exam-root .coding-sidebar-legend {
+  color: var(--c-text-muted);
+}
+
+.coding-exam-root .coding-question-panel {
+  color: var(--c-text-soft);
+}
+
+.coding-exam-root .coding-chip {
+  background: var(--c-chip-bg);
+  border: 1px solid var(--c-chip-border);
+  color: var(--c-chip-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.coding-exam-root .coding-chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-chip-bg) 65%, var(--c-chip-border));
+  color: var(--c-text);
+}
+.coding-exam-root .coding-chip:disabled {
+  color: var(--c-text-muted);
+  opacity: 0.6;
+}
+
+/* Monaco host: keep editor flush with surrounding surface and remove inner overflow gutters */
+.coding-exam-root .monaco-host {
+  position: relative;
+  overflow: hidden;
+}
+.coding-exam-root .monaco-host .monaco-editor,
+.coding-exam-root .monaco-host .monaco-editor .overflow-guard {
+  border-radius: 0;
+}
+/* Custom scrollbars inside monaco to match theme */
+.coding-exam-root .monaco-host .monaco-scrollable-element > .scrollbar > .slider {
+  border-radius: 4px;
+}
+
+/* Dev controls hover */
+.coding-exam-root .dev-btn:hover {
+  background: var(--dev-btn-hover-bg, var(--c-surface-raised-hover)) !important;
+}
+.coding-exam-root .dev-row:hover {
+  background: var(--c-surface-raised-hover);
+}
+
+/* ───────────────────── Light theme: re-map common hardcoded utilities ─────────────────────
+   Components were originally written for the dark exam shell with `text-white/X`,
+   `bg-white/0.0X`, etc. In light mode those classes become unreadable. We re-color
+   them via attribute selectors scoped to the light root. */
+.coding-exam-root.coding-theme-light [class~="text-white"]            { color: #111814; }
+.coding-exam-root.coding-theme-light [class~="text-white/85"]         { color: rgb(15 23 18 / 0.88); }
+.coding-exam-root.coding-theme-light [class~="text-white/75"]         { color: rgb(15 23 18 / 0.78); }
+.coding-exam-root.coding-theme-light [class~="text-white/70"]         { color: rgb(15 23 18 / 0.72); }
+.coding-exam-root.coding-theme-light [class~="text-white/65"]         { color: rgb(15 23 18 / 0.7); }
+.coding-exam-root.coding-theme-light [class~="text-white/60"]         { color: rgb(15 23 18 / 0.66); }
+.coding-exam-root.coding-theme-light [class~="text-white/55"]         { color: rgb(15 23 18 / 0.62); }
+.coding-exam-root.coding-theme-light [class~="text-white/50"]         { color: rgb(15 23 18 / 0.58); }
+.coding-exam-root.coding-theme-light [class~="text-white/45"]         { color: rgb(15 23 18 / 0.54); }
+.coding-exam-root.coding-theme-light [class~="text-white/40"]         { color: rgb(15 23 18 / 0.5); }
+.coding-exam-root.coding-theme-light [class~="text-white/35"]         { color: rgb(15 23 18 / 0.48); }
+.coding-exam-root.coding-theme-light [class~="text-white/30"]         { color: rgb(15 23 18 / 0.45); }
+.coding-exam-root.coding-theme-light [class~="text-white/25"]         { color: rgb(15 23 18 / 0.4); }
+.coding-exam-root.coding-theme-light [class~="text-white/20"]         { color: rgb(15 23 18 / 0.35); }
+.coding-exam-root.coding-theme-light [class~="text-white/15"]         { color: rgb(15 23 18 / 0.3); }
+.coding-exam-root.coding-theme-light [class~="text-white/10"]         { color: rgb(15 23 18 / 0.22); }
+
+.coding-exam-root.coding-theme-light [class~="bg-white/[0.04]"]       { background-color: rgb(15 23 18 / 0.04); }
+.coding-exam-root.coding-theme-light [class~="bg-white/[0.05]"]       { background-color: rgb(15 23 18 / 0.05); }
+.coding-exam-root.coding-theme-light [class~="bg-white/[0.06]"]       { background-color: rgb(15 23 18 / 0.06); }
+.coding-exam-root.coding-theme-light [class~="bg-white/[0.07]"]       { background-color: rgb(15 23 18 / 0.07); }
+.coding-exam-root.coding-theme-light [class~="bg-white/[0.08]"]       { background-color: rgb(15 23 18 / 0.08); }
+.coding-exam-root.coding-theme-light [class~="bg-white/10"]           { background-color: rgb(15 23 18 / 0.1); }
+
+.coding-exam-root.coding-theme-light [class~="border-white/[0.06]"]   { border-color: rgb(15 23 18 / 0.08); }
+.coding-exam-root.coding-theme-light [class~="border-white/[0.07]"]   { border-color: rgb(15 23 18 / 0.09); }
+.coding-exam-root.coding-theme-light [class~="border-white/[0.08]"]   { border-color: rgb(15 23 18 / 0.1); }
+.coding-exam-root.coding-theme-light [class~="border-white/10"]       { border-color: rgb(15 23 18 / 0.12); }
+.coding-exam-root.coding-theme-light [class~="border-white/15"]       { border-color: rgb(15 23 18 / 0.16); }
+.coding-exam-root.coding-theme-light [class~="border-white/20"]       { border-color: rgb(15 23 18 / 0.2); }
+.coding-exam-root.coding-theme-light [class~="border-white/30"]       { border-color: rgb(15 23 18 / 0.28); }
+
+/* Surfaces hardcoded with hex values — flip to light surface */
+.coding-exam-root.coding-theme-light [class~="bg-[#0F1712]"]          { background-color: #FFFFFF; }
+.coding-exam-root.coding-theme-light [class~="bg-[#0F1712]/95"]       { background-color: rgba(255, 255, 255, 0.95); }
+.coding-exam-root.coding-theme-light [class~="bg-[#0f1712]/70"]       { background-color: rgba(244, 248, 245, 0.85); }
+.coding-exam-root.coding-theme-light [class~="bg-[#0a0f0b]"]          { background-color: #F0F4F1; }
+.coding-exam-root.coding-theme-light [class~="bg-[#111814]"]          { background-color: #F8FBF9; }
+.coding-exam-root.coding-theme-light [class~="bg-[#111a15]"]          { background-color: #F0F4F1; }
+.coding-exam-root.coding-theme-light [class~="bg-[#19211C]"]          { background-color: #F4F8F5; }
+.coding-exam-root.coding-theme-light [class~="bg-[#1B1F23]"]          { background-color: #FFFFFF; }
+.coding-exam-root.coding-theme-light [class~="bg-[#1B1F23]/95"]       { background-color: rgba(255, 255, 255, 0.97); }
+.coding-exam-root.coding-theme-light [class~="bg-[#0D110F]"]          { background-color: #F0F4F1; }
+
+/* Caret + selection in editor textareas (legacy) and code blocks */
+.coding-exam-root.coding-theme-light textarea.code-textarea {
+  caret-color: #0FA255;
+  color: #1F2A23;
+}
+
+/* Make pre/code blocks readable on light surfaces */
+.coding-exam-root.coding-theme-light pre,
+.coding-exam-root.coding-theme-light code {
+  color: #1F2A23;
+}
+
+/* Logo invert for light mode */
+.coding-exam-root.coding-theme-light .coding-header img[alt="Origin BI"] {
+  filter: invert(1) brightness(0.35);
 }
