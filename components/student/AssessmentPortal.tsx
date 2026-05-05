@@ -472,7 +472,7 @@ const AssessmentPortal: React.FC = () => {
           <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
               <div>
-                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Assessments</h1>
+                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
               </div>
 
