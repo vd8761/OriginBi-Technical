@@ -9,14 +9,14 @@ const VALID_IDS: AssessmentId[] = ["aptitude", "communication", "coding", "mnc",
 
 export default function ExploreDetailClient({ id }: { id: string }) {
     if (!VALID_IDS.includes(id as AssessmentId)) {
-        redirect("/");
+        redirect("/dashboard");
     }
 
     const exam = EXAMS.find((e) => e.id === id);
     const detail = EXAM_DETAILS[id as AssessmentId];
 
     if (!exam || !detail) {
-        redirect("/");
+        redirect("/dashboard");
     }
 
     return <ExploreDetailView exam={exam} detail={detail} />;

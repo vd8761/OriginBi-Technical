@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Header from "./Header";
 import ExamCarousel, { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
@@ -11,6 +11,7 @@ import CommunicationPreTest from "../assessment/communication/CommunicationPreTe
 import RolePreTest from "../assessment/role/RolePreTest";
 import MNCPreTest from "../assessment/mnc/MNCPreTest";
 import AssessmentCard from "./AssessmentCard";
+import ProfileView from "./ProfileView";
 import { ProfileIcon } from "../icons";
 import {
   EXAMS,
@@ -21,7 +22,7 @@ import {
 } from "@/lib/exams";
 import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 
-type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore" | "aptitude-results" | "roadmaps" | "counsellor" | "debrief";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
 
 
@@ -39,18 +40,31 @@ const TRACK_PALETTE = {
   career: "#148a3c",
 } as const;
 
-const AssessmentPortal: React.FC = () => {
+interface AssessmentPortalProps {
+  initialView?: AssessmentView;
+}
+
+export default function AssessmentPortal({ initialView }: AssessmentPortalProps) {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showMncModal, setShowMncModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
+  const [currentView, setCurrentView] = useState<AssessmentView>(initialView || "dashboard");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
   const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const { isPaid } = usePaidAssessments();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Handle URL view parameter
+  useEffect(() => {
+    const viewParam = searchParams.get("view") as AssessmentView;
+    if (viewParam && ["dashboard", "assessment", "profile", "details", "explore", "aptitude-results", "roadmaps", "counsellor", "debrief"].includes(viewParam)) {
+      setCurrentView(viewParam);
+    }
+  }, [searchParams]);
 
   const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
 
@@ -364,6 +378,26 @@ const AssessmentPortal: React.FC = () => {
     },
   ];
 
+  const handleNavClick = (viewId: AssessmentView) => {
+    const routeMap: Record<string, string> = {
+      dashboard: "/dashboard",
+      explore: "/explore",
+      assessment: "/assessment",
+      profile: "/profile",
+      "aptitude-results": "/results",
+    };
+
+    if (routeMap[viewId]) {
+      router.push(routeMap[viewId]);
+    } else {
+      setCurrentView(viewId);
+    }
+
+    if (viewId === 'dashboard') {
+      setShowNextStepAlert(true);
+    }
+  };
+
   const handleSelectExam = (exam: Exam) => {
     setSelectedExam(exam);
     setShowDetailModal(true);
@@ -406,8 +440,11 @@ const AssessmentPortal: React.FC = () => {
 
       <Header
         currentView={currentHeaderView}
-        onNavigate={(view) => setCurrentView(view)}
-        onLogout={() => console.log("Logging out...")}
+        onNavigate={handleNavClick}
+        onLogout={() => {
+          localStorage.removeItem("isLoggedIn");
+          router.push("/");
+        }}
       />
 
       {/* Next Step Notification Alert */}
@@ -434,7 +471,7 @@ const AssessmentPortal: React.FC = () => {
                   <button
                     onClick={() => {
                       setShowNextStepAlert(false);
-                      setCurrentView("assessment");
+                      handleNavClick("assessment");
                     }}
                     className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"
                   >
@@ -555,7 +592,7 @@ const AssessmentPortal: React.FC = () => {
 
                   <div className="mt-8 flex flex-wrap gap-4">
                     <button 
-                      onClick={() => setCurrentView("assessment")}
+                      onClick={() => handleNavClick("assessment")}
                       className="px-7 py-4 rounded-2xl bg-brand-green text-white font-semibold shadow-xl shadow-brand-green/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                       Explore library
                     </button>
@@ -771,7 +808,7 @@ const AssessmentPortal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setCurrentView("assessment");
+                      handleNavClick("assessment");
                       setFilter("ready");
                     }}
                     className="rounded-full border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 px-4 py-2 text-xs font-semibold text-brand-text-light-secondary dark:text-brand-text-secondary hover:bg-brand-light-primary transition-all"
@@ -1233,6 +1270,8 @@ const AssessmentPortal: React.FC = () => {
               </div>
             </section>
           </>
+        ) : currentView === "profile" ? (
+          <ProfileView onNavigate={setCurrentView} />
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
@@ -1244,7 +1283,7 @@ const AssessmentPortal: React.FC = () => {
             </p>
             <button
               type="button"
-              onClick={() => setCurrentView("assessment")}
+              onClick={() => handleNavClick("assessment")}
               className="mt-6 px-6 py-3 rounded-xl bg-brand-green text-white text-sm font-medium transition-all hover:opacity-90"
             >
               View assessments
@@ -1308,6 +1347,6 @@ const AssessmentPortal: React.FC = () => {
       )}
     </div>
   );
-};
+}
 
-export default AssessmentPortal;
+

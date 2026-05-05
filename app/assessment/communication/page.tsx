@@ -10,7 +10,7 @@ export default function CommunicationAssessmentPage() {
     const handleComplete = (answers: CommunicationAnswers) => {
         console.log("Communication Assessment Completed. Answers:", answers);
         alert("Assessment Completed successfully! Responses are saved.");
-        router.push('/'); // Route back to portal
+        router.push('/dashboard'); // Route back to portal dashboard
     };
 
     return (

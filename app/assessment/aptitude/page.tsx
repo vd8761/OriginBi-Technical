@@ -10,7 +10,7 @@ export default function AptitudeAssessmentPage() {
     const handleComplete = (answers: Record<string, string>) => {
         console.log("Assessment Completed. Answers:", answers);
         alert("Assessment Completed successfully! Results are saved.");
-        router.push('/'); // Route back to portal
+        router.push('/dashboard'); // Route back to portal dashboard
     };
 
     return (

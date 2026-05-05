@@ -22,7 +22,7 @@ interface UserProfile {
 }
 
 interface ProfileViewProps {
-    onNavigate?: (view: "dashboard" | "assessment" | "profile" | "details" | "counsellor" | "roadmaps") => void;
+    onNavigate?: (view: "dashboard" | "assessment" | "profile" | "details" | "explore" | "aptitude-results" | "roadmaps" | "counsellor" | "debrief") => void;
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
@@ -57,7 +57,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
     }
 
     return (
-        <div className="w-full max-w-7xl mx-auto animate-fade-in pb-20">
+        <div className="w-full max-w-7xl mx-auto pb-20">
             {/* Breadcrumbs */}
             <div className="flex items-center text-xs text-black dark:text-white mb-6 font-normal flex-wrap">
                 <span 
