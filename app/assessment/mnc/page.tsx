@@ -20,7 +20,7 @@ export default function MNCAssessmentPage() {
     if (isCompleted) {
         return (
             <div className="min-h-screen w-full bg-brand-light-secondary dark:bg-brand-dark-primary flex items-center justify-center p-6">
-                <div className="max-w-md w-full rounded-3xl border border-brand-green/20 bg-white dark:bg-brand-dark-secondary p-10 text-center shadow-[0_24px_80px_rgba(15,23,42,0.2)]">
+                <div className="max-w-md w-full rounded-3xl border border-brand-green/20 bg-white dark:bg-brand-dark-secondary p-10 text-center shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
                     <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand-green/10 mb-6">
                         <svg className="w-10 h-10 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />

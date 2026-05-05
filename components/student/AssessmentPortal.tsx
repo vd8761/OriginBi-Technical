@@ -9,6 +9,7 @@ import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
+import MNCPreTest from "../assessment/mnc/MNCPreTest";
 import AssessmentCard from "./AssessmentCard";
 import { ProfileIcon } from "../icons";
 import {
@@ -42,6 +43,7 @@ const AssessmentPortal: React.FC = () => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showMncModal, setShowMncModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
@@ -389,7 +391,7 @@ const AssessmentPortal: React.FC = () => {
     } else if (exam.id === "coding") {
       router.push("/assessment/coding");
     } else if (exam.id === "mnc") {
-      router.push("/assessment/mnc");
+      setShowMncModal(true);
     }
   };
 
@@ -1293,6 +1295,15 @@ const AssessmentPortal: React.FC = () => {
           onClose={() => setShowRoleModal(false)}
           accentColor={EXAMS.find(e => e.id === 'role')?.accentColor}
           gradient={EXAMS.find(e => e.id === 'role')?.gradient}
+        />
+      )}
+
+      {showMncModal && (
+        <MNCPreTest
+          onStart={() => router.push("/assessment/mnc")}
+          onClose={() => setShowMncModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'mnc')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'mnc')?.gradient}
         />
       )}
     </div>

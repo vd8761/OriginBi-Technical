@@ -297,7 +297,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
-            <header className="assessment-header sticky top-0 z-50 flex min-h-14 items-center justify-between gap-4 px-4 py-2 md:px-6">
+            <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                     <div className="hidden origin-left scale-[0.7] sm:block">
                         <Logo />
@@ -327,10 +327,10 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1600px] gap-8 px-6 py-8 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden lg:px-8">
+            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
                 <section className="flex min-h-[600px] flex-col rounded-lg border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
-                    <div className="border-b border-brand-green/5 p-4 sm:px-6 sm:py-4 dark:border-white/10">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
                                     {taskCopy[currentTask.type].label}
@@ -354,7 +354,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                 <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center">
                                     <button
                                         onClick={handleMarkReview}
-                                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-[11px] font-bold transition sm:px-5 sm:text-xs ${
+                                        className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3.5 text-[10px] font-bold transition sm:px-4 sm:text-[11px] ${
                                             isQuestionMarked
                                                 ? "border-amber-400 bg-amber-400 text-[#241604]"
                                                 : "border-brand-green/20 bg-white text-[#17201b] hover:border-amber-400 hover:text-amber-600 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-amber-400"
@@ -368,7 +368,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                     <button
                                         onClick={handleClear}
                                         disabled={!isQuestionAnswered}
-                                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-[11px] font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400 sm:px-5 sm:text-xs"
+                                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-brand-green/20 bg-white px-3.5 text-[10px] font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400 sm:px-4 sm:text-[11px]"
                                     >
                                         <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -379,17 +379,17 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                         </div>
                     </div>
 
-                    <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
+                    <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
                         {renderTaskContent()}
                     </div>
 
-                    <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-4 dark:border-white/10 dark:bg-white/5">
+                    <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-3 dark:border-white/10 dark:bg-white/5">
                         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                             <button
                                 type="button"
                                 onClick={handlePrev}
                                 disabled={currentIndex === 0}
-                                className="min-h-11 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
+                                className="min-h-10 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
                             >
                                 Previous
                             </button>
@@ -397,7 +397,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                 <button
                                     type="button"
                                     onClick={handleConfirmSubmit}
-                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] shadow-sm"
+                                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] shadow-sm"
                                 >
                                     Submit assessment
                                 </button>
@@ -405,7 +405,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                 <button
                                     type="button"
                                     onClick={handleNext}
-                                    className="min-h-11 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e]"
+                                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e]"
                                 >
                                     Save and next
                                 </button>

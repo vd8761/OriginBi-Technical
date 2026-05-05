@@ -40,12 +40,12 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     };
 
     return (
-        <div className="flex h-full flex-col gap-6">
+        <div className="flex h-full flex-col gap-4">
             {/* Progress Section */}
-            <div className="flex items-center gap-4 rounded-md border border-brand-green/15 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5">
-                <div className="h-16 w-16 shrink-0 rounded-full p-1" style={progressRingStyle}>
+            <div className="flex items-center gap-4 rounded-md border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5">
+                <div className="h-12 w-12 shrink-0 rounded-full p-1" style={progressRingStyle}>
                     <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
-                        <span className="text-sm font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
+                        <span className="text-[11px] font-bold text-[#17201b] dark:text-white">{safeProgress}%</span>
                     </div>
                 </div>
                 <div>
@@ -59,19 +59,19 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             </div>
             
             {/* Status Summary Section */}
-            <div className="rounded-lg border border-brand-green/15 bg-white/40 p-6 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
+            <div className="rounded-lg border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
                 <div className="grid grid-cols-3 gap-1.5">
-                    <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-3 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
+                    <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-2 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
                         <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
                         <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green dark:text-brand-green">Answered</span>
                     </div>
 
-                    <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-3 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
+                    <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-2 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
                         <span className="text-lg font-black text-amber-500 leading-none">{markedCount}</span>
                         <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-500">Review</span>
                     </div>
 
-                    <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-3 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
+                    <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-2 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
                         <span className="text-lg font-black text-slate-700 dark:text-white leading-none">{leftCount}</span>
                         <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-700 dark:text-white">Left</span>
                     </div>
