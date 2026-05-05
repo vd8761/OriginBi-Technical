@@ -100,125 +100,22 @@ const NotificationItem: React.FC<{
     </motion.div>
 );
 
-// Refined animated underline with organic easing
-const AnimatedUnderline = ({ active }: { active: boolean }) => (
-    <motion.div
-        className="absolute -bottom-0.5 left-1/2 h-[2px] bg-gradient-to-r from-brand-green via-emerald-400 to-brand-green rounded-full"
-        initial={false}
-        animate={{
-            width: active ? "65%" : "0%",
-            x: active ? "-50%" : "-50%",
-            opacity: active ? 1 : 0,
-        }}
-        transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
-    />
+// Clean pill-shaped NavItem matching reference design
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isMobile, onClick }) => (
+    <motion.button
+        onClick={onClick}
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.97 }}
+        className={`relative flex items-center gap-2.5 px-5 py-2.5 rounded-full text-[13px] font-semibold tracking-tight transition-all duration-300 border ${
+            active
+                ? "bg-brand-green text-white border-brand-green shadow-lg shadow-brand-green/20"
+                : "bg-white/90 dark:bg-white/[0.06] border-gray-200 dark:border-white/[0.12] text-gray-600 dark:text-gray-300 hover:border-brand-green/50 hover:shadow-md"
+        } ${isMobile ? 'w-full justify-start py-3.5' : ''}`}
+    >
+        <span className={`transition-colors ${active ? "text-white" : "text-brand-green"}`}>{icon}</span>
+        <span className={`${isMobile ? '' : 'hidden lg:inline'}`}>{label}</span>
+    </motion.button>
 );
-
-// Sophisticated glow effect with subtle animation
-const GlowOrb = ({ active }: { active: boolean }) => (
-    <motion.div
-        className="absolute inset-0 rounded-[16px] blur-3xl"
-        style={{ background: "linear-gradient(135deg, rgba(30,211,106,0.25) 0%, rgba(16,185,129,0.08) 100%)" }}
-        initial={false}
-        animate={{
-            opacity: active ? 0.3 : 0,
-            scale: active ? 1.25 : 0.85,
-        }}
-        transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
-    />
-);
-
-// Premium NavItem with UI/UX designer-level polish
-const NavItem: React.FC<NavItemProps> = ({
-    icon,
-    label,
-    active,
-    isMobile,
-    onClick,
-    index = 0,
-}) => {
-    const [isHovered, setIsHovered] = useState(false);
-
-    return (
-        <motion.div 
-            className="relative"
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.06, duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
-        >
-            <GlowOrb active={!!active} />
-            <motion.button
-                onClick={onClick}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                className={`relative flex items-center gap-3 px-6 py-3.5 rounded-[16px] text-[13px] font-semibold tracking-tight transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden ${
-                    active
-                        ? "text-brand-green bg-gradient-to-br from-brand-green/[0.08] to-emerald-500/[0.04]"
-                        : "text-gray-600 dark:text-gray-300 hover:text-brand-green"
-                } ${isMobile ? 'w-full justify-start py-4' : ''}`}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-            >
-                {/* Refined gradient background on hover */}
-                <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-brand-green/[0.12] via-brand-green/[0.04] to-transparent rounded-[16px]"
-                    initial={false}
-                    animate={{
-                        opacity: isHovered && !active ? 1 : 0,
-                        x: isHovered ? 0 : -40,
-                    }}
-                    transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
-                />
-
-                {/* Subtle shimmer effect */}
-                {isHovered && !active && (
-                    <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent rounded-[16px]"
-                        initial={{ x: -100 }}
-                        animate={{ x: 100 }}
-                        transition={{ duration: 0.8, ease: [0.32, 0.72, 0, 1] }}
-                    />
-                )}
-
-                {/* Icon with refined animation */}
-                <motion.span 
-                    className={`relative z-10 ${active ? "text-brand-green" : "text-gray-500 dark:text-gray-400"}`}
-                    animate={{
-                        scale: isHovered ? 1.08 : 1,
-                        rotate: isHovered ? [0, -4, 4, 0] : 0,
-                    }}
-                    transition={{ duration: 0.5, type: "spring", stiffness: 250, damping: 20 }}
-                >
-                    {icon}
-                </motion.span>
-
-                {/* Label with refined typography */}
-                <motion.span 
-                    className={`relative z-10 hidden lg:inline ${isMobile ? '!inline' : ''} ${active ? "font-bold tracking-tight" : ""}`}
-                    animate={{
-                        letterSpacing: isHovered ? "0.015em" : "0em",
-                    }}
-                    transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-                >
-                    {label}
-                </motion.span>
-
-                {/* Animated underline for desktop */}
-                {!isMobile && <AnimatedUnderline active={!!active} />}
-
-                {/* Refined active indicator */}
-                {active && (
-                    <motion.span 
-                        className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-brand-green shadow-[0_0_10px_rgba(30,211,106,0.7)]"
-                        layoutId="activeIndicator"
-                        animate={{ scale: [1, 1.15, 1] }}
-                        transition={{ duration: 2.5, ease: [0.32, 0.72, 0, 1], repeat: Infinity }}
-                    />
-                )}
-            </motion.button>
-        </motion.div>
-    );
-};
 
 const Header: React.FC<HeaderProps> = ({
     onLogout,

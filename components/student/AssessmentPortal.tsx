@@ -103,7 +103,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         onLogout={() => console.log("Logging out...")}
       />
 
-      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6">
+      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[100px] sm:pt-[108px]">
         {currentView === "explore" ? (
           <ExploreView
             assessments={EXAMS as any}
