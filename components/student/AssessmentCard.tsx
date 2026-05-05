@@ -1,3 +1,5 @@
+import { ArrowRightIcon } from "../icons";
+
 interface AssessmentCardProps {
     title: string;
     description: string;
@@ -11,6 +13,8 @@ interface AssessmentCardProps {
     available: boolean;
     level: string;
     insight: string;
+    accentColor?: string;
+    gradient?: string;
     onDetailsClick: () => void;
     onStartClick: () => void;
 }
@@ -28,27 +32,47 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
     available,
     level,
     insight,
+    accentColor = '#1ED36A',
+    gradient,
     onDetailsClick,
     onStartClick,
 }) => {
     return (
-        <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-2xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] hover:border-brand-green/40">
+        <div 
+            className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-3xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] hover:border-[var(--acc-color)]"
+            style={{ '--acc-color': `${accentColor}66` } as React.CSSProperties}
+        >
             <div className="flex gap-4 mb-4">
                 {/* Left: Hero Icon */}
-                <div className="flex items-center justify-center shrink-0 w-12 h-12 bg-brand-green/10 rounded-2xl text-brand-green transition-transform duration-500 group-hover:scale-110 border border-brand-green/20">
+                <div 
+                    className="flex items-center justify-center shrink-0 w-14 h-14 rounded-2xl text-white shadow-lg [&_svg]:h-7 [&_svg]:w-7"
+                    style={{ background: gradient || accentColor }}
+                >
                     {icon}
                 </div>
 
                 <div className="flex-1 min-w-0 flex items-center">
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white transition-colors">{title}</h3>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white transition-colors tracking-tight">{title}</h3>
                 </div>
+
+                {/* Top Right: Details Arrow */}
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDetailsClick();
+                    }}
+                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors group/arrow self-start -mt-2 -mr-2"
+                    title="View Details"
+                >
+                    <ArrowRightIcon className="w-5 h-5 text-slate-400 group-hover/arrow:text-slate-600 dark:group-hover/arrow:text-white transition-colors" />
+                </button>
             </div>
 
             <div className="flex-1 flex flex-col">
                 <p className="text-[13px] text-slate-600 dark:text-gray-300 line-clamp-2 leading-relaxed mb-4 font-normal">{description}</p>
 
                 {/* Stats Row */}
-                <div className="flex items-center gap-6 mb-4">
+                <div className="flex items-center gap-5 mb-4">
                     <div className="flex flex-col">
                         <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Questions</span>
                         <span className="text-xs font-semibold text-slate-800 dark:text-white">{totalQuestions} Qs</span>
@@ -56,6 +80,10 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                     <div className="flex flex-col">
                         <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Duration</span>
                         <span className="text-xs font-semibold text-slate-800 dark:text-white">{duration}</span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">Attempts</span>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-white">2 Main / 5 Trial</span>
                     </div>
                 </div>
 
@@ -73,24 +101,19 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             <div className="h-[1px] w-full bg-black/10 dark:bg-white/10 mb-5"></div>
 
             {/* Bottom Actions */}
-            <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                    <span className="text-[9px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-widest leading-none">Price</span>
-                    <span className="text-[15px] font-bold text-brand-green mt-1">{price}</span>
-                </div>
-
+            <div className="flex items-center justify-end">
                 <div className="flex gap-2">
                     <button
                         onClick={onDetailsClick}
-                        className="px-5 py-2 text-[11px] font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
+                        className="px-5 py-2 text-xs font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
                     >
-                        Details
+                        Start Trial
                     </button>
                     <button 
                         onClick={onStartClick}
-                        className={`px-6 py-2 text-[11px] font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
+                        className={`px-6 py-2 text-xs font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
                             available 
-                                ? 'bg-brand-green text-white hover:bg-[#1bb85c]' 
+                                ? 'bg-brand-green text-white hover:bg-[#1bb85c] shadow-brand-green/20' 
                                 : 'bg-slate-400 text-white cursor-not-allowed'
                         }`}
                         disabled={!available}

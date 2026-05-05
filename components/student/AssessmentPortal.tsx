@@ -18,6 +18,7 @@ import {
   type ExtendedExam,
   type PricingTier,
 } from "@/lib/exams";
+import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -46,18 +47,17 @@ const AssessmentPortal: React.FC = () => {
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
   const [showNextStepAlert, setShowNextStepAlert] = useState(true);
+  const { isPaid } = usePaidAssessments();
   const router = useRouter();
 
   const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
 
   const filteredExams = useMemo(() => {
-    if (filter === "ready") {
-      return EXAMS.filter((exam) => exam.available);
+    const baseExams = EXAMS.filter((exam) => exam.available);
+    if (filter === "ready" || filter === "all") {
+      return baseExams;
     }
-    if (filter === "all") {
-      return EXAMS;
-    }
-    return EXAMS.filter((exam) => (exam as ExtendedExam).track === filter);
+    return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
   }, [filter]);
 
   const totalQuestions = useMemo(() => EXAMS.reduce((sum, exam) => sum + exam.questions, 0), []);
@@ -398,8 +398,6 @@ const AssessmentPortal: React.FC = () => {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-gradient-to-br from-brand-green/20 via-brand-green/5 to-transparent blur-[90px] animate-float-slow opacity-80" />
-        <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-brand-green/15 via-brand-green/5 to-transparent blur-[100px] animate-float-slower opacity-70" />
         <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
         <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
       </div>
@@ -461,7 +459,7 @@ const AssessmentPortal: React.FC = () => {
         </div>
       )}
 
-      <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-10">
+      <main className="relative z-10 mx-auto flex max-w-[1480px] flex-col gap-8 px-4 pb-8 pt-24 sm:px-6 lg:px-8">
         {currentView === "explore" ? (
           <ExploreView
             assessments={EXAMS}
@@ -469,14 +467,14 @@ const AssessmentPortal: React.FC = () => {
             onNavigateToDetails={(exam) => router.push(`/explore/${exam.id}`)}
           />
         ) : currentView === "assessment" ? (
-          <div className="animate-slide-up space-y-10" style={{ animationDelay: "100ms" }}>
+          <div className="animate-slide-up space-y-8" style={{ animationDelay: "100ms" }}>
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
               <div>
-                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Assessments</h1>
+                <h1 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">Assessments</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select an assessment to validate your skills and get certified.</p>
               </div>
 
-              <div className="relative flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+              <div className="relative flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
                 {FILTERS.map((item) => {
                   const isActive = filter === item.value;
                   return (
@@ -485,10 +483,10 @@ const AssessmentPortal: React.FC = () => {
                       type="button"
                       onClick={() => setFilter(item.value)}
                       className={
-                        "relative px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 " +
+                        "relative px-5 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 border " +
                         (isActive
-                          ? "text-white bg-slate-900 dark:bg-white dark:text-slate-900 shadow-md"
-                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
+                          ? "text-white bg-brand-green border-brand-green/20"
+                          : "text-slate-600 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-white/5")
                       }
                     >
                       {item.label}
@@ -514,6 +512,8 @@ const AssessmentPortal: React.FC = () => {
                   available={exam.available}
                   level={exam.difficulty}
                   insight={exam.statusLabel}
+                  accentColor={exam.accentColor}
+                  gradient={exam.gradient}
                   onDetailsClick={() => handleSelectExam(exam)}
                   onStartClick={() => handleStartExam(exam)}
                 />
@@ -1273,6 +1273,8 @@ const AssessmentPortal: React.FC = () => {
         <AptitudePreTest
           onStart={() => router.push("/assessment/aptitude")}
           onClose={() => setShowAptitudeModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'aptitude')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'aptitude')?.gradient}
         />
       )}
 
@@ -1280,6 +1282,8 @@ const AssessmentPortal: React.FC = () => {
         <CommunicationPreTest
           onStart={() => router.push("/assessment/communication")}
           onClose={() => setShowCommunicationModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'communication')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'communication')?.gradient}
         />
       )}
 
@@ -1287,6 +1291,8 @@ const AssessmentPortal: React.FC = () => {
         <RolePreTest
           onStart={() => router.push("/assessment/role")}
           onClose={() => setShowRoleModal(false)}
+          accentColor={EXAMS.find(e => e.id === 'role')?.accentColor}
+          gradient={EXAMS.find(e => e.id === 'role')?.gradient}
         />
       )}
     </div>

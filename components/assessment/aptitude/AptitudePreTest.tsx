@@ -3,6 +3,8 @@ import React from "react";
 interface AptitudePreTestProps {
     onStart: () => void;
     onClose: () => void;
+    accentColor?: string;
+    gradient?: string;
 }
 
 const metrics = [
@@ -17,12 +19,17 @@ const checklist = [
     "Keep one uninterrupted 60 minute window ready.",
     "Use a laptop or desktop for the most stable test layout.",
     "Avoid refreshing the browser after the assessment begins.",
-    "Submit only when you are confident with your selected answers.",
+    "Ensure all questions are answered before submission.",
 ];
 
 const skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"];
 
-const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) => {
+const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ 
+    onStart, 
+    onClose,
+    accentColor = '#1ED36A',
+    gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)'
+}) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
             <button
@@ -38,21 +45,23 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                 aria-labelledby="aptitude-pretest-title"
                 className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
             >
-                <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 sm:p-8 dark:border-white/10">
 
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <div className="flex items-start gap-5">
+                        <div 
+                            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg [&_svg]:h-7 [&_svg]:w-7"
+                            style={{ background: gradient || accentColor }}
+                        >
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2Z" />
                             </svg>
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-brand-green">Ready assessment</p>
-                            <h2 id="aptitude-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-[#17201b] dark:text-white">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: accentColor }}>Ready assessment</p>
+                            <h2 id="aptitude-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight">
                                 Aptitude Assessment
                             </h2>
-                            <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
-
+                            <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-slate-500 dark:text-white/60">
                                 Benchmark problem-solving speed, numerical accuracy, logical reasoning, and data interpretation in one structured session.
                             </p>
                         </div>
@@ -109,18 +118,19 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ onStart, onClose }) =
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-brand-green/5 bg-brand-green/5 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
+                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-white p-6 sm:flex-row sm:items-center sm:justify-end sm:px-8 dark:border-white/10 dark:bg-[#111a15]">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:bg-transparent dark:text-white"
+                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-[13px] font-bold text-slate-600 transition hover:bg-slate-50 focus:outline-none dark:border-white/15 dark:bg-transparent dark:text-white"
                     >
                         Go back
                     </button>
                     <button
                         type="button"
                         onClick={onStart}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-green px-6 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                        className="inline-flex min-h-11 items-center justify-center rounded-full px-8 text-[13px] font-bold text-white transition active:scale-95 shadow-lg"
+                        style={{ background: gradient || accentColor, boxShadow: `0 8px 20px ${accentColor}33` }}
                     >
                         Begin test
                     </button>

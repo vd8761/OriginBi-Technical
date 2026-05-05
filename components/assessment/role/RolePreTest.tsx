@@ -3,6 +3,8 @@ import React from "react";
 interface RolePreTestProps {
     onStart: () => void;
     onClose: () => void;
+    accentColor?: string;
+    gradient?: string;
 }
 
 const metrics = [
@@ -16,13 +18,18 @@ const metrics = [
 const checklist = [
     "Think from the perspective of your selected target role.",
     "Read scenario context before choosing the best action.",
-    "There is no negative marking in this assessment.",
     "Keep one uninterrupted 30 minute window ready.",
+    "Ensure all questions are answered before submission.",
 ];
 
 const skills = ["Role concepts", "Scenario judgement", "Priority calls", "Practical reasoning"];
 
-const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
+const RolePreTest: React.FC<RolePreTestProps> = ({ 
+    onStart, 
+    onClose,
+    accentColor = '#1ED36A',
+    gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)'
+}) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
             <button
@@ -38,21 +45,23 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                 aria-labelledby="role-pretest-title"
                 className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
             >
-                <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 sm:p-8 dark:border-white/10">
 
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-green/10 text-brand-green">
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <div className="flex items-start gap-5">
+                        <div 
+                            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg [&_svg]:h-7 [&_svg]:w-7"
+                            style={{ background: gradient || accentColor }}
+                        >
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.93 23.93 0 0 1 12 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2m4 6h.01M5 20h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z" />
                             </svg>
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-brand-green">Ready assessment</p>
-                            <h2 id="role-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-[#17201b] dark:text-white">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: accentColor }}>Ready assessment</p>
+                            <h2 id="role-pretest-title" className="mt-1 text-2xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight">
                                 Role-Based Assessment
                             </h2>
-                            <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
-
+                            <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-slate-500 dark:text-white/60">
                                 Check role-fit through concept questions and work scenarios that test judgement, prioritization, and practical decisions.
                             </p>
                         </div>
@@ -111,18 +120,19 @@ const RolePreTest: React.FC<RolePreTestProps> = ({ onStart, onClose }) => {
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
+                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-white p-6 sm:flex-row sm:items-center sm:justify-end sm:px-8 dark:border-white/10 dark:bg-[#111a15]">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:text-white"
+                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-[13px] font-bold text-slate-600 transition hover:bg-slate-50 focus:outline-none dark:border-white/15 dark:bg-transparent dark:text-white"
                     >
                         Go back
                     </button>
                     <button
                         type="button"
                         onClick={onStart}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-green px-6 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                        className="inline-flex min-h-11 items-center justify-center rounded-full px-8 text-[13px] font-bold text-white transition active:scale-95 shadow-lg"
+                        style={{ background: gradient || accentColor, boxShadow: `0 8px 20px ${accentColor}33` }}
                     >
                         Begin test
                     </button>
