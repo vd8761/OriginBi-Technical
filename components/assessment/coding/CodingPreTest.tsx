@@ -54,7 +54,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     style={{ background: language.accent }}
                 />
 
-                <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-5 sm:p-6 dark:border-white/10">
+                <header className="flex items-start justify-between gap-4 border-b border-brand-green/5 p-4 sm:px-6 sm:py-5 dark:border-white/10">
                     <div className="flex items-start gap-4">
                         <div
                             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
@@ -74,11 +74,11 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                             </p>
                             <h2
                                 id="coding-pretest-title"
-                                className="mt-1 text-2xl font-bold leading-tight text-[#17201b] dark:text-white"
+                                className="text-xl font-bold leading-tight text-[#17201b] dark:text-white sm:text-2xl"
                             >
                                 Coding Assessment &middot; {language.name}
                             </h2>
-                            <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-[#17201b]/60 dark:text-white/60">
+                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b]/60 dark:text-white/60 sm:text-sm">
                                 Five problems covering core programming, data structures, algorithms, complexity, and dynamic programming — all evaluated in {language.name}.
                             </p>
                         </div>
@@ -99,13 +99,13 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     </button>
                 </header>
 
-                <div className="overflow-y-auto p-5 sm:p-6">
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+                <div className="overflow-y-auto p-4 sm:p-5">
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
                         <div>
                             <h3 className="text-base font-bold text-[#17201b] dark:text-white">
                                 What this test covers
                             </h3>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {covers.map((skill) => (
                                     <div
                                         key={skill}
@@ -120,17 +120,17 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                 ))}
                             </div>
 
-                            <h3 className="mt-6 text-base font-bold text-[#17201b] dark:text-white">
+                            <h3 className="mt-5 text-base font-bold text-[#17201b] dark:text-white">
                                 Before you begin
                             </h3>
-                            <div className="mt-4 space-y-3">
+                            <div className="mt-3 space-y-2.5">
                                 {checklist.map((point) => (
                                     <div key={point} className="flex items-start gap-3">
                                         <span
-                                            className="mt-2 h-2 w-2 shrink-0 rounded-sm"
+                                            className="mt-2 h-1.5 w-1.5 shrink-0 rounded-sm"
                                             style={{ background: language.accent }}
                                         />
-                                        <p className="text-sm font-medium leading-6 text-[#17201b]/80 dark:text-white/80">
+                                        <p className="text-[13px] font-medium leading-5 text-[#17201b]/80 dark:text-white/80 sm:text-sm">
                                             {point}
                                         </p>
                                     </div>
@@ -148,11 +148,11 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                             <h3 className="text-sm font-bold text-[#17201b] dark:text-white">
                                 Session snapshot
                             </h3>
-                            <div className="mt-4 divide-y divide-brand-green/10 dark:divide-white/10">
+                            <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
                                 {metrics.map((metric) => (
                                     <div
                                         key={metric.label}
-                                        className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                                        className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
                                     >
                                         <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">
                                             {metric.label}
@@ -178,18 +178,18 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-brand-green/5 bg-brand-green/5 p-4 sm:flex-row sm:justify-end dark:border-white/10 dark:bg-white/5">
+                <footer className="flex flex-col gap-3 border-t border-brand-green/5 bg-brand-green/5 p-4 sm:flex-row sm:justify-end sm:px-6 dark:border-white/10 dark:bg-white/5">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:bg-transparent dark:text-white"
+                        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/15 dark:bg-transparent dark:text-white"
                     >
                         Not yet
                     </button>
                     <button
                         type="button"
                         onClick={onStart}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg px-6 text-sm font-bold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                        className="inline-flex min-h-10 items-center justify-center rounded-lg px-6 text-sm font-bold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                         style={{
                             background: language.accent,
                             boxShadow: `0 8px 18px ${language.accent}40`,
