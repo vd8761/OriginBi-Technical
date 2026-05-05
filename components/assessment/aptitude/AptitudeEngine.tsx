@@ -131,12 +131,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
 
     const handleOptionSelect = (optionId: string) => {
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
-
-        if (markedForReview.has(currentQuestion.id)) {
-            const newMarked = new Set(markedForReview);
-            newMarked.delete(currentQuestion.id);
-            setMarkedForReview(newMarked);
-        }
     };
 
     const handleClear = () => {
@@ -254,26 +248,26 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center">
                                 <button
                                     onClick={handleMarkReview}
-                                    className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-[11px] font-bold transition sm:text-xs ${
+                                    className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-[11px] font-bold transition sm:px-5 sm:text-xs ${
                                         isQuestionMarked
                                             ? "border-amber-400 bg-amber-400 text-[#241604]"
                                             : "border-brand-green/20 bg-white text-[#17201b] hover:border-amber-400 hover:text-amber-600 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-amber-400"
                                     }`}
                                 >
-                                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className={`h-3.5 w-3.5 shrink-0 ${isQuestionMarked ? "fill-current" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
                                     </svg>
-                                    <span className="truncate">{isQuestionMarked ? "Unmark" : "Mark review"}</span>
+                                    <span className="truncate">{isQuestionMarked ? "Unmark review" : "Mark for review"}</span>
                                 </button>
                                 <button
                                     onClick={handleClear}
                                     disabled={!isQuestionAnswered}
-                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-[11px] font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400 sm:text-xs"
+                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-[11px] font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400 sm:px-5 sm:text-xs"
                                 >
                                     <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
-                                    <span className="truncate">Clear</span>
+                                    <span className="truncate">Clear response</span>
                                 </button>
                             </div>
 
@@ -282,8 +276,8 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
 
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
                         <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
-                            <h2 className="text-sm font-semibold leading-relaxed text-[#17201b] dark:text-white sm:text-base">
-                                <span className="mr-3 font-bold">{currentIndex + 1}.</span>
+                            <h2 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white sm:text-base">
+                                <span className="mr-3 font-semibold">{currentIndex + 1}.</span>
                                 {currentQuestion.text}
                             </h2>
                             {currentQuestion.imageUrl && (
@@ -405,7 +399,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             animate={{ x: 0 }}
                             exit={{ x: "100%" }}
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="absolute inset-y-0 right-0 w-full max-w-[320px] border-l border-brand-green/10 bg-[#f6f8f5] shadow-2xl dark:bg-[#111a15]"
+                            className="absolute inset-y-0 right-0 w-[85%] max-w-sm border-l border-brand-green/10 bg-[#f6f8f5] shadow-2xl dark:bg-[#111a15]"
                         >
                             <div className="flex h-full flex-col">
                                 <div className="flex items-center justify-between border-b border-brand-green/5 p-6 dark:border-white/10">

@@ -97,12 +97,17 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                                 onClick={() => onSelect(idx)}
                                 title={`${q.category} - Question ${q.number}`}
                                 aria-current={isActive ? "step" : undefined}
-                                className={`flex h-10 items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
+                                className={`relative flex h-10 items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
                                         ? "z-10 border-brand-green ring-2 ring-brand-green ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15] scale-105"
                                         : ""
                                     } ${stateStyles[q.state]}`}
                             >
                                 {q.number}
+                                {q.isAnswered && q.isMarked && (
+                                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-brand-green border border-white dark:border-[#111a15]">
+                                        <div className="h-1 w-1 rounded-full bg-white" />
+                                    </span>
+                                )}
                             </button>
                         );
                     })}

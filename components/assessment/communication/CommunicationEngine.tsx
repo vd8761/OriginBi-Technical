@@ -5,11 +5,12 @@ import AudioTaskComponent from "./TaskTypes/AudioTask";
 import SpeakingTaskComponent from "./TaskTypes/SpeakingTask";
 import ReadingTaskComponent from "./TaskTypes/ReadingTask";
 import WritingTaskComponent from "./TaskTypes/WritingTask";
+import McqTaskComponent from "./TaskTypes/McqTask";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
 import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
-export type TaskType = "audio" | "speaking" | "reading" | "writing";
+export type TaskType = "audio" | "speaking" | "reading" | "writing" | "mcq";
 
 export interface BaseTask {
     id: string;
@@ -43,7 +44,12 @@ export interface WritingTask extends BaseTask {
     maxWords?: number;
 }
 
-export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTask;
+export interface McqTask extends BaseTask {
+    type: "mcq";
+    questions: { id: string; text: string; options: { id: string; text: string }[] }[];
+}
+
+export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTask | McqTask;
 export type CommunicationAnswer = Record<string, string> | { audioBlobUrl: string } | { text: string };
 export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
@@ -100,6 +106,23 @@ const MOCK_TASKS: AssessmentTask[] = [
         minWords: 50,
         maxWords: 200,
     },
+    {
+        id: "task_5",
+        type: "mcq",
+        instructions: "Identify the correct grammatical structure or best response for the professional scenarios below.",
+        questions: [
+            {
+                id: "q_m1",
+                text: "Choose the most professional way to start a follow-up email after a meeting.",
+                options: [
+                    { id: "opt_1", text: "Hey, just checking in about what we talked about." },
+                    { id: "opt_2", text: "It was a pleasure meeting with you earlier today to discuss our project milestones." },
+                    { id: "opt_3", text: "I'm writing because I forgot to ask something in the meeting." },
+                    { id: "opt_4", text: "Did you have time to look at the notes I sent yet?" },
+                ],
+            },
+        ],
+    },
 ];
 
 interface CommunicationEngineProps {
@@ -111,6 +134,7 @@ const taskCopy: Record<TaskType, { label: string; hint: string; accent: string }
     reading: { label: "Reading Clarity", hint: "Analyze the passage and respond precisely.", accent: "Reading" },
     speaking: { label: "Speaking Response", hint: "Record a clear, structured response.", accent: "Speaking" },
     writing: { label: "Writing Craft", hint: "Compose a concise, professional reply.", accent: "Writing" },
+    mcq: { label: "Linguistic Accuracy", hint: "Select the most appropriate professional response.", accent: "Grammar" },
 };
 
 const formatTime = (seconds: number) => {
@@ -121,7 +145,7 @@ const formatTime = (seconds: number) => {
 
 const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | undefined) => {
     if (!answer) return false;
-    if (task.type === "audio" || task.type === "reading") {
+    if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
         return task.questions.every((question) => Boolean((answer as Record<string, string>)[question.id]));
     }
     if (task.type === "speaking") {
@@ -219,9 +243,6 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
         const newAnswers = { ...answers };
         delete newAnswers[currentTask.id];
         setAnswers(newAnswers);
-        const newMarked = new Set(markedForReview);
-        newMarked.delete(currentTask.id);
-        setMarkedForReview(newMarked);
     };
 
     const isQuestionMarked = markedForReview.has(currentTask.id);
@@ -259,6 +280,14 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                         task={currentTask}
                         value={answers[currentTask.id] as { text: string } | undefined}
                         onChange={(value) => updateAnswer(currentTask.id, value)}
+                    />
+                );
+            case "mcq":
+                return (
+                    <McqTaskComponent
+                        task={currentTask}
+                        value={answers[currentTask.id] as Record<string, string> | undefined}
+                        onChange={(value: Record<string, string>) => updateAnswer(currentTask.id, value)}
                     />
                 );
             default:
@@ -325,26 +354,26 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                                 <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center">
                                     <button
                                         onClick={handleMarkReview}
-                                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-[11px] font-bold transition sm:text-xs ${
+                                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-[11px] font-bold transition sm:px-5 sm:text-xs ${
                                             isQuestionMarked
                                                 ? "border-amber-400 bg-amber-400 text-[#241604]"
                                                 : "border-brand-green/20 bg-white text-[#17201b] hover:border-amber-400 hover:text-amber-600 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-amber-400"
                                         }`}
                                     >
-                                        <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className={`h-3.5 w-3.5 shrink-0 ${isQuestionMarked ? "fill-current" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
                                         </svg>
-                                        <span className="truncate">{isQuestionMarked ? "Unmark" : "Mark review"}</span>
+                                        <span className="truncate">{isQuestionMarked ? "Unmark review" : "Mark for review"}</span>
                                     </button>
                                     <button
                                         onClick={handleClear}
                                         disabled={!isQuestionAnswered}
-                                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-[11px] font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400 sm:text-xs"
+                                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand-green/20 bg-white px-4 text-[11px] font-bold text-[#17201b] transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:text-red-400 sm:px-5 sm:text-xs"
                                     >
                                         <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
-                                        <span className="truncate">Clear</span>
+                                        <span className="truncate">Clear response</span>
                                     </button>
                                 </div>
                         </div>
@@ -399,7 +428,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                 {isSidebarOpen && (
                     <div className="fixed inset-0 z-[110] lg:hidden">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-sm" />
-                        <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="absolute inset-y-0 right-0 w-full max-w-[320px] bg-[#f6f8f5] dark:bg-[#111a15]">
+                        <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="absolute inset-y-0 right-0 w-[85%] max-w-sm bg-[#f6f8f5] dark:bg-[#111a15]">
                             <div className="flex h-full flex-col">
                                 <div className="flex items-center justify-between border-b p-6 dark:border-white/10">
                                     <div className="flex items-center gap-4">
