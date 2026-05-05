@@ -9,6 +9,7 @@ import CommunicationPreTest from "../assessment/communication/CommunicationPreTe
 import RolePreTest from "../assessment/role/RolePreTest";
 import PaymentModal from "../payments/PaymentModal";
 import LanguageSelectModal from "../payments/LanguageSelectModal";
+import CodingPreTest from "../assessment/coding/CodingPreTest";
 import { ArrowLeftIcon, LockIcon } from "../icons";
 import {
     CODING_LANGUAGES,
@@ -70,6 +71,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const [showCommunicationModal, setShowCommunicationModal] = useState(false);
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [pendingCodingLang, setPendingCodingLang] = useState<CodingLanguage | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<
         | { kind: "exam"; key: PaymentKey; title: string; subtitle: string }
         | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string }
@@ -115,7 +117,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         const key = codingPaymentKey(language.id);
         if (isPaid(key)) {
             setShowLanguageModal(false);
-            router.push(`/assessment/coding?lang=${language.id}`);
+            setPendingCodingLang(language);
             return;
         }
         setPaymentTarget({
@@ -130,15 +132,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const handlePaymentSuccess = () => {
         if (!paymentTarget) return;
         markPaid(paymentTarget.key);
-
-        if (paymentTarget.kind === "coding") {
-            const lang = paymentTarget.language;
-            setPaymentTarget(null);
-            setShowLanguageModal(false);
-            router.push(`/assessment/coding?lang=${lang.id}`);
-            return;
-        }
-
         setPaymentTarget(null);
     };
 
@@ -300,7 +293,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                     price={exam.price}
                                     onAction={() => {
                                         if (status === "ready" || status === "completed") {
-                                            router.push(`/assessment/coding?lang=${lang.id}`);
+                                            setPendingCodingLang(lang);
                                         } else {
                                             handleLanguagePick(lang);
                                         }
@@ -500,6 +493,18 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     isCompleted={isCompleted}
                     onClose={() => setShowLanguageModal(false)}
                     onPick={handleLanguagePick}
+                />
+            )}
+
+            {pendingCodingLang && (
+                <CodingPreTest
+                    language={pendingCodingLang}
+                    onStart={() => {
+                        const langId = pendingCodingLang.id;
+                        setPendingCodingLang(null);
+                        router.push(`/assessment/coding?lang=${langId}`);
+                    }}
+                    onClose={() => setPendingCodingLang(null)}
                 />
             )}
 
