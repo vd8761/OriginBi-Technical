@@ -193,7 +193,13 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
                             Time left
                         </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
+                        <p className={`font-mono text-sm font-bold ${
+                            timeLeft < 300 
+                                ? "text-red-500" 
+                                : timeLeft < 600 
+                                    ? "text-amber-500" 
+                                    : "text-[#17201b] dark:text-white"
+                        }`}>
                             {formatTime(timeLeft)}
                         </p>
                     </div>
@@ -499,9 +505,27 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
                             <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/60">Review your assessment summary before finalizing your submission.</p>
 
-                            <div className="mt-4 flex items-center gap-2 rounded-full border border-brand-green/10 bg-brand-green/[0.03] px-4 py-1.5 dark:border-white/5 dark:bg-white/5">
-                                <div className="h-2 w-2 animate-pulse rounded-full bg-brand-green" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-brand-green">
+                            <div className={`mt-4 flex items-center gap-2 rounded-full border px-4 py-1.5 dark:border-white/5 dark:bg-white/5 ${
+                                timeLeft < 300 
+                                    ? "border-red-500/20 bg-red-500/[0.03]" 
+                                    : timeLeft < 600 
+                                        ? "border-amber-500/20 bg-amber-500/[0.03]" 
+                                        : "border-brand-green/10 bg-brand-green/[0.03]"
+                            }`}>
+                                <div className={`h-2 w-2 animate-pulse rounded-full ${
+                                    timeLeft < 300 
+                                        ? "bg-red-500" 
+                                        : timeLeft < 600 
+                                            ? "bg-amber-500" 
+                                            : "bg-brand-green"
+                                }`} />
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                                    timeLeft < 300 
+                                        ? "text-red-500" 
+                                        : timeLeft < 600 
+                                            ? "text-amber-500" 
+                                            : "text-brand-green"
+                                }`}>
                                     Time Remaining: {formatTime(timeLeft)}
                                 </span>
                             </div>

@@ -693,7 +693,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
     }, [timer, markCompleted, lang, clearStorage]);
 
     const handleBackToExplore = () => {
-        router.push("/explore/coding");
+        router.push("/dashboard");
     };
 
     const tabSwitchCount = tabMonitor.count;

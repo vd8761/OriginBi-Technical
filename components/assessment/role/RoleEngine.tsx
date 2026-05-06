@@ -258,7 +258,13 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                         <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
                             Time left
                         </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
+                        <p className={`font-mono text-sm font-bold ${
+                            timeLeft < 300 
+                                ? "text-red-500" 
+                                : timeLeft < 600 
+                                    ? "text-amber-500" 
+                                    : "text-[#17201b] dark:text-white"
+                        }`}>
                             {formatTime(timeLeft)}
                         </p>
                     </div>

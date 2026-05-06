@@ -122,7 +122,7 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
                         onClick={onBackToExplore}
                         className="cursor-pointer rounded-full border-0 bg-[#1ED36A] px-8 py-3.5 text-[14px] font-extrabold text-white shadow-[0_4px_20px_rgba(30,211,106,0.3)]"
                     >
-                        Back to Explore
+                        Back to Dashboard
                     </button>
                 </div>
             </div>

@@ -13,7 +13,7 @@ export default function MNCAssessmentPage() {
         setIsCompleted(true);
         // In a real app, you would save the results here
         setTimeout(() => {
-            router.push('/assessment-portal');
+            router.push('/dashboard');
         }, 2000);
     };
 
