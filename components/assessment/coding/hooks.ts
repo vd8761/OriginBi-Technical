@@ -152,3 +152,58 @@ export function useTabSwitchMonitor(active: boolean) {
 
     return { count, events, hidden, lastReason, clear };
 }
+
+const PANIC_FAVICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+    '<circle cx="16" cy="16" r="15" fill="#ED2F34"/>' +
+    '<text x="16" y="23" text-anchor="middle" fill="white" font-size="22" font-weight="900" font-family="Arial,sans-serif">!</text>' +
+    "</svg>";
+
+const PANIC_FAVICON_URL = `data:image/svg+xml,${encodeURIComponent(PANIC_FAVICON_SVG)}`;
+const PANIC_TITLE = "⚠ Return to your assessment!";
+
+// Flashes the document title and swaps the favicon while the tab is hidden,
+// so the candidate sees an alarming label/icon in their tab bar and snaps back.
+export function useTabPanic(active: boolean, hidden: boolean) {
+    useEffect(() => {
+        if (typeof document === "undefined") return;
+        if (!active || !hidden) return;
+
+        const originalTitle = document.title;
+        const head = document.head;
+
+        // Snapshot current favicons so we can restore them.
+        const existing = Array.from(
+            head.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'),
+        );
+        const snapshots = existing.map((el) => ({ el, href: el.href, rel: el.rel }));
+
+        // Remove existing icons and inject the panic icon.
+        existing.forEach((el) => el.parentNode?.removeChild(el));
+        const panicLink = document.createElement("link");
+        panicLink.rel = "icon";
+        panicLink.type = "image/svg+xml";
+        panicLink.href = PANIC_FAVICON_URL;
+        head.appendChild(panicLink);
+
+        let toggle = false;
+        document.title = PANIC_TITLE;
+        const interval = window.setInterval(() => {
+            toggle = !toggle;
+            document.title = toggle ? originalTitle : PANIC_TITLE;
+        }, 900);
+
+        return () => {
+            window.clearInterval(interval);
+            document.title = originalTitle;
+            panicLink.parentNode?.removeChild(panicLink);
+            // Restore previous favicons in original order.
+            snapshots.forEach(({ el, href, rel }) => {
+                const restored = el.cloneNode(false) as HTMLLinkElement;
+                restored.rel = rel;
+                restored.href = href;
+                head.appendChild(restored);
+            });
+        };
+    }, [active, hidden]);
+}

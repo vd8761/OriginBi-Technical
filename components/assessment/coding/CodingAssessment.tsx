@@ -10,7 +10,7 @@ import CompletionScreen from "./CompletionScreen";
 import DevControls from "./DevControls";
 import GuidelinesModal from "./GuidelinesModal";
 import { QUESTIONS, TOTAL_TIME_SECONDS, type Question } from "./data";
-import { useTabSwitchMonitor, useTimer } from "./hooks";
+import { useTabPanic, useTabSwitchMonitor, useTimer } from "./hooks";
 import {
     DEFAULT_PROCTORING,
     EMPTY_COUNTERS,
@@ -44,24 +44,18 @@ const formatTime = (secs: number) => {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const QStatusIcon: React.FC<{ status: QStatus }> = ({ status }) => {
-    if (status === "solved")
-        return (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1ED36A" strokeWidth="3" strokeLinecap="round">
-                <polyline points="20 6 9 17 4 12" />
-            </svg>
-        );
-    if (status === "flagged")
-        return (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="#FFB703" stroke="none">
-                <polygon points="4,1 20,8 4,15" />
-                <line x1="4" y1="1" x2="4" y2="23" stroke="#FFB703" strokeWidth="2.5" />
-            </svg>
-        );
-    if (status === "attempted")
-        return <div className="h-1.5 w-1.5 rounded-full bg-[#4AC6EA]" />;
-    return null;
-};
+const FlagBadge: React.FC = () => (
+    <div
+        className="flex h-3.5 w-3.5 items-center justify-center rounded-[4px] shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+        style={{ background: "#FFB703" }}
+        aria-label="Flagged"
+    >
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round">
+            <path d="M5 4 L5 21" />
+            <path d="M5 4 L18 7 L5 11 Z" />
+        </svg>
+    </div>
+);
 
 interface SidebarProps {
     questions: Question[];
@@ -78,11 +72,6 @@ const QuestionSidebar: React.FC<SidebarProps> = ({
     onSelect,
     theme,
 }) => {
-    const diffColors: Record<string, string> = {
-        Easy: "#1ED36A",
-        Medium: "#FFB703",
-        Hard: "#ED2F34",
-    };
     const isLight = theme === "light";
     const idleBg = isLight ? "rgba(15,23,18,0.04)" : "rgba(255,255,255,0.04)";
     const idleOutline = isLight ? "1px solid rgba(15,23,18,0.08)" : "1px solid rgba(255,255,255,0.07)";
@@ -93,52 +82,59 @@ const QuestionSidebar: React.FC<SidebarProps> = ({
             {questions.map((q, i) => {
                 const st: QStatus = statuses[q.id] ?? "unattempted";
                 const isActive = i === current;
-                const bg = isActive
-                    ? "rgba(30,211,106,0.15)"
-                    : st === "solved"
-                        ? "rgba(30,211,106,0.08)"
-                        : st === "flagged"
-                            ? "rgba(255,183,3,0.08)"
-                            : idleBg;
-                const outline = isActive
-                    ? "2px solid #1ED36A"
-                    : st === "solved"
-                        ? "1px solid rgba(30,211,106,0.3)"
-                        : idleOutline;
+                const isFlagged = st === "flagged";
+                const isSolved = st === "solved";
+
+                let bg = idleBg;
+                let outline = idleOutline;
+                let textColor = idleText;
+
+                if (isFlagged) {
+                    bg = "rgba(255,183,3,0.18)";
+                    outline = isActive ? "2px solid #FFB703" : "1px solid rgba(255,183,3,0.5)";
+                    textColor = "#FFB703";
+                } else if (isActive && isSolved) {
+                    bg = "#1ED36A";
+                    outline = "2px solid #1ED36A";
+                    textColor = "#FFFFFF";
+                } else if (isActive) {
+                    bg = "transparent";
+                    outline = "2px solid #1ED36A";
+                    textColor = "#1ED36A";
+                } else if (isSolved) {
+                    bg = "rgba(30,211,106,0.14)";
+                    outline = "1px solid rgba(30,211,106,0.4)";
+                    textColor = isLight ? "#0FA255" : "rgba(30,211,106,0.9)";
+                }
+
                 return (
                     <button
                         key={q.id}
                         type="button"
                         onClick={() => onSelect(i)}
                         title={`Q${q.id}: ${q.title}`}
-                        className="relative flex h-11 w-11 flex-shrink-0 cursor-pointer flex-col items-center justify-center gap-px rounded-[10px] border-0 transition-all"
-                        style={{ background: bg, outline }}
+                        className="relative flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-0 transition-all"
+                        style={{ background: bg, outline, outlineOffset: "-1px" }}
                     >
                         <span
-                            className="text-[13px]"
+                            className="text-[13px] tabular-nums"
                             style={{
                                 fontWeight: isActive ? 800 : 600,
-                                color: isActive
-                                    ? "#1ED36A"
-                                    : st === "solved"
-                                        ? "rgba(30,211,106,0.8)"
-                                        : idleText,
+                                color: textColor,
                             }}
                         >
                             {String(q.id).padStart(2, "0")}
                         </span>
-                        <div
-                            className="h-1 w-1 rounded-full opacity-80"
-                            style={{ background: diffColors[q.difficulty] || "#1ED36A" }}
-                        />
-                        <div className="absolute right-[3px] top-[3px]">
-                            <QStatusIcon status={st} />
-                        </div>
+                        {isFlagged && (
+                            <div className="absolute -right-1 -top-1">
+                                <FlagBadge />
+                            </div>
+                        )}
                     </button>
                 );
             })}
             <div
-                className="mt-auto flex w-full flex-col items-center gap-1 border-t pt-3"
+                className="mt-auto flex w-full flex-col items-start gap-1 border-t px-2.5 pt-3"
                 style={{ borderColor: dividerColor }}
             >
                 {[
@@ -265,29 +261,6 @@ const SaveIndicator: React.FC<{ saved: boolean }> = ({ saved }) => (
     </div>
 );
 
-interface TabSwitchPillProps {
-    count: number;
-    onClick: () => void;
-}
-
-const TabSwitchPill: React.FC<TabSwitchPillProps> = ({ count, onClick }) => {
-    if (count === 0) return null;
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            title="Tab switches recorded — click for details"
-            className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[#FFB703]/30 bg-[#FFB703]/10 px-2.5 py-1 text-[11px] font-bold text-[#FFB703] hover:bg-[#FFB703]/15"
-        >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                <path d="M12 9v4M12 17h.01" />
-                <circle cx="12" cy="12" r="10" />
-            </svg>
-            {count} switch{count === 1 ? "" : "es"}
-        </button>
-    );
-};
-
 interface HeaderProps {
     question: Question;
     currentQ: number;
@@ -301,7 +274,6 @@ interface HeaderProps {
     onFlag: () => void;
     isSolved: boolean;
     isFlagged: boolean;
-    tabSwitches: number;
     languageLabel: string;
     theme: "dark" | "light";
     onToggleTheme: () => void;
@@ -321,7 +293,6 @@ const Header: React.FC<HeaderProps> = ({
     onFlag,
     isSolved,
     isFlagged,
-    tabSwitches,
     languageLabel,
     theme,
     onToggleTheme,
@@ -333,7 +304,8 @@ const Header: React.FC<HeaderProps> = ({
             alt="Origin BI"
             width={108}
             height={18}
-            className="h-[18px] w-auto flex-shrink-0"
+            className="h-[18px] flex-shrink-0"
+            style={{ width: "auto", height: "18px" }}
             priority
         />
         <div className="h-7 w-px flex-shrink-0 bg-white/10" />
@@ -353,12 +325,6 @@ const Header: React.FC<HeaderProps> = ({
                 />
             </div>
             <SaveIndicator saved={saved} />
-            <TabSwitchPill
-                count={tabSwitches}
-                onClick={() => {
-                    /* opens nothing yet, handled by toast */
-                }}
-            />
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
             <button
@@ -524,6 +490,8 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
     const proctoringActive = !submitted;
 
     const tabMonitor = useTabSwitchMonitor(proctoringActive && proctoring.settings.tabSwitch);
+
+    useTabPanic(proctoringActive, tabMonitor.hidden);
 
     const [counters, setCounters] = useState<ProctoringCounters>({ ...EMPTY_COUNTERS });
     const [toastVisible, setToastVisible] = useState(false);
@@ -840,7 +808,6 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
                 onFlag={handleFlag}
                 isSolved={isSolved}
                 isFlagged={isFlagged}
-                tabSwitches={tabSwitchCount}
                 languageLabel={languageLabel}
                 theme={theme}
                 onToggleTheme={toggleTheme}
