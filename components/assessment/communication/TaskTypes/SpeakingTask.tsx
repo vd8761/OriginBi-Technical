@@ -92,7 +92,7 @@ const SpeakingTaskComponent: React.FC<SpeakingTaskProps> = ({ task, value, onCha
                     {task.instructions}
                 </p>
                 <div className="mt-4 rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
-                    <h3 className="text-lg font-bold leading-8 text-[#17201b] dark:text-white">
+                    <h3 className="text-lg font-semibold leading-8 text-[#17201b] dark:text-white">
                         {task.prompt}
                     </h3>
                 </div>

@@ -40,17 +40,17 @@ const WritingTaskComponent: React.FC<WritingTaskProps> = ({ task, value, onChang
                     {task.instructions}
                 </p>
                 <div className="mt-4 rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
-                    <h3 className="text-base font-bold leading-7 text-[#17201b] dark:text-white">
+                    <h3 className="text-base font-semibold leading-7 text-[#17201b] dark:text-white">
                         {task.prompt}
                     </h3>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-brand-green/10 bg-white p-3 dark:border-white/10 dark:bg-[#0f1712]">
-                        <p className="text-xs font-medium text-[#17201b] dark:text-white">Minimum</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">Min Words</p>
                         <p className="mt-1 text-lg font-bold text-[#17201b] dark:text-white">{task.minWords ?? "-"}</p>
                     </div>
                     <div className="rounded-lg border border-brand-green/10 bg-white p-3 dark:border-white/10 dark:bg-[#0f1712]">
-                        <p className="text-xs font-medium text-[#17201b] dark:text-white">Maximum</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">Max Words</p>
                         <p className="mt-1 text-lg font-bold text-[#17201b] dark:text-white">{task.maxWords ?? "-"}</p>
                     </div>
                 </div>
@@ -59,24 +59,19 @@ const WritingTaskComponent: React.FC<WritingTaskProps> = ({ task, value, onChang
             <section className="flex min-h-[440px] flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white dark:border-white/10 dark:bg-[#0f1712]">
                 <div className="flex min-h-12 items-center justify-between gap-3 border-b border-brand-green/5 bg-brand-green/[0.02] px-4 dark:border-white/10 dark:bg-white/5">
                     <p className="text-sm font-bold text-[#17201b] dark:text-white">Response editor</p>
-                    <span className={`text-sm font-bold ${getWordCountColor()}`}>{wordCount} words</span>
+                    <div className="flex items-center gap-2">
+                        <div className={`h-1.5 w-1.5 rounded-full animate-pulse ${getWordCountColor() === 'text-brand-green' ? 'bg-brand-green' : 'bg-amber-500'}`} />
+                        <span className={`text-sm font-bold ${getWordCountColor()}`}>{wordCount} words</span>
+                    </div>
                 </div>
 
                 <textarea
                     value={text}
                     onChange={handleChange}
                     placeholder="Write your response here..."
-                    className="custom-scrollbar min-h-0 flex-1 resize-none bg-transparent p-4 text-sm font-medium leading-7 text-[#17201b] outline-none placeholder:text-[#17201b] dark:text-white dark:placeholder:text-white"
+                    className="custom-scrollbar min-h-0 flex-1 resize-none bg-transparent p-4 text-sm font-medium leading-7 text-[#17201b] outline-none placeholder:text-[#17201b]/40 dark:text-white dark:placeholder:text-white/20"
                 />
 
-                <div className="flex min-h-11 items-center justify-between gap-3 border-t border-brand-green/5 bg-brand-green/[0.02] px-4 text-[10px] font-bold uppercase tracking-wider text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
-                    <span>Professional tone, clear next steps, concise structure.</span>
-                    {(task.minWords || task.maxWords) && (
-                        <span>
-                            {task.minWords ? `Min ${task.minWords}` : ""} {task.minWords && task.maxWords ? "|" : ""} {task.maxWords ? `Max ${task.maxWords}` : ""}
-                        </span>
-                    )}
-                </div>
             </section>
         </div>
     );

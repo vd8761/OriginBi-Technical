@@ -16,15 +16,7 @@ const ConceptualQuestionComponent: React.FC<ConceptualQuestionProps> = ({
 }) => {
     return (
         <div className="flex flex-col gap-4">
-            <section className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="rounded-md bg-brand-green/10 px-3 py-1.5 text-xs font-bold text-brand-green">
-                        Conceptual knowledge
-                    </span>
-                    <span className="rounded-md bg-brand-green/5 px-3 py-1.5 text-xs font-bold text-[#17201b] dark:bg-white/10 dark:text-white">
-                        Core fundamentals
-                    </span>
-                </div>
+            <section className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
                 <h2 className="text-base font-semibold leading-relaxed text-[#17201b] dark:text-white">
                     {question.text}
                 </h2>
