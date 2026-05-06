@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from "react";
 
 type MonacoModule = typeof import("monaco-editor");
 type EditorInstance = ReturnType<MonacoModule["editor"]["create"]>;
+type MonacoModel = ReturnType<MonacoModule["editor"]["createModel"]>;
 
 let monacoLoader: Promise<MonacoModule> | null = null;
 let environmentConfigured = false;
@@ -116,7 +117,7 @@ const ensureThemes = (monaco: MonacoModule, alreadyDefined: { current: boolean }
     alreadyDefined.current = true;
 };
 
-const LANG_TO_MONACO: Record<string, string> = {
+export const LANG_TO_MONACO: Record<string, string> = {
     python: "python",
     javascript: "javascript",
     java: "java",
@@ -124,8 +125,44 @@ const LANG_TO_MONACO: Record<string, string> = {
     c: "c",
 };
 
+const EXT_TO_MONACO: Record<string, string> = {
+    py: "python",
+    js: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    ts: "typescript",
+    jsx: "javascript",
+    tsx: "typescript",
+    java: "java",
+    cpp: "cpp",
+    cc: "cpp",
+    cxx: "cpp",
+    h: "cpp",
+    hpp: "cpp",
+    c: "c",
+    md: "markdown",
+    markdown: "markdown",
+    json: "json",
+    yml: "yaml",
+    yaml: "yaml",
+    txt: "plaintext",
+    sh: "shell",
+    css: "css",
+    html: "html",
+};
+
+export const detectLanguageForPath = (path: string, fallbackLang: string): string => {
+    const dot = path.lastIndexOf(".");
+    if (dot < 0) return LANG_TO_MONACO[fallbackLang] ?? "plaintext";
+    const ext = path.slice(dot + 1).toLowerCase();
+    return EXT_TO_MONACO[ext] ?? LANG_TO_MONACO[fallbackLang] ?? "plaintext";
+};
+
 interface MonacoEditorProps {
+    /** Stable identifier for the open file. Used as the model URI so undo history is preserved per file. */
+    path: string;
     value: string;
+    /** Question language ("python", "javascript", …). Used as fallback when the path has no extension. */
     language: string;
     fontSize: number;
     theme: "dark" | "light";
@@ -134,6 +171,7 @@ interface MonacoEditorProps {
 }
 
 const MonacoEditor: React.FC<MonacoEditorProps> = ({
+    path,
     value,
     language,
     fontSize,
@@ -144,13 +182,42 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const containerRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<EditorInstance | null>(null);
     const monacoRef = useRef<MonacoModule | null>(null);
+    const modelsRef = useRef<Map<string, MonacoModel>>(new Map());
     const themesDefined = useRef(false);
     const onChangeRef = useRef(onChange);
     const valueRef = useRef(value);
+    const pathRef = useRef(path);
     const suppressOnChange = useRef(false);
+    const changeListenerRef = useRef<{ dispose: () => void } | null>(null);
 
     onChangeRef.current = onChange;
     valueRef.current = value;
+    pathRef.current = path;
+
+    const ensureModel = (
+        monaco: MonacoModule,
+        modelPath: string,
+        modelValue: string,
+        fallbackLang: string,
+    ): MonacoModel => {
+        const existing = modelsRef.current.get(modelPath);
+        if (existing && !existing.isDisposed()) return existing;
+        const uri = monaco.Uri.parse(`originbi://workspace/${modelPath}`);
+        const monacoLang = detectLanguageForPath(modelPath, fallbackLang);
+        const model = monaco.editor.createModel(modelValue, monacoLang, uri);
+        modelsRef.current.set(modelPath, model);
+        return model;
+    };
+
+    const attachChangeListener = (editor: EditorInstance) => {
+        changeListenerRef.current?.dispose();
+        const subscription = editor.onDidChangeModelContent(() => {
+            if (suppressOnChange.current) return;
+            const v = editor.getValue();
+            onChangeRef.current?.(v);
+        });
+        changeListenerRef.current = subscription;
+    };
 
     useEffect(() => {
         let disposed = false;
@@ -160,9 +227,10 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
             ensureThemes(monaco, themesDefined);
             monacoRef.current = monaco;
 
+            const initialModel = ensureModel(monaco, pathRef.current, valueRef.current, language);
+
             const editor = monaco.editor.create(containerRef.current, {
-                value: valueRef.current,
-                language: LANG_TO_MONACO[language] ?? "plaintext",
+                model: initialModel,
                 theme: theme === "light" ? LIGHT_THEME : DARK_THEME,
                 fontSize,
                 fontFamily:
@@ -197,44 +265,58 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
                 },
             });
 
-            editor.onDidChangeModelContent(() => {
-                if (suppressOnChange.current) return;
-                const v = editor.getValue();
-                onChangeRef.current?.(v);
-            });
-
+            attachChangeListener(editor);
             editorRef.current = editor;
         });
 
         return () => {
             disposed = true;
+            changeListenerRef.current?.dispose();
+            changeListenerRef.current = null;
             editorRef.current?.dispose();
             editorRef.current = null;
+            modelsRef.current.forEach((m) => {
+                if (!m.isDisposed()) m.dispose();
+            });
+            modelsRef.current.clear();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    useEffect(() => {
-        const editor = editorRef.current;
-        if (!editor) return;
-        if (editor.getValue() !== value) {
-            suppressOnChange.current = true;
-            const pos = editor.getPosition();
-            editor.setValue(value);
-            if (pos) editor.setPosition(pos);
-            suppressOnChange.current = false;
-        }
-    }, [value]);
-
+    // Switch model when path changes (preserves undo history per file).
     useEffect(() => {
         const monaco = monacoRef.current;
         const editor = editorRef.current;
         if (!monaco || !editor) return;
-        const model = editor.getModel();
-        if (model) {
-            monaco.editor.setModelLanguage(model, LANG_TO_MONACO[language] ?? "plaintext");
+        const current = editor.getModel();
+        const next = ensureModel(monaco, path, value, language);
+        if (current !== next) {
+            editor.setModel(next);
+            attachChangeListener(editor);
+            // Sync content if the parent has authoritative state newer than the cached model.
+            if (next.getValue() !== value) {
+                suppressOnChange.current = true;
+                next.setValue(value);
+                suppressOnChange.current = false;
+            }
         }
-    }, [language]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [path]);
+
+    // Sync incoming value into the active model without thrashing the undo stack.
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        const model = editor.getModel();
+        if (!model) return;
+        if (model.getValue() !== value) {
+            suppressOnChange.current = true;
+            const pos = editor.getPosition();
+            model.setValue(value);
+            if (pos) editor.setPosition(pos);
+            suppressOnChange.current = false;
+        }
+    }, [value]);
 
     useEffect(() => {
         const monaco = monacoRef.current;
