@@ -3,12 +3,8 @@
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tech_assessments_negative_mark') THEN
-        ALTER TABLE tech_assessments
-            ADD CONSTRAINT chk_tech_assessments_negative_mark
-            CHECK ((negative_mark_enabled = FALSE AND negative_mark_value IS NULL)
-                OR (negative_mark_enabled = TRUE AND negative_mark_value IS NOT NULL));
-    END IF;
+    -- Moved constraint check to after table creation
+
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tech_module_type') THEN
         CREATE TYPE tech_module_type AS ENUM ('aptitude', 'grammar', 'coding', 'mnc', 'role');
@@ -55,6 +51,17 @@ CREATE TABLE IF NOT EXISTS tech_assessments (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tech_assessments_negative_mark') THEN
+        ALTER TABLE tech_assessments
+            ADD CONSTRAINT chk_tech_assessments_negative_mark
+            CHECK ((negative_mark_enabled = FALSE AND negative_mark_value IS NULL)
+                OR (negative_mark_enabled = TRUE AND negative_mark_value IS NOT NULL));
+    END IF;
+END $$;
+
 
 -- TECH Aptitude
 CREATE TABLE IF NOT EXISTS tech_aptitude_questions (
