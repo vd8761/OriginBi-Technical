@@ -77,6 +77,13 @@ export function getLimitsFor(lang: string, override?: Partial<ExecutionLimits>):
     return { ...base, ...(override ?? {}) };
 }
 
+export interface FileNode {
+    path: string;
+    content: string;
+    readOnly?: boolean;
+    language?: string;
+}
+
 export interface Question {
     id: number;
     type: QuestionType;
@@ -92,6 +99,14 @@ export interface Question {
     correct?: number;
     explanation?: string;
     starterCode?: Record<string, string>;
+    /**
+     * Multi-file starter sets keyed by language. Takes priority over `starterCode`
+     * when present. Each entry is a flat list of files; folders are derived from
+     * forward-slash separators in `path`.
+     */
+    starterFiles?: Record<string, FileNode[]>;
+    /** Default file to open per language. Falls back to the first file. */
+    entryFile?: Record<string, string>;
     testCases?: TestCase[];
     limits?: Partial<ExecutionLimits>;
 }
@@ -126,6 +141,49 @@ target = 9
             java: `class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write your solution here\n        return new int[]{};\n    }\n}`,
             cpp: `class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        // Write your solution here\n    }\n};`,
             c: `#include <stdlib.h>\n\nint* twoSum(int* nums, int numsSize, int target, int* returnSize) {\n    // Write your solution here\n    *returnSize = 0;\n    return NULL;\n}`,
+        },
+        starterFiles: {
+            python: [
+                {
+                    path: "src/solution.py",
+                    content: `from src.helpers import build_index\n\n\ndef twoSum(nums, target):\n    # Write your solution here.\n    # Hint: build_index(nums) gives you an O(n) value -> index map.\n    pass\n`,
+                },
+                {
+                    path: "src/helpers.py",
+                    content: `def build_index(nums):\n    """Return a {value: last_index} map for the input list."""\n    return {v: i for i, v in enumerate(nums)}\n`,
+                },
+                {
+                    path: "tests/test_solution.py",
+                    readOnly: true,
+                    content: `from src.solution import twoSum\n\n\ndef test_basic():\n    assert sorted(twoSum([2, 7, 11, 15], 9)) == [0, 1]\n\n\ndef test_duplicate():\n    assert sorted(twoSum([3, 3], 6)) == [0, 1]\n`,
+                },
+                {
+                    path: "README.md",
+                    readOnly: true,
+                    language: "markdown",
+                    content: `# Two Sum\n\n- Edit \`src/solution.py\` to implement \`twoSum\`.\n- \`src/helpers.py\` is a starter helper you can use or replace.\n- \`tests/test_solution.py\` is read-only — it is part of the grader.\n`,
+                },
+            ],
+            javascript: [
+                {
+                    path: "src/solution.js",
+                    content: `import { buildIndex } from "./helpers.js";\n\nexport function twoSum(nums, target) {\n    // Write your solution here.\n    // Hint: buildIndex(nums) gives you an O(n) value -> index map.\n}\n`,
+                },
+                {
+                    path: "src/helpers.js",
+                    content: `export function buildIndex(nums) {\n    const map = new Map();\n    nums.forEach((v, i) => map.set(v, i));\n    return map;\n}\n`,
+                },
+                {
+                    path: "README.md",
+                    readOnly: true,
+                    language: "markdown",
+                    content: `# Two Sum\n\nImplement \`twoSum\` in \`src/solution.js\`. \`helpers.js\` is provided as a starting point.\n`,
+                },
+            ],
+        },
+        entryFile: {
+            python: "src/solution.py",
+            javascript: "src/solution.js",
         },
         testCases: [
             { input: "nums = [2,7,11,15], target = 9", expected: "[0,1]" },
