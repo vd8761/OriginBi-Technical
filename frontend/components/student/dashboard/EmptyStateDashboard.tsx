@@ -355,12 +355,12 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                   {/* What You Get - Value Proposition */}
                   {valueProp && (
                     <div className="mb-5">
-                      <p className="text-xs font-bold text-brand-text-light-primary dark:text-white/80 mb-3 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-brand-green/10 flex items-center justify-center">
+                      <div className="text-xs font-bold text-brand-text-light-primary dark:text-white/80 mb-3 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-brand-green/10 flex items-center justify-center">
                           <TargetIcon className="w-3.5 h-3.5 text-brand-green" />
-                        </div>
+                        </span>
                         What you will discover
-                      </p>
+                      </div>
                       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {valueProp.benefits.slice(0, 4).map((benefit, i) => (
                           <li 
