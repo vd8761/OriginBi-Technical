@@ -26,9 +26,10 @@ import {
   MNCIcon,
   RoleIcon,
 } from "@/components/icons";
+import { motion, AnimatePresence } from "framer-motion";
 
 const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }> = {
-  aptitude: { color: "#10b981", gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)" },
+  aptitude: { color: "#1ed36a", gradient: "linear-gradient(135deg, #1ed36a 0%, #17b85c 100%)" },
   mnc: { color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" },
   communication: { color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)" },
   role: { color: "#84cc16", gradient: "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)" },
@@ -136,266 +137,304 @@ export default function AdminQuestionsManager() {
   };
 
   const handleDeleteQuestion = (id: string) => { setQuestions(questions.filter(q => (q as { id: string }).id !== id)); setDeleteConfirm(null); showToast("Question deleted"); };
-  const handleImport = (imported: AnyQuestion[]) => { setQuestions([...questions, ...imported]); setView("list"); showToast(`${imported.length} question${imported.length !== 1 ? "s" : ""} imported`); };
-  const handleClearAll = () => { setQuestions([]); setClearConfirm(false); showToast("All questions cleared"); };
+  const handleImport = (imported: AnyQuestion[]) => { setQuestions([...questions, ...imported]); setView("list"); showToast(`${imported.length} imported`); };
+  const handleClearAll = () => { setQuestions([]); setClearConfirm(false); showToast("Bank cleared"); };
   const handleExportJson = () => {
     const blob = new Blob([JSON.stringify(questions, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = `${selectedModule}_${mode}_questions.json`; a.click(); URL.revokeObjectURL(url); showToast("JSON exported");
+    a.href = url; a.download = `${selectedModule}_${mode}.json`; a.click(); URL.revokeObjectURL(url); showToast("JSON exported");
   };
 
-  // ─── LANDING: Assessment Cards ───
+  // ─── LANDING ───
   if (!selectedModule) {
     return (
-      <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
+      <div className="relative min-h-screen w-full bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500 overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08] assessment-grid" />
         </div>
 
-        {/* Header */}
-        <header className="fixed top-0 left-0 right-0 w-full z-50 h-[60px] sm:h-[64px] bg-white/[0.96] dark:bg-[#19211C]/[0.96] backdrop-blur-xl border-b border-gray-100/[0.8] dark:border-white/[0.06]">
+        <header className="fixed top-0 left-0 right-0 w-full z-50 h-[64px] sm:h-[72px] bg-white/[0.9] dark:bg-[#19211C]/[0.9] backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
           <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-6">
               <Logo className="h-5" />
               <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
-              <div className="hidden sm:block">
-                <p className="text-[10px] font-semibold text-brand-green tracking-tight uppercase">Admin Console</p>
-                <p className="text-[12px] font-bold text-slate-800 dark:text-white tracking-tight">Question Bank</p>
-              </div>
+              
+              {/* Breadcrumbs for Landing */}
+              <nav className="hidden md:flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
+                <span className="text-brand-green">Admin Hub</span>
+                <span className="text-slate-300 dark:text-white/10">/</span>
+                <span className="text-slate-400 dark:text-slate-500">Question Banks</span>
+              </nav>
             </div>
             <ThemeToggle />
           </div>
         </header>
 
-        <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-4 pt-[76px]">
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary">Assessment Modules</h2>
-              <p className="text-xs text-brand-text-light-secondary dark:text-brand-text-secondary mt-0.5">Select a module to manage its question bank</p>
-            </div>
+        <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
+          <div className="space-y-6">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment Modules</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select a module to manage its question library</p>
+            </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-              {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map(at => {
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at, idx) => {
                 const accent = ACCENT_COLORS[at];
-                const tags = MODULE_TAGS[at];
                 const trialCount = loadQuestions(at, "trial").length;
                 const mainCount = loadQuestions(at, "main").length;
                 return (
-                  <button
+                  <motion.button
                     key={at}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
                     onClick={() => { setSelectedModule(at); setView("list"); }}
-                    className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-[24px] p-5 flex flex-col transition-all duration-500 group h-full hover:scale-[1.01] text-left cursor-pointer shadow-sm hover:shadow-md"
-                    style={{ '--acc-color': `${accent.color}66` } as React.CSSProperties}
+                    className="dashboard-glass-card !rounded-3xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.02] hover:border-brand-green/30 text-left hover:shadow-xl dark:bg-white/[0.05]"
                   >
-                    <div className="flex gap-4 mb-3">
-                      <div className="flex items-center justify-center shrink-0 w-12 h-12 rounded-2xl text-white shadow-lg [&_svg]:w-6 [&_svg]:h-6" style={{ background: accent.gradient }}>
+                    <div className="flex gap-4 mb-4">
+                      <div className="flex items-center justify-center shrink-0 w-14 h-14 rounded-[20px] text-white shadow-lg shadow-brand-green/10 [&_svg]:w-7 [&_svg]:h-7" style={{ background: accent.gradient }}>
                         {MODULE_ICONS[at]}
                       </div>
                       <div className="flex-1 min-w-0 flex items-center">
-                        <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight">{ASSESSMENT_TYPE_LABELS[at]}</h3>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white tracking-tight leading-snug">{ASSESSMENT_TYPE_LABELS[at]}</h3>
                       </div>
                     </div>
 
-                    <p className="text-[12px] text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed mb-4 font-normal opacity-80">{ASSESSMENT_TYPE_DESCRIPTIONS[at]}</p>
+                    <p className="text-[13px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mb-6 font-medium">{ASSESSMENT_TYPE_DESCRIPTIONS[at]}</p>
 
-                    <div className="flex items-center gap-4 mb-4">
+                    <div className="flex items-center gap-5 mb-6 bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
                       <div className="flex flex-col">
-                        <span className="text-[8px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Trial</span>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-white">{trialCount} Qs</span>
+                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none mb-1.5">Trial</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-white">{trialCount} Qs</span>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-[8px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Main</span>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-white">{mainCount} Qs</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[8px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Total</span>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-white">{trialCount + mainCount} Qs</span>
+                      <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
+                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none mb-1.5">Main</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-white">{mainCount} Qs</span>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-1.5 mb-5 mt-auto">
-                      {tags.map((tag, idx) => (
-                        <span key={idx} className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-[8px] font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-wider">{tag}</span>
+                    <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">
+                      {MODULE_TAGS[at].map((tag, tIdx) => (
+                        <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">{tag}</span>
                       ))}
                     </div>
 
-                    <div className="h-[1px] w-full bg-black/5 dark:bg-white/10 mb-4" />
+                    <div className="h-px w-full bg-slate-100 dark:bg-white/5 mb-6" />
 
                     <div className="flex items-center justify-end">
-                      <span className="px-5 py-1.5 text-[11px] font-bold rounded-full bg-brand-green text-white shadow-sm hover:shadow-md shadow-brand-green/20 transition-all">
-                        Manage Bank
-                      </span>
+                      <div className="px-6 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-full bg-brand-green text-white shadow-lg shadow-brand-green/20 group-hover:scale-105 transition-all">
+                        Configure Bank
+                      </div>
                     </div>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
           </div>
 
-          <footer className="py-6 text-center">
-            <p className="text-[11px] text-brand-text-light-secondary/70 dark:text-brand-text-secondary font-medium">&copy; {new Date().getFullYear()} Origin BI | Admin Console</p>
+          <footer className="py-10 text-center opacity-40">
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">&copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence</p>
           </footer>
         </main>
       </div>
     );
   }
 
-  // ─── INSIDE MODULE: Question Management ───
+  // ─── MANAGEMENT ───
   const accent = ACCENT_COLORS[selectedModule];
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
+    <div className="relative min-h-screen w-full bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500 overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
+        <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08] assessment-grid" />
       </div>
 
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 w-full z-50 h-[60px] sm:h-[64px] bg-white/[0.96] dark:bg-[#19211C]/[0.96] backdrop-blur-xl border-b border-gray-100/[0.8] dark:border-white/[0.06]">
+      <header className="fixed top-0 left-0 right-0 w-full z-50 h-[64px] sm:h-[72px] bg-white/[0.9] dark:bg-[#19211C]/[0.9] backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
         <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setSelectedModule(null); setView("list"); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-tight border bg-gray-50 border-gray-200 text-gray-600 dark:bg-white/[0.06] dark:border-white/[0.12] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
-              <ArrowLeft className="w-3.5 h-3.5 text-brand-green" />
-              <span className="hidden sm:inline">Back</span>
+          <div className="flex items-center gap-6">
+            <button onClick={() => { setSelectedModule(null); setView("list"); }} className="group flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">
+              <ArrowLeft className="w-4 h-4 text-brand-green group-hover:-translate-x-0.5 transition-transform" />
             </button>
-            <Logo className="h-5 hidden sm:block" />
-            <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-7 h-7 rounded-xl text-white shadow-md [&_svg]:w-4 [&_svg]:h-4" style={{ background: accent.gradient }}>
+            
+            {/* Breadcrumbs for Management */}
+            <nav className="hidden md:flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
+              <button onClick={() => setSelectedModule(null)} className="text-slate-400 hover:text-brand-green transition-colors">Admin Hub</button>
+              <span className="text-slate-300 dark:text-white/10">/</span>
+              <button onClick={() => setSelectedModule(null)} className="text-slate-400 hover:text-brand-green transition-colors">Question Banks</button>
+              <span className="text-slate-300 dark:text-white/10">/</span>
+              <span className="text-brand-green">{ASSESSMENT_TYPE_LABELS[selectedModule]}</span>
+            </nav>
+
+            <div className="md:hidden flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl text-white shadow-lg [&_svg]:w-5 [&_svg]:h-5" style={{ background: accent.gradient }}>
                 {MODULE_ICONS[selectedModule]}
               </div>
               <div className="leading-tight">
-                <p className="text-[12px] font-bold text-slate-800 dark:text-white tracking-tight">{ASSESSMENT_TYPE_LABELS[selectedModule]}</p>
-                <p className="text-[9px] font-semibold text-brand-green tracking-tight uppercase">Bank Management</p>
+                <p className="text-[13px] font-bold text-slate-800 dark:text-white tracking-tight">{ASSESSMENT_TYPE_LABELS[selectedModule]}</p>
+                <p className="text-[10px] font-black text-brand-green tracking-widest uppercase">Management</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Trial/Main Toggle */}
-            <div className="relative flex items-center gap-1 p-1 rounded-xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
-              <button onClick={() => { setMode("trial"); setView("list"); }} className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border ${mode === "trial" ? "text-white bg-brand-green shadow-md" : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:bg-brand-light-secondary dark:hover:bg-white/5 border-transparent"}`}>
-                <Beaker size={10} className="inline mr-1" /> Trial
-              </button>
-              <button onClick={() => { setMode("main"); setView("list"); }} className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border ${mode === "main" ? "text-white bg-brand-green shadow-md" : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:bg-brand-light-secondary dark:hover:bg-white/5 border-transparent"}`}>
-                <BookOpen size={10} className="inline mr-1" /> Main
-              </button>
+            <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
+              <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
+              <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
             </div>
             <ThemeToggle />
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-4 pt-[76px]">
-        {/* Filters + Actions Bar */}
-        <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-[24px] p-4 mb-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
-              <button onClick={() => setFilterCategory("all")} className={`shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${filterCategory === "all" ? "text-white bg-brand-green shadow-md" : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"}`}>
+      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
+        {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
+        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6">
+          {/* Search bar matching main app */}
+          <div className="relative w-full xl:w-96">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search repository..."
+              className="w-full bg-white/50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-4 pr-10 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 transition-all"
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <Search size={16} />
+            </div>
+          </div>
+          
+          {/* Action Buttons matching main app (Add New, Bulk Import) */}
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+            {/* Filter Tabs - subtly adjusted for alignment */}
+            <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm overflow-x-auto scrollbar-hide">
+              <button 
+                onClick={() => setFilterCategory("all")} 
+                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"}`}
+              >
                 All ({questions.length})
               </button>
               {filterCats.map(cat => (
-                <button key={cat.key} onClick={() => setFilterCategory(cat.key)} className={`shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${filterCategory === cat.key ? "text-white bg-brand-green shadow-md" : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"}`}>
+                <button 
+                  key={cat.key} 
+                  onClick={() => setFilterCategory(cat.key)} 
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                >
                   {cat.label} ({categoryCounts[cat.key] || 0})
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search..." className="w-full sm:w-40 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#19211C] py-1.5 pl-8 pr-3 text-[11px] text-slate-800 dark:text-white placeholder:text-slate-400 focus:border-brand-green focus:outline-none" />
-              </div>
-              <button onClick={() => setEditingQuestion("new")} className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-green text-white shadow-sm hover:shadow-md shadow-brand-green/20 transition-all" title="Add"><Plus size={14} /></button>
-              <button onClick={() => setView("json-import")} className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all" title="Import"><Upload size={14} /></button>
-            </div>
+ 
+            <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden xl:block mx-1" />
+ 
+            <button 
+              onClick={() => setView("json-import")} 
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
+            >
+              <span>Bulk Import</span>
+              <Upload size={16} className="text-brand-green" />
+            </button>
+ 
+            <button 
+              onClick={() => setEditingQuestion("new")} 
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all shadow-lg shadow-brand-green/20"
+            >
+              <span>Add New</span>
+              <Plus size={16} />
+            </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-[24px] p-5 min-h-[350px]">
+        {/* LIST CONTAINER - Using dashboard-glass-card for consistency */}
+        <div className="dashboard-glass-card !rounded-3xl p-8 min-h-[600px] dark:bg-white/[0.04]">
           {view === "json-import" ? (
             <JsonImportPanel assessmentType={selectedModule} mode={mode} onImport={handleImport} onCancel={() => setView("list")} />
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl mb-4 text-white shadow-md [&_svg]:w-6 [&_svg]:h-6" style={{ background: accent.gradient }}>{MODULE_ICONS[selectedModule]}</div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-white">{questions.length === 0 ? "Empty Question Bank" : "No Results"}</h3>
-              <p className="mt-1.5 max-w-xs text-[12px] text-slate-500 dark:text-slate-400 font-medium">{questions.length === 0 ? `Add questions to the ${ASSESSMENT_TYPE_LABELS[selectedModule]} ${mode} bank.` : "Adjust your search or filters."}</p>
-              {questions.length === 0 && (
-                <div className="mt-6 flex gap-3">
-                  <button onClick={() => setEditingQuestion("new")} className="px-4 py-2 text-[11px] font-bold rounded-full bg-brand-green text-white shadow-sm">
-                    <Plus size={12} className="inline mr-1" /> New Question
-                  </button>
-                  <button onClick={() => setView("json-import")} className="px-4 py-2 text-[11px] font-semibold border border-slate-200 dark:border-white/10 rounded-full text-slate-700 dark:text-slate-300">
-                    <Upload size={12} className="inline mr-1" /> Bulk Import
-                  </button>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-widest">Repository Bank</h3>
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Showing {filtered.length} of {questions.length} entries</p>
+                </div>
+                <div className="flex items-center gap-6">
+                  <button onClick={handleExportJson} className="text-[10px] font-black text-slate-500 hover:text-brand-green transition-all uppercase tracking-[0.15em] flex items-center gap-1.5"><Download size={14} /> Export</button>
+                  <button onClick={() => setClearConfirm(true)} className="text-[10px] font-black text-red-400/60 hover:text-red-500 transition-all uppercase tracking-[0.15em] flex items-center gap-1.5"><Trash2 size={14} /> Clear Bank</button>
+                </div>
+              </div>
+
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 text-center">
+                  <div className="w-20 h-20 rounded-3xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 flex items-center justify-center mb-6 opacity-40">
+                    <AlertCircle size={32} className="text-slate-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">Zero Results Found</h3>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">No question vectors found for the current filter scope. Try adjusting your search query.</p>
+                  <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Reset Explorer</button>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {filtered.map((q, qIdx) => (
+                    <QuestionCard key={(q as { id: string }).id} question={q} index={qIdx} assessmentType={selectedModule} onEdit={() => setEditingQuestion(q)} onDelete={() => setDeleteConfirm((q as { id: string }).id)} />
+                  ))}
                 </div>
               )}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Showing {filtered.length} of {questions.length}</p>
-                <div className="flex items-center gap-3">
-                  <button onClick={handleExportJson} className="text-[10px] font-bold text-slate-500 hover:text-brand-green transition-colors uppercase tracking-wider"><Download size={10} className="inline mr-1" /> Export</button>
-                  <button onClick={() => setClearConfirm(true)} className="text-[10px] font-bold text-red-400 hover:text-red-500 transition-colors uppercase tracking-wider"><Trash2 size={10} className="inline mr-1" /> Clear All</button>
-                </div>
-              </div>
-              <div className="grid gap-3">
-                {filtered.map(q => (
-                  <QuestionCard key={(q as { id: string }).id} question={q} index={questions.indexOf(q)} assessmentType={selectedModule} onEdit={() => setEditingQuestion(q)} onDelete={() => setDeleteConfirm((q as { id: string }).id)} />
-                ))}
-              </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Editor Modal */}
-      {editingQuestion !== null && (
-        <QuestionEditor question={editingQuestion === "new" ? null : editingQuestion} assessmentType={selectedModule} onSave={handleSaveQuestion} onCancel={() => setEditingQuestion(null)} />
-      )}
+      <AnimatePresence>
+        {editingQuestion !== null && (
+          <QuestionEditor question={editingQuestion === "new" ? null : editingQuestion} assessmentType={selectedModule} onSave={handleSaveQuestion} onCancel={() => setEditingQuestion(null)} />
+        )}
+      </AnimatePresence>
 
-      {/* Delete Confirm */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
-          <div className="relative w-full max-w-sm rounded-[24px] bg-white dark:bg-[#19211C] p-6 shadow-2xl border border-white/20 dark:border-white/[0.08]">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 mb-4"><Trash2 size={20} className="text-red-500" /></div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-white">Delete Question?</h3>
-              <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 font-medium">This cannot be undone.</p>
-              <div className="mt-6 flex w-full gap-3">
-                <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-[12px] font-bold text-slate-600 dark:text-slate-300">Cancel</button>
-                <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-2.5 rounded-xl bg-red-500 text-[12px] font-bold text-white shadow-sm">Delete</button>
+      {/* Delete/Clear Modals styled with OriginBI theme */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#0b100d]/60 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[32px] bg-white dark:bg-[#111a15] p-8 shadow-2xl border border-white/20 dark:border-white/5">
+              <div className="flex flex-col items-center text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Delete Entry?</h3>
+                <p className="mt-3 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">This action will permanently purge the question vector from the repository.</p>
+                <div className="mt-8 flex w-full gap-3">
+                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
+                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Confirm</button>
+                </div>
               </div>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {/* Clear Confirm */}
-      {clearConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-md" onClick={() => setClearConfirm(false)} />
-          <div className="relative w-full max-w-sm rounded-[24px] bg-white dark:bg-[#19211C] p-6 shadow-2xl border border-white/20 dark:border-white/[0.08]">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 mb-4"><AlertCircle size={20} className="text-red-500" /></div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-white">Clear Entire Bank?</h3>
-              <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 font-medium">All questions in {mode} {ASSESSMENT_TYPE_LABELS[selectedModule]} will be removed.</p>
-              <div className="mt-6 flex w-full gap-3">
-                <button onClick={() => setClearConfirm(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-[12px] font-bold text-slate-600 dark:text-slate-300">Cancel</button>
-                <button onClick={handleClearAll} className="flex-1 py-2.5 rounded-xl bg-red-500 text-[12px] font-bold text-white shadow-sm">Yes, Clear All</button>
+      <AnimatePresence>
+        {clearConfirm && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#0b100d]/60 backdrop-blur-md" onClick={() => setClearConfirm(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[32px] bg-white dark:bg-[#111a15] p-8 shadow-2xl border border-white/20 dark:border-white/5">
+              <div className="flex flex-col items-center text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Clear Entire Bank?</h3>
+                <p className="mt-3 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">Purging all {questions.length} entries from the {mode} {selectedModule} bank. This is irreversible.</p>
+                <div className="mt-8 flex w-full gap-3">
+                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
+                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Purge Bank</button>
+                </div>
               </div>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 rounded-xl px-4 py-2.5 shadow-xl border backdrop-blur-xl ${toast.type === "success" ? "border-brand-green/20 bg-white/90 dark:bg-[#19211C]/90 text-brand-green" : "border-red-500/20 bg-white/90 dark:bg-[#19211C]/90 text-red-500"}`}>
-          <div className={`h-1.5 w-1.5 rounded-full ${toast.type === "success" ? "bg-brand-green" : "bg-red-500"}`} />
-          <span className="text-[11px] font-bold uppercase tracking-wider">{toast.msg}</span>
-        </div>
-      )}
+      {/* TOAST: THEME FIX */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-3 rounded-full px-6 py-3 shadow-2xl border backdrop-blur-xl ${toast.type === "success" ? "border-brand-green/20 bg-white/95 dark:bg-[#111a15]/95 text-brand-green" : "border-red-500/20 bg-white/95 dark:bg-[#111a15]/95 text-red-500"}`}>
+            <div className={`h-2 w-2 rounded-full animate-pulse ${toast.type === "success" ? "bg-brand-green shadow-[0_0_8px_#1ed36a]" : "bg-red-500 shadow-[0_0_8px_#ef4444]"}`} />
+            <span className="text-[11px] font-black uppercase tracking-widest">{toast.msg}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

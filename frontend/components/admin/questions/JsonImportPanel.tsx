@@ -154,11 +154,11 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
         <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-brand-green animate-pulse" />
-                <h3 className="text-base font-black tracking-tight text-[#17201b] dark:text-white">Import Engine</h3>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_8px_#1ed36a]" />
+                <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-white">Import Engine</h3>
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/40 dark:text-white/30">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Processing <span className="text-brand-green">{assessmentType}</span> question vectors
               </p>
             </div>
@@ -172,7 +172,7 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
               value={jsonText}
               onChange={(e) => { setJsonText(e.target.value); setError(null); }}
               placeholder="Paste raw JSON array here..."
-              className="relative h-64 w-full resize-none rounded-2xl border border-brand-green/20 bg-[#f9fbf8] dark:bg-[#0b100d] p-4 font-mono text-[10px] leading-relaxed text-[#17201b] placeholder:text-[#17201b]/20 focus:border-brand-green/40 focus:outline-none dark:border-white/5 dark:text-white dark:placeholder:text-white/10 shadow-inner"
+              className="relative h-64 w-full resize-none rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 font-mono text-[11px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-brand-green focus:outline-none dark:text-white dark:placeholder:text-white/20 shadow-inner"
               spellCheck={false}
             />
           </div>
@@ -187,12 +187,12 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
             </div>
           )}
 
-          <div className="flex items-center gap-3">
-            <button onClick={handleParse} disabled={!jsonText.trim()} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-brand-green py-3 text-xs font-black text-white shadow-lg hover:bg-[#19be5e] disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed">
-              <Upload size={14} /> Run Validation
-            </button>
-            <button onClick={onCancel} className="px-6 py-3 rounded-xl border border-[#17201b]/10 text-xs font-bold text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
+          <div className="flex items-center justify-end gap-3">
+            <button onClick={onCancel} className="px-6 py-2.5 rounded-lg border border-[#17201b]/10 text-sm font-bold text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
               Cancel
+            </button>
+            <button onClick={handleParse} disabled={!jsonText.trim()} className="px-8 py-2.5 rounded-lg bg-brand-green text-sm font-black text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+              <Upload size={14} /> Run Validation
             </button>
           </div>
         </div>
@@ -200,22 +200,22 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
         <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-brand-green/[0.02] border border-brand-green/10">
             <div>
-              <div className="flex items-center gap-1.5 mb-0.5">
+              <div className="flex items-center gap-1.5 mb-1">
                  <CheckCircle2 className="h-4 w-4 text-brand-green" />
-                 <h3 className="text-base font-black tracking-tight text-[#17201b] dark:text-white">
+                 <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-white">
                   Pre-flight
                 </h3>
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b]/40 dark:text-white/30">
-                Ready to commit <span className="text-brand-green">{preview.length} objects</span>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                Ready to commit <span className="text-brand-green font-black">{preview.length} objects</span>
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setPreview(null)} className="px-3 py-2 rounded-lg border border-[#17201b]/10 text-[10px] font-black uppercase text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setPreview(null)} className="px-5 py-2 rounded-lg border border-[#17201b]/10 text-[11px] font-black uppercase tracking-wider text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
                 Edit JSON
               </button>
-              <button onClick={() => onImport(preview)} className="px-4 py-2 rounded-lg bg-brand-green text-[10px] font-black uppercase text-white shadow-md hover:bg-[#19be5e]">
-                Commit
+              <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90">
+                Commit Import
               </button>
             </div>
           </div>
@@ -228,7 +228,7 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
 
               return (
                 <div key={(q as { id: string }).id} className={`group rounded-xl border transition-all duration-300 ${
-                  isExpanded ? "bg-[#f9fbf8] border-brand-green/30 dark:bg-[#14211a]" : "bg-white border-brand-green/10 dark:bg-[#0b100d] dark:border-white/5"
+                  isExpanded ? "bg-white dark:bg-white/[0.04] border-brand-green/30 shadow-md" : "bg-white/50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/20"
                 }`}>
                   <button
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}

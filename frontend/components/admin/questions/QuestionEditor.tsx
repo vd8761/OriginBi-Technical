@@ -130,7 +130,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   const updateSubQOption = (sqIdx: number, oIdx: number, val: string) => {
     const u = [...commSubQuestions];
     const opts = [...u[sqIdx].options]; opts[oIdx] = { ...opts[oIdx], text: val };
-    u[sqIdx] = { ...u[sqIdx].options, options: opts }; setCommSubQuestions(u);
+    u[sqIdx] = { ...u[sqIdx], options: opts }; setCommSubQuestions(u);
   };
   const setSubQCorrect = (sqIdx: number, optId: string) => {
     const u = [...commSubQuestions]; u[sqIdx] = { ...u[sqIdx], correctOptionId: optId }; setCommSubQuestions(u);
@@ -352,12 +352,12 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3 border-t border-brand-green/5 bg-[#f9fbf8] p-5 sm:p-6 dark:border-white/5 dark:bg-[#0b100d]">
-           <button onClick={handleSave} className="flex-1 rounded-2xl bg-brand-green py-3 text-sm font-black text-white shadow-lg hover:bg-[#19be5e] transition-all">
-             {question ? "Finalize" : "Commit"}
-           </button>
-           <button onClick={onCancel} className="px-6 py-3 rounded-2xl border border-[#17201b]/10 text-sm font-bold text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
+        <div className="flex items-center justify-end gap-3 border-t border-brand-green/5 bg-[#f9fbf8] p-5 sm:p-6 dark:border-white/5 dark:bg-[#0b100d]">
+           <button onClick={onCancel} className="px-6 py-2.5 rounded-lg border border-[#17201b]/10 text-sm font-bold text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
              Cancel
+           </button>
+           <button onClick={handleSave} className="px-8 py-2.5 rounded-lg bg-brand-green text-sm font-black text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 transition-all">
+             {question ? "Save Changes" : "Create Question"}
            </button>
         </div>
       </div>

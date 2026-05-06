@@ -89,10 +89,10 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
   const catColor = CATEGORY_COLORS[catKey] || { bg: "bg-slate-500/10", text: "text-slate-600 dark:text-slate-400", border: "border-slate-500/20" };
 
   return (
-    <div className={`group relative rounded-[20px] transition-all duration-300 border ${
+    <div className={`group relative rounded-2xl transition-all duration-300 border ${
       isExpanded 
-        ? "bg-[#f9fbf8] border-brand-green/30 shadow-lg dark:bg-[#14211a] dark:border-brand-green/20" 
-        : "bg-white border-brand-green/5 hover:border-brand-green/20 hover:shadow-md dark:bg-[#111a15] dark:border-white/5 dark:hover:border-white/10"
+        ? "bg-white dark:bg-white/[0.04] border-brand-green/30 shadow-xl" 
+        : "bg-white/50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/20 hover:shadow-md"
     }`}>
       <div className="flex items-center gap-3 p-3.5 sm:p-4">
         <div className="flex flex-col items-center gap-1">
@@ -134,17 +134,17 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
         <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
           <div className="space-y-3">
             {/* Question text */}
-            <div className="rounded-xl bg-[#f0f4f1] p-4 dark:bg-[#0b100d] border border-brand-green/10 dark:border-white/5 shadow-inner">
-               <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-2">Content</p>
-               <p className="text-[13px] font-bold leading-relaxed text-[#17201b] dark:text-white/90">
+            <div className="rounded-lg bg-slate-50 dark:bg-white/[0.03] p-4 border border-slate-100 dark:border-white/5 shadow-sm">
+               <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-2 opacity-80">Content</p>
+               <p className="text-[13px] font-bold leading-relaxed text-slate-800 dark:text-white/90">
                 {getText(question, assessmentType)}
                </p>
             </div>
 
             {/* Scenario context */}
             {assessmentType === "role" && (question as RoleQuestion).scenarioContext && (
-              <div className="rounded-xl bg-amber-500/5 p-4 border border-amber-500/10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">Scenario Context</p>
+              <div className="rounded-lg bg-amber-500/5 p-4 border border-amber-500/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2 opacity-80">Scenario Context</p>
                 <p className="text-[12px] font-medium leading-relaxed text-amber-900/80 dark:text-amber-200/70">{(question as RoleQuestion).scenarioContext}</p>
               </div>
             )}
@@ -156,10 +156,10 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
                   const correctId = (question as AptitudeQuestion).correctOptionId;
                   const isCorrect = correctId === opt.id;
                   return (
-                    <div key={opt.id} className={`flex items-center gap-3 p-3 rounded-xl transition-all border ${
+                    <div key={opt.id} className={`flex items-center gap-3 p-3 rounded-lg transition-all border ${
                       isCorrect 
-                        ? "bg-brand-green/5 border-brand-green shadow-sm" 
-                        : "bg-[#f6f8f5] dark:bg-[#0b100d] border-[#17201b]/5 dark:border-white/5"
+                        ? "bg-brand-green/5 border-brand-green/40 shadow-sm" 
+                        : "bg-white/50 dark:bg-white/[0.02] border-slate-100 dark:border-white/5"
                     }`}>
                       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${
                         isCorrect ? "bg-brand-green text-white shadow-sm" : "bg-brand-green/10 text-brand-green"
