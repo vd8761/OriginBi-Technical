@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRi
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
+import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 
 const APTITUDE_TOTAL_TIME = 3600;
 
@@ -211,7 +212,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
                         title="Question Map"
                     >
-                        <LayoutGrid size={20} className="text-brand-green" />
+                        <SidebarMobileIcon className="text-brand-green" />
                     </button>
                     <button 
                         onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
@@ -222,21 +223,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         }`}
                         title="Toggle Question Map"
                     >
-                        {isDesktopSidebarOpen ? (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2"/>
-                                <path d="M15 4V20" stroke="currentColor" strokeWidth="2"/>
-                                <path d="M15 4H19C20.1046 4 21 4.89543 21 6V18C21 19.1046 20.1046 20 19 20H15V4Z" fill="currentColor"/>
-                                <path d="M8 9L11 12L8 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                        ) : (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2"/>
-                                <path d="M15 4V20" stroke="currentColor" strokeWidth="2"/>
-                                <path d="M15 4H19C20.1046 4 21 4.89543 21 6V18C21 19.1046 20.1046 20 19 20H15V4Z" fill="currentColor"/>
-                                <path d="M11 9L8 12L11 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                        )}
+                        {isDesktopSidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
                     </button>
                 </div>
             </header>
