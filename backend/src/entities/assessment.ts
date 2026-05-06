@@ -1,6 +1,7 @@
 import {
     Column,
     CreateDateColumn,
+    Check,
     Entity,
     Index,
     JoinColumn,
@@ -15,6 +16,10 @@ import { UserEntity } from "./UserEntity";
 
 @Entity({ name: "tech_assessments" })
 @Index("idx_tech_assessments_module", ["moduleType"])
+@Check(
+    "chk_tech_assessments_negative_mark",
+    "((negative_mark_enabled = false AND negative_mark_value IS NULL) OR (negative_mark_enabled = true AND negative_mark_value IS NOT NULL))"
+)
 export class TechAssessment {
     @PrimaryGeneratedColumn("increment", { name: "assessment_id", type: "bigint" })
     assessmentId!: string;
