@@ -104,13 +104,12 @@ const NotificationItem: React.FC<{
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isMobile, onClick }) => (
     <motion.button
         onClick={onClick}
-        whileHover={{ scale: 1.04 }}
         whileTap={{ scale: 0.97 }}
-        className={`relative flex items-center gap-2.5 px-5 py-2.5 rounded-full text-[13px] font-semibold tracking-tight transition-all duration-300 border ${
+        className={`relative flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-full text-[11.5px] font-semibold tracking-tight transition-all duration-300 border ${
             active
                 ? "bg-brand-green text-white border-brand-green shadow-lg shadow-brand-green/20"
-                : "bg-white/90 dark:bg-white/[0.06] border-gray-200 dark:border-white/[0.12] text-gray-600 dark:text-gray-300 hover:border-brand-green/50 hover:shadow-md"
-        } ${isMobile ? 'w-full justify-start py-3.5' : ''}`}
+                : "bg-gray-50 border-gray-200 text-gray-600 dark:bg-white/[0.06] dark:border-white/[0.12] dark:text-gray-300 hover:bg-gray-100 hover:text-black hover:border-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+        } ${isMobile ? 'w-full justify-start py-3.5 px-5 gap-3 text-[14px]' : ''}`}
     >
         <span className={`transition-colors ${active ? "text-white" : "text-brand-green"}`}>{icon}</span>
         <span className={`${isMobile ? '' : 'hidden lg:inline'}`}>{label}</span>
@@ -234,7 +233,7 @@ const Header: React.FC<HeaderProps> = ({
                 opacity: headerOpacity,
                 backdropFilter: `blur(${headerBlur}px)`,
             }}
-            className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-600 h-[76px] sm:h-[84px] ${
+            className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-600 h-[64px] sm:h-[72px] ${
                 scrolled 
                     ? "bg-white/[0.98] dark:bg-[#19211C]/[0.98] shadow-xl shadow-black/[0.04] border-b border-gray-200/[0.6] dark:border-white/[0.08]" 
                     : "bg-white/[0.96] dark:bg-[#19211C]/[0.96] border-b border-gray-100/[0.8] dark:border-white/[0.06]"
@@ -247,11 +246,11 @@ const Header: React.FC<HeaderProps> = ({
                 transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
             />
 
-            <div className="w-full max-w-[2000px] mx-auto px-5 sm:px-7 lg:px-9 py-3 flex items-center justify-between h-full relative z-10">
-                <div className="flex items-center gap-4 lg:gap-6">
+            <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between h-full relative z-10">
+                <div className="flex items-center gap-3 lg:gap-4">
                     <motion.button
                         id="mobile-menu-btn"
-                        className="md:hidden text-gray-700 dark:text-white p-2.5 rounded-[12px] hover:bg-gray-100 dark:hover:bg-white/[0.08] transition-all cursor-pointer"
+                        className="md:hidden text-gray-700 dark:text-white p-2 rounded-[12px] hover:bg-gray-100 dark:hover:bg-white/[0.08] transition-all cursor-pointer"
                         onClick={() => setMobileMenuOpen((p) => !p)}
                         whileTap={{ scale: 0.92 }}
                     >
@@ -263,7 +262,7 @@ const Header: React.FC<HeaderProps> = ({
                         whileHover={{ scale: 1.015 }}
                         transition={{ type: "spring", stiffness: 350, damping: 25 }}
                     >
-                        <Logo className="h-6 lg:h-7" />
+                        <Logo className="h-5 lg:h-5.5" />
                         {/* Refined glow behind logo */}
                         <motion.div
                             className="absolute inset-0 bg-brand-green/[0.15] blur-3xl -z-10"
@@ -272,7 +271,7 @@ const Header: React.FC<HeaderProps> = ({
                         />
                     </motion.div>
 
-                    <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 ml-5">
+                    <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 ml-2 lg:ml-3">
                         {renderNavItems(false)}
                     </nav>
                 </div>
@@ -291,13 +290,13 @@ const Header: React.FC<HeaderProps> = ({
                             onClick={() => setNotificationsOpen(!isNotificationsOpen)}
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
-                            className={`w-10 h-10 rounded-[14px] flex items-center justify-center transition-all relative cursor-pointer shadow-sm ${
+                            className={`w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center transition-all relative cursor-pointer shadow-sm ${
                                 isNotificationsOpen
-                                    ? "bg-gradient-to-br from-brand-green to-emerald-500 text-white shadow-lg shadow-brand-green/[0.25]"
-                                    : "bg-gray-50 dark:bg-white/[0.04] border border-gray-200/[0.8] dark:border-white/[0.08] text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.08]"
+                                    ? "bg-brand-green text-white shadow-lg shadow-brand-green/[0.25]"
+                                    : "bg-white border border-gray-200 text-gray-600 dark:bg-white/[0.04] dark:border-white/[0.08] dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.08] hover:border-gray-300"
                             }`}
                         >
-                            <NotificationIcon className="w-[17px] h-[17px] fill-current" />
+                            <NotificationIcon className="w-[15px] h-[15px] fill-current" />
                             {unreadCount > 0 && (
                                 <motion.span 
                                     className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center ${
@@ -320,7 +319,7 @@ const Header: React.FC<HeaderProps> = ({
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -12, scale: 0.96 }}
                                     transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                                    className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[76px] sm:top-full mt-4 sm:mt-5 w-auto sm:w-[520px] md:w-[580px] bg-white dark:bg-[#19211C] rounded-[20px] shadow-2xl shadow-black/[0.08] z-[100] border border-gray-100 dark:border-white/[0.08] overflow-hidden"
+                                    className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[64px] sm:top-full mt-2 sm:mt-6 w-auto sm:w-[520px] md:w-[580px] bg-white dark:bg-[#19211C] rounded-[20px] shadow-2xl shadow-black/[0.08] z-[100] border border-gray-100 dark:border-white/[0.08] overflow-hidden"
                                 >
                                     <div className="p-7 pb-6">
                                         <div className="flex justify-between items-center mb-6">
@@ -395,13 +394,13 @@ const Header: React.FC<HeaderProps> = ({
                             onClick={() => setProfileOpen(!isProfileOpen)}
                             whileHover={{ scale: 1.015 }}
                             whileTap={{ scale: 0.985 }}
-                            className="flex items-center gap-3 focus:outline-none cursor-pointer p-2 rounded-[12px] hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all"
+                            className="flex items-center gap-2.5 focus:outline-none cursor-pointer p-1.5 rounded-[12px] hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all"
                         >
                             <motion.div 
-                                className="w-9 h-9 lg:w-10 lg:h-10 rounded-[14px] bg-gradient-to-br from-brand-green/[0.08] to-emerald-500/[0.04] border border-brand-green/[0.15] flex items-center justify-center overflow-hidden relative"
+                                className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-gradient-to-br from-brand-green/[0.08] to-emerald-500/[0.04] border border-brand-green/[0.15] flex items-center justify-center overflow-hidden relative"
                                 whileHover={{ rotate: 4 }}
                             >
-                                <ProfileIcon className="w-5 h-5 text-brand-green" />
+                                <ProfileIcon className="w-4.5 h-4.5 text-brand-green" />
                                 <motion.div
                                     className="absolute inset-0 bg-brand-green/[0.15]"
                                     animate={{ opacity: [0, 0.4, 0] }}

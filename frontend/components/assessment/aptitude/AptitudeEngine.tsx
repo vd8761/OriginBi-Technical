@@ -2,8 +2,12 @@ import React, { useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, ZoomIn, Search } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import TimerDisplay from "../shared/TimerDisplay";
+
+const APTITUDE_TOTAL_TIME = 3600;
 
 interface Option {
     id: string;
@@ -74,19 +78,24 @@ interface AptitudeEngineProps {
 const labels = ["A", "B", "C", "D"];
 
 const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${remainingSeconds}`;
+    const safe = Math.max(0, seconds);
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
 const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(3600);
+    const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+    const { theme } = useTheme();
 
     const currentQuestion = MOCK_QUESTIONS[currentIndex];
     const totalQuestions = MOCK_QUESTIONS.length;
@@ -189,14 +198,11 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Time left
-                        </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
-                            {formatTime(timeLeft)}
-                        </p>
-                    </div>
+                    <TimerDisplay 
+                        time={timeLeft} 
+                        total={APTITUDE_TOTAL_TIME} 
+                        theme={theme} 
+                    />
                     <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
@@ -207,13 +213,38 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                     >
                         <LayoutGrid size={20} className="text-brand-green" />
                     </button>
+                    <button 
+                        onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+                        className={`hidden lg:flex h-10 w-10 items-center justify-center rounded-lg border transition shadow-sm ${
+                            isDesktopSidebarOpen 
+                            ? 'border-brand-green/50 bg-brand-green/10 text-brand-green dark:border-brand-green/30 dark:bg-brand-green/10' 
+                            : 'border-brand-green/20 bg-white hover:border-brand-green dark:border-white/10 dark:bg-white/5 text-brand-green'
+                        }`}
+                        title="Toggle Question Map"
+                    >
+                        {isDesktopSidebarOpen ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2"/>
+                                <path d="M15 4V20" stroke="currentColor" strokeWidth="2"/>
+                                <path d="M15 4H19C20.1046 4 21 4.89543 21 6V18C21 19.1046 20.1046 20 19 20H15V4Z" fill="currentColor"/>
+                                <path d="M8 9L11 12L8 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                        ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2"/>
+                                <path d="M15 4V20" stroke="currentColor" strokeWidth="2"/>
+                                <path d="M15 4H19C20.1046 4 21 4.89543 21 6V18C21 19.1046 20.1046 20 19 20H15V4Z" fill="currentColor"/>
+                                <path d="M11 9L8 12L11 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                        )}
+                    </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
+            <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
 
                 {/* Question Area */}
-                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
                     {/* Top Progress Bar */}
                     <div className="h-1 w-full bg-brand-green/5">
                         <div 
@@ -370,17 +401,24 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </section>
 
                 {/* Sidebar (Desktop only) */}
-                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
-                    <QuestionNavigator
-                        questions={navigatorQuestions}
-                        currentIndex={currentIndex}
-                        onSelect={(idx) => {
-                            setCurrentIndex(idx);
-                            setIsSidebarOpen(false);
-                        }}
-                        progressPercent={safeProgress}
-                    />
-                </aside>
+                <motion.aside 
+                    initial={false}
+                    animate={{ width: isDesktopSidebarOpen ? 300 : 80 }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                    className="hidden shrink-0 relative lg:block lg:min-h-0 rounded-xl border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] overflow-hidden"
+                >
+                    <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
+                        <QuestionNavigator
+                            questions={navigatorQuestions}
+                            currentIndex={currentIndex}
+                            onSelect={(idx) => {
+                                setCurrentIndex(idx);
+                            }}
+                            progressPercent={safeProgress}
+                            isCollapsed={!isDesktopSidebarOpen}
+                        />
+                    </div>
+                </motion.aside>
             </main>
 
             {/* Mobile Drawer */}
