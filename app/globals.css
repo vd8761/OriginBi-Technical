@@ -438,6 +438,223 @@
   animation: float-slower 18s ease-in-out infinite;
 }
 
+@keyframes shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+/* ── ENHANCED DASHBOARD ANIMATIONS ── */
+
+@keyframes gradient-border-spin {
+  0% { --angle: 0deg; }
+  100% { --angle: 360deg; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(30, 211, 106, 0.15), 0 0 60px rgba(30, 211, 106, 0.05); }
+  50% { box-shadow: 0 0 30px rgba(30, 211, 106, 0.25), 0 0 80px rgba(30, 211, 106, 0.1); }
+}
+
+@keyframes float-x {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(15px); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(60px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(60px) rotate(-360deg); }
+}
+
+@keyframes morph-blob {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  50% { border-radius: 50% 60% 30% 60% / 30% 60% 70% 40%; }
+  75% { border-radius: 60% 40% 60% 30% / 60% 40% 30% 60%; }
+}
+
+@keyframes text-gradient-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes counter-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+@keyframes dash-flow {
+  0% { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes border-beam {
+  0% { left: -25%; }
+  100% { left: 125%; }
+}
+
+.animate-gradient-border {
+  animation: gradient-border-spin 4s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-float-x {
+  animation: float-x 8s ease-in-out infinite;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+.animate-sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+.animate-orbit {
+  animation: orbit 20s linear infinite;
+}
+
+.animate-morph-blob {
+  animation: morph-blob 12s ease-in-out infinite;
+}
+
+.animate-text-gradient-flow {
+  background-size: 300% 300%;
+  animation: text-gradient-flow 4s ease infinite;
+}
+
+.animate-breathe {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.animate-border-beam::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 25%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #1ed36a, transparent);
+  animation: border-beam 3s ease-in-out infinite;
+}
+
+/* Constellation dot particles */
+.constellation-dot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(30, 211, 106, 0.4);
+  box-shadow: 0 0 6px rgba(30, 211, 106, 0.3);
+}
+
+/* Animated gradient card border effect */
+.gradient-border-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.gradient-border-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--angle, 0deg),
+    transparent 40%,
+    rgba(30, 211, 106, 0.5) 50%,
+    transparent 60%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  animation: gradient-border-spin 4s linear infinite;
+}
+
+.gradient-border-card:hover::before {
+  opacity: 1;
+}
+
+/* Stat card shimmer overlay */
+.stat-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(30, 211, 106, 0.05),
+    transparent
+  );
+  transition: left 0.6s ease;
+}
+
+.stat-shimmer:hover::after {
+  left: 150%;
+}
+
+/* Milestone connector line */
+.milestone-connector {
+  position: relative;
+}
+
+.milestone-connector::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -1rem;
+  width: 2rem;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(30, 211, 106, 0.3), transparent);
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 /* ───────────────────── Coding Assessment scope ─────────────────────
    Plus Jakarta Sans + dark exam shell. The body has font-family: Haskoy
    !important globally, so we scope everything under .coding-exam-root
