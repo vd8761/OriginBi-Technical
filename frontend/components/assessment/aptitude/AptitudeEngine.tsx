@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
@@ -22,61 +22,18 @@ interface Question {
     imageUrl?: string;
     options: Option[];
 }
-
-const MOCK_QUESTIONS: Question[] = [
-    {
-        id: "q1",
-        category: "QA",
-        text: "If the price of a book is first decreased by 25% and then increased by 20%, then the net change in the price will be:",
-        options: [
-            { id: "o1", text: "10% decrease" },
-            { id: "o2", text: "5% decrease" },
-            { id: "o3", text: "No change" },
-            { id: "o4", text: "5% increase" },
-        ],
-    },
-    {
-        id: "q2",
-        category: "LR",
-        text: "Look at this series: 2, 1, (1/2), (1/4), ... What number should come next?",
-        options: [
-            { id: "o1", text: "(1/3)" },
-            { id: "o2", text: "(1/8)" },
-            { id: "o3", text: "(2/8)" },
-            { id: "o4", text: "(1/16)" },
-        ],
-    },
-    {
-        id: "q3",
-        category: "DI",
-        text: "Based on the chart below, what was the total revenue in Q3?",
-        imageUrl: "/assessment/q3_chart.png",
-        options: [
-            { id: "o1", text: "$45,000" },
-            { id: "o2", text: "$50,000" },
-            { id: "o3", text: "$55,000" },
-            { id: "o4", text: "$60,000" },
-        ],
-    },
-    {
-        id: "q4",
-        category: "AR",
-        text: "Which of the following figures is the odd one out?",
-        imageUrl: "/assessment/q4_figures.png",
-        options: [
-            { id: "o1", text: "Figure A" },
-            { id: "o2", text: "Figure B" },
-            { id: "o3", text: "Figure C" },
-            { id: "o4", text: "Figure D" },
-        ],
-    },
-];
-
-interface AptitudeEngineProps {
-    onComplete: (answers: Record<string, string>) => void;
+interface AptitudeResult {
+    overallScore: number;
+    accuracy: number;
+    timeTakenSeconds: number;
+    sections: { name: string; score: number; weight: string }[];
 }
 
-const labels = ["A", "B", "C", "D"];
+interface AptitudeEngineProps {
+    onComplete: (result: AptitudeResult) => void;
+    assessmentCode?: string;
+    userId?: number;
+}
 
 const formatTime = (seconds: number) => {
     const safe = Math.max(0, seconds);
@@ -87,7 +44,15 @@ const formatTime = (seconds: number) => {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+const labelForIndex = (index: number) => String.fromCharCode(65 + index);
+
+const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
+    onComplete,
+    assessmentCode = "TECH_APT_001",
+    userId,
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
@@ -97,20 +62,79 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
     const { theme } = useTheme();
+    const [questions, setQuestions] = useState<Question[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const currentQuestion = MOCK_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_QUESTIONS.length;
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
-    const markedCount = markedForReview.size;
-    const safeProgress = Math.round((answeredCount / totalQuestions) * 100);
+    const safeProgress = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const isLastQuestion = currentIndex === totalQuestions - 1;
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
+    const currentQuestionId = currentQuestion?.id ?? "";
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestionId] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestionId) : false;
 
 
     useEffect(() => {
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId }),
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to load aptitude questions.");
+                }
+
+                const data = await response.json();
+                setAttemptToken(data.attemptToken);
+                setQuestions(data.questions || []);
+                setTimeLeft(Number(data.durationSeconds || 3600));
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId]);
+
+    const handleSubmitAttempt = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit aptitude attempt.");
+            }
+
+            const result = await response.json();
+            onComplete(result);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, isSubmitting, onComplete]);
+
+    useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
-            onComplete(answers);
+            setShowSubmitModal(false);
+            handleSubmitAttempt();
             return;
         }
 
@@ -119,9 +143,9 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [answers, onComplete, timeLeft]);
+    }, [attemptToken, handleSubmitAttempt, isLoading, timeLeft]);
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
 
@@ -176,8 +200,33 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     };
 
     const confirmSubmit = () => {
-        onComplete(answers);
+        setShowSubmitModal(false);
+        handleSubmitAttempt();
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                Loading aptitude assessment...
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#b42318] dark:bg-[#0f1712]">
+                {loadError}
+            </div>
+        );
+    }
+
+    if (!currentQuestion) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                No questions available.
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
@@ -343,7 +392,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                                                 ? "bg-brand-green text-[#0f1712]"
                                                 : "bg-brand-green/10 text-brand-green"
                                         }`}>
-                                            {labels[index]}
+                                            {labelForIndex(index)}
                                         </span>
                                         <span className={`text-sm font-semibold leading-6 ${
                                             isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"
