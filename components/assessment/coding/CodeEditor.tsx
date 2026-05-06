@@ -2,9 +2,11 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { Question } from "./data";
+import type { FileNode, Question } from "./data";
 import { getLimitsFor, type ExecutionLimits } from "./data";
 import { simulateRun, type RunResult } from "./simulateRun";
+import FileTabs from "./FileTabs";
+import FileTreePanel from "./FileTreePanel";
 
 const MonacoEditor = dynamic(() => import("./MonacoEditor"), {
     ssr: false,
@@ -319,6 +321,25 @@ const OutputPanel: React.FC<{
     );
 };
 
+const buildInitialFiles = (question: Question, lang: string): FileNode[] => {
+    const explicit = question.starterFiles?.[lang];
+    if (explicit && explicit.length > 0) {
+        return explicit.map((f) => ({ ...f }));
+    }
+    const ext = LANG_META[lang]?.ext?.replace(".", "") ?? "txt";
+    const fallback =
+        question.starterCode?.[lang] ??
+        `${LANG_META[lang]?.comment ?? "//"} Write your solution here`;
+    return [{ path: `solution.${ext}`, content: fallback }];
+};
+
+const initialEntryFile = (question: Question, lang: string, files: FileNode[]) => {
+    const explicit = question.entryFile?.[lang];
+    if (explicit && files.some((f) => f.path === explicit)) return explicit;
+    const writable = files.find((f) => !f.readOnly);
+    return (writable ?? files[0]).path;
+};
+
 const CodeEditor: React.FC<CodeEditorProps> = ({
     question,
     lang,
@@ -326,9 +347,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     theme,
     onCodeChange,
 }) => {
-    const starterCode =
-        question.starterCode?.[lang] ?? `${LANG_META[lang]?.comment ?? "//"} Write your solution here`;
-    const [code, setCode] = useState(starterCode);
+    const initialFiles = useMemo(() => buildInitialFiles(question, lang), [question, lang]);
+    const initialActive = useMemo(
+        () => initialEntryFile(question, lang, initialFiles),
+        [question, lang, initialFiles],
+    );
+
+    const [files, setFiles] = useState<FileNode[]>(initialFiles);
+    const [activePath, setActivePath] = useState<string>(initialActive);
+    const [openTabs, setOpenTabs] = useState<string[]>([initialActive]);
+    const [treeOpen, setTreeOpen] = useState(true);
     const [result, setResult] = useState<RunResult | null>(null);
     const [running, setRunning] = useState(false);
     const [outputOpen, setOutputOpen] = useState(false);
@@ -341,28 +369,62 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const limits = useMemo(() => getLimitsFor(lang, question.limits), [lang, question.limits]);
     const isLight = theme === "light";
 
+    const activeFile = files.find((f) => f.path === activePath) ?? files[0];
+
     useEffect(() => {
         if (question.id !== prevQId.current) {
-            const sc =
-                question.starterCode?.[lang] ??
-                `${LANG_META[lang]?.comment ?? "//"} Write your solution here`;
-            setCode(sc);
+            const next = buildInitialFiles(question, lang);
+            const entry = initialEntryFile(question, lang, next);
+            setFiles(next);
+            setOpenTabs([entry]);
+            setActivePath(entry);
             setResult(null);
             prevQId.current = question.id;
         }
-    }, [question.id, question.starterCode, lang]);
+    }, [question, lang]);
 
     useEffect(() => {
-        onCodeChange?.(code);
-    }, [code, onCodeChange]);
+        onCodeChange?.(activeFile?.content ?? "");
+    }, [activeFile?.content, onCodeChange]);
 
     useEffect(() => () => {
         if (runTimer.current) window.clearTimeout(runTimer.current);
         if (compileTimer.current) window.clearTimeout(compileTimer.current);
     }, []);
 
+    const handleEditorChange = useCallback(
+        (next: string) => {
+            setFiles((prev) =>
+                prev.map((f) => (f.path === activePath ? { ...f, content: next } : f)),
+            );
+        },
+        [activePath],
+    );
+
+    const openFile = useCallback((path: string) => {
+        setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
+        setActivePath(path);
+    }, []);
+
+    const closeTab = useCallback(
+        (path: string) => {
+            setOpenTabs((prev) => {
+                if (prev.length <= 1) return prev;
+                const next = prev.filter((p) => p !== path);
+                if (path === activePath) {
+                    const idx = prev.indexOf(path);
+                    setActivePath(next[Math.max(0, idx - 1)] ?? next[0]);
+                }
+                return next;
+            });
+        },
+        [activePath],
+    );
+
     const handleRun = useCallback(() => {
         if (running) return;
+        const entry = files.find((f) => f.path === activePath) ?? files[0];
+        if (!entry) return;
         setRunning(true);
         setOutputOpen(true);
 
@@ -371,18 +433,19 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
         compileTimer.current = window.setTimeout(() => {
             runTimer.current = window.setTimeout(() => {
-                const res = simulateRun(code, lang, question.testCases, limits);
+                const res = simulateRun(entry.content, lang, question.testCases, limits);
                 setResult(res);
                 setRunning(false);
             }, runtimeMs);
         }, compileMs);
-    }, [code, lang, question.testCases, limits, running]);
+    }, [files, activePath, lang, question.testCases, limits, running]);
 
     const handleReset = () => {
-        const sc =
-            question.starterCode?.[lang] ??
-            `${LANG_META[lang]?.comment ?? "//"} Write your solution here`;
-        setCode(sc);
+        const next = buildInitialFiles(question, lang);
+        const entry = initialEntryFile(question, lang, next);
+        setFiles(next);
+        setOpenTabs([entry]);
+        setActivePath(entry);
         setResult(null);
     };
 
@@ -510,13 +573,91 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
             <div className="flex flex-1 flex-col overflow-hidden min-h-0">
                 <div className="flex flex-1 overflow-hidden min-h-0">
-                    <MonacoEditor
-                        value={code}
-                        language={lang}
-                        fontSize={fontSize}
-                        theme={theme}
-                        onChange={(v) => setCode(v)}
-                    />
+                    <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+                        <div className="flex flex-shrink-0 items-stretch">
+                            <div className="min-w-0 flex-1 overflow-hidden">
+                                <FileTabs
+                                    tabs={openTabs.map((p) => {
+                                        const f = files.find((x) => x.path === p);
+                                        return { path: p, readOnly: f?.readOnly };
+                                    })}
+                                    active={activePath}
+                                    onActivate={(p) => setActivePath(p)}
+                                    onClose={openTabs.length > 1 ? closeTab : undefined}
+                                    theme={theme}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setTreeOpen((s) => !s)}
+                                title={treeOpen ? "Hide file tree" : "Show file tree"}
+                                aria-label="Toggle file tree"
+                                className="flex h-8 w-9 flex-shrink-0 cursor-pointer items-center justify-center transition-colors"
+                                style={{
+                                    background: treeOpen
+                                        ? "rgba(30,211,106,0.12)"
+                                        : isLight
+                                            ? "rgba(15,23,18,0.04)"
+                                            : "rgba(255,255,255,0.04)",
+                                    borderLeft: `1px solid ${toolbarBorder}`,
+                                    borderBottom: `1px solid ${toolbarBorder}`,
+                                    color: treeOpen ? "#1ED36A" : subtle,
+                                }}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 6.5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="flex flex-1 min-h-0 overflow-hidden">
+                            {activeFile && (
+                                <MonacoEditor
+                                    path={activeFile.path}
+                                    value={activeFile.content}
+                                    language={lang}
+                                    fontSize={fontSize}
+                                    theme={theme}
+                                    readOnly={activeFile.readOnly}
+                                    onChange={handleEditorChange}
+                                />
+                            )}
+                        </div>
+                    </div>
+                    {treeOpen && (
+                        <FileTreePanel
+                            files={files}
+                            activePath={activePath}
+                            theme={theme}
+                            onOpen={openFile}
+                            onFilesChange={setFiles}
+                            onPathRename={(oldPath, newPath) => {
+                                setOpenTabs((prev) =>
+                                    prev.map((p) => (p === oldPath ? newPath : p)),
+                                );
+                                setActivePath((p) => (p === oldPath ? newPath : p));
+                            }}
+                            onPathDelete={(path) => {
+                                setOpenTabs((prev) => {
+                                    if (!prev.includes(path)) return prev;
+                                    if (prev.length === 1) {
+                                        // Keep at least one tab — re-open another file if available.
+                                        const fallback = files.find((f) => f.path !== path);
+                                        if (fallback) {
+                                            setActivePath(fallback.path);
+                                            return [fallback.path];
+                                        }
+                                        return prev;
+                                    }
+                                    const next = prev.filter((p) => p !== path);
+                                    if (path === activePath) {
+                                        const idx = prev.indexOf(path);
+                                        setActivePath(next[Math.max(0, idx - 1)] ?? next[0]);
+                                    }
+                                    return next;
+                                });
+                            }}
+                        />
+                    )}
                 </div>
 
                 {outputOpen && (
