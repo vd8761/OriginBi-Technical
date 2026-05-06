@@ -3,6 +3,13 @@
 
 DO $$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tech_assessments_negative_mark') THEN
+        ALTER TABLE tech_assessments
+            ADD CONSTRAINT chk_tech_assessments_negative_mark
+            CHECK ((negative_mark_enabled = FALSE AND negative_mark_value IS NULL)
+                OR (negative_mark_enabled = TRUE AND negative_mark_value IS NOT NULL));
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tech_module_type') THEN
         CREATE TYPE tech_module_type AS ENUM ('aptitude', 'grammar', 'coding', 'mnc', 'role');
     END IF;
@@ -412,4 +419,13 @@ CREATE INDEX IF NOT EXISTS idx_grammar_questions_assessment ON tech_grammar_ques
 CREATE INDEX IF NOT EXISTS idx_coding_questions_assessment ON tech_coding_questions(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_mnc_questions_assessment ON tech_mnc_questions(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_role_questions_assessment ON tech_role_questions(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_aptitude_attempts_assessment ON tech_aptitude_attempts(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_aptitude_attempts_user ON tech_aptitude_attempts(user_id);
+CREATE INDEX IF NOT EXISTS idx_grammar_attempts_assessment ON tech_grammar_attempts(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_grammar_attempts_user ON tech_grammar_attempts(user_id);
+CREATE INDEX IF NOT EXISTS idx_coding_attempts_assessment ON tech_coding_attempts(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_coding_attempts_user ON tech_coding_attempts(user_id);
+CREATE INDEX IF NOT EXISTS idx_mnc_attempts_assessment ON tech_mnc_attempts(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_mnc_attempts_user ON tech_mnc_attempts(user_id);
+CREATE INDEX IF NOT EXISTS idx_role_attempts_assessment ON tech_role_attempts(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_role_attempts_user ON tech_role_attempts(user_id);
