@@ -162,8 +162,8 @@ export default function AdminQuestionsManager() {
               {/* Breadcrumbs for Landing */}
               <nav className="hidden md:flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
                 <span className="text-brand-green">Admin Hub</span>
-                <span className="text-slate-300 dark:text-white/10">/</span>
-                <span className="text-slate-400 dark:text-slate-500">Question Banks</span>
+                <span className="text-slate-900 dark:text-white/40">/</span>
+                <span className="text-slate-900 dark:text-white">Question Banks</span>
               </nav>
             </div>
             <ThemeToggle />
@@ -173,8 +173,8 @@ export default function AdminQuestionsManager() {
         <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
           <div className="space-y-6">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Assessment Modules</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Select a module to manage its question library</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Assessment Modules</h2>
+              <p className="text-sm text-slate-900 dark:text-white mt-1">Select a module to manage its question library</p>
             </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -196,26 +196,26 @@ export default function AdminQuestionsManager() {
                         {MODULE_ICONS[at]}
                       </div>
                       <div className="flex-1 min-w-0 flex items-center">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white tracking-tight leading-snug">{ASSESSMENT_TYPE_LABELS[at]}</h3>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-snug">{ASSESSMENT_TYPE_LABELS[at]}</h3>
                       </div>
                     </div>
 
-                    <p className="text-[13px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mb-6 font-medium">{ASSESSMENT_TYPE_DESCRIPTIONS[at]}</p>
+                    <p className="text-[13px] text-slate-900 dark:text-white line-clamp-2 leading-relaxed mb-6 font-medium">{ASSESSMENT_TYPE_DESCRIPTIONS[at]}</p>
 
                     <div className="flex items-center gap-5 mb-6 bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
                       <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none mb-1.5">Trial</span>
-                        <span className="text-xs font-bold text-slate-800 dark:text-white">{trialCount} Qs</span>
+                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Trial</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">{trialCount} Qs</span>
                       </div>
                       <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
-                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none mb-1.5">Main</span>
-                        <span className="text-xs font-bold text-slate-800 dark:text-white">{mainCount} Qs</span>
+                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Main</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">{mainCount} Qs</span>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">
                       {MODULE_TAGS[at].map((tag, tIdx) => (
-                        <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">{tag}</span>
+                        <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
                       ))}
                     </div>
 
@@ -233,7 +233,7 @@ export default function AdminQuestionsManager() {
           </div>
 
           <footer className="py-10 text-center opacity-40">
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">&copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence</p>
+            <p className="text-[11px] font-bold text-slate-900 dark:text-white uppercase tracking-[0.2em]">&copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence</p>
           </footer>
         </main>
       </div>
@@ -259,9 +259,9 @@ export default function AdminQuestionsManager() {
             {/* Breadcrumbs for Management */}
             <nav className="hidden md:flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
               <button onClick={() => setSelectedModule(null)} className="text-slate-400 hover:text-brand-green transition-colors">Admin Hub</button>
-              <span className="text-slate-300 dark:text-white/10">/</span>
+              <span className="text-slate-900 dark:text-white/40">/</span>
               <button onClick={() => setSelectedModule(null)} className="text-slate-400 hover:text-brand-green transition-colors">Question Banks</button>
-              <span className="text-slate-300 dark:text-white/10">/</span>
+              <span className="text-slate-900 dark:text-white/40">/</span>
               <span className="text-brand-green">{ASSESSMENT_TYPE_LABELS[selectedModule]}</span>
             </nav>
 
@@ -270,15 +270,15 @@ export default function AdminQuestionsManager() {
                 {MODULE_ICONS[selectedModule]}
               </div>
               <div className="leading-tight">
-                <p className="text-[13px] font-bold text-slate-800 dark:text-white tracking-tight">{ASSESSMENT_TYPE_LABELS[selectedModule]}</p>
+                <p className="text-[13px] font-bold text-slate-900 dark:text-white tracking-tight">{ASSESSMENT_TYPE_LABELS[selectedModule]}</p>
                 <p className="text-[10px] font-black text-brand-green tracking-widest uppercase">Management</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
-              <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
-              <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
+              <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
+              <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
             </div>
             <ThemeToggle />
           </div>
@@ -288,43 +288,39 @@ export default function AdminQuestionsManager() {
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
         <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6">
-          {/* Search bar matching main app */}
-          <div className="relative w-full xl:w-96">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search repository..."
-              className="w-full bg-white/50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-4 pr-10 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 transition-all"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-              <Search size={16} />
-            </div>
+          {/* Filter Tabs - Now on the left */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm overflow-x-auto scrollbar-hide">
+            <button 
+              onClick={() => setFilterCategory("all")} 
+              className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+            >
+              All ({questions.length})
+            </button>
+            {filterCats.map(cat => (
+              <button 
+                key={cat.key} 
+                onClick={() => setFilterCategory(cat.key)} 
+                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+              >
+                {cat.label} ({categoryCounts[cat.key] || 0})
+              </button>
+            ))}
           </div>
           
-          {/* Action Buttons matching main app (Add New, Bulk Import) */}
+          {/* Action Buttons: Export, Clear, Bulk Import, Add New */}
           <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-            {/* Filter Tabs - subtly adjusted for alignment */}
-            <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm overflow-x-auto scrollbar-hide">
-              <button 
-                onClick={() => setFilterCategory("all")} 
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"}`}
-              >
-                All ({questions.length})
-              </button>
-              {filterCats.map(cat => (
-                <button 
-                  key={cat.key} 
-                  onClick={() => setFilterCategory(cat.key)} 
-                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"}`}
-                >
-                  {cat.label} ({categoryCounts[cat.key] || 0})
-                </button>
-              ))}
-            </div>
- 
+            <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
+              <Download size={16} className="text-brand-green" />
+              <span>Export</span>
+            </button>
+
+            <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
+              <Trash2 size={16} />
+              <span>Clear Bank</span>
+            </button>
+
             <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden xl:block mx-1" />
- 
+  
             <button 
               onClick={() => setView("json-import")} 
               className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
@@ -343,30 +339,42 @@ export default function AdminQuestionsManager() {
           </div>
         </div>
 
+
         {/* LIST CONTAINER - Using dashboard-glass-card for consistency */}
         <div className="dashboard-glass-card !rounded-3xl p-8 min-h-[600px] dark:bg-white/[0.04]">
           {view === "json-import" ? (
             <JsonImportPanel assessmentType={selectedModule} mode={mode} onImport={handleImport} onCancel={() => setView("list")} />
           ) : (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-widest">Repository Bank</h3>
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Showing {filtered.length} of {questions.length} entries</p>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-widest">Repository Bank</h3>
+                  <p className="text-[11px] font-bold text-slate-900 dark:text-white uppercase tracking-widest mt-1">Showing {filtered.length} of {questions.length} entries</p>
                 </div>
-                <div className="flex items-center gap-6">
-                  <button onClick={handleExportJson} className="text-[10px] font-black text-slate-500 hover:text-brand-green transition-all uppercase tracking-[0.15em] flex items-center gap-1.5"><Download size={14} /> Export</button>
-                  <button onClick={() => setClearConfirm(true)} className="text-[10px] font-black text-red-400/60 hover:text-red-500 transition-all uppercase tracking-[0.15em] flex items-center gap-1.5"><Trash2 size={14} /> Clear Bank</button>
+                
+                {/* Search Bar - Now relocated here */}
+                <div className="relative w-full md:w-72 lg:w-96">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search repository..."
+                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 transition-all"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <Search size={16} />
+                  </div>
                 </div>
               </div>
+
 
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="w-20 h-20 rounded-3xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 flex items-center justify-center mb-6 opacity-40">
                     <AlertCircle size={32} className="text-slate-400" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">Zero Results Found</h3>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">No question vectors found for the current filter scope. Try adjusting your search query.</p>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Zero Results Found</h3>
+                  <p className="mt-2 text-sm text-slate-900 dark:text-white max-w-xs leading-relaxed">No question vectors found for the current filter scope. Try adjusting your search query.</p>
                   <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Reset Explorer</button>
                 </div>
               ) : (
@@ -395,10 +403,10 @@ export default function AdminQuestionsManager() {
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[32px] bg-white dark:bg-[#111a15] p-8 shadow-2xl border border-white/20 dark:border-white/5">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Delete Entry?</h3>
-                <p className="mt-3 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">This action will permanently purge the question vector from the repository.</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Entry?</h3>
+                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently purge the question vector from the repository.</p>
                 <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
+                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
                   <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Confirm</button>
                 </div>
               </div>
@@ -414,10 +422,10 @@ export default function AdminQuestionsManager() {
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[32px] bg-white dark:bg-[#111a15] p-8 shadow-2xl border border-white/20 dark:border-white/5">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Clear Entire Bank?</h3>
-                <p className="mt-3 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">Purging all {questions.length} entries from the {mode} {selectedModule} bank. This is irreversible.</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
+                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">Purging all {questions.length} entries from the {mode} {selectedModule} bank. This is irreversible.</p>
                 <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
+                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
                   <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Purge Bank</button>
                 </div>
               </div>

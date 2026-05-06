@@ -108,7 +108,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
               {getTag(question, assessmentType)}
             </span>
             <span className="h-0.5 w-0.5 rounded-full bg-[#17201b]/10 dark:bg-white/10" />
-            <p className="text-[9px] font-bold uppercase tracking-widest text-[#17201b]/30 dark:text-white/20">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
               {getSubtext(question, assessmentType)}
             </p>
           </div>
@@ -136,7 +136,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
             {/* Question text */}
             <div className="rounded-lg bg-slate-50 dark:bg-white/[0.03] p-4 border border-slate-100 dark:border-white/5 shadow-sm">
                <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-2 opacity-80">Content</p>
-               <p className="text-[13px] font-bold leading-relaxed text-slate-800 dark:text-white/90">
+               <p className="text-[13px] font-bold leading-relaxed text-[#17201b] dark:text-white">
                 {getText(question, assessmentType)}
                </p>
             </div>
@@ -166,7 +166,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
                       }`}>
                         {LABELS[oIdx]}
                       </span>
-                      <span className={`flex-1 text-[11px] font-bold ${isCorrect ? "text-[#17201b] dark:text-white" : "text-[#17201b]/60 dark:text-white/40"}`}>
+                      <span className={`flex-1 text-[11px] font-bold ${isCorrect ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
                         {opt.text}
                       </span>
                     </div>
@@ -183,7 +183,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
                   <div key={sq.id} className="rounded-xl bg-[#f6f8f5] dark:bg-[#0b100d] border border-[#17201b]/5 dark:border-white/5 p-4">
                     <div className="flex items-start gap-2.5 mb-3">
                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand-green text-[9px] font-black text-white">{sqIdx + 1}</span>
-                       <p className="text-[12px] font-bold text-[#17201b] dark:text-white/80">{sq.text}</p>
+                       <p className="text-[12px] font-bold text-[#17201b] dark:text-white">{sq.text}</p>
                     </div>
                     <div className="grid gap-1.5 sm:grid-cols-2">
                       {sq.options.map((opt, oIdx) => {
@@ -193,7 +193,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
                             isCorrect ? "bg-brand-green/10 border-brand-green" : "bg-white dark:bg-[#111a15] border-brand-green/5 dark:border-white/5"
                           }`}>
                             <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[8px] font-black ${isCorrect ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"}`}>{LABELS[oIdx]}</span>
-                            <span className={`text-[10px] font-bold ${isCorrect ? "text-[#17201b] dark:text-white" : "text-[#17201b]/40 dark:text-white/30"}`}>{opt.text}</span>
+                            <span className={`text-[10px] font-bold ${isCorrect ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>{opt.text}</span>
                           </div>
                         );
                       })}
@@ -207,7 +207,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
             {(question as AptitudeQuestion).explanation && (
               <div className="rounded-xl bg-brand-green/5 p-4 border border-dashed border-brand-green/20">
                 <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-1.5">Technical Rationale</p>
-                <p className="text-[11px] font-bold leading-relaxed text-[#17201b]/60 dark:text-white/40">{(question as AptitudeQuestion).explanation}</p>
+                <p className="text-[11px] font-bold leading-relaxed text-[#17201b] dark:text-white">{(question as AptitudeQuestion).explanation}</p>
               </div>
             )}
           </div>

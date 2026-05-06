@@ -182,8 +182,8 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   };
 
   const groupCls = "rounded-[20px] bg-[#f9fbf8] dark:bg-[#0b100d] border border-brand-green/10 dark:border-white/5 p-4 shadow-inner transition-all";
-  const inputCls = "mt-1.5 w-full rounded-xl border border-brand-green/15 bg-white dark:bg-[#111a15] p-3 text-[13px] font-bold text-[#17201b] dark:text-white placeholder:text-[#17201b]/20 dark:placeholder:text-white/10 focus:border-brand-green/40 focus:ring-4 focus:ring-brand-green/5 focus:outline-none transition-all";
-  const labelCls = "text-[9px] font-black uppercase tracking-wider text-[#17201b]/40 dark:text-white/20";
+  const inputCls = "mt-1.5 w-full rounded-xl border border-brand-green/15 bg-white dark:bg-[#111a15] p-3 text-[13px] font-bold text-[#17201b] dark:text-white placeholder:text-[#17201b] dark:placeholder:text-white focus:border-brand-green/40 focus:ring-4 focus:ring-brand-green/5 focus:outline-none transition-all";
+  const labelCls = "text-[9px] font-black uppercase tracking-wider text-[#17201b] dark:text-white";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -345,7 +345,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
             {errors.length > 0 && (
               <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-in shake duration-500">
                 <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1.5">Validation Errors</p>
-                {errors.map((e, i) => <p key={i} className="text-[10px] font-bold text-red-600/80 dark:text-red-400/60 leading-relaxed">• {e}</p>)}
+                {errors.map((e, i) => <p key={i} className="text-[10px] font-bold text-red-600 dark:text-red-400 leading-relaxed">• {e}</p>)}
               </div>
             )}
           </div>
@@ -353,7 +353,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 border-t border-brand-green/5 bg-[#f9fbf8] p-5 sm:p-6 dark:border-white/5 dark:bg-[#0b100d]">
-           <button onClick={onCancel} className="px-6 py-2.5 rounded-lg border border-[#17201b]/10 text-sm font-bold text-[#17201b]/40 hover:text-[#17201b] dark:border-white/10 dark:text-white/30 dark:hover:text-white transition-all">
+           <button onClick={onCancel} className="px-6 py-2.5 rounded-lg border border-[#17201b]/10 text-sm font-bold text-[#17201b] dark:text-white transition-all">
              Cancel
            </button>
            <button onClick={handleSave} className="px-8 py-2.5 rounded-lg bg-brand-green text-sm font-black text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 transition-all">
