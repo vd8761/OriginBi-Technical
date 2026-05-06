@@ -159,10 +159,9 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         {currentView === "explore" ? (
           <ExploreView
             assessments={EXAMS as any}
-            examDetails={{} as any}
+            examDetails={EXAM_DETAILS as any}
             onNavigateToDetails={(exam) => {
-              handleSelectExam(exam as Exam);
-              setCurrentView("assessment");
+              router.push(`/explore/${exam.id}`);
             }}
           />
         ) : currentView === "assessment" ? (

@@ -6,36 +6,75 @@ type MonacoModule = typeof import("monaco-editor");
 type EditorInstance = ReturnType<MonacoModule["editor"]["create"]>;
 type MonacoModel = ReturnType<MonacoModule["editor"]["createModel"]>;
 
-let monacoLoader: Promise<MonacoModule> | null = null;
-let environmentConfigured = false;
+const MONACO_VERSION = "0.55.1";
+const MONACO_CDN_BASE = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min/vs`;
 
-const configureEnvironment = () => {
-    if (environmentConfigured || typeof window === "undefined") return;
-    const w = window as unknown as {
-        MonacoEnvironment?: { getWorker?: (...args: unknown[]) => Worker };
-    };
-    if (!w.MonacoEnvironment) {
-        w.MonacoEnvironment = {
-            getWorker() {
-                const stub =
-                    "self.onmessage = function () {};\n" +
-                    "self.postMessage({});\n";
-                const blob = new Blob([stub], { type: "application/javascript" });
-                return new Worker(URL.createObjectURL(blob));
-            },
-        };
-    }
-    environmentConfigured = true;
-};
+let monacoLoader: Promise<MonacoModule> | null = null;
 
 const loadMonaco = (): Promise<MonacoModule> => {
     if (typeof window === "undefined") {
         return Promise.reject(new Error("monaco can only load on the client"));
     }
-    configureEnvironment();
-    if (!monacoLoader) {
-        monacoLoader = import("monaco-editor");
-    }
+    if (monacoLoader) return monacoLoader;
+
+    monacoLoader = new Promise<MonacoModule>((resolve, reject) => {
+        const w = window as unknown as {
+            MonacoEnvironment?: Record<string, unknown>;
+            require?: {
+                (deps: string[], cb: (mod: MonacoModule) => void): void;
+                config: (cfg: { paths: Record<string, string> }) => void;
+            };
+        };
+
+        // Workers are loaded from the same CDN via a tiny inline proxy script.
+        if (!w.MonacoEnvironment) {
+            w.MonacoEnvironment = {
+                getWorkerUrl: () => {
+                    const proxy =
+                        `self.MonacoEnvironment = { baseUrl: '${MONACO_CDN_BASE}/' };\n` +
+                        `importScripts('${MONACO_CDN_BASE}/base/worker/workerMain.js');\n`;
+                    return URL.createObjectURL(
+                        new Blob([proxy], { type: "application/javascript" }),
+                    );
+                },
+            };
+        }
+
+        const finalize = () => {
+            if (!w.require) {
+                reject(new Error("monaco AMD loader did not expose require"));
+                return;
+            }
+            w.require.config({ paths: { vs: MONACO_CDN_BASE } });
+            w.require(["vs/editor/editor.main"], (mod) => resolve(mod));
+        };
+
+        const existing = document.querySelector<HTMLScriptElement>(
+            'script[data-monaco-loader="true"]',
+        );
+        if (existing) {
+            if (w.require) {
+                finalize();
+            } else {
+                existing.addEventListener("load", finalize, { once: true });
+                existing.addEventListener(
+                    "error",
+                    () => reject(new Error("failed to load monaco loader")),
+                    { once: true },
+                );
+            }
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = `${MONACO_CDN_BASE}/loader.js`;
+        script.async = true;
+        script.dataset.monacoLoader = "true";
+        script.onload = finalize;
+        script.onerror = () => reject(new Error("failed to load monaco loader"));
+        document.head.appendChild(script);
+    });
+
     return monacoLoader;
 };
 
