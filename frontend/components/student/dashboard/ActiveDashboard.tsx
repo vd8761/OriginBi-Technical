@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { EXAMS, EXAM_DETAILS, CODING_LANGUAGES, type AssessmentId, type ExtendedExam } from "@/lib/exams";
 import { usePaidAssessments, codingPaymentKey, type PaymentKey } from "@/lib/payments";
 import { useAssessmentResults, deriveCareerIdentity, type AssessmentResult, type SectionResult } from "@/lib/progress";
+import { useAssessmentTracker } from "@/lib/assessmentTracker";
 import DetailedResultModal from "./DetailedResultModal";
+import AssessmentNotifications from "./AssessmentNotifications";
 import type { Exam } from "../ExamCarousel";
 
 // ── Icons ──
@@ -120,6 +122,14 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
   const { results, isCompleted, getResult } = useAssessmentResults();
+  const { 
+    notifications, 
+    markNotificationRead, 
+    clearAllNotifications,
+    getNextRecommended,
+    getOverallProgress,
+    completed,
+  } = useAssessmentTracker();
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
   const purchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
@@ -287,6 +297,82 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
             </div>
           </motion.section>
         )}
+      </div>
+
+      {/* ===== NOTIFICATIONS & PROGRESS ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Notifications */}
+        <div className="lg:col-span-2">
+          <AssessmentNotifications
+            notifications={notifications}
+            onMarkRead={markNotificationRead}
+            onClearAll={clearAllNotifications}
+          />
+        </div>
+
+        {/* Progress Card */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="rounded-2xl bg-gradient-to-br from-[#1ed36a]/10 to-[#1ed36a]/5 border border-[#1ed36a]/20 p-6"
+        >
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Your Progress</h3>
+          {(() => {
+            const progress = getOverallProgress();
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 font-medium">Completed</span>
+                  <span className="font-bold text-gray-900">{progress.completed}/{progress.total}</span>
+                </div>
+                <div className="h-3 bg-white rounded-full overflow-hidden border border-gray-200">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress.percentage}%` }}
+                    transition={{ delay: 0.5, duration: 0.8 }}
+                    className="h-full bg-[#1ed36a] rounded-full"
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>{progress.percentage}% complete</span>
+                  <span>{progress.inProgress} in progress</span>
+                </div>
+
+                {/* Next Recommended */}
+                {(() => {
+                  const next = getNextRecommended();
+                  if (!next) return null;
+                  const exam = EXAMS.find(e => e.id === next);
+                  if (!exam) return null;
+                  return (
+                    <div className="mt-4 pt-4 border-t border-[#1ed36a]/20">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Recommended Next</p>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center"
+                          style={{ background: `${exam.accentColor}20`, color: exam.accentColor }}
+                        >
+                          {exam.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-gray-900 truncate">{exam.title}</p>
+                          <p className="text-xs text-gray-500">{exam.questions} questions · {exam.duration}</p>
+                        </div>
+                        <button
+                          onClick={() => onStartExam(exam)}
+                          className="px-3 py-1.5 rounded-lg bg-[#1ed36a] text-white text-xs font-bold hover:bg-[#17b55a] transition-colors"
+                        >
+                          Start
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          })()}
+        </motion.section>
       </div>
 
       {/* ===== RESULTS: Clean list layout (NOT card grid) ===== */}

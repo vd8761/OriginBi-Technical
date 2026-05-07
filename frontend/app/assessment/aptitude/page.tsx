@@ -3,6 +3,7 @@
 import React from "react";
 import AptitudeEngine from "../../../components/assessment/aptitude/AptitudeEngine";
 import { useRouter } from "next/navigation";
+import { useAssessmentTracker } from "../../../lib/assessmentTracker";
 
 interface AptitudeResult {
     overallScore: number;
@@ -13,6 +14,7 @@ interface AptitudeResult {
 
 export default function AptitudeAssessmentPage() {
     const router = useRouter();
+    const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AptitudeResult) => {
         const sections = result.sections || [];
@@ -67,8 +69,16 @@ export default function AptitudeAssessmentPage() {
             window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
         }
 
+        // Mark complete in tracker (generates notifications & suggestions)
+        markAssessmentComplete("aptitude", {
+            totalScore: overallScore,
+            correctCount: Math.round((result.accuracy / 100) * (sections.length || 1)),
+            wrongCount: sections.length - Math.round((result.accuracy / 100) * (sections.length || 1)),
+            timeTakenSeconds: result.timeTakenSeconds,
+        });
+
         // Redirect to dashboard
-        router.push('/?completed=aptitude');
+        router.push('/student/dashboard?completed=aptitude');
     };
 
     return (

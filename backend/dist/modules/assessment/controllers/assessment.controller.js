@@ -28,6 +28,10 @@ let AssessmentController = class AssessmentController {
         const data = await this.assessmentService.getAttemptQuestions(token);
         return data;
     }
+    async submitAptitudeAttempt(token, body) {
+        const data = await this.assessmentService.submitAptitudeAttempt(token, body);
+        return data;
+    }
 };
 exports.AssessmentController = AssessmentController;
 __decorate([
@@ -44,6 +48,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], AssessmentController.prototype, "getAttemptQuestions", null);
+__decorate([
+    (0, common_1.Post)('aptitude/attempts/:token/submit'),
+    __param(0, (0, common_1.Param)('token')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], AssessmentController.prototype, "submitAptitudeAttempt", null);
 exports.AssessmentController = AssessmentController = __decorate([
     (0, common_1.Controller)('assessment'),
     __metadata("design:paramtypes", [assessment_service_1.AssessmentService])

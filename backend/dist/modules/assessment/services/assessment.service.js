@@ -181,6 +181,72 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
             throw error;
         }
     }
+    async submitAptitudeAttempt(token, body) {
+        const { answers } = body;
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            // Get attempt with questions
+            const attemptRows = await queryRunner.query(`SELECT a.* FROM tech_aptitude_attempts a WHERE a.attempt_token = $1`, [token]);
+            const attempt = attemptRows[0];
+            if (!attempt)
+                throw new common_1.NotFoundException('Attempt not found');
+            if (attempt.status === 'submitted')
+                throw new common_1.BadRequestException('Attempt already submitted');
+            // Get all questions with correct answers
+            const questionRows = await queryRunner.query(`SELECT aq.attempt_question_id, aq.aptitude_question_id, q.correct_option_id, q.marks, q.negative_marks
+         FROM tech_aptitude_attempt_questions aq
+         JOIN tech_aptitude_questions q ON q.aptitude_question_id = aq.aptitude_question_id
+         WHERE aq.aptitude_attempt_id = $1`, [attempt.aptitude_attempt_id]);
+            let totalScore = 0;
+            let correctCount = 0;
+            let wrongCount = 0;
+            const answerEntries = Object.entries(answers || {});
+            for (const question of questionRows) {
+                const selectedOptionId = answers[question.attempt_question_id] || answers[question.aptitude_question_id];
+                if (selectedOptionId) {
+                    const isCorrect = Number(selectedOptionId) === Number(question.correct_option_id);
+                    await queryRunner.query(`UPDATE tech_aptitude_attempt_questions 
+             SET selected_option_id = $1, is_correct = $2
+             WHERE attempt_question_id = $3`, [selectedOptionId, isCorrect, question.attempt_question_id]);
+                    if (isCorrect) {
+                        totalScore += Number(question.marks);
+                        correctCount++;
+                    }
+                    else {
+                        totalScore -= Number(question.negative_marks || 0);
+                        wrongCount++;
+                    }
+                }
+            }
+            // Calculate time taken
+            const timeTakenSeconds = Math.floor((Date.now() - new Date(attempt.started_at).getTime()) / 1000);
+            // Update attempt
+            await queryRunner.query(`UPDATE tech_aptitude_attempts 
+         SET status = 'submitted', submitted_at = NOW(), total_score = $1, 
+             positive_score = $2, negative_score = $3, time_taken_seconds = $4
+         WHERE aptitude_attempt_id = $5`, [totalScore, correctCount * 10, wrongCount * (attempt.negative_mark_value || 0), timeTakenSeconds, attempt.aptitude_attempt_id]);
+            await queryRunner.commitTransaction();
+            return {
+                success: true,
+                token,
+                totalScore,
+                correctCount,
+                wrongCount,
+                timeTakenSeconds,
+                status: 'completed',
+            };
+        }
+        catch (error) {
+            await queryRunner.rollbackTransaction();
+            this.logger.error('submitAptitudeAttempt error:', error);
+            throw error;
+        }
+        finally {
+            await queryRunner.release();
+        }
+    }
 };
 exports.AssessmentService = AssessmentService;
 exports.AssessmentService = AssessmentService = AssessmentService_1 = __decorate([

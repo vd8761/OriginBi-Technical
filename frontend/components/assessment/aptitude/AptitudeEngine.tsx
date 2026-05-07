@@ -90,12 +90,20 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 });
 
                 if (!response.ok) {
-                    throw new Error("Failed to load aptitude questions.");
+                    const errorText = await response.text().catch(() => "Unknown error");
+                    console.error("API Error:", response.status, errorText);
+                    throw new Error(`Failed to load questions: ${response.status} - ${errorText}`);
                 }
 
                 const data = await response.json();
-                setAttemptToken(data.attemptToken);
-                setQuestions(data.questions || []);
+                setAttemptToken(data.token || data.attemptToken);
+                // Note: Backend returns token, expiresAt, totalQuestions - questions fetched separately
+                const questionsRes = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${data.token}/questions`);
+                if (!questionsRes.ok) {
+                    throw new Error("Failed to fetch questions");
+                }
+                const questionsData = await questionsRes.json();
+                setQuestions(questionsData.questions || []);
                 setTimeLeft(Number(data.durationSeconds || 3600));
             } catch (error) {
                 setLoadError((error as Error).message);
@@ -118,10 +126,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             });
 
             if (!response.ok) {
-                throw new Error("Failed to submit aptitude attempt.");
+                const errorText = await response.text().catch(() => "Unknown error");
+                console.error("Submit API Error:", response.status, errorText);
+                throw new Error(`Submit failed: ${response.status} - ${errorText}`);
             }
 
             const result = await response.json();
+            
+            // Call parent handler (tracking handled in page component)
             onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
