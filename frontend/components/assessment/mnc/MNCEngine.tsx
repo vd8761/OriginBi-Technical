@@ -2,8 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import TimerDisplay from "../shared/TimerDisplay";
+import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+
+const MNC_TOTAL_TIME = 30 * 60;
 
 export interface Option {
     id: string;
@@ -80,9 +85,12 @@ interface MNCEngineProps {
 }
 
 const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${remainingSeconds}`;
+    const safe = Math.max(0, seconds);
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
 const labels = ["A", "B", "C", "D"];
@@ -91,9 +99,11 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(30 * 60);
+    const [timeLeft, setTimeLeft] = useState(MNC_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+    const { theme } = useTheme();
 
     const currentQuestion = MOCK_MNC_QUESTIONS[currentIndex];
     const totalQuestions = MOCK_MNC_QUESTIONS.length;
@@ -173,14 +183,11 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Time left
-                        </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
-                            {formatTime(timeLeft)}
-                        </p>
-                    </div>
+                    <TimerDisplay 
+                        time={timeLeft} 
+                        total={MNC_TOTAL_TIME} 
+                        theme={theme} 
+                    />
                     <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
@@ -189,13 +196,24 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
                         title="Question Map"
                     >
-                        <LayoutGrid size={20} className="text-brand-green" />
+                        <SidebarMobileIcon className="text-brand-green" />
+                    </button>
+                    <button 
+                        onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+                        className={`hidden lg:flex h-10 w-10 items-center justify-center rounded-lg border transition shadow-sm ${
+                            isDesktopSidebarOpen 
+                            ? 'border-brand-green/50 bg-brand-green/10 text-brand-green dark:border-brand-green/30 dark:bg-brand-green/10' 
+                            : 'border-brand-green/20 bg-white hover:border-brand-green dark:border-white/10 dark:bg-white/5 text-brand-green'
+                        }`}
+                        title="Toggle Question Map"
+                    >
+                        {isDesktopSidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
                     </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
-                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+            <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
+                <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
                     <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
@@ -310,14 +328,22 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
                     </div>
                 </section>
 
-                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
-                    <QuestionNavigator 
-                        questions={navigatorQuestions}
-                        currentIndex={currentIndex}
-                        onSelect={setCurrentIndex}
-                        progressPercent={progressPercent}
-                    />
-                </aside>
+                <motion.aside 
+                    initial={false}
+                    animate={{ width: isDesktopSidebarOpen ? 300 : 80 }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                    className="hidden shrink-0 relative lg:block lg:min-h-0 rounded-xl border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] overflow-hidden"
+                >
+                    <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
+                        <QuestionNavigator 
+                            questions={navigatorQuestions}
+                            currentIndex={currentIndex}
+                            onSelect={setCurrentIndex}
+                            progressPercent={progressPercent}
+                            isCollapsed={!isDesktopSidebarOpen}
+                        />
+                    </div>
+                </motion.aside>
             </main>
 
             {showSubmitModal && (

@@ -16,6 +16,7 @@ interface QuestionNavigatorProps {
     currentIndex: number;
     onSelect: (index: number) => void;
     progressPercent?: number;
+    isCollapsed?: boolean;
 }
 
 const stateStyles: Record<QuestionState, string> = {
@@ -29,6 +30,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     currentIndex,
     onSelect,
     progressPercent = 0,
+    isCollapsed = false,
 }) => {
     const answeredCount = questions.filter((q) => q.isAnswered).length;
     const markedCount = questions.filter((q) => q.isMarked).length;
@@ -42,51 +44,57 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     return (
         <div className="flex h-full flex-col gap-4">
             {/* Progress Section */}
-            <div className="flex items-center gap-4 rounded-md border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5">
-                <div className="h-16 w-16 shrink-0 rounded-full p-1.5" style={progressRingStyle}>
+            <div className={`flex items-center ${isCollapsed ? 'justify-center py-2' : 'gap-4 p-4 rounded-md border border-brand-green/15 bg-white/40 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5'}`}>
+                <div className={`shrink-0 rounded-full p-1.5 ${isCollapsed ? 'h-12 w-12' : 'h-16 w-16'}`} style={progressRingStyle}>
                     <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
-                        <span className="text-sm font-black text-[#17201b] dark:text-white">{safeProgress}%</span>
+                        <span className={`${isCollapsed ? 'text-[10px]' : 'text-sm'} font-black text-[#17201b] dark:text-white`}>{safeProgress}%</span>
                     </div>
                 </div>
-                <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">
-                        Overall Progress
-                    </p>
-                    <p className="mt-0.5 text-2xl font-black text-[#17201b] dark:text-white">
-                        {answeredCount} <span className="text-base font-bold text-[#17201b]/40 dark:text-white/40">/ {questions.length}</span>
-                    </p>
-                </div>
+                {!isCollapsed && (
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">
+                            Overall Progress
+                        </p>
+                        <p className="mt-0.5 text-2xl font-black text-[#17201b] dark:text-white">
+                            {answeredCount} <span className="text-base font-bold text-[#17201b]/40 dark:text-white/40">/ {questions.length}</span>
+                        </p>
+                    </div>
+                )}
             </div>
             
             {/* Status Summary Section */}
-            <div className="rounded-lg border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
-                <div className="grid grid-cols-3 gap-1.5">
-                    <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-2 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
-                        <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green dark:text-brand-green">Answered</span>
-                    </div>
+            {!isCollapsed && (
+                <div className="rounded-lg border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
+                    <div className="grid grid-cols-3 gap-1.5">
+                        <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-2 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
+                            <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-green dark:text-brand-green">Answered</span>
+                        </div>
 
-                    <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-2 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
-                        <span className="text-lg font-black text-amber-500 leading-none">{markedCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-500">Review</span>
-                    </div>
+                        <div className="flex flex-col items-center justify-center rounded-md border border-amber-400/20 bg-amber-400/[0.08] p-2 transition-colors hover:bg-amber-400/[0.12] dark:bg-amber-400/10">
+                            <span className="text-lg font-black text-amber-500 leading-none">{markedCount}</span>
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-500">Review</span>
+                        </div>
 
-                    <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-2 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
-                        <span className="text-lg font-black text-slate-700 dark:text-white leading-none">{leftCount}</span>
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-700 dark:text-white">Left</span>
+                        <div className="flex flex-col items-center justify-center rounded-md border border-slate-300/20 bg-slate-100 p-2 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]">
+                            <span className="text-lg font-black text-slate-700 dark:text-white leading-none">{leftCount}</span>
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-700 dark:text-white">Left</span>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
-            <div className="mx-auto h-px w-5/6 bg-brand-green/10 dark:bg-white/10" />
+            <div className={`mx-auto h-px bg-brand-green/10 dark:bg-white/10 ${isCollapsed ? 'w-1/2' : 'w-5/6'}`} />
 
             {/* Question Map Section */}
             <div className="flex flex-col">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">Question Map</h3>
-                </div>
+                {!isCollapsed && (
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">Question Map</h3>
+                    </div>
+                )}
 
-                <div className="mt-4 grid grid-cols-5 gap-2 lg:grid-cols-4 px-2">
+                <div className={`mt-4 grid gap-3 ${isCollapsed ? 'grid-cols-1 place-items-center' : 'grid-cols-5 lg:grid-cols-4 px-2'}`}>
                     {questions.map((q, idx) => {
                         const isActive = idx === currentIndex;
 
@@ -97,10 +105,10 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                                 onClick={() => onSelect(idx)}
                                 title={`${q.category} - Question ${q.number}`}
                                 aria-current={isActive ? "step" : undefined}
-                                className={`relative flex h-10 items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
+                                className={`relative flex items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
                                         ? "z-10 border-brand-green ring-2 ring-brand-green ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15] scale-105"
                                         : ""
-                                    } ${stateStyles[q.state]}`}
+                                    } ${stateStyles[q.state]} ${isCollapsed ? 'h-10 w-10' : 'h-10 w-full'}`}
                             >
                                 {q.number}
                                 {q.isAnswered && q.isMarked && (

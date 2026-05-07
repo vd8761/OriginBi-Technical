@@ -155,7 +155,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         </div>
       )}
 
-      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[100px] sm:pt-[108px]">
+      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
             assessments={EXAMS as any}
@@ -173,33 +173,26 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                   Explore and start your technical evaluations
                 </p>
               </div>
-              <button
-                onClick={() => setCurrentView("dashboard")}
-                className="px-5 py-2.5 rounded-xl border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary hover:bg-brand-light-primary transition-all"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-
-            <div className="relative flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
-              {FILTERS.map((item) => {
-                const isActive = filter === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setFilter(item.value)}
-                    className={
-                      "relative px-5 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 border " +
-                      (isActive
-                        ? "text-white bg-brand-green shadow-md"
-                        : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
-                    }
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
+              <div className="relative flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 border " +
+                        (isActive
+                          ? "text-white bg-brand-green shadow-md"
+                          : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
