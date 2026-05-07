@@ -14,7 +14,8 @@ interface AptitudeResult {
 
 export default function AptitudeAssessmentPage() {
     const router = useRouter();
-    const { markAssessmentComplete } = useAssessmentTracker();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
 
     const handleComplete = (result: AptitudeResult) => {
         const sections = result.sections || [];
@@ -83,7 +84,7 @@ export default function AptitudeAssessmentPage() {
 
     return (
         <div className="min-h-screen w-full">
-            <AptitudeEngine onComplete={handleComplete} />
+            <AptitudeEngine onComplete={handleComplete} mode={mode} />
         </div>
     );
 }

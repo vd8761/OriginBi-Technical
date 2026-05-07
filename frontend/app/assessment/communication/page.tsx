@@ -2,10 +2,12 @@
 
 import React from 'react';
 import CommunicationEngine, { type CommunicationAnswers } from '../../../components/assessment/communication/CommunicationEngine';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function CommunicationAssessmentPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
 
     const handleComplete = (answers: CommunicationAnswers) => {
         // Simulate scoring based on completion
@@ -54,7 +56,7 @@ export default function CommunicationAssessmentPage() {
 
     return (
         <div className="min-h-screen w-full">
-            <CommunicationEngine onComplete={handleComplete} />
+            <CommunicationEngine onComplete={handleComplete} mode={mode} />
         </div>
     );
 }

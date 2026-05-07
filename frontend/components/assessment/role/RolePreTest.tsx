@@ -1,10 +1,11 @@
 import React from "react";
 
 interface RolePreTestProps {
-    onStart: () => void;
+    onStart: (mode: 'trial' | 'main') => void;
     onClose: () => void;
     accentColor?: string;
     gradient?: string;
+    mode?: 'trial' | 'main';
 }
 
 const metrics = [
@@ -12,7 +13,6 @@ const metrics = [
     { label: "Duration", value: "30 min" },
     { label: "Format", value: "MCQ + scenario" },
     { label: "Attempts", value: "1 out of 2" },
-
 ];
 
 const checklist = [
@@ -28,7 +28,8 @@ const RolePreTest: React.FC<RolePreTestProps> = ({
     onStart, 
     onClose,
     accentColor = '#1ED36A',
-    gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)'
+    gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
+    mode = 'main'
 }) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
@@ -59,7 +60,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({
                         <div>
 
                             <h2 id="role-pretest-title" className="text-xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight sm:text-2xl">
-                                Role-Based Assessment
+                                Role-Based Assessment ({mode === 'trial' ? 'Trial' : 'Main'})
                             </h2>
                             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-slate-500 dark:text-white/60 sm:text-sm">
                                 Check role-fit through concept questions and work scenarios that test judgement, prioritization, and practical decisions.
@@ -128,7 +129,7 @@ const RolePreTest: React.FC<RolePreTestProps> = ({
                     </button>
                     <button
                         type="button"
-                        onClick={onStart}
+                        onClick={() => onStart(mode)}
                         className="inline-flex min-h-10 items-center justify-center rounded-full bg-brand-green px-8 text-[13px] font-bold text-white transition hover:bg-[#1bb85c] active:scale-95"
                     >
                         Begin test
@@ -140,4 +141,3 @@ const RolePreTest: React.FC<RolePreTestProps> = ({
 };
 
 export default RolePreTest;
-

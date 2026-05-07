@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import MNCEngine from '@/components/assessment/mnc/MNCEngine';
 
 export default function MNCAssessmentPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
     const [isCompleted, setIsCompleted] = useState(false);
 
     const handleComplete = (answers: Record<string, string>) => {
@@ -37,5 +39,9 @@ export default function MNCAssessmentPage() {
         );
     }
 
-    return <MNCEngine onComplete={handleComplete} />;
+    return (
+        <div className="min-h-screen w-full">
+            <MNCEngine onComplete={handleComplete} mode={mode} />
+        </div>
+    );
 }
