@@ -10,18 +10,17 @@ import { generateId } from "./storage";
 import { AlertCircle, CheckCircle2, Copy, Upload, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 interface JsonImportPanelProps {
-  assessmentType: AssessmentType;
-  mode: QuestionMode;
+  type: AssessmentType;
   onImport: (questions: AnyQuestion[]) => void;
   onCancel: () => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion[] {
+function parseQuestions(raw: any[], type: AssessmentType): AnyQuestion[] {
   return raw.map((item, i) => {
     const baseId = generateId() + `_${i}`;
 
-    switch (assessmentType) {
+    switch (type) {
       case "aptitude": {
         if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
         if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
@@ -90,8 +89,8 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
   });
 }
 
-function getQuestionLabel(q: AnyQuestion, assessmentType: AssessmentType): string {
-  switch (assessmentType) {
+function getQuestionLabel(q: AnyQuestion, type: AssessmentType): string {
+  switch (type) {
     case "aptitude": return (q as AptitudeQuestion).category;
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return COMM_TASK_LABELS[(q as CommQuestion).taskType] || (q as CommQuestion).taskType;
@@ -99,8 +98,8 @@ function getQuestionLabel(q: AnyQuestion, assessmentType: AssessmentType): strin
   }
 }
 
-function getQuestionText(q: AnyQuestion, assessmentType: AssessmentType): string {
-  switch (assessmentType) {
+function getQuestionText(q: AnyQuestion, type: AssessmentType): string {
+  switch (type) {
     case "aptitude": return (q as AptitudeQuestion).text;
     case "mnc": return (q as MNCQuestion).text;
     case "communication": {
@@ -111,8 +110,8 @@ function getQuestionText(q: AnyQuestion, assessmentType: AssessmentType): string
   }
 }
 
-function getCategoryKey(q: AnyQuestion, assessmentType: AssessmentType): string {
-  switch (assessmentType) {
+function getCategoryKey(q: AnyQuestion, type: AssessmentType): string {
+  switch (type) {
     case "aptitude": return (q as AptitudeQuestion).category;
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
@@ -120,7 +119,7 @@ function getCategoryKey(q: AnyQuestion, assessmentType: AssessmentType): string 
   }
 }
 
-export default function JsonImportPanel({ assessmentType, mode, onImport, onCancel }: JsonImportPanelProps) {
+export default function JsonImportPanel({ type, onImport, onCancel }: JsonImportPanelProps) {
   const [jsonText, setJsonText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AnyQuestion[] | null>(null);
@@ -132,7 +131,7 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
       const parsed = JSON.parse(jsonText);
       if (!Array.isArray(parsed)) throw new Error("JSON must be an array.");
       if (parsed.length === 0) throw new Error("Array is empty.");
-      setPreview(parseQuestions(parsed, assessmentType));
+      setPreview(parseQuestions(parsed, type));
     } catch (e: unknown) {
       if (e instanceof Error) setError(e.message);
       else setError("Invalid JSON format.");
@@ -146,7 +145,7 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
     setPreview(updated);
   };
 
-  const copySample = () => setJsonText(SAMPLE_JSONS[assessmentType]);
+  const copySample = () => setJsonText(SAMPLE_JSONS[type as AssessmentType]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,7 +158,7 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
                 <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">Import Engine</h3>
               </div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-900 dark:text-white">
-                Processing <span className="text-brand-green">{assessmentType}</span> question vectors
+                Processing <span className="text-brand-green">{type}</span> question vectors
               </p>
             </div>
             <button onClick={copySample} className="flex items-center gap-1.5 rounded-xl border border-brand-green/20 bg-brand-green/5 px-3 py-1.5 text-[10px] font-black uppercase text-brand-green transition-all hover:bg-brand-green hover:text-white">
@@ -223,7 +222,7 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
           <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
             {preview.map((q, idx) => {
               const isExpanded = expandedIdx === idx;
-              const catKey = getCategoryKey(q, assessmentType);
+              const catKey = getCategoryKey(q, type);
               const catColor = CATEGORY_COLORS[catKey] || { bg: "bg-slate-500/10", text: "text-slate-600 dark:text-slate-400", border: "border-slate-500/20" };
 
               return (
@@ -242,11 +241,11 @@ export default function JsonImportPanel({ assessmentType, mode, onImport, onCanc
                     <div className="flex-1 min-w-0">
                        <div className="flex items-center gap-1.5 mb-0.5">
                           <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${catColor.bg} ${catColor.text} ${catColor.border} border`}>
-                            {getQuestionLabel(q, assessmentType)}
+                            {getQuestionLabel(q, type)}
                           </span>
                        </div>
                        <p className={`text-[12px] font-bold truncate transition-colors ${isExpanded ? "text-brand-green" : "text-[#17201b] dark:text-white/80"}`}>
-                        {getQuestionText(q, assessmentType)}
+                        {getQuestionText(q, type)}
                        </p>
                     </div>
                     <div className="flex items-center gap-1.5">

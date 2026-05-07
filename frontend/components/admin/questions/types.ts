@@ -32,6 +32,9 @@ export type QuestionMode = "trial" | "main";
 export type ViewMode = "list" | "json-import";
 
 // ── Aptitude ──
+export type DifficultyLevel = "easy" | "medium" | "hard";
+export type QuestionStatus = "active" | "inactive";
+
 export interface AptitudeQuestion {
   id: string;
   category: string;
@@ -39,6 +42,13 @@ export interface AptitudeQuestion {
   options: QuestionOption[];
   correctOptionId: string;
   explanation?: string;
+  // DB-aligned fields
+  assessmentId?: number;
+  difficulty?: DifficultyLevel;
+  marks?: number;
+  negativeMarks?: number;
+  status?: QuestionStatus;
+  imageUrl?: string | null;
 }
 
 export const APTITUDE_CATEGORIES = ["QA", "LR", "DI", "AR", "VA"] as const;
@@ -59,6 +69,13 @@ export interface MNCQuestion {
   options: QuestionOption[];
   correctOptionId: string;
   explanation?: string;
+  // DB-aligned fields
+  assessmentId?: number;
+  difficulty?: DifficultyLevel;
+  marks?: number;
+  negativeMarks?: number;
+  status?: QuestionStatus;
+  imageUrl?: string | null;
 }
 
 export const MNC_TOPICS = [
@@ -87,6 +104,12 @@ export interface CommQuestion {
   // For writing
   minWords?: number;
   maxWords?: number;
+  // DB-aligned fields
+  assessmentId?: number;
+  difficulty?: DifficultyLevel;
+  marks?: number;
+  negativeMarks?: number;
+  status?: QuestionStatus;
 }
 
 export const COMM_TASK_LABELS: Record<CommTaskType, string> = {
@@ -116,6 +139,13 @@ export interface RoleQuestion {
   ticketId?: string;
   priority?: "Low" | "Medium" | "High" | "Critical";
   reportedBy?: string;
+  // DB-aligned fields
+  assessmentId?: number;
+  difficulty?: DifficultyLevel;
+  marks?: number;
+  negativeMarks?: number;
+  status?: QuestionStatus;
+  imageUrl?: string | null;
 }
 
 export const ROLE_QUESTION_TYPE_LABELS: Record<RoleQuestionType, string> = {
