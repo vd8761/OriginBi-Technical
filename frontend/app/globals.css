@@ -671,6 +671,12 @@
 .coding-exam-root textarea.code-textarea {
   font-family: 'Cascadia Code', 'Fira Code', ui-monospace, monospace !important;
 }
+/* Monaco's icon font (find/replace widget, suggest icons, etc) — the wildcard
+   rule above otherwise clobbers Monaco's own .codicon { font-family: codicon } */
+.coding-exam-root .codicon,
+.coding-exam-root .codicon::before {
+  font-family: 'codicon' !important;
+}
 
 .coding-exam-root .hl-keyword { color: #AC96FF; font-weight: 600; }
 .coding-exam-root .hl-string  { color: #1ED36A; }
@@ -833,6 +839,40 @@
 /* Custom scrollbars inside monaco to match theme */
 .coding-exam-root .monaco-host .monaco-scrollable-element > .scrollbar > .slider {
   border-radius: 4px;
+}
+
+/* Find widget — light theme overrides so it's readable on light surface. */
+.coding-exam-root.coding-theme-light .monaco-editor .find-widget {
+  background: #FFFFFF;
+  color: #1F2A23;
+  border: 1px solid rgba(15, 23, 18, 0.12);
+  box-shadow: 0 8px 24px rgba(15, 23, 18, 0.12);
+}
+.coding-exam-root.coding-theme-light .monaco-editor .find-widget .monaco-inputbox {
+  background: #F8FBF9;
+  color: #1F2A23;
+}
+.coding-exam-root.coding-theme-light .monaco-editor .find-widget .monaco-inputbox .input {
+  color: #1F2A23;
+}
+.coding-exam-root.coding-theme-light .monaco-editor .find-widget .matchesCount {
+  color: rgba(15, 23, 18, 0.65);
+}
+.coding-exam-root.coding-theme-light .monaco-editor .find-widget .button:not(.disabled):hover,
+.coding-exam-root.coding-theme-light .monaco-editor .find-widget .codicon-find-selection:hover {
+  background-color: rgba(30, 211, 106, 0.14);
+}
+
+/* Find-widget tooltips: when our observer flips them below, the existing
+   pointer pseudo-element becomes wrong-facing — hide it so the bare card sits
+   cleanly under the trigger button. */
+.monaco-hover.find-widget-tooltip-below::before,
+.monaco-hover.find-widget-tooltip-below::after {
+  display: none !important;
+}
+.monaco-hover.find-widget-tooltip-below .workbench-hover-pointer,
+.monaco-hover.find-widget-tooltip-below .monaco-hover-pointer {
+  display: none !important;
 }
 
 /* Dev controls hover */

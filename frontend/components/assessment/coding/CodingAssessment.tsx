@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import QuestionPanel from "./QuestionPanel";
-import CodeEditor, { LANG_META } from "./CodeEditor";
+import CodeEditor, { LANG_META, readPrefs, writePrefs } from "./CodeEditor";
 import SubmitModal, { type QStatus } from "./SubmitModal";
 import CompletionScreen from "./CompletionScreen";
 import DevControls from "./DevControls";
@@ -479,6 +479,28 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
     const [saved, setSaved] = useState(true);
     const [splitPct, setSplitPct] = useState(42);
     const [fontSize, setFontSize] = useState(14);
+    // Editor feature toggles, loaded once from coding prefs.
+    const [editorFindEnabled, setEditorFindEnabledState] = useState<boolean>(
+        () => readPrefs().findEnabled ?? true,
+    );
+    const [editorSuggestionsEnabled, setEditorSuggestionsEnabledState] = useState<boolean>(
+        () => readPrefs().suggestionsEnabled ?? true,
+    );
+    const [editorLintsEnabled, setEditorLintsEnabledState] = useState<boolean>(
+        () => readPrefs().lintsEnabled ?? true,
+    );
+    const setEditorFindEnabled = useCallback((v: boolean) => {
+        setEditorFindEnabledState(v);
+        writePrefs({ ...readPrefs(), findEnabled: v });
+    }, []);
+    const setEditorSuggestionsEnabled = useCallback((v: boolean) => {
+        setEditorSuggestionsEnabledState(v);
+        writePrefs({ ...readPrefs(), suggestionsEnabled: v });
+    }, []);
+    const setEditorLintsEnabled = useCallback((v: boolean) => {
+        setEditorLintsEnabledState(v);
+        writePrefs({ ...readPrefs(), lintsEnabled: v });
+    }, []);
     const { theme, toggleTheme } = useTheme();
     const [showGuidelines, setShowGuidelines] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -754,6 +776,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
             onResetCounters: resetCounters,
             onRequestFullscreen: requestFullscreen,
             onExitFullscreen: exitFullscreen,
+            editorFindEnabled,
+            editorSuggestionsEnabled,
+            editorLintsEnabled,
+            onEditorFindToggle: setEditorFindEnabled,
+            onEditorSuggestionsToggle: setEditorSuggestionsEnabled,
+            onEditorLintsToggle: setEditorLintsEnabled,
         }),
         [
             currentQ,
@@ -771,6 +799,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
             clearStorage,
             tabMonitor,
             resetCounters,
+            editorFindEnabled,
+            editorSuggestionsEnabled,
+            editorLintsEnabled,
+            setEditorFindEnabled,
+            setEditorSuggestionsEnabled,
+            setEditorLintsEnabled,
         ],
     );
 
@@ -849,6 +883,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
                         fontSize={fontSize}
                         theme={theme}
                         onCodeChange={triggerSave}
+                        findEnabled={editorFindEnabled}
+                        suggestionsEnabled={editorSuggestionsEnabled}
+                        lintsEnabled={editorLintsEnabled}
                     />
                 </div>
             </div>
