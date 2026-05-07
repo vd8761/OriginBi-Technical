@@ -2,7 +2,7 @@
 
 import React from "react";
 import AptitudeEngine from "../../../components/assessment/aptitude/AptitudeEngine";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface AptitudeResult {
     overallScore: number;
@@ -13,6 +13,8 @@ interface AptitudeResult {
 
 export default function AptitudeAssessmentPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
 
     const handleComplete = (result: AptitudeResult) => {
         const sections = result.sections || [];
@@ -73,7 +75,7 @@ export default function AptitudeAssessmentPage() {
 
     return (
         <div className="min-h-screen w-full">
-            <AptitudeEngine onComplete={handleComplete} />
+            <AptitudeEngine onComplete={handleComplete} mode={mode} />
         </div>
     );
 }

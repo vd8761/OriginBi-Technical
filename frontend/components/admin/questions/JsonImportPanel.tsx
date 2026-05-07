@@ -171,7 +171,7 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
               value={jsonText}
               onChange={(e) => { setJsonText(e.target.value); setError(null); }}
               placeholder="Paste your JSON array here..."
-              className="relative h-72 w-full resize-none rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-black/20 backdrop-blur-sm p-5 font-mono text-[11px] leading-relaxed text-slate-800 placeholder:text-slate-400 dark:text-white/70 shadow-inner focus:border-brand-green/40 focus:outline-none transition-all"
+              className="relative h-72 w-full resize-none rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-black/20 backdrop-blur-sm p-5 font-mono text-[11px] leading-relaxed text-slate-800 placeholder:text-slate-400 dark:text-white/70 focus:border-brand-green/40 focus:outline-none transition-all"
               spellCheck={false}
             />
           </div>
@@ -202,7 +202,7 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
             <button 
               onClick={handleParse} 
               disabled={!jsonText.trim() || jsonText.trim() === (SAMPLE_JSONS[assessmentType] || "").trim()} 
-              className="px-8 py-3 rounded-xl bg-brand-green text-[11px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+              className="px-8 py-3 rounded-xl bg-brand-green text-[11px] font-black uppercase tracking-[0.2em] text-white hover:bg-brand-green/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2"
             >
               <Upload size={14} /> Review Questions
             </button>
@@ -226,7 +226,7 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
               <button onClick={() => setPreview(null)} className="px-5 py-2 rounded-lg border border-[#17201b]/10 text-[11px] font-black uppercase tracking-wider text-[#17201b] dark:text-white transition-all">
                 Edit JSON
               </button>
-              <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white shadow-md hover:bg-brand-green/90">
+              <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white hover:bg-brand-green/90">
                 Commit Import
               </button>
             </div>

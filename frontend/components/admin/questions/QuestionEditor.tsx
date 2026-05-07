@@ -453,7 +453,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
              Cancel
            </button>
            <div className="flex items-center gap-3">
-             <button onClick={handleSave} className="px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white shadow-md transition-all">
+             <button onClick={handleSave} className="px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white transition-all">
                {question ? "Update Question" : "Create Question"}
              </button>
            </div>

@@ -16,6 +16,7 @@ import {
   updateQuestion,
   deleteQuestion as apiDeleteQuestion,
   bulkImportQuestions,
+  clearQuestions as apiClearQuestions,
   ApiQuestion,
   CreateQuestionPayload,
 } from "./api";
@@ -298,9 +299,18 @@ export default function AdminQuestionsManager() {
     setView("list");
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (isDbModule(selectedModule)) {
-      showToast("Clear All not supported for DB modules yet", "error");
+      try {
+        setLoading(true);
+        await apiClearQuestions(selectedModule!, mode);
+        showToast(`All ${mode} questions cleared`);
+        await loadQuestionsForModule(selectedModule!, mode);
+      } catch (err) {
+        showToast((err as Error).message || "Clear failed", "error");
+      } finally {
+        setLoading(false);
+      }
     } else {
       setQuestions([]);
       showToast("All questions cleared");
@@ -451,12 +461,10 @@ export default function AdminQuestionsManager() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!isDbModule(selectedModule) && (
-              <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
-                <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
-                <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
-              </div>
-            )}
+            <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
+              <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
+              <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
+            </div>
             <ThemeToggle />
           </div>
         </div>
@@ -469,7 +477,7 @@ export default function AdminQuestionsManager() {
           <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm overflow-x-auto scrollbar-hide">
             <button 
               onClick={() => setFilterCategory("all")} 
-              className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+              className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
             >
               All ({questions.length})
             </button>
@@ -477,7 +485,7 @@ export default function AdminQuestionsManager() {
               <button 
                 key={cat.key} 
                 onClick={() => setFilterCategory(cat.key)} 
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
+                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
               >
                 {cat.label} ({categoryCounts[cat.key] || 0})
               </button>
@@ -508,7 +516,7 @@ export default function AdminQuestionsManager() {
  
             <button 
               onClick={() => setEditingQuestion("new")} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all shadow-md"
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all"
             >
               <span>Add New</span>
               <Plus size={16} />
@@ -592,7 +600,7 @@ export default function AdminQuestionsManager() {
                 <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently purge the question vector from the repository.</p>
                 <div className="mt-8 flex w-full gap-3">
                   <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
-                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 transition-all">Confirm</button>
+                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Confirm</button>
                 </div>
               </div>
             </motion.div>
@@ -611,7 +619,7 @@ export default function AdminQuestionsManager() {
                 <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">Purging all {questions.length} entries from the bank. This is irreversible.</p>
                 <div className="mt-8 flex w-full gap-3">
                   <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
-                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 transition-all">Purge Bank</button>
+                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Purge Bank</button>
                 </div>
               </div>
             </motion.div>

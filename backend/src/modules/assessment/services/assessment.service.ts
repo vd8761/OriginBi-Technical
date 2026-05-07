@@ -111,10 +111,10 @@ export class AssessmentService {
 
       const attemptResult = await queryRunner.query(
         `INSERT INTO ${config.attempts}
-            (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
+            (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at, mode)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW(), $7)
          RETURNING *`,
-        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, mode],
       );
       const attemptId = attemptResult[0][config.attemptIdCol];
 

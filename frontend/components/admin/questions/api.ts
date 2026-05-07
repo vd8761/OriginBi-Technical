@@ -147,6 +147,12 @@ export async function deleteQuestion(module: string, id: number): Promise<void> 
     await apiFetch<{ message: string }>(url, { method: "DELETE" });
 }
 
+export async function clearQuestions(module: string, mode?: string): Promise<void> {
+    const query = mode ? `?mode=${mode}` : "";
+    const url = `${ADMIN_BASE}/${getBackendModule(module)}/questions${query}`;
+    await apiFetch<{ message: string }>(url, { method: "DELETE" });
+}
+
 export async function bulkImportQuestions(
     module: string,
     questions: CreateQuestionPayload[],

@@ -2,10 +2,12 @@
 
 import React from 'react';
 import RoleEngine from '../../../components/assessment/role/RoleEngine';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function RoleAssessmentPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
 
     const handleComplete = (answers: Record<string, string>) => {
         // Generate scores based on role assessment sections
@@ -56,7 +58,7 @@ export default function RoleAssessmentPage() {
 
     return (
         <div className="min-h-screen w-full">
-            <RoleEngine onComplete={handleComplete} roleName="Full Stack Engineer" />
+            <RoleEngine onComplete={handleComplete} mode={mode} />
         </div>
     );
 }

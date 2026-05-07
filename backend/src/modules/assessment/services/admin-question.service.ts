@@ -463,4 +463,47 @@ export class AdminQuestionService {
       throw new InternalServerErrorException('Failed to list assessments');
     }
   }
+  async clearQuestions(module: ModuleType, mode?: string) {
+    const config = MODULE_CONFIGS[module];
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const conditions: string[] = [];
+      const params: any[] = [];
+      if (mode) {
+        conditions.push(`mode = $1`);
+        params.push(mode);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      
+      const assessmentsRows = await queryRunner.query(
+        `SELECT DISTINCT assessment_id FROM ${config.questionTable} ${whereClause}`,
+        params
+      );
+      const affectedAssessmentIds = assessmentsRows.map((r: any) => r.assessment_id);
+
+      await queryRunner.query(`DELETE FROM ${config.questionTable} ${whereClause}`, params);
+
+      for (const aid of affectedAssessmentIds) {
+        await queryRunner.query(
+          `UPDATE tech_assessments
+           SET total_questions = (SELECT COUNT(*) FROM ${config.questionTable} WHERE assessment_id = $1), updated_at = NOW()
+           WHERE assessment_id = $1`,
+          [aid],
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return { message: 'Questions cleared' };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`clearQuestions (${module}) error:`, error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }
