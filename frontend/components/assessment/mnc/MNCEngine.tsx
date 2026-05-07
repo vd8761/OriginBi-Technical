@@ -102,7 +102,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 const MNCEngine: React.FC<MNCEngineProps> = ({ 
     onComplete,
-    assessmentCode = "TECH_MNC_001",
+    assessmentCode = "MNC_DEFAULT",
     userId,
     mode = 'main'
 }) => {

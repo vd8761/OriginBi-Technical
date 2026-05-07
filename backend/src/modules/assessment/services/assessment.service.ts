@@ -46,6 +46,7 @@ export class AssessmentService {
 
   async startAttempt(module: string, data: any) {
     const { assessmentId, assessmentCode, userId, mode = 'main' } = data;
+    this.logger.log(`startAttempt: module=${module}, code=${assessmentCode}, mode=${mode}`);
     if (!assessmentId && !assessmentCode) throw new BadRequestException('assessmentId or assessmentCode is required');
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -67,7 +68,7 @@ export class AssessmentService {
       const now = new Date();
       const durationMinutes = Number(assessment.total_time_minutes || 60);
       const expiresAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
-      const attemptToken = crypto.randomUUID();
+      const attemptToken = `${module.substring(0, 3).toUpperCase()}-${crypto.randomUUID()}`;
       const shuffleSeed = crypto.randomBytes(8).toString('hex');
 
       // Table mapping
@@ -195,25 +196,15 @@ export class AssessmentService {
   }
 
   async startAptitudeAttempt(data: any) {
-      return this.startAttempt('aptitude', data);
+    return this.startAttempt('aptitude', data);
   }
 
   async getAttemptQuestions(token: string) {
     try {
-      const attemptRows = await this.dataSource.query(
-        `SELECT a.*, ass.shuffle_options, ass.module_type
-         FROM tech_aptitude_attempts a
-         JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
-         WHERE a.attempt_token = $1`,
-        [token],
-      );
-      
-      const attempt = attemptRows[0];
-      if (!attempt) throw new NotFoundException('Attempt not found');
-
       // Table mapping
       const tableMap: Record<string, any> = {
         aptitude: { 
+            attempts: 'tech_aptitude_attempts',
             questions: 'tech_aptitude_questions', 
             junction: 'tech_aptitude_attempt_questions', 
             idCol: 'aptitude_question_id',
@@ -221,16 +212,49 @@ export class AssessmentService {
             attemptIdCol: 'aptitude_attempt_id'
         },
         grammar: { 
+            attempts: 'tech_grammar_attempts',
             questions: 'tech_grammar_questions', 
             junction: 'tech_grammar_attempt_questions', 
             idCol: 'grammar_question_id',
             options: 'tech_grammar_options',
             attemptIdCol: 'grammar_attempt_id'
         },
-        // Add others as needed
+        mnc: { 
+            attempts: 'tech_mnc_attempts',
+            questions: 'tech_mnc_questions', 
+            junction: 'tech_mnc_attempt_questions', 
+            idCol: 'mnc_question_id',
+            options: 'tech_mnc_options',
+            attemptIdCol: 'mnc_attempt_id'
+        },
+        role: { 
+            attempts: 'tech_role_attempts',
+            questions: 'tech_role_questions', 
+            junction: 'tech_role_attempt_questions', 
+            idCol: 'role_question_id',
+            options: 'tech_role_options',
+            attemptIdCol: 'role_attempt_id'
+        }
       };
 
-      const config = tableMap[attempt.module_type || 'aptitude'];
+      const moduleType = (token.startsWith('APT-') ? 'aptitude' : 
+                         token.startsWith('GRA-') ? 'grammar' :
+                         token.startsWith('MNC-') ? 'mnc' :
+                         token.startsWith('ROL-') ? 'role' : 'aptitude');
+
+      const config = tableMap[moduleType];
+      if (!config) throw new BadRequestException(`Token ${token} has invalid module prefix`);
+
+      const attemptRows = await this.dataSource.query(
+        `SELECT a.*, ass.shuffle_options, ass.module_type
+         FROM ${config.attempts} a
+         JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
+         WHERE a.attempt_token = $1`,
+        [token],
+      );
+      
+      const attempt = attemptRows[0];
+      if (!attempt) throw new NotFoundException('Attempt not found');
       const attemptId = attempt[config.attemptIdCol];
       
       const questions = await this.getAttemptQuestionsByConfig(attemptId, config, attempt.shuffle_options, attempt.shuffle_seed);

@@ -126,7 +126,7 @@ const formatTime = (seconds: number) => {
 const RoleEngine: React.FC<RoleEngineProps> = ({ 
     onComplete, 
     roleName = "Full Stack Engineer",
-    assessmentCode = "TECH_ROLE_001",
+    assessmentCode = "ROLE_DEFAULT",
     userId,
     mode = 'main'
 }) => {

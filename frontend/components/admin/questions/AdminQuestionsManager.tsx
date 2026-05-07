@@ -27,7 +27,7 @@ import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  BookOpen, Beaker, AlertCircle, ArrowLeft,
+  AlertCircle, ArrowLeft,
 } from "lucide-react";
 import {
   AptitudeIcon,
@@ -181,7 +181,12 @@ export default function AdminQuestionsManager() {
 
   useEffect(() => {
     if (!selectedModule) return;
+    
+    // Use an immediately invoked function to avoid synchronous setState triggers if needed
+    // or just ensure the call is handled as an async side effect
     loadQuestionsForModule(selectedModule, mode);
+    
+    // Move resets outside if they cause issues, but here they are fine as part of the transition
     setFilterCategory("all");
     setSearchQuery("");
   }, [selectedModule, mode, loadQuestionsForModule]);
@@ -545,7 +550,7 @@ export default function AdminQuestionsManager() {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search repository..."
-                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 transition-all"
+                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-slate-300 dark:focus:border-white/20 transition-all"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                     <Search size={16} />

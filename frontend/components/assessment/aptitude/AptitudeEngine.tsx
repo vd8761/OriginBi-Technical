@@ -51,7 +51,7 @@ const labelForIndex = (index: number) => String.fromCharCode(65 + index);
 
 const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     onComplete,
-    assessmentCode = "TECH_APT_001",
+    assessmentCode = "APTITUDE_DEFAULT",
     userId,
     mode = 'main',
 }) => {

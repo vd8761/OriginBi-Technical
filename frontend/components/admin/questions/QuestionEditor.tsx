@@ -214,7 +214,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   };
 
   const groupCls = "rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-4 transition-all";
-  const inputCls = "mt-1.5 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 text-[13px] font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/20 focus:border-brand-green/40 focus:ring-4 focus:ring-brand-green/5 focus:outline-none transition-all";
+  const inputCls = "mt-1.5 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 text-[13px] font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/20 focus:border-slate-300 dark:focus:border-white/20 focus:outline-none transition-all";
   const labelCls = "text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-white/40";
 
   return (

@@ -352,12 +352,51 @@ export class AdminQuestionService {
       if (existing.length === 0) throw new NotFoundException('Question not found');
       const assessmentId = existing[0].assessment_id;
 
+      // 1. Nullify the self-referencing FK (correct_option_id -> options table)
       if (config.optionsTable) {
         await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = NULL WHERE ${config.idColumn} = $1`, [id]);
+        
+        // Handle attempt-level dependencies
+        const attemptOptionsMap: Record<string, string> = {
+          aptitude: 'tech_aptitude_attempt_question_options',
+          grammar: 'tech_grammar_attempt_question_options',
+          mnc: 'tech_mnc_attempt_question_options',
+          role: 'tech_role_attempt_question_options'
+        };
+        const optJunction = attemptOptionsMap[module as string];
+        if (optJunction) {
+           await queryRunner.query(
+             `DELETE FROM ${optJunction} WHERE option_id IN (SELECT option_id FROM ${config.optionsTable} WHERE ${config.optionsFk} = $1)`,
+             [id]
+           );
+        }
       }
-      
+
+      // 2. Delete from attempt junction tables
+      const attemptJunctionMap: Record<string, string> = {
+        aptitude: 'tech_aptitude_attempt_questions',
+        grammar: 'tech_grammar_attempt_questions',
+        mnc: 'tech_mnc_attempt_questions',
+        role: 'tech_role_attempt_questions',
+      };
+      const junctionTable = attemptJunctionMap[module];
+      if (junctionTable) {
+        // Nullify selected_option_id first if applicable
+        if (config.optionsTable) {
+           await queryRunner.query(`UPDATE ${junctionTable} SET selected_option_id = NULL WHERE ${config.idColumn} = $1`, [id]);
+        }
+        await queryRunner.query(`DELETE FROM ${junctionTable} WHERE ${config.idColumn} = $1`, [id]);
+      }
+
+      // 3. Delete options
+      if (config.optionsTable) {
+        await queryRunner.query(`DELETE FROM ${config.optionsTable} WHERE ${config.optionsFk} = $1`, [id]);
+      }
+
+      // 4. Delete the question itself
       await queryRunner.query(`DELETE FROM ${config.questionTable} WHERE ${config.idColumn} = $1`, [id]);
       
+      // 5. Update assessment total count
       await queryRunner.query(
         `UPDATE tech_assessments
          SET total_questions = (SELECT COUNT(*) FROM ${config.questionTable} WHERE assessment_id = $1), updated_at = NOW()
@@ -375,6 +414,7 @@ export class AdminQuestionService {
       await queryRunner.release();
     }
   }
+
 
   async bulkImportQuestions(module: ModuleType, data: any) {
     const config = MODULE_CONFIGS[module];
@@ -485,6 +525,63 @@ export class AdminQuestionService {
       );
       const affectedAssessmentIds = assessmentsRows.map((r: any) => r.assessment_id);
 
+      if (config.optionsTable) {
+        // 1. Nullify correct_option_id on questions
+        await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = NULL ${whereClause}`, params);
+        
+        // 2. Handle Attempt-level dependencies
+        const attemptOptionsMap: Record<string, string> = {
+          aptitude: 'tech_aptitude_attempt_question_options',
+          grammar: 'tech_grammar_attempt_question_options',
+          mnc: 'tech_mnc_attempt_question_options',
+          role: 'tech_role_attempt_question_options'
+        };
+        const optJunction = attemptOptionsMap[module as string];
+        if (optJunction) {
+           await queryRunner.query(
+             `DELETE FROM ${optJunction} WHERE option_id IN (SELECT option_id FROM ${config.optionsTable} WHERE ${config.optionsFk} IN (SELECT ${config.idColumn} FROM ${config.questionTable} ${whereClause}))`,
+             params
+           );
+        }
+
+        // 3. Nullify selected_option_id in attempt questions
+        const attemptJunctions: Record<string, string> = {
+          aptitude: 'tech_aptitude_attempt_questions',
+          grammar: 'tech_grammar_attempt_questions',
+          mnc: 'tech_mnc_attempt_questions',
+          role: 'tech_role_attempt_questions'
+        };
+        const junctionTable = attemptJunctions[module as string];
+        if (junctionTable) {
+          await queryRunner.query(
+            `UPDATE ${junctionTable} SET selected_option_id = NULL WHERE ${config.idColumn} IN (SELECT ${config.idColumn} FROM ${config.questionTable} ${whereClause})`,
+            params
+          );
+        }
+
+        // 4. Delete options
+        await queryRunner.query(
+          `DELETE FROM ${config.optionsTable} WHERE ${config.optionsFk} IN (SELECT ${config.idColumn} FROM ${config.questionTable} ${whereClause})`,
+          params
+        );
+      }
+
+      // 5. Delete from attempts junction table
+      const attemptJunctions: Record<string, string> = {
+        aptitude: 'tech_aptitude_attempt_questions',
+        grammar: 'tech_grammar_attempt_questions',
+        mnc: 'tech_mnc_attempt_questions',
+        role: 'tech_role_attempt_questions'
+      };
+      const junctionTable = attemptJunctions[module as string];
+      if (junctionTable) {
+        await queryRunner.query(
+          `DELETE FROM ${junctionTable} WHERE ${config.idColumn} IN (SELECT ${config.idColumn} FROM ${config.questionTable} ${whereClause})`,
+          params
+        );
+      }
+
+      // 6. Finally delete questions
       await queryRunner.query(`DELETE FROM ${config.questionTable} ${whereClause}`, params);
 
       for (const aid of affectedAssessmentIds) {
