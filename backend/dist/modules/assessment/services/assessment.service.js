@@ -123,7 +123,8 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
                     junction: 'tech_aptitude_attempt_questions',
                     idCol: 'aptitude_question_id',
                     options: 'tech_aptitude_options',
-                    attemptIdCol: 'aptitude_attempt_id'
+                    attemptIdCol: 'aptitude_attempt_id',
+                    catCol: 'subcategory'
                 },
                 grammar: {
                     attempts: 'tech_grammar_attempts',
@@ -131,7 +132,17 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
                     junction: 'tech_grammar_attempt_questions',
                     idCol: 'grammar_question_id',
                     options: 'tech_grammar_options',
-                    attemptIdCol: 'grammar_attempt_id'
+                    attemptIdCol: 'grammar_attempt_id',
+                    catCol: 'task_type'
+                },
+                communication: {
+                    attempts: 'tech_grammar_attempts',
+                    questions: 'tech_grammar_questions',
+                    junction: 'tech_grammar_attempt_questions',
+                    idCol: 'grammar_question_id',
+                    options: 'tech_grammar_options',
+                    attemptIdCol: 'grammar_attempt_id',
+                    catCol: 'task_type'
                 },
                 mnc: {
                     attempts: 'tech_mnc_attempts',
@@ -139,7 +150,8 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
                     junction: 'tech_mnc_attempt_questions',
                     idCol: 'mnc_question_id',
                     options: 'tech_mnc_options',
-                    attemptIdCol: 'mnc_attempt_id'
+                    attemptIdCol: 'mnc_attempt_id',
+                    catCol: 'topic_group'
                 },
                 role: {
                     attempts: 'tech_role_attempts',
@@ -147,12 +159,14 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
                     junction: 'tech_role_attempt_questions',
                     idCol: 'role_question_id',
                     options: 'tech_role_options',
-                    attemptIdCol: 'role_attempt_id'
+                    attemptIdCol: 'role_attempt_id',
+                    catCol: 'domain'
                 }
             };
             const config = tableMap[module];
             if (!config)
                 throw new common_1.BadRequestException(`Module ${module} not supported yet`);
+            this.logger.log(`startAttempt: module=${module}, code=${assessmentCode || 'LATEST'}, mode=${mode || 'main'}`);
             const attemptResult = await queryRunner.query(`INSERT INTO ${config.attempts}
             (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at, mode)
          VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW(), $7)
@@ -193,32 +207,35 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
         }
     }
     async getAttemptQuestionsByConfig(attemptId, config, shuffleOptions, seed) {
-        const questionRows = await this.dataSource.query(`SELECT aq.display_order, q.${config.idCol} as question_id, q.question_text, q.image_url, q.difficulty,
-              COALESCE(
-                json_agg(
-                  json_build_object('id', o.option_id::text, 'text', o.option_text)
-                ) FILTER (WHERE o.option_id IS NOT NULL),
-                '[]'::json
-              ) as options
+        const questionRows = await this.dataSource.query(`SELECT q.*, aq.display_order, q.${config.idCol} as question_id
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-       LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
-       GROUP BY aq.display_order, q.${config.idCol}, q.question_text, q.image_url, q.difficulty
        ORDER BY aq.display_order ASC`, [attemptId]);
-        return questionRows.map((q) => {
-            let finalOptions = q.options;
+        // Fetch options separately to avoid massive duplication in join or complex aggregations for simple mapping
+        const questions = [];
+        for (const q of questionRows) {
+            const options = await this.dataSource.query(`SELECT option_id::text as id, option_text as text 
+             FROM ${config.options} 
+             WHERE ${config.idCol} = $1 
+             ORDER BY option_id ASC`, [q[config.idCol]]);
+            let finalOptions = options;
             if (shuffleOptions) {
-                finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
+                finalOptions = this.shuffleWithSeed(options, seed + q[config.idCol]);
             }
-            return {
-                id: q.question_id,
+            // Map to frontend shape
+            questions.push({
+                ...q,
+                id: String(q[config.idCol]),
                 text: q.question_text,
+                instructions: q.question_text, // For communication tasks
+                type: q[config.catCol], // For communication tasks
+                category: q[config.catCol],
                 imageUrl: q.image_url,
-                difficulty: q.difficulty,
-                options: finalOptions,
-            };
-        });
+                options: finalOptions
+            });
+        }
+        return questions;
     }
     async startAptitudeAttempt(data) {
         return this.startAttempt('aptitude', data);

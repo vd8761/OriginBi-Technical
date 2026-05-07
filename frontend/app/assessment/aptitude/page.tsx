@@ -3,6 +3,7 @@
 import React from "react";
 import AptitudeEngine from "../../../components/assessment/aptitude/AptitudeEngine";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 interface AptitudeResult {
     overallScore: number;
@@ -11,7 +12,7 @@ interface AptitudeResult {
     sections: { name: string; score: number; weight: string }[];
 }
 
-export default function AptitudeAssessmentPage() {
+function AptitudeAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
@@ -77,5 +78,20 @@ export default function AptitudeAssessmentPage() {
         <div className="min-h-screen w-full">
             <AptitudeEngine onComplete={handleComplete} mode={mode} />
         </div>
+    );
+}
+
+export default function AptitudeAssessmentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen w-full flex items-center justify-center bg-brand-light-secondary dark:bg-brand-dark-primary">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
+                    <p className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Initializing Assessment Engine...</p>
+                </div>
+            </div>
+        }>
+            <AptitudeAssessmentContent />
+        </Suspense>
     );
 }

@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MNCEngine from '@/components/assessment/mnc/MNCEngine';
+import { Suspense } from 'react';
 
-export default function MNCAssessmentPage() {
+function MNCAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
@@ -43,5 +44,20 @@ export default function MNCAssessmentPage() {
         <div className="min-h-screen w-full">
             <MNCEngine onComplete={handleComplete} mode={mode} />
         </div>
+    );
+}
+
+export default function MNCAssessmentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen w-full flex items-center justify-center bg-brand-light-secondary dark:bg-brand-dark-primary">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
+                    <p className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Initializing MNC Engine...</p>
+                </div>
+            </div>
+        }>
+            <MNCAssessmentContent />
+        </Suspense>
     );
 }
