@@ -47,6 +47,7 @@ const assessment_controller_1 = require("./controllers/assessment.controller");
 const admin_question_service_1 = require("./services/admin-question.service");
 const assessment_service_1 = require("./services/assessment.service");
 const code_execution_service_1 = require("./services/code-execution.service");
+const evaluation_service_1 = require("./services/evaluation.service");
 const Entities = __importStar(require("../../entities"));
 const entities = Object.values(Entities).filter(e => typeof e === 'function');
 let AssessmentModule = class AssessmentModule {
@@ -65,11 +66,13 @@ exports.AssessmentModule = AssessmentModule = __decorate([
             admin_question_service_1.AdminQuestionService,
             assessment_service_1.AssessmentService,
             code_execution_service_1.CodeExecutionService,
+            evaluation_service_1.EvaluationService,
         ],
         exports: [
             admin_question_service_1.AdminQuestionService,
             assessment_service_1.AssessmentService,
             code_execution_service_1.CodeExecutionService,
+            evaluation_service_1.EvaluationService,
         ],
     })
 ], AssessmentModule);
