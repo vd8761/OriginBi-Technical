@@ -2,15 +2,16 @@
 
 import React, { useState } from "react";
 import {
-  AssessmentType, AnyQuestion, SAMPLE_JSONS,
+  AssessmentType, AnyQuestion, QuestionMode, SAMPLE_JSONS,
   CATEGORY_COLORS, AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   COMM_TASK_LABELS, ROLE_QUESTION_TYPE_LABELS,
 } from "./types";
 import { generateId } from "./storage";
-import { AlertCircle, CheckCircle2, Copy, Upload, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, Upload, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 interface JsonImportPanelProps {
   assessmentType: AssessmentType;
+  mode: QuestionMode;
   onImport: (questions: AnyQuestion[]) => void;
   onCancel: () => void;
 }
@@ -119,7 +120,7 @@ function getCategoryKey(q: AnyQuestion, assessmentType: AssessmentType): string 
   }
 }
 
-export default function JsonImportPanel({ assessmentType, onImport, onCancel }: JsonImportPanelProps) {
+export default function JsonImportPanel({ assessmentType, mode, onImport, onCancel }: JsonImportPanelProps) {
   const [jsonText, setJsonText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AnyQuestion[] | null>(null);
@@ -150,113 +151,103 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
   return (
     <div className="flex flex-col gap-6">
       {!preview ? (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-xl font-bold tracking-tight text-[#150089] dark:text-white">Bulk Upload Questions</h3>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-brand-green shadow-[0_0_8px_#1ed36a]" />
+                <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">Import Engine</h3>
               </div>
-              <p className="text-sm font-medium text-slate-500 dark:text-white/40">
-                Prepare and upload your question bank in JSON format for the <span className="text-brand-green font-bold">{assessmentType}</span> assessment
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-900 dark:text-white">
+                Processing <span className="text-brand-green">{assessmentType}</span> question vectors
               </p>
             </div>
-            <button onClick={copySample} className="flex items-center gap-2 rounded-xl border border-brand-green/20 bg-brand-green/5 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-brand-green transition-all hover:bg-brand-green hover:text-white group">
-              <Copy size={12} className="group-hover:scale-110 transition-transform" /> Sample Template
+            <button onClick={copySample} className="flex items-center gap-1.5 rounded-xl border border-brand-green/20 bg-brand-green/5 px-3 py-1.5 text-[10px] font-black uppercase text-brand-green transition-all hover:bg-brand-green hover:text-white">
+              <Copy size={12} /> Template
             </button>
           </div>
-
-          <div className="relative">
+          
+          <div className="relative group">
             <textarea
               value={jsonText}
               onChange={(e) => { setJsonText(e.target.value); setError(null); }}
-              placeholder="Paste your JSON array here..."
-              className="relative h-72 w-full resize-none rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-black/20 backdrop-blur-sm p-5 font-mono text-[11px] leading-relaxed text-slate-800 placeholder:text-slate-400 dark:text-white/70 focus:border-slate-300 dark:focus:border-white/20 focus:outline-none transition-all"
+              placeholder="Paste raw JSON array here..."
+              className="relative h-64 w-full resize-none rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 font-mono text-[11px] leading-relaxed text-slate-800 placeholder:text-slate-900 dark:text-white shadow-inner"
               spellCheck={false}
             />
           </div>
 
-          {jsonText.trim() === (SAMPLE_JSONS[assessmentType] || "").trim() && (
-            <div className="flex items-start gap-3 rounded-xl border border-brand-green/20 bg-brand-green/5 p-4 animate-in fade-in duration-300">
-              <AlertCircle className="h-4 w-4 shrink-0 text-brand-green mt-0.5" />
-              <p className="text-[10px] font-bold text-brand-green leading-relaxed">
-                You are currently viewing the sample template. Please modify the content or paste your own question data to proceed with the review.
-              </p>
-            </div>
-          )}
-
           {error && (
             <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-in shake duration-500">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
               <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-red-500 mb-0.5 leading-none">Format Error</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-red-500 mb-0.5">Parsing Error</p>
                 <p className="text-[10px] font-bold text-red-600 dark:text-red-400 leading-relaxed">{error}</p>
               </div>
             </div>
           )}
 
           <div className="flex items-center justify-end gap-3">
-            <button onClick={onCancel} className="px-6 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:text-white/40 dark:hover:text-white transition-all">
+            <button onClick={onCancel} className="px-6 py-2.5 rounded-lg border border-[#17201b]/10 text-sm font-bold text-[#17201b] dark:text-white transition-all">
               Cancel
             </button>
-            <button
-              onClick={handleParse}
-              disabled={!jsonText.trim() || jsonText.trim() === (SAMPLE_JSONS[assessmentType] || "").trim()}
-              className="px-8 py-3 rounded-xl bg-brand-green text-[11px] font-black uppercase tracking-[0.2em] text-white hover:bg-brand-green/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-            >
-              <Upload size={14} /> Review Questions
+            <button onClick={handleParse} disabled={!jsonText.trim()} className="px-8 py-2.5 rounded-lg bg-brand-green text-sm font-black text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+              <Upload size={14} /> Run Validation
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 rounded-2xl bg-brand-green/[0.04] border border-brand-green/20 backdrop-blur-md">
+        <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-brand-green/[0.02] border border-brand-green/10">
             <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <CheckCircle2 className="h-5 w-5 text-brand-green" />
-                <h3 className="text-xl font-bold tracking-tight text-[#150089] dark:text-white uppercase">
-                  Review & Confirm
+              <div className="flex items-center gap-1.5 mb-1">
+                 <CheckCircle2 className="h-4 w-4 text-brand-green" />
+                 <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                  Pre-flight
                 </h3>
               </div>
-              <p className="text-sm font-medium text-slate-500 dark:text-white/40">
-                Ready to import <span className="text-brand-green font-bold">{preview.length} questions</span> into the database
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-900 dark:text-white">
+                Ready to commit <span className="text-brand-green font-black">{preview.length} objects</span>
               </p>
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => setPreview(null)} className="px-5 py-2 rounded-lg border border-[#17201b]/10 text-[11px] font-black uppercase tracking-wider text-[#17201b] dark:text-white transition-all">
                 Edit JSON
               </button>
-              <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white hover:bg-brand-green/90">
+              <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90">
                 Commit Import
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
+          <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
             {preview.map((q, idx) => {
               const isExpanded = expandedIdx === idx;
               const catKey = getCategoryKey(q, assessmentType);
               const catColor = CATEGORY_COLORS[catKey] || { bg: "bg-slate-500/10", text: "text-slate-600 dark:text-slate-400", border: "border-slate-500/20" };
 
               return (
-                <div key={(q as { id: string }).id} className={`group rounded-xl border transition-all duration-300 ${isExpanded ? "bg-white dark:bg-white/[0.04] border-brand-green/30 shadow-md" : "bg-white/50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/20"
-                  }`}>
+                <div key={(q as { id: string }).id} className={`group rounded-xl border transition-all duration-300 ${
+                  isExpanded ? "bg-white dark:bg-white/[0.04] border-brand-green/30 shadow-md" : "bg-white/50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/20"
+                }`}>
                   <button
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
                     className="flex w-full items-center gap-3 p-3 text-left"
                   >
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-black transition-colors ${isExpanded ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"
-                      }`}>
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-black transition-colors ${
+                      isExpanded ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"
+                    }`}>
                       {idx + 1}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${catColor.bg} ${catColor.text} ${catColor.border} border`}>
-                          {getQuestionLabel(q, assessmentType)}
-                        </span>
-                      </div>
-                      <p className={`text-[12px] font-bold truncate transition-colors ${isExpanded ? "text-brand-green" : "text-[#17201b] dark:text-white/80"}`}>
+                       <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${catColor.bg} ${catColor.text} ${catColor.border} border`}>
+                            {getQuestionLabel(q, assessmentType)}
+                          </span>
+                       </div>
+                       <p className={`text-[12px] font-bold truncate transition-colors ${isExpanded ? "text-brand-green" : "text-[#17201b] dark:text-white/80"}`}>
                         {getQuestionText(q, assessmentType)}
-                      </p>
+                       </p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button onClick={(e) => { e.stopPropagation(); handleRemoveFromPreview(idx); }} className="rounded-md p-1.5 text-red-400/40 hover:bg-red-500 hover:text-white transition-all">
@@ -269,7 +260,7 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
                   </button>
 
                   {isExpanded && (
-                    <div className="px-3.5 pb-3.5">
+                    <div className="px-3.5 pb-3.5 animate-in slide-in-from-top-2 duration-300">
                       <div className="rounded-xl bg-[#0b100d] p-4 border border-white/5 shadow-inner">
                         <pre className="max-h-48 overflow-auto text-[10px] font-mono leading-relaxed text-brand-green/70 custom-scrollbar">
                           {JSON.stringify(q, null, 2)}

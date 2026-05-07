@@ -25,12 +25,13 @@ let AdminQuestionController = class AdminQuestionController {
         return { data };
     }
     // ─── Generic Question Routes ──────────────────────────────────────────────────
-    async listQuestions(module, assessmentId, category, subcategory, status, search) {
+    async listQuestions(module, assessmentId, category, subcategory, status, search, mode) {
         const data = await this.adminQuestionService.listQuestions(module, {
             assessmentId: assessmentId ? Number(assessmentId) : undefined,
             category: category || subcategory,
             status,
             search,
+            mode,
         });
         return { data, total: data.length };
     }
@@ -45,6 +46,9 @@ let AdminQuestionController = class AdminQuestionController {
     async updateQuestion(module, id, body) {
         const data = await this.adminQuestionService.updateQuestion(module, Number(id), body);
         return { message: 'Question updated', data };
+    }
+    async clearQuestions(module, mode) {
+        return await this.adminQuestionService.clearQuestions(module, mode);
     }
     async deleteQuestion(module, id) {
         return await this.adminQuestionService.deleteQuestion(module, Number(id));
@@ -73,8 +77,9 @@ __decorate([
     __param(3, (0, common_1.Query)('subcategory')),
     __param(4, (0, common_1.Query)('status')),
     __param(5, (0, common_1.Query)('search')),
+    __param(6, (0, common_1.Query)('mode')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], AdminQuestionController.prototype, "listQuestions", null);
 __decorate([
@@ -103,6 +108,14 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], AdminQuestionController.prototype, "updateQuestion", null);
+__decorate([
+    (0, common_1.Delete)(':module/questions'),
+    __param(0, (0, common_1.Param)('module')),
+    __param(1, (0, common_1.Query)('mode')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], AdminQuestionController.prototype, "clearQuestions", null);
 __decorate([
     (0, common_1.Delete)(':module/questions/:id'),
     __param(0, (0, common_1.Param)('module')),

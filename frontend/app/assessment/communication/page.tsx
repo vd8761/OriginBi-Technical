@@ -2,10 +2,13 @@
 
 import React from 'react';
 import CommunicationEngine, { type CommunicationAnswers } from '../../../components/assessment/communication/CommunicationEngine';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function CommunicationAssessmentPage() {
+function CommunicationAssessmentContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
 
     const handleComplete = (answers: CommunicationAnswers) => {
         // Simulate scoring based on completion
@@ -54,7 +57,22 @@ export default function CommunicationAssessmentPage() {
 
     return (
         <div className="min-h-screen w-full">
-            <CommunicationEngine onComplete={handleComplete} />
+            <CommunicationEngine onComplete={handleComplete} mode={mode} />
         </div>
+    );
+}
+
+export default function CommunicationAssessmentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen w-full flex items-center justify-center bg-brand-light-secondary dark:bg-brand-dark-primary">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
+                    <p className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Initializing Communication Engine...</p>
+                </div>
+            </div>
+        }>
+            <CommunicationAssessmentContent />
+        </Suspense>
     );
 }

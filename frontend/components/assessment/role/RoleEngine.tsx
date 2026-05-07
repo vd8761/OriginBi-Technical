@@ -4,7 +4,7 @@ import ThemeToggle from "../../ui/ThemeToggle";
 import ConceptualQuestionComponent from "./QuestionTypes/ConceptualQuestion";
 import ScenarioQuestionComponent from "./QuestionTypes/ScenarioQuestion";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
@@ -104,9 +104,14 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     },
 ];
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 interface RoleEngineProps {
     onComplete: (answers: Record<string, string>) => void;
+    assessmentCode?: string;
+    userId?: number;
     roleName?: string;
+    mode?: 'trial' | 'main';
 }
 
 const formatTime = (seconds: number) => {
@@ -118,7 +123,13 @@ const formatTime = (seconds: number) => {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full Stack Engineer" }) => {
+const RoleEngine: React.FC<RoleEngineProps> = ({ 
+    onComplete, 
+    roleName = "Full Stack Engineer",
+    assessmentCode = "ROLE_DEFAULT",
+    userId,
+    mode = 'main'
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
@@ -127,21 +138,55 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const { theme } = useTheme();
+    const [questions, setQuestions] = useState<RoleQuestion[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
+    useEffect(() => {
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/role/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                });
 
-    const currentQuestion = MOCK_ROLE_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_ROLE_QUESTIONS.length;
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load Role questions.");
+                }
+
+                const data = await response.json();
+                setAttemptToken(data.attemptToken);
+                setQuestions(data.questions || []);
+                setTimeLeft(Number(data.durationSeconds || 1800));
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId, mode]);
+
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
     const markedCount = markedForReview.size;
     const remainingCount = totalQuestions - answeredCount;
-    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+    const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const isLastQuestion = currentIndex === totalQuestions - 1;
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
-    const scenarioCount = MOCK_ROLE_QUESTIONS.filter((question) => question.type === "scenario").length;
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestion.id] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestion.id) : false;
+    const scenarioCount = questions.filter((question) => question.type === "scenario").length;
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_ROLE_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
 
@@ -159,11 +204,30 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
         };
     });
 
-    const completeAssessment = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const completeAssessment = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/role/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            onComplete(answers);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, isSubmitting, onComplete]);
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             completeAssessment();
             return;
@@ -174,9 +238,10 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [completeAssessment, timeLeft]);
+    }, [completeAssessment, timeLeft, isLoading, attemptToken]);
 
     const handleOptionSelect = (optionId: string) => {
+        if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
 
         if (markedForReview.has(currentQuestion.id)) {
@@ -187,12 +252,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const handleClear = () => {
+        if (!currentQuestion) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
     };
 
     const handleMarkReview = () => {
+        if (!currentQuestion) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentQuestion.id)) {
             newMarked.delete(currentQuestion.id);
@@ -223,6 +290,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const renderQuestionContent = () => {
+        if (!currentQuestion) return null;
         const selectedOption = answers[currentQuestion.id];
 
         if (currentQuestion.type === "conceptual") {
@@ -243,6 +311,46 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
             />
         );
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (loadError || questions.length === 0) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 dark:bg-red-500/5">
+                    <AlertCircle size={32} />
+                </div>
+                <h2 className="mb-2 text-xl font-black text-[#17201b] dark:text-white">
+                    {questions.length === 0 ? "Question Bank Empty" : "Initialization Failed"}
+                </h2>
+                <p className="mb-8 max-w-md text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {loadError || `No active ${mode} questions were found for this Role assessment. Please check your admin settings.`}
+                </p>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-brand-green/20 bg-white px-6 text-sm font-bold text-[#17201b] transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white"
+                    >
+                        <RotateCcw size={16} />
+                        Retry Sync
+                    </button>
+                    <button 
+                        onClick={() => window.location.href = '/'}
+                        className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-green px-6 text-sm font-bold text-white shadow-lg shadow-brand-green/20 transition hover:bg-[#19be5e]"
+                    >
+                        Return Home
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
