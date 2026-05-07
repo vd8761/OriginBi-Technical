@@ -10,6 +10,7 @@ import {
 } from "./types";
 import { generateId } from "./storage";
 import { X, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import CustomSelect from "@/components/ui/CustomSelect";
 
 interface QuestionEditorProps {
   question: AnyQuestion | null;
@@ -33,7 +34,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   // DB-backed fields
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
   const [marks, setMarks] = useState(1);
-  const [negMarks, setNegMarks] = useState(0);
+  const [negMarks, setNegMarks] = useState(0.25);
   const [status, setStatus] = useState<QuestionStatus>("active");
   const [assessmentId, setAssessmentId] = useState<number | undefined>(undefined);
 
@@ -68,9 +69,14 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   useEffect(() => {
     if (!question) return;
     const q = question as any;
-    setDifficulty(q.difficulty || "medium");
-    setMarks(q.marks ?? 1);
-    setNegMarks(q.negativeMarks ?? 0);
+    const diff = q.difficulty || "medium";
+    setDifficulty(diff);
+    // Auto-standardize marks on load based on difficulty
+    if (diff === 'easy') setMarks(1);
+    else if (diff === 'medium') setMarks(2);
+    else if (diff === 'hard') setMarks(5);
+    else setMarks(q.marks ?? 1);
+    setNegMarks(0.25); // Always 0.25
     setStatus(q.status || "active");
     setAssessmentId(q.assessmentId);
 
@@ -159,7 +165,9 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
       if (["mcq", "reading", "audio"].includes(commTaskType) && commSubQuestions.length === 0) errs.push("At least 1 sub-question required.");
     } else {
       if (!text.trim()) errs.push("Question text required.");
-      if (options.filter(o => o.text.trim()).length < 2) errs.push("At least 2 options required.");
+      const filledOptions = options.filter(o => o.text.trim());
+      if (filledOptions.length < 2) errs.push("At least 2 non-empty options required.");
+      if (filledOptions.length > 6) errs.push("Maximum 6 options allowed.");
     }
     setErrors(errs);
     return errs.length === 0;
@@ -173,7 +181,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
       id,
       difficulty,
       marks,
-      negativeMarks: negMarks,
+      negativeMarks: 0.25,
       status,
       assessmentId,
     };
@@ -205,78 +213,101 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
     }
   };
 
-  const groupCls = "rounded-[20px] bg-[#f9fbf8] dark:bg-[#0b100d] border border-brand-green/10 dark:border-white/5 p-4 shadow-inner transition-all";
-  const inputCls = "mt-1.5 w-full rounded-xl border border-brand-green/15 bg-white dark:bg-[#111a15] p-3 text-[13px] font-bold text-[#17201b] dark:text-white placeholder:text-[#17201b] dark:placeholder:text-white focus:border-brand-green/40 focus:ring-4 focus:ring-brand-green/5 focus:outline-none transition-all";
-  const labelCls = "text-[9px] font-black uppercase tracking-wider text-[#17201b] dark:text-white";
+  const groupCls = "rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-4 transition-all";
+  const inputCls = "mt-1.5 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 text-[13px] font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/20 focus:border-brand-green/40 focus:ring-4 focus:ring-brand-green/5 focus:outline-none transition-all";
+  const labelCls = "text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-white/40";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#0b100d]/60 backdrop-blur-md" onClick={onCancel} />
-      <div className="relative w-full max-w-xl max-h-[90vh] overflow-hidden rounded-[32px] border border-brand-green/20 bg-white shadow-2xl dark:border-white/5 dark:bg-[#111a15] animate-in zoom-in-95 duration-300">
+      <div className="absolute inset-0 bg-[#0b100d]/80 backdrop-blur-md" />
+      <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-brand-dark-primary shadow-2xl">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-brand-green/5 bg-gradient-to-r from-brand-green/[0.03] to-transparent p-5 sm:p-6 dark:border-white/5">
+        <div className="shrink-0 flex items-center justify-between border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] p-6">
           <div>
-            <h2 className="text-lg font-black tracking-tight text-[#17201b] dark:text-white">{question ? "Update Question" : "Add Question"}</h2>
-            <p className="mt-0.5 text-[10px] font-black uppercase tracking-widest text-brand-green opacity-70">Assessment: {assessmentType}</p>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">{question ? "Update Question" : "Add Question"}</h2>
+            <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-brand-green">Assessment: {assessmentType}</p>
           </div>
-          <button onClick={onCancel} className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f6f8f5] dark:bg-[#0b100d] text-[#17201b]/40 transition hover:bg-red-500 hover:text-white dark:text-white/20"><X size={16} /></button>
+          <button onClick={onCancel} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:bg-red-500 hover:text-white transition-all"><X size={18} /></button>
         </div>
 
-        <div className="overflow-y-auto custom-scrollbar p-5 sm:p-6" style={{ maxHeight: "calc(90vh - 160px)" }}>
-          <div className="flex flex-col gap-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="flex flex-col gap-6 p-6">
             
             <div className={groupCls}>
                <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-3">Core Configuration</p>
                <div className="grid gap-3.5 sm:grid-cols-2">
-                 <div>
-                    <label className={labelCls}>Difficulty</label>
-                    <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)} className={inputCls}>
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
-                    </select>
+                  <div>
+                    <CustomSelect
+                      label="Difficulty"
+                      value={difficulty}
+                      onChange={(v) => {
+                        const d = v as DifficultyLevel;
+                        setDifficulty(d);
+                        // Auto-assign marks based on difficulty
+                        if (d === 'easy') setMarks(1);
+                        else if (d === 'medium') setMarks(2);
+                        else if (d === 'hard') setMarks(5);
+                      }}
+                      options={[
+                        { label: 'Easy', value: 'easy' },
+                        { label: 'Medium', value: 'medium' },
+                        { label: 'Hard', value: 'hard' }
+                      ]}
+                    />
                   </div>
                   <div>
-                    <label className={labelCls}>Status</label>
-                    <select value={status} onChange={(e) => setStatus(e.target.value as QuestionStatus)} className={inputCls}>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
+                    <CustomSelect
+                      label="Status"
+                      value={status}
+                      onChange={(v) => setStatus(v as QuestionStatus)}
+                      options={[
+                        { label: 'Active', value: 'active' },
+                        { label: 'Inactive', value: 'inactive' }
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Marks</label>
-                    <input type="number" step="0.25" min="0" value={marks} onChange={e => setMarks(Number(e.target.value))} className={inputCls} />
+                    <input type="number" value={marks} disabled className={`${inputCls} opacity-60 cursor-not-allowed`} />
                   </div>
                   <div>
                     <label className={labelCls}>Negative Marks</label>
-                    <input type="number" step="0.25" min="0" value={negMarks} onChange={e => setNegMarks(Number(e.target.value))} className={inputCls} />
+                    <input type="number" value={0.25} disabled className={`${inputCls} opacity-60 cursor-not-allowed`} />
                   </div>
 
                  {assessmentType === "aptitude" && (
                   <div className="sm:col-span-2">
-                    <label className={labelCls}>Aptitude Category</label>
-                    <select value={aptCategory} onChange={(e) => setAptCategory(e.target.value)} className={inputCls}>
-                      {APTITUDE_CATEGORIES.map(c => <option key={c} value={c}>{APTITUDE_CATEGORY_LABELS[c]}</option>)}
-                    </select>
+                    <CustomSelect
+                      label="Aptitude Category"
+                      value={aptCategory}
+                      onChange={setAptCategory}
+                      options={APTITUDE_CATEGORIES.map(c => ({ label: APTITUDE_CATEGORY_LABELS[c], value: c }))}
+                    />
                   </div>
                  )}
                  {assessmentType === "mnc" && (
                   <div className="sm:col-span-2">
-                    <label className={labelCls}>Topic Vector</label>
-                    <select value={mncTopic} onChange={(e) => setMncTopic(e.target.value)} className={inputCls}>
-                      {MNC_TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <CustomSelect
+                      label="Topic Vector"
+                      value={mncTopic}
+                      onChange={setMncTopic}
+                      options={MNC_TOPICS.map(t => ({ label: t, value: t }))}
+                    />
                   </div>
                  )}
                  {assessmentType === "role" && (
                   <>
                     <div className="sm:col-span-2">
-                      <label className={labelCls}>Question Logic</label>
-                      <select value={roleType} onChange={(e) => setRoleType(e.target.value as RoleQuestionType)} className={inputCls}>
-                        <option value="conceptual">Conceptual Assessment</option>
-                        <option value="scenario">Simulation / Scenario</option>
-                      </select>
+                      <CustomSelect
+                        label="Question Logic"
+                        value={roleType}
+                        onChange={(v) => setRoleType(v as RoleQuestionType)}
+                        options={[
+                          { label: 'Conceptual Assessment', value: 'conceptual' },
+                          { label: 'Simulation / Scenario', value: 'scenario' }
+                        ]}
+                      />
                     </div>
                     {roleType === "conceptual" ? (
                       <>
@@ -288,13 +319,14 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                         <div><label className={labelCls}>Simulation Title</label><input value={scenarioTitle} onChange={e => setScenarioTitle(e.target.value)} className={inputCls} placeholder="System Outage" /></div>
                         <div><label className={labelCls}>Context</label><textarea value={scenarioContext} onChange={e => setScenarioContext(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Simulation context..." /></div>
                         <div className="grid grid-cols-3 gap-2">
-                          <div><label className={labelCls}>Ticket ID</label><input value={ticketId} onChange={e => setTicketId(e.target.value)} className={inputCls} placeholder="INC-001" /></div>
-                          <div><label className={labelCls}>Priority</label>
-                            <select value={priority} onChange={e => setPriority(e.target.value as typeof priority)} className={inputCls}>
-                              {["Low", "Medium", "High", "Critical"].map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                          </div>
-                          <div><label className={labelCls}>Unit</label><input value={reportedBy} onChange={e => setReportedBy(e.target.value)} className={inputCls} placeholder="Support" /></div>
+                           <div><label className={labelCls}>Ticket ID</label><input value={ticketId} onChange={e => setTicketId(e.target.value)} className={inputCls} placeholder="INC-001" /></div>
+                           <div className="mt-[-2px]"><CustomSelect
+                             label="Priority"
+                             value={priority}
+                             onChange={(v) => setPriority(v as any)}
+                             options={["Low", "Medium", "High", "Critical"].map(p => ({ label: p, value: p }))}
+                           /></div>
+                           <div><label className={labelCls}>Unit</label><input value={reportedBy} onChange={e => setReportedBy(e.target.value)} className={inputCls} placeholder="Support" /></div>
                         </div>
                       </div>
                     )}
@@ -303,10 +335,12 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                  {assessmentType === "communication" && (
                   <>
                     <div className="sm:col-span-2">
-                      <label className={labelCls}>Task Modality</label>
-                      <select value={commTaskType} onChange={(e) => setCommTaskType(e.target.value as CommTaskType)} className={inputCls}>
-                        {Object.entries(COMM_TASK_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
+                      <CustomSelect
+                        label="Task Modality"
+                        value={commTaskType}
+                        onChange={(v) => setCommTaskType(v as CommTaskType)}
+                        options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({ label: v, value: k }))}
+                      />
                     </div>
                     <div className="sm:col-span-2"><label className={labelCls}>Instructions</label><textarea value={commInstructions} onChange={e => setCommInstructions(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Direct instructions..." /></div>
                     {commTaskType === "reading" && <div className="sm:col-span-2"><label className={labelCls}>Passage</label><textarea value={commPassage} onChange={e => setCommPassage(e.target.value)} className={`${inputCls} resize-none`} rows={3} placeholder="Reading corpus..." /></div>}
@@ -340,16 +374,30 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                       <label className={labelCls}>Options</label>
                       {options.length < 6 && <button onClick={handleAddOption} className="px-2 py-1 rounded-md bg-brand-green/10 text-[9px] font-black uppercase text-brand-green transition-all hover:bg-brand-green hover:text-white">+ Add</button>}
                     </div>
-                    <div className="grid gap-2">
+                    <div className="grid gap-3">
                       {options.map((opt, idx) => {
                         const isCorrect = correctId === opt.id;
                         return (
-                          <div key={opt.id} className={`flex items-center gap-3 p-2.5 rounded-xl transition-all border ${isCorrect ? "bg-brand-green/5 border-brand-green/30" : "bg-white dark:bg-[#111a15] border-[#17201b]/5 dark:border-white/5"}`}>
-                            <button type="button" onClick={() => setCorrectId(opt.id)} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-black transition-all ${isCorrect ? "bg-brand-green text-white shadow-sm" : "bg-brand-green/5 text-brand-green"}`}>
-                              {isCorrect ? <CheckCircle2 size={14} /> : LABELS[idx]}
+                          <div key={opt.id} className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setCorrectId(opt.id)}
+                              title="Set as correct answer"
+                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 transition-all ${isCorrect ? "border-brand-green bg-brand-green text-white shadow-md" : "border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-300 dark:text-white/10 hover:border-slate-300 dark:hover:border-white/20"}`}
+                            >
+                              {isCorrect ? <CheckCircle2 size={18} /> : <span className="text-[12px] font-black">{LABELS[idx]}</span>}
                             </button>
-                            <input value={opt.text} onChange={e => handleOptionChange(idx, e.target.value)} className="flex-1 bg-transparent text-[13px] font-bold focus:outline-none dark:text-white" placeholder={`Option ${LABELS[idx]}...`} />
-                            {options.length > 2 && <button onClick={() => handleRemoveOption(idx)} className="p-1.5 text-red-400/30 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>}
+                            <input
+                              value={opt.text}
+                              onChange={e => handleOptionChange(idx, e.target.value)}
+                              className={inputCls}
+                              placeholder={`Option ${LABELS[idx]}...`}
+                            />
+                            {options.length > 2 && (
+                              <button onClick={() => handleRemoveOption(idx)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -400,13 +448,15 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-brand-green/5 bg-[#f9fbf8] p-5 sm:p-6 dark:border-white/5 dark:bg-[#0b100d]">
-           <button onClick={onCancel} className="px-6 py-2.5 rounded-lg border border-[#17201b]/10 text-sm font-bold text-[#17201b] dark:text-white transition-all">
+        <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.04] px-6 py-4 backdrop-blur-md">
+           <button onClick={onCancel} className="px-6 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all">
              Cancel
            </button>
-           <button onClick={handleSave} className="px-8 py-2.5 rounded-lg bg-brand-green text-sm font-black text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 transition-all">
-             {question ? "Save Changes" : "Create Question"}
-           </button>
+           <div className="flex items-center gap-3">
+             <button onClick={handleSave} className="px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white shadow-md transition-all">
+               {question ? "Update Question" : "Create Question"}
+             </button>
+           </div>
         </div>
       </div>
     </div>

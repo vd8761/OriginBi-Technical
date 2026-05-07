@@ -25,6 +25,7 @@ export interface ApiQuestion {
     marks: number;
     negativeMarks: number;
     status: "active" | "inactive";
+    mode: "trial" | "main";
     imageUrl: string | null;
     createdAt: string;
     updatedAt: string;
@@ -41,6 +42,7 @@ export interface CreateQuestionPayload {
     marks?: number;
     negativeMarks?: number;
     status?: "active" | "inactive";
+    mode?: "trial" | "main";
     imageUrl?: string | null;
 }
 
@@ -93,12 +95,14 @@ export async function fetchQuestions(module: string, params?: {
     assessmentId?: number;
     category?: string;
     status?: string;
+    mode?: string;
     search?: string;
 }): Promise<ApiQuestion[]> {
     const query = new URLSearchParams();
     if (params?.assessmentId) query.set("assessmentId", String(params.assessmentId));
     if (params?.category) query.set("category", params.category);
     if (params?.status) query.set("status", params.status);
+    if (params?.mode) query.set("mode", params.mode);
     if (params?.search) query.set("search", params.search);
 
     const qs = query.toString();

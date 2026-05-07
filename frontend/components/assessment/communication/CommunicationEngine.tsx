@@ -14,6 +14,7 @@ import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 
 const COMMUNICATION_TOTAL_TIME = 45 * 60;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export type TaskType = "audio" | "speaking" | "reading" | "writing" | "mcq";
 
@@ -58,82 +59,6 @@ export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTas
 export type CommunicationAnswer = Record<string, string> | { audioBlobUrl: string } | { text: string };
 export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
-const MOCK_TASKS: AssessmentTask[] = [
-    {
-        id: "task_1",
-        type: "audio",
-        instructions: "Listen to the audio clip and answer the questions below.",
-        audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-        questions: [
-            {
-                id: "q1",
-                text: "What is the primary topic of the announcement?",
-                options: [
-                    { id: "opt_1", text: "Quarterly financial results" },
-                    { id: "opt_2", text: "New office policies" },
-                    { id: "opt_3", text: "Upcoming company retreat" },
-                    { id: "opt_4", text: "Software update schedule" },
-                ],
-            },
-        ],
-    },
-    {
-        id: "task_2",
-        type: "reading",
-        instructions: "Read the following business email and answer the questions.",
-        passage: "Subject: Urgent Update on Project Alpha Delivery\\n\\nTeam,\\n\\nI am writing to inform you that the delivery date for Project Alpha has been moved up by two weeks. The client has requested an expedited timeline due to an upcoming product launch on their end. This means our new target for Phase 1 completion is now October 15th, rather than November 1st.\\n\\nPlease review your current workload and let me know by EOD tomorrow if this compressed schedule poses any critical risks to your deliverables. We will hold a brief stand-up meeting on Thursday morning at 9:00 AM to discuss mitigation strategies.\\n\\nBest regards,\\nSarah Jensen\\nProject Manager",
-        questions: [
-            {
-                id: "q3",
-                text: "What is the main reason for the schedule change?",
-                options: [
-                    { id: "opt_1", text: "The team was working too slowly." },
-                    { id: "opt_2", text: "The client has an upcoming product launch." },
-                    { id: "opt_3", text: "Sarah Jensen is going on leave." },
-                    { id: "opt_4", text: "There was an error in the original contract." },
-                ],
-            },
-        ],
-    },
-    {
-        id: "task_3",
-        type: "speaking",
-        instructions: "Read the prompt below. You will have 30 seconds to prepare and 90 seconds to record your response.",
-        prompt: "Imagine you are explaining a complex technical problem to a non-technical stakeholder. How would you approach the conversation to ensure they understand the core issue without getting lost in technical jargon?",
-        prepTimeSeconds: 30,
-        recordTimeSeconds: 90,
-    },
-    {
-        id: "task_4",
-        type: "writing",
-        instructions: "Draft an email response based on the scenario provided below.",
-        prompt: "Scenario: A key client has emailed you expressing frustration that a recent software update broke a critical feature they rely on. Draft a professional, empathetic email acknowledging the issue, explaining that the engineering team is actively working on a fix, and outlining the next steps for communication.",
-        minWords: 50,
-        maxWords: 200,
-    },
-    {
-        id: "task_5",
-        type: "mcq",
-        instructions: "Identify the correct grammatical structure or best response for the professional scenarios below.",
-        questions: [
-            {
-                id: "q_m1",
-                text: "Choose the most professional way to start a follow-up email after a meeting.",
-                options: [
-                    { id: "opt_1", text: "Hey, just checking in about what we talked about." },
-                    { id: "opt_2", text: "It was a pleasure meeting with you earlier today to discuss our project milestones." },
-                    { id: "opt_3", text: "I'm writing because I forgot to ask something in the meeting." },
-                    { id: "opt_4", text: "Did you have time to look at the notes I sent yet?" },
-                ],
-            },
-        ],
-    },
-];
-
-interface CommunicationEngineProps {
-    onComplete: (data: CommunicationAnswers) => void;
-}
-
 const taskCopy: Record<TaskType, { label: string; hint: string; accent: string }> = {
     audio: { label: "Audio Comprehension", hint: "Listen carefully and select the best answers.", accent: "Listening" },
     reading: { label: "Reading Clarity", hint: "Analyze the passage and respond precisely.", accent: "Reading" },
@@ -154,15 +79,25 @@ const formatTime = (seconds: number) => {
 const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | undefined) => {
     if (!answer) return false;
     if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
-        return task.questions.every((question) => Boolean((answer as Record<string, string>)[question.id]));
+        return (task as any).questions?.every((question: any) => Boolean((answer as Record<string, string>)[question.id]));
     }
     if (task.type === "speaking") {
         return "audioBlobUrl" in answer && Boolean(answer.audioBlobUrl);
     }
-    return "text" in answer && answer.text.trim().length > 0;
+    return "text" in answer && (answer as { text: string }).text.trim().length > 0;
 };
 
-const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete }) => {
+interface CommunicationEngineProps {
+    onComplete: (data: CommunicationAnswers) => void;
+    assessmentCode?: string;
+    userId?: number;
+}
+
+const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ 
+    onComplete,
+    assessmentCode = "TECH_COMM_001",
+    userId
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [timeLeft, setTimeLeft] = useState(COMMUNICATION_TOTAL_TIME);
     const [answers, setAnswers] = useState<CommunicationAnswers>({});
@@ -171,19 +106,54 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const { theme } = useTheme();
+    const [tasks, setTasks] = useState<AssessmentTask[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const currentTask = MOCK_TASKS[currentIndex];
-    const totalTasks = MOCK_TASKS.length;
+    useEffect(() => {
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/grammar/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load Communication questions.");
+                }
+
+                const data = await response.json();
+                setAttemptToken(data.attemptToken);
+                setTasks(data.questions || []);
+                setTimeLeft(Number(data.durationSeconds || 2700));
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId]);
+
+    const currentTask = tasks[currentIndex];
+    const totalTasks = tasks.length;
     
     const completedCount = useMemo(
-        () => MOCK_TASKS.filter((task) => isTaskComplete(task, answers[task.id])).length,
-        [answers],
+        () => tasks.filter((task) => isTaskComplete(task, answers[task.id])).length,
+        [answers, tasks],
     );
-    const progressPercent = Math.round((completedCount / totalTasks) * 100);
+    const progressPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const isLastTask = currentIndex === totalTasks - 1;
 
-    const navigatorTasks: NavigatorQuestion[] = MOCK_TASKS.map((task, index) => {
+    const navigatorTasks: NavigatorQuestion[] = tasks.map((task, index) => {
         const isAnswered = isTaskComplete(task, answers[task.id]);
         const isMarked = markedForReview.has(task.id);
 
@@ -201,15 +171,34 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
         };
     });
 
-    const confirmSubmit = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const confirmSubmit = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/grammar/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            onComplete(answers);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, isSubmitting, onComplete]);
 
     const handleConfirmSubmit = () => {
         setShowSubmitModal(true);
     };
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             confirmSubmit();
             return;
@@ -218,7 +207,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             setTimeLeft((prev) => prev - 1);
         }, 1000);
         return () => window.clearInterval(timer);
-    }, [confirmSubmit, timeLeft]);
+    }, [confirmSubmit, timeLeft, isLoading, attemptToken]);
 
     const handleNext = () => {
         if (!isLastTask) {
@@ -240,6 +229,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     };
 
     const handleMarkReview = () => {
+        if (!currentTask) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentTask.id)) {
             newMarked.delete(currentTask.id);
@@ -250,13 +240,38 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     };
 
     const handleClear = () => {
+        if (!currentTask) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentTask.id];
         setAnswers(newAnswers);
     };
 
-    const isQuestionMarked = markedForReview.has(currentTask.id);
-    const isQuestionAnswered = isTaskComplete(currentTask, answers[currentTask.id]);
+    const isQuestionMarked = currentTask ? markedForReview.has(currentTask.id) : false;
+    const isQuestionAnswered = currentTask ? isTaskComplete(currentTask, answers[currentTask.id]) : false;
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                Loading communication assessment...
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#b42318] dark:bg-[#0f1712]">
+                {loadError}
+            </div>
+        );
+    }
+
+    if (!currentTask) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                No tasks available.
+            </div>
+        );
+    }
 
     const renderTaskContent = () => {
         switch (currentTask.type) {

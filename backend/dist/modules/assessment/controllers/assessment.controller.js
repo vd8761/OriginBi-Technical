@@ -20,25 +20,29 @@ let AssessmentController = class AssessmentController {
     constructor(assessmentService) {
         this.assessmentService = assessmentService;
     }
-    async startAptitudeAttempt(body) {
-        const data = await this.assessmentService.startAptitudeAttempt(body);
+    async startAttempt(module, body) {
+        // Note: module might be 'aptitude', 'mnc', 'grammar', or 'role'
+        const data = await this.assessmentService.startAttempt(module, body);
         return data;
     }
     async getAttemptQuestions(token) {
+        // Currently getAttemptQuestions is still a bit aptitude-specific, 
+        // but startAttempt already returns questions which is what the frontend needs.
         const data = await this.assessmentService.getAttemptQuestions(token);
         return data;
     }
 };
 exports.AssessmentController = AssessmentController;
 __decorate([
-    (0, common_1.Post)('aptitude/attempts'),
-    __param(0, (0, common_1.Body)()),
+    (0, common_1.Post)(':module/attempts'),
+    __param(0, (0, common_1.Param)('module')),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
-], AssessmentController.prototype, "startAptitudeAttempt", null);
+], AssessmentController.prototype, "startAttempt", null);
 __decorate([
-    (0, common_1.Get)('aptitude/attempts/:token/questions'),
+    (0, common_1.Get)(':module/attempts/:token/questions'),
     __param(0, (0, common_1.Param)('token')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),

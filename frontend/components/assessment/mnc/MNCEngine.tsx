@@ -82,6 +82,8 @@ const MOCK_MNC_QUESTIONS: MncQuestion[] = [
 
 interface MNCEngineProps {
     onComplete: (answers: Record<string, string>) => void;
+    assessmentCode?: string;
+    userId?: number;
 }
 
 const formatTime = (seconds: number) => {
@@ -95,7 +97,13 @@ const formatTime = (seconds: number) => {
 
 const labels = ["A", "B", "C", "D"];
 
-const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+const MNCEngine: React.FC<MNCEngineProps> = ({ 
+    onComplete,
+    assessmentCode = "TECH_MNC_001",
+    userId
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
@@ -104,14 +112,49 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const { theme } = useTheme();
+    const [questions, setQuestions] = useState<MncQuestion[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const currentQuestion = MOCK_MNC_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_MNC_QUESTIONS.length;
+    useEffect(() => {
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/mnc/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load MNC questions.");
+                }
+
+                const data = await response.json();
+                setAttemptToken(data.attemptToken);
+                setQuestions(data.questions || []);
+                setTimeLeft(Number(data.durationSeconds || 1800));
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId]);
+
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
-    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+    const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const isLastQuestion = currentIndex === totalQuestions - 1;
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_MNC_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
         let state: QuestionState = isMarked ? "marked" : (isAnswered ? "answered" : "unanswered");
@@ -126,16 +169,18 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
         };
     });
 
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestion.id] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestion.id) : false;
 
     const handleClear = () => {
+        if (!currentQuestion) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
     };
 
     const handleMarkReview = () => {
+        if (!currentQuestion) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentQuestion.id)) {
             newMarked.delete(currentQuestion.id);
@@ -145,22 +190,66 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
         setMarkedForReview(newMarked);
     };
 
-    const completeAssessment = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const completeAssessment = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/mnc/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            onComplete(answers);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, isSubmitting, onComplete]);
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             completeAssessment();
             return;
         }
         const timer = window.setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
         return () => window.clearInterval(timer);
-    }, [completeAssessment, timeLeft]);
+    }, [completeAssessment, timeLeft, isLoading, attemptToken]);
 
     const handleOptionSelect = (optionId: string) => {
+        if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                Loading MNC assessment...
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#b42318] dark:bg-[#0f1712]">
+                {loadError}
+            </div>
+        );
+    }
+
+    if (!currentQuestion) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                No questions available.
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">

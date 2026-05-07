@@ -90,6 +90,7 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
             marks: Number(row.marks),
             negativeMarks: Number(row.negative_marks),
             status: row.status,
+            mode: row.mode || 'trial',
             imageUrl: row.image_url,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
@@ -98,7 +99,7 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
     // ─── Generic CRUD Methods ──────────────────────────────────────────────────────
     async listQuestions(module, query) {
         const config = MODULE_CONFIGS[module];
-        const { assessmentId, category, status, search } = query;
+        const { assessmentId, category, status, search, mode } = query;
         const conditions = [];
         const params = [];
         let paramIdx = 1;
@@ -113,6 +114,10 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
         if (status) {
             conditions.push(`q.status = $${paramIdx++}`);
             params.push(status);
+        }
+        if (mode) {
+            conditions.push(`q.mode = $${paramIdx++}`);
+            params.push(mode);
         }
         if (search) {
             conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
@@ -178,7 +183,7 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
     }
     async createQuestion(module, data) {
         const config = MODULE_CONFIGS[module];
-        const { assessmentId: reqAssessmentId, category, difficulty = 'medium', questionText, options, correctOptionIndex = 0, explanation, marks = 1, negativeMarks = 0, status = 'active', imageUrl = null, userId, } = data;
+        const { assessmentId: reqAssessmentId, category, difficulty = 'medium', questionText, options, correctOptionIndex = 0, explanation, marks = 1, negativeMarks = 0, status = 'active', mode = 'trial', imageUrl = null, userId, } = data;
         if (!category || !questionText)
             throw new common_1.BadRequestException('category and questionText are required');
         const queryRunner = this.dataSource.createQueryRunner();
@@ -194,9 +199,9 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
             }
             const qInsert = await queryRunner.query(`INSERT INTO ${config.questionTable}
             (assessment_id, ${config.categoryColumn}, difficulty, question_text, image_url,
-             correct_option_id, marks, negative_marks, explanation, status)
-         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9)
-         RETURNING *`, [assessmentId, category, difficulty, questionText, imageUrl, marks, negativeMarks, explanation || null, status]);
+             correct_option_id, marks, negative_marks, explanation, status, mode)
+         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10)
+         RETURNING *`, [assessmentId, category, difficulty, questionText, imageUrl, marks, negativeMarks, explanation || null, status, mode]);
             const questionRow = qInsert[0];
             const questionId = questionRow[config.idColumn];
             let insertedOptions = [];
@@ -227,7 +232,7 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
     }
     async updateQuestion(module, id, data) {
         const config = MODULE_CONFIGS[module];
-        const { category, difficulty, questionText, options, correctOptionIndex, explanation, marks, negativeMarks, status, imageUrl } = data;
+        const { category, difficulty, questionText, options, correctOptionIndex, explanation, marks, negativeMarks, status, mode, imageUrl } = data;
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
@@ -268,6 +273,10 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
             if (status !== undefined) {
                 updates.push(`status = $${pIdx++}`);
                 params.push(status);
+            }
+            if (mode !== undefined) {
+                updates.push(`mode = $${pIdx++}`);
+                params.push(mode);
             }
             if (imageUrl !== undefined) {
                 updates.push(`image_url = $${pIdx++}`);
@@ -354,9 +363,9 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
                     if (!questionText)
                         continue;
                     const qInsert = await queryRunner.query(`INSERT INTO ${config.questionTable}
-                (assessment_id, ${config.categoryColumn}, difficulty, question_text, correct_option_id, marks, negative_marks, explanation, status)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
-             RETURNING ${config.idColumn}`, [assessmentId, category, q.difficulty || 'medium', questionText, q.marks ?? 1, q.negativeMarks ?? 0, q.explanation || null, q.status || 'active']);
+                (assessment_id, ${config.categoryColumn}, difficulty, question_text, correct_option_id, marks, negative_marks, explanation, status, mode)
+             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
+             RETURNING ${config.idColumn}`, [assessmentId, category, q.difficulty || 'medium', questionText, q.marks ?? 1, q.negativeMarks ?? 0, q.explanation || null, q.status || 'active', q.mode || 'trial']);
                     const newQId = qInsert[0][config.idColumn];
                     if (config.optionsTable && Array.isArray(q.options)) {
                         const insertedOpts = [];

@@ -42,10 +42,10 @@ export class AssessmentService {
     return rows[0]?.id ?? null;
   }
 
-  // ─── Aptitude Assessment logic ──────────────────────────────────────────────────
+  // ─── Generic Assessment logic ──────────────────────────────────────────────────
 
-  async startAptitudeAttempt(data: any) {
-    const { assessmentId, assessmentCode, userId } = data;
+  async startAttempt(module: string, data: any) {
+    const { assessmentId, assessmentCode, userId, mode = 'main' } = data;
     if (!assessmentId && !assessmentCode) throw new BadRequestException('assessmentId or assessmentCode is required');
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -54,12 +54,12 @@ export class AssessmentService {
 
     try {
       const assessmentQuery = assessmentId
-        ? "SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = 'aptitude'"
-        : "SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = 'aptitude'";
+        ? `SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = $2`
+        : `SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = $2`;
       
-      const assessments = await queryRunner.query(assessmentQuery, [assessmentId || assessmentCode]);
+      const assessments = await queryRunner.query(assessmentQuery, [assessmentId || assessmentCode, module]);
       const assessment = assessments[0];
-      if (!assessment) throw new NotFoundException('Aptitude assessment not found');
+      if (!assessment) throw new NotFoundException(`${module} assessment not found`);
 
       const resolvedUserId = await this.resolveUserId(queryRunner, userId);
       if (!resolvedUserId) throw new BadRequestException('No users found.');
@@ -70,91 +70,173 @@ export class AssessmentService {
       const attemptToken = crypto.randomUUID();
       const shuffleSeed = crypto.randomBytes(8).toString('hex');
 
+      // Table mapping
+      const tableMap: Record<string, { attempts: string; questions: string; junction: string; idCol: string; options: string; attemptIdCol: string }> = {
+        aptitude: { 
+            attempts: 'tech_aptitude_attempts', 
+            questions: 'tech_aptitude_questions', 
+            junction: 'tech_aptitude_attempt_questions', 
+            idCol: 'aptitude_question_id',
+            options: 'tech_aptitude_options',
+            attemptIdCol: 'aptitude_attempt_id'
+        },
+        grammar: { 
+            attempts: 'tech_grammar_attempts', 
+            questions: 'tech_grammar_questions', 
+            junction: 'tech_grammar_attempt_questions', 
+            idCol: 'grammar_question_id',
+            options: 'tech_grammar_options',
+            attemptIdCol: 'grammar_attempt_id'
+        },
+        mnc: { 
+            attempts: 'tech_mnc_attempts', 
+            questions: 'tech_mnc_questions', 
+            junction: 'tech_mnc_attempt_questions', 
+            idCol: 'mnc_question_id',
+            options: 'tech_mnc_options',
+            attemptIdCol: 'mnc_attempt_id'
+        },
+        role: { 
+            attempts: 'tech_role_attempts', 
+            questions: 'tech_role_questions', 
+            junction: 'tech_role_attempt_questions', 
+            idCol: 'role_question_id',
+            options: 'tech_role_options',
+            attemptIdCol: 'role_attempt_id'
+        }
+      };
+
+      const config = tableMap[module];
+      if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
+
       const attemptResult = await queryRunner.query(
-        `INSERT INTO tech_aptitude_attempts
+        `INSERT INTO ${config.attempts}
             (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
          VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
-         RETURNING aptitude_attempt_id`,
+         RETURNING *`,
         [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
       );
-      const attemptId = attemptResult[0].aptitude_attempt_id;
+      const attemptId = attemptResult[0][config.attemptIdCol];
 
+      // Fetch questions filtered by mode and assessment
       const questions = await queryRunner.query(
-        `SELECT aptitude_question_id FROM tech_aptitude_questions WHERE assessment_id = $1 AND status = 'active'`,
-        [assessment.assessment_id],
+        `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = $2`,
+        [assessment.assessment_id, mode],
       );
 
-      const shuffled = this.shuffleWithSeed(questions, shuffleSeed) as any[];
+      if (questions.length === 0) {
+        throw new BadRequestException(`No active ${mode} questions found for this assessment.`);
+      }
+
+      const shuffled = assessment.shuffle_questions 
+        ? this.shuffleWithSeed(questions, shuffleSeed) 
+        : questions;
 
       for (let i = 0; i < shuffled.length; i++) {
         await queryRunner.query(
-          `INSERT INTO tech_aptitude_attempt_questions (aptitude_attempt_id, aptitude_question_id, display_order)
+          `INSERT INTO ${config.junction} (${config.attemptIdCol}, ${config.idCol}, display_order)
            VALUES ($1, $2, $3)`,
-          [attemptId, shuffled[i].aptitude_question_id, i + 1],
+          [attemptId, shuffled[i][config.idCol], i + 1],
         );
       }
 
       await queryRunner.commitTransaction();
+
+      // Get full questions for the response
+      const fullQuestions = await this.getAttemptQuestionsByConfig(attemptId, config, assessment.shuffle_options, shuffleSeed);
+
       return {
-        token: attemptToken,
+        attemptToken,
         expiresAt,
-        totalQuestions: shuffled.length,
+        durationSeconds: durationMinutes * 60,
+        questions: fullQuestions,
+        totalQuestions: fullQuestions.length,
       };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error('startAptitudeAttempt error:', error);
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      this.logger.error(`startAttempt (${module}) error:`, error);
       throw error;
     } finally {
       await queryRunner.release();
     }
   }
 
+  private async getAttemptQuestionsByConfig(attemptId: number, config: any, shuffleOptions: boolean, seed: string) {
+    const questionRows = await this.dataSource.query(
+      `SELECT aq.display_order, q.${config.idCol} as question_id, q.question_text, q.image_url, q.difficulty,
+              COALESCE(
+                json_agg(
+                  json_build_object('id', o.option_id, 'text', o.option_text)
+                ) FILTER (WHERE o.option_id IS NOT NULL),
+                '[]'::json
+              ) as options
+       FROM ${config.junction} aq
+       JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+       LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
+       WHERE aq.${config.attemptIdCol} = $1
+       GROUP BY aq.display_order, q.${config.idCol}
+       ORDER BY aq.display_order ASC`,
+      [attemptId],
+    );
+
+    return questionRows.map((q: any) => {
+        let finalOptions = q.options;
+        if (shuffleOptions) {
+          finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
+        }
+        return {
+          id: q.question_id,
+          text: q.question_text,
+          imageUrl: q.image_url,
+          difficulty: q.difficulty,
+          options: finalOptions,
+        };
+      });
+  }
+
+  async startAptitudeAttempt(data: any) {
+      return this.startAttempt('aptitude', data);
+  }
+
   async getAttemptQuestions(token: string) {
     try {
       const attemptRows = await this.dataSource.query(
-        `SELECT a.*, ass.shuffle_options
+        `SELECT a.*, ass.shuffle_options, ass.module_type
          FROM tech_aptitude_attempts a
          JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
          WHERE a.attempt_token = $1`,
         [token],
       );
+      
       const attempt = attemptRows[0];
       if (!attempt) throw new NotFoundException('Attempt not found');
 
-      const questionRows = await this.dataSource.query(
-        `SELECT aq.attempt_question_id, q.aptitude_question_id, q.question_text, q.image_url, q.subcategory as category,
-                COALESCE(
-                  json_agg(
-                    json_build_object('id', o.option_id, 'text', o.option_text)
-                  ) FILTER (WHERE o.option_id IS NOT NULL),
-                  '[]'::json
-                ) as options
-         FROM tech_aptitude_attempt_questions aq
-         JOIN tech_aptitude_questions q ON q.aptitude_question_id = aq.aptitude_question_id
-         LEFT JOIN tech_aptitude_options o ON o.aptitude_question_id = q.aptitude_question_id
-         WHERE aq.aptitude_attempt_id = $1
-         GROUP BY aq.attempt_question_id, q.aptitude_question_id
-         ORDER BY aq.display_order ASC`,
-        [attempt.aptitude_attempt_id],
-      );
+      // Table mapping
+      const tableMap: Record<string, any> = {
+        aptitude: { 
+            questions: 'tech_aptitude_questions', 
+            junction: 'tech_aptitude_attempt_questions', 
+            idCol: 'aptitude_question_id',
+            options: 'tech_aptitude_options',
+            attemptIdCol: 'aptitude_attempt_id'
+        },
+        grammar: { 
+            questions: 'tech_grammar_questions', 
+            junction: 'tech_grammar_attempt_questions', 
+            idCol: 'grammar_question_id',
+            options: 'tech_grammar_options',
+            attemptIdCol: 'grammar_attempt_id'
+        },
+        // Add others as needed
+      };
 
-      const results = questionRows.map((q: any) => {
-        let finalOptions = q.options;
-        if (attempt.shuffle_options) {
-          finalOptions = this.shuffleWithSeed(q.options, `${attempt.shuffle_seed}_${q.aptitude_question_id}`);
-        }
-        return {
-          id: q.attempt_question_id,
-          questionId: q.aptitude_question_id,
-          text: q.question_text,
-          imageUrl: q.image_url,
-          category: q.category,
-          options: finalOptions,
-        };
-      });
+      const config = tableMap[attempt.module_type || 'aptitude'];
+      const attemptId = attempt[config.attemptIdCol];
+      
+      const questions = await this.getAttemptQuestionsByConfig(attemptId, config, attempt.shuffle_options, attempt.shuffle_seed);
 
       return {
-        questions: results,
+        questions,
         expiresAt: attempt.expires_at,
         status: attempt.status,
       };

@@ -5,14 +5,17 @@ import { AssessmentService } from '../services/assessment.service';
 export class AssessmentController {
   constructor(private readonly assessmentService: AssessmentService) {}
 
-  @Post('aptitude/attempts')
-  async startAptitudeAttempt(@Body() body: any) {
-    const data = await this.assessmentService.startAptitudeAttempt(body);
+  @Post(':module/attempts')
+  async startAttempt(@Param('module') module: string, @Body() body: any) {
+    // Note: module might be 'aptitude', 'mnc', 'grammar', or 'role'
+    const data = await this.assessmentService.startAttempt(module, body);
     return data;
   }
 
-  @Get('aptitude/attempts/:token/questions')
+  @Get(':module/attempts/:token/questions')
   async getAttemptQuestions(@Param('token') token: string) {
+    // Currently getAttemptQuestions is still a bit aptitude-specific, 
+    // but startAttempt already returns questions which is what the frontend needs.
     const data = await this.assessmentService.getAttemptQuestions(token);
     return data;
   }

@@ -19,7 +19,7 @@ import {
   ApiQuestion,
   CreateQuestionPayload,
 } from "./api";
-import QuestionCard from "./QuestionCard";
+import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
 import JsonImportPanel from "./JsonImportPanel";
 import Logo from "@/components/ui/Logo";
@@ -164,7 +164,7 @@ export default function AdminQuestionsManager() {
     setLoading(true);
     try {
       if (isDbModule(module)) {
-        const apiQuestions = await fetchQuestions(module);
+        const apiQuestions = await fetchQuestions(module, { mode: m });
         setQuestions(apiQuestions.map(q => apiToFrontend(module, q)));
       } else {
         setQuestions(loadQuestions(module, m));
@@ -227,7 +227,10 @@ export default function AdminQuestionsManager() {
     if (isDbModule(selectedModule)) {
       try {
         setLoading(true);
-        const payload = frontendToPayload(selectedModule!, q);
+        const payload = {
+          ...frontendToPayload(selectedModule!, q),
+          mode
+        };
         if (isExisting && !qId.startsWith("new-")) {
           await updateQuestion(selectedModule!, Number(qId), payload);
           showToast("Question updated");
@@ -276,7 +279,10 @@ export default function AdminQuestionsManager() {
     if (isDbModule(selectedModule)) {
       try {
         setLoading(true);
-        const payloads = imported.map(q => frontendToPayload(selectedModule!, q));
+        const payloads = imported.map(q => ({
+          ...frontendToPayload(selectedModule!, q),
+          mode
+        }));
         const res = await bulkImportQuestions(selectedModule!, payloads);
         showToast(`Imported ${res.imported} questions`);
         await loadQuestionsForModule(selectedModule!, mode);
@@ -340,10 +346,10 @@ export default function AdminQuestionsManager() {
 
         <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
           <div className="space-y-6">
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <div>
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Assessment Modules</h2>
               <p className="text-sm text-slate-900 dark:text-white mt-1">Select a module to manage its question library</p>
-            </motion.div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at, idx) => {
@@ -353,16 +359,13 @@ export default function AdminQuestionsManager() {
                 const mainCount = isDbModule(at) ? 0 : loadQuestions(at, "main").length;
 
                 return (
-                  <motion.button
+                  <button
                     key={at}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
                     onClick={() => { setSelectedModule(at); setView("list"); }}
-                    className="dashboard-glass-card !rounded-3xl p-6 flex flex-col transition-all duration-500 group h-full hover:scale-[1.02] hover:border-brand-green/30 text-left hover:shadow-xl dark:bg-white/[0.05]"
+                    className="dashboard-glass-card !rounded-3xl p-6 flex flex-col transition-all duration-300 group h-full hover:border-brand-green/30 text-left dark:bg-white/[0.05]"
                   >
                     <div className="flex gap-4 mb-4">
-                      <div className="flex items-center justify-center shrink-0 w-14 h-14 rounded-[20px] text-white shadow-lg shadow-brand-green/10 [&_svg]:w-7 [&_svg]:h-7" style={{ background: accent.gradient }}>
+                      <div className="flex items-center justify-center shrink-0 w-14 h-14 rounded-[20px] text-white shadow-md [&_svg]:w-7 [&_svg]:h-7" style={{ background: accent.gradient }}>
                         {MODULE_ICONS[at]}
                       </div>
                       <div className="flex-1 min-w-0 flex items-center">
@@ -394,11 +397,11 @@ export default function AdminQuestionsManager() {
                     <div className="h-px w-full bg-slate-100 dark:bg-white/5 mb-6" />
 
                     <div className="flex items-center justify-end">
-                      <div className="px-6 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-full bg-brand-green text-white shadow-lg shadow-brand-green/20 group-hover:scale-105 transition-all">
-                        Configure Bank
+                      <div className="px-6 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-full bg-brand-green text-white shadow-md transition-all">
+                        Manage Questions
                       </div>
                     </div>
-                  </motion.button>
+                  </button>
                 );
               })}
             </div>
@@ -425,7 +428,7 @@ export default function AdminQuestionsManager() {
         <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
           <div className="flex items-center gap-6">
             <button onClick={() => { setSelectedModule(null); setView("list"); }} className="group flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">
-              <ArrowLeft className="w-4 h-4 text-brand-green group-hover:-translate-x-0.5 transition-transform" />
+              <ArrowLeft className="w-4 h-4 text-brand-green transition-transform" />
             </button>
             
             {/* Breadcrumbs for Management */}
@@ -448,14 +451,10 @@ export default function AdminQuestionsManager() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!isDbModule(selectedModule) ? (
+            {!isDbModule(selectedModule) && (
               <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
                 <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
                 <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
-              </div>
-            ) : (
-              <div className="px-4 py-1.5 rounded-xl border border-brand-green/20 bg-brand-green/5 backdrop-blur-md text-[10px] font-black text-brand-green uppercase tracking-widest">
-                Database Sync Active
               </div>
             )}
             <ThemeToggle />
@@ -509,7 +508,7 @@ export default function AdminQuestionsManager() {
  
             <button 
               onClick={() => setEditingQuestion("new")} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all shadow-lg shadow-brand-green/20"
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all shadow-md"
             >
               <span>Add New</span>
               <Plus size={16} />
@@ -518,16 +517,17 @@ export default function AdminQuestionsManager() {
         </div>
 
 
-        {/* LIST CONTAINER - Using dashboard-glass-card for consistency */}
-        <div className="dashboard-glass-card !rounded-3xl p-8 min-h-[600px] dark:bg-white/[0.04]">
+        {/* LIST CONTAINER */}
+        <div className="min-h-[600px]">
           {view === "json-import" ? (
             <JsonImportPanel assessmentType={selectedModule} onImport={handleImport} onCancel={() => setView("list")} />
           ) : (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2">
                 <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-widest">Repository Bank</h3>
-                  <p className="text-[11px] font-bold text-slate-900 dark:text-white uppercase tracking-widest mt-1">Showing {filtered.length} of {questions.length} entries</p>
+                  <h3 className="text-2xl font-bold text-[#150089] dark:text-white">
+                    Inventory Overview <span className="text-brand-green">({questions.length})</span>
+                  </h3>
                 </div>
                 
                 {/* Search Bar - Now relocated here */}
@@ -561,11 +561,13 @@ export default function AdminQuestionsManager() {
                   <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Reset Explorer</button>
                 </div>
               ) : (
-                <div className="grid gap-4">
-                  {filtered.map((q, qIdx) => (
-                    <QuestionCard key={(q as any).id} question={q} index={qIdx} assessmentType={selectedModule!} onEdit={() => setEditingQuestion(q)} onDelete={() => setDeleteConfirm((q as any).id)} />
-                  ))}
-                </div>
+                <QuestionTable 
+                  questions={filtered} 
+                  loading={loading} 
+                  assessmentType={selectedModule!} 
+                  onEdit={(q) => setEditingQuestion(q)} 
+                  onDelete={(id) => setDeleteConfirm(id)} 
+                />
               )}
             </div>
           )}
@@ -582,15 +584,15 @@ export default function AdminQuestionsManager() {
       <AnimatePresence>
         {deleteConfirm && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#0b100d]/60 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[32px] bg-white dark:bg-[#111a15] p-8 shadow-2xl border border-white/20 dark:border-white/5">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Entry?</h3>
                 <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently purge the question vector from the repository.</p>
                 <div className="mt-8 flex w-full gap-3">
                   <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
-                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Confirm</button>
+                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 transition-all">Confirm</button>
                 </div>
               </div>
             </motion.div>
@@ -601,15 +603,15 @@ export default function AdminQuestionsManager() {
       <AnimatePresence>
         {clearConfirm && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#0b100d]/60 backdrop-blur-md" onClick={() => setClearConfirm(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[32px] bg-white dark:bg-[#111a15] p-8 shadow-2xl border border-white/20 dark:border-white/5">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md" onClick={() => setClearConfirm(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
                 <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">Purging all {questions.length} entries from the bank. This is irreversible.</p>
                 <div className="mt-8 flex w-full gap-3">
                   <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
-                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Purge Bank</button>
+                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 transition-all">Purge Bank</button>
                 </div>
               </div>
             </motion.div>

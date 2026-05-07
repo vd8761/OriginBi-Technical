@@ -104,8 +104,12 @@ const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
     },
 ];
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 interface RoleEngineProps {
     onComplete: (answers: Record<string, string>) => void;
+    assessmentCode?: string;
+    userId?: number;
     roleName?: string;
 }
 
@@ -118,7 +122,12 @@ const formatTime = (seconds: number) => {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full Stack Engineer" }) => {
+const RoleEngine: React.FC<RoleEngineProps> = ({ 
+    onComplete, 
+    roleName = "Full Stack Engineer",
+    assessmentCode = "TECH_ROLE_001",
+    userId
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
@@ -127,21 +136,55 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const { theme } = useTheme();
+    const [questions, setQuestions] = useState<RoleQuestion[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
+    useEffect(() => {
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/role/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId }),
+                });
 
-    const currentQuestion = MOCK_ROLE_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_ROLE_QUESTIONS.length;
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load Role questions.");
+                }
+
+                const data = await response.json();
+                setAttemptToken(data.attemptToken);
+                setQuestions(data.questions || []);
+                setTimeLeft(Number(data.durationSeconds || 1800));
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId]);
+
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
     const markedCount = markedForReview.size;
     const remainingCount = totalQuestions - answeredCount;
-    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+    const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const isLastQuestion = currentIndex === totalQuestions - 1;
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
-    const scenarioCount = MOCK_ROLE_QUESTIONS.filter((question) => question.type === "scenario").length;
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestion.id] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestion.id) : false;
+    const scenarioCount = questions.filter((question) => question.type === "scenario").length;
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_ROLE_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
 
@@ -159,11 +202,30 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
         };
     });
 
-    const completeAssessment = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const completeAssessment = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/role/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            onComplete(answers);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, isSubmitting, onComplete]);
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             completeAssessment();
             return;
@@ -174,9 +236,10 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [completeAssessment, timeLeft]);
+    }, [completeAssessment, timeLeft, isLoading, attemptToken]);
 
     const handleOptionSelect = (optionId: string) => {
+        if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
 
         if (markedForReview.has(currentQuestion.id)) {
@@ -187,12 +250,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const handleClear = () => {
+        if (!currentQuestion) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
     };
 
     const handleMarkReview = () => {
+        if (!currentQuestion) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentQuestion.id)) {
             newMarked.delete(currentQuestion.id);
@@ -223,6 +288,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const renderQuestionContent = () => {
+        if (!currentQuestion) return null;
         const selectedOption = answers[currentQuestion.id];
 
         if (currentQuestion.type === "conceptual") {
@@ -243,6 +309,30 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
             />
         );
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                Loading role assessment...
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#b42318] dark:bg-[#0f1712]">
+                {loadError}
+            </div>
+        );
+    }
+
+    if (!currentQuestion) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f8f5] text-sm text-[#17201b] dark:bg-[#0f1712] dark:text-white">
+                No questions available.
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
