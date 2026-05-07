@@ -151,6 +151,12 @@ export default function AdminQuestionsManager() {
   const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(null);
   const [mode, setMode] = useState<QuestionMode>("trial");
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
+  const [moduleCounts, setModuleCounts] = useState<Record<AssessmentType, { trial: number; main: number }>>({
+    aptitude: { trial: 0, main: 0 },
+    mnc: { trial: 0, main: 0 },
+    communication: { trial: 0, main: 0 },
+    role: { trial: 0, main: 0 },
+  });
   const [view, setView] = useState<"list" | "json-import">("list");
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -178,6 +184,39 @@ export default function AdminQuestionsManager() {
       setLoading(false);
     }
   }, []);
+
+  const refreshModuleCounts = useCallback(async (module?: AssessmentType) => {
+    const modules = module
+      ? [module]
+      : (["aptitude", "mnc", "communication", "role"] as AssessmentType[]);
+
+    await Promise.all(
+      modules.map(async (currentModule) => {
+        if (!isDbModule(currentModule)) return;
+
+        try {
+          const [trialQuestions, mainQuestions] = await Promise.all([
+            fetchQuestions(currentModule, { mode: "trial" }),
+            fetchQuestions(currentModule, { mode: "main" }),
+          ]);
+
+          setModuleCounts((prev) => ({
+            ...prev,
+            [currentModule]: {
+              trial: trialQuestions.length,
+              main: mainQuestions.length,
+            },
+          }));
+        } catch (err) {
+          console.error(`Failed to load counts for ${currentModule}:`, err);
+        }
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    refreshModuleCounts();
+  }, [refreshModuleCounts]);
 
   useEffect(() => {
     if (!selectedModule) return;
@@ -245,6 +284,7 @@ export default function AdminQuestionsManager() {
           showToast("Question added");
         }
         await loadQuestionsForModule(selectedModule!, mode);
+        await refreshModuleCounts(selectedModule!);
       } catch (err) {
         showToast((err as Error).message || "Save failed", "error");
       } finally {
@@ -269,6 +309,7 @@ export default function AdminQuestionsManager() {
         await apiDeleteQuestion(selectedModule!, Number(id));
         showToast("Question deleted");
         await loadQuestionsForModule(selectedModule!, mode);
+        await refreshModuleCounts(selectedModule!);
       } catch (err) {
         showToast((err as Error).message || "Delete failed", "error");
       } finally {
@@ -292,6 +333,7 @@ export default function AdminQuestionsManager() {
         const res = await bulkImportQuestions(selectedModule!, payloads);
         showToast(`Imported ${res.imported} questions`);
         await loadQuestionsForModule(selectedModule!, mode);
+        await refreshModuleCounts(selectedModule!);
       } catch (err) {
         showToast((err as Error).message || "Import failed", "error");
       } finally {
@@ -311,6 +353,7 @@ export default function AdminQuestionsManager() {
         await apiClearQuestions(selectedModule!, mode);
         showToast(`All ${mode} questions cleared`);
         await loadQuestionsForModule(selectedModule!, mode);
+        await refreshModuleCounts(selectedModule!);
       } catch (err) {
         showToast((err as Error).message || "Clear failed", "error");
       } finally {
@@ -369,9 +412,8 @@ export default function AdminQuestionsManager() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at, idx) => {
                 const accent = ACCENT_COLORS[at];
-                // Note: For counts, we still show Trial/Main but for DB modules it might be simplified
-                const trialCount = isDbModule(at) ? questions.length : loadQuestions(at, "trial").length;
-                const mainCount = isDbModule(at) ? 0 : loadQuestions(at, "main").length;
+                const trialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
+                const mainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
 
                 return (
                   <button
@@ -392,15 +434,13 @@ export default function AdminQuestionsManager() {
 
                     <div className="flex items-center gap-5 mb-6 bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
                       <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">{isDbModule(at) ? "Database" : "Trial"}</span>
+                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Trial</span>
                         <span className="text-xs font-bold text-slate-900 dark:text-white">{trialCount} Qs</span>
                       </div>
-                      {!isDbModule(at) && (
-                        <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
-                          <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Main</span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">{mainCount} Qs</span>
-                        </div>
-                      )}
+                      <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
+                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Main</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">{mainCount} Qs</span>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">

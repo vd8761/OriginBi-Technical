@@ -87,17 +87,24 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
     async startAttempt(module, data) {
         const { assessmentId, assessmentCode, userId, mode = 'main' } = data;
         this.logger.log(`startAttempt: module=${module}, code=${assessmentCode}, mode=${mode}`);
-        if (!assessmentId && !assessmentCode)
-            throw new common_1.BadRequestException('assessmentId or assessmentCode is required');
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
         try {
-            const assessmentQuery = assessmentId
-                ? `SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = $2`
-                : `SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = $2`;
-            const assessments = await queryRunner.query(assessmentQuery, [assessmentId || assessmentCode, module]);
-            const assessment = assessments[0];
+            let assessment;
+            if (assessmentId) {
+                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = $2`, [assessmentId, module]);
+                assessment = assessments[0];
+            }
+            else if (assessmentCode) {
+                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = $2`, [assessmentCode, module]);
+                assessment = assessments[0];
+            }
+            else {
+                // Fallback: Get the latest active assessment for this module
+                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`, [module]);
+                assessment = assessments[0];
+            }
             if (!assessment)
                 throw new common_1.NotFoundException(`${module} assessment not found`);
             const resolvedUserId = await this.resolveUserId(queryRunner, userId);
@@ -151,10 +158,10 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
          VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW(), $7)
          RETURNING *`, [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, mode]);
             const attemptId = attemptResult[0][config.attemptIdCol];
-            // Fetch questions filtered by mode and assessment
-            const questions = await queryRunner.query(`SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = $2`, [assessment.assessment_id, mode]);
+            const requestedMode = mode === 'trial' ? 'trial' : 'main';
+            const questions = await queryRunner.query(`SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = $2`, [assessment.assessment_id, requestedMode]);
             if (questions.length === 0) {
-                throw new common_1.BadRequestException(`No active ${mode} questions found for this assessment.`);
+                throw new common_1.BadRequestException(`No active ${requestedMode} questions found for this assessment.`);
             }
             const shuffled = assessment.shuffle_questions
                 ? this.shuffleWithSeed(questions, shuffleSeed)
@@ -170,6 +177,7 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
                 attemptToken,
                 expiresAt,
                 durationSeconds: durationMinutes * 60,
+                mode: requestedMode,
                 questions: fullQuestions,
                 totalQuestions: fullQuestions.length,
             };
@@ -188,7 +196,7 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
         const questionRows = await this.dataSource.query(`SELECT aq.display_order, q.${config.idCol} as question_id, q.question_text, q.image_url, q.difficulty,
               COALESCE(
                 json_agg(
-                  json_build_object('id', o.option_id, 'text', o.option_text)
+                  json_build_object('id', o.option_id::text, 'text', o.option_text)
                 ) FILTER (WHERE o.option_id IS NOT NULL),
                 '[]'::json
               ) as options
@@ -196,7 +204,7 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
        LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
-       GROUP BY aq.display_order, q.${config.idCol}
+       GROUP BY aq.display_order, q.${config.idCol}, q.question_text, q.image_url, q.difficulty
        ORDER BY aq.display_order ASC`, [attemptId]);
         return questionRows.map((q) => {
             let finalOptions = q.options;

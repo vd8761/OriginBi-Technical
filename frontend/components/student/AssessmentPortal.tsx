@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Header from "./Header";
-import ExamCarousel, { Exam } from "./ExamCarousel";
+import { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
 import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
@@ -20,7 +20,6 @@ import {
   type PricingTier,
 } from "@/lib/exams";
 import DashboardContent from "./dashboard/DashboardContent";
-import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -37,6 +36,8 @@ interface AssessmentPortalProps {
   userName?: string;
 }
 
+type AssessmentMode = "trial" | "main";
+
 const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student" }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
@@ -47,11 +48,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
   const [showNextStepAlert, setShowNextStepAlert] = useState(true);
-  const [assessmentMode, setAssessmentMode] = useState<'trial' | 'main'>('main');
-  const { isPaid } = usePaidAssessments();
+  const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
   const router = useRouter();
-
-  const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
 
   const filteredExams = useMemo(() => {
     const baseExams = EXAMS.filter((exam) => exam.available);
@@ -66,31 +64,59 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     setShowDetailModal(true);
   };
 
-  const handleStartExam = (exam: Exam, tier?: PricingTier) => {
+  const launchAssessment = (examId: string, mode: AssessmentMode) => {
+    if (examId === "coding") {
+      router.push(`/assessment/coding?mode=${mode}`);
+      return;
+    }
+
+    if (examId === "aptitude") {
+      setShowAptitudeModal(true);
+      return;
+    }
+
+    if (examId === "communication") {
+      setShowCommunicationModal(true);
+      return;
+    }
+
+    if (examId === "role") {
+      setShowRoleModal(true);
+      return;
+    }
+
+    if (examId === "mnc") {
+      setShowMncModal(true);
+    }
+  };
+
+  const openAssessmentFlow = (exam: Exam, mode: AssessmentMode) => {
     if (!exam.available) {
       setSelectedExam(exam);
       setShowDetailModal(true);
       return;
     }
 
+    setAssessmentMode(mode);
+    launchAssessment(exam.id, mode);
+  };
+
+  const handleCardTrialStart = (exam: Exam) => {
+    openAssessmentFlow(exam, "trial");
+  };
+
+  const handleCardMainStart = (exam: Exam) => {
+    openAssessmentFlow(exam, "main");
+  };
+
+  const handleModalStart = (exam: Exam, tier?: PricingTier) => {
     if (tier) {
       console.log(`Processing payment for ${exam.title} - ${tier.name} tier: ₹${tier.price}`);
-      setAssessmentMode('main');
-    } else {
-      setAssessmentMode('trial');
+      openAssessmentFlow(exam, "main");
+      return;
     }
 
-    if (exam.id === "aptitude") {
-      setShowAptitudeModal(true);
-    } else if (exam.id === "communication") {
-      setShowCommunicationModal(true);
-    } else if (exam.id === "role") {
-      setShowRoleModal(true);
-    } else if (exam.id === "coding") {
-      router.push(`/assessment/coding?mode=${tier ? 'main' : 'trial'}`);
-    } else if (exam.id === "mnc") {
-      setShowMncModal(true);
-    }
+    openAssessmentFlow(exam, "trial");
   };
 
   const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
@@ -218,7 +244,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                   accentColor={exam.accentColor}
                   gradient={exam.gradient}
                   onDetailsClick={() => handleSelectExam(exam)}
-                  onStartClick={() => handleStartExam(exam)}
+                  onTrialClick={() => handleCardTrialStart(exam)}
+                  onMainClick={() => handleCardMainStart(exam)}
                 />
               ))}
             </div>
@@ -227,7 +254,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           <DashboardContent
             userName={userName}
             handleSelectExam={handleSelectExam}
-            handleStartExam={handleStartExam}
+            handleStartExam={handleModalStart}
             setShowDetailModal={setShowDetailModal}
           />
         ) : (
@@ -262,7 +289,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         onClose={() => setShowDetailModal(false)}
         onStart={(exam, tier) => {
           setShowDetailModal(false);
-          handleStartExam(exam, tier);
+          handleModalStart(exam, tier);
         }}
       />
 
