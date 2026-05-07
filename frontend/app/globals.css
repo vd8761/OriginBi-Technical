@@ -142,6 +142,10 @@
     @apply bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.02)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.15)] rounded-2xl;
   }
 
+  .dashboard-glass-card {
+    @apply bg-white/80 dark:bg-white/[0.04] backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.2)] rounded-3xl;
+  }
+
   .portal-bg {
     @apply bg-[url('/Background_Light_Theme.svg')] bg-cover bg-top bg-no-repeat dark:bg-none dark:bg-[#19211C];
   }

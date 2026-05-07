@@ -11,6 +11,7 @@ import { AlertCircle, CheckCircle2, Copy, Upload, X, ChevronDown, ChevronUp, Tra
 
 interface JsonImportPanelProps {
   assessmentType: AssessmentType;
+  mode: QuestionMode;
   onImport: (questions: AnyQuestion[]) => void;
   onCancel: () => void;
 }
@@ -119,7 +120,7 @@ function getCategoryKey(q: AnyQuestion, assessmentType: AssessmentType): string 
   }
 }
 
-export default function JsonImportPanel({ assessmentType, onImport, onCancel }: JsonImportPanelProps) {
+export default function JsonImportPanel({ assessmentType, mode, onImport, onCancel }: JsonImportPanelProps) {
   const [jsonText, setJsonText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AnyQuestion[] | null>(null);

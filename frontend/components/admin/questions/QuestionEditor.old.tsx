@@ -6,7 +6,6 @@ import {
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS, MNC_TOPICS,
   COMM_TASK_LABELS, CommTaskType, RoleQuestionType,
-  DifficultyLevel, QuestionStatus,
 } from "./types";
 import { generateId } from "./storage";
 import { X, Plus, Trash2, CheckCircle2 } from "lucide-react";
@@ -29,13 +28,6 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   ]);
   const [correctId, setCorrectId] = useState("opt_0");
   const [explanation, setExplanation] = useState("");
-  
-  // DB-backed fields
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
-  const [marks, setMarks] = useState(1);
-  const [negMarks, setNegMarks] = useState(0);
-  const [status, setStatus] = useState<QuestionStatus>("active");
-  const [assessmentId, setAssessmentId] = useState<number | undefined>(undefined);
 
   // Aptitude
   const [aptCategory, setAptCategory] = useState("QA");
@@ -67,13 +59,6 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
   // Populate from existing question
   useEffect(() => {
     if (!question) return;
-    const q = question as any;
-    setDifficulty(q.difficulty || "medium");
-    setMarks(q.marks ?? 1);
-    setNegMarks(q.negativeMarks ?? 0);
-    setStatus(q.status || "active");
-    setAssessmentId(q.assessmentId);
-
     switch (assessmentType) {
       case "aptitude": {
         const aq = question as AptitudeQuestion;
@@ -169,32 +154,23 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
     if (!validate()) return;
     const id = question ? (question as { id: string }).id : generateId();
 
-    const common = {
-      id,
-      difficulty,
-      marks,
-      negativeMarks: negMarks,
-      status,
-      assessmentId,
-    };
-
     switch (assessmentType) {
       case "aptitude":
-        onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined } as AptitudeQuestion);
+        onSave({ id, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined } as AptitudeQuestion);
         break;
       case "mnc":
-        onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined } as MNCQuestion);
+        onSave({ id, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined } as MNCQuestion);
         break;
       case "role":
         onSave({
-          ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined,
+          id, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined,
           ...(roleType === "conceptual" ? { category: roleCategory, subCategory: roleSubCategory } : {}),
           ...(roleType === "scenario" ? { title: scenarioTitle, scenarioContext, ticketId, priority, reportedBy } : {}),
         } as RoleQuestion);
         break;
       case "communication":
         onSave({
-          ...common, taskType: commTaskType, instructions: commInstructions.trim(),
+          id, taskType: commTaskType, instructions: commInstructions.trim(),
           ...(commPassage ? { passage: commPassage } : {}),
           ...(commPrompt ? { prompt: commPrompt } : {}),
           ...(commTaskType === "speaking" ? { prepTimeSeconds: commPrepTime, recordTimeSeconds: commRecordTime } : {}),
@@ -227,32 +203,8 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
           <div className="flex flex-col gap-6">
             
             <div className={groupCls}>
-               <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-3">Core Configuration</p>
+               <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-3">Configuration</p>
                <div className="grid gap-3.5 sm:grid-cols-2">
-                 <div>
-                    <label className={labelCls}>Difficulty</label>
-                    <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)} className={inputCls}>
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Status</label>
-                    <select value={status} onChange={(e) => setStatus(e.target.value as QuestionStatus)} className={inputCls}>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Marks</label>
-                    <input type="number" step="0.25" min="0" value={marks} onChange={e => setMarks(Number(e.target.value))} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Negative Marks</label>
-                    <input type="number" step="0.25" min="0" value={negMarks} onChange={e => setNegMarks(Number(e.target.value))} className={inputCls} />
-                  </div>
-
                  {assessmentType === "aptitude" && (
                   <div className="sm:col-span-2">
                     <label className={labelCls}>Aptitude Category</label>

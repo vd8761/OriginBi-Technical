@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   AnyQuestion, AssessmentType, QuestionMode,
   ASSESSMENT_TYPE_LABELS, ASSESSMENT_TYPE_DESCRIPTIONS,
@@ -10,15 +10,6 @@ import {
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
-import {
-  fetchQuestions,
-  createQuestion,
-  updateQuestion,
-  deleteQuestion as apiDeleteQuestion,
-  bulkImportQuestions,
-  ApiQuestion,
-  CreateQuestionPayload,
-} from "./api";
 import QuestionCard from "./QuestionCard";
 import QuestionEditor from "./QuestionEditor";
 import JsonImportPanel from "./JsonImportPanel";
@@ -31,6 +22,7 @@ import {
 import {
   AptitudeIcon,
   CommunicationIcon,
+  CodingIcon,
   MNCIcon,
   RoleIcon,
 } from "@/components/icons";
@@ -84,68 +76,6 @@ function getSearchText(q: AnyQuestion, t: AssessmentType): string {
   }
 }
 
-// ─── API ↔ Frontend shape converters ───────────────────────────────────────────
-
-function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
-  const common = {
-    id: String(q.id),
-    text: q.questionText,
-    options: q.options.map(o => ({ id: String(o.id), text: o.text })),
-    correctOptionId: q.correctOptionId ? String(q.correctOptionId) : "",
-    explanation: q.explanation || undefined,
-    assessmentId: q.assessmentId,
-    difficulty: q.difficulty,
-    marks: q.marks,
-    negativeMarks: q.negativeMarks,
-    status: q.status,
-    imageUrl: q.imageUrl,
-  };
-
-  switch (module) {
-    case "aptitude":
-      return { ...common, category: q.category } as AptitudeQuestion;
-    case "mnc":
-      return { ...common, topic: q.category } as MNCQuestion;
-    case "communication":
-      return { ...common, taskType: q.category as CommTaskType, instructions: q.questionText } as unknown as CommQuestion;
-    case "role":
-      return { ...common, questionType: q.category as RoleQuestionType } as RoleQuestion;
-    default:
-      return common as any;
-  }
-}
-
-function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuestionPayload {
-  const common = q as any;
-  const correctIdx = common.options?.findIndex((o: any) => o.id === common.correctOptionId) ?? 0;
-  
-  let category = "";
-  switch (module) {
-    case "aptitude": category = (q as AptitudeQuestion).category; break;
-    case "mnc": category = (q as MNCQuestion).topic; break;
-    case "communication": category = (q as CommQuestion).taskType; break;
-    case "role": category = (q as RoleQuestion).questionType; break;
-  }
-
-  return {
-    category,
-    difficulty: common.difficulty || "medium",
-    questionText: common.text || common.instructions || "",
-    options: common.options?.map((o: any) => ({ text: o.text })),
-    correctOptionIndex: correctIdx >= 0 ? correctIdx : 0,
-    explanation: common.explanation,
-    marks: common.marks ?? 1,
-    negativeMarks: common.negativeMarks ?? 0,
-    status: common.status || "active",
-    imageUrl: common.imageUrl,
-    assessmentId: common.assessmentId,
-  };
-}
-
-// All modules except specialized ones are now DB-backed
-const isDbModule = (m: AssessmentType | null): m is AssessmentType => 
-  m === "aptitude" || m === "mnc" || m === "communication" || m === "role";
-
 export default function AdminQuestionsManager() {
   const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(null);
   const [mode, setMode] = useState<QuestionMode>("trial");
@@ -157,37 +87,16 @@ export default function AdminQuestionsManager() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // ─── Load questions: API for DB modules, localStorage for others ─────────────
-  const loadQuestionsForModule = useCallback(async (module: AssessmentType, m: QuestionMode) => {
-    setLoading(true);
-    try {
-      if (isDbModule(module)) {
-        const apiQuestions = await fetchQuestions(module);
-        setQuestions(apiQuestions.map(q => apiToFrontend(module, q)));
-      } else {
-        setQuestions(loadQuestions(module, m));
-      }
-    } catch (err) {
-      console.error("Failed to load questions:", err);
-      // Fallback to localStorage if API fails
-      setQuestions(loadQuestions(module, m));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     if (!selectedModule) return;
-    loadQuestionsForModule(selectedModule, mode);
+    setQuestions(loadQuestions(selectedModule, mode));
     setFilterCategory("all");
     setSearchQuery("");
-  }, [selectedModule, mode, loadQuestionsForModule]);
+  }, [selectedModule, mode]);
 
-  // Auto-save to localStorage ONLY for non-DB modules
   useEffect(() => {
-    if (!selectedModule || isDbModule(selectedModule)) return;
+    if (!selectedModule) return;
     saveQuestions(selectedModule, mode, questions);
   }, [questions, selectedModule, mode]);
 
@@ -219,98 +128,21 @@ export default function AdminQuestionsManager() {
 
   const showToast = (msg: string, type: "success" | "error" = "success") => setToast({ msg, type });
 
-  // ─── CRUD handlers ─────────────────────────────────────────────────────────────
-  const handleSaveQuestion = async (q: AnyQuestion) => {
+  const handleSaveQuestion = (q: AnyQuestion) => {
     const qId = (q as { id: string }).id;
-    const isExisting = questions.find(ex => (ex as { id: string }).id === qId);
-
-    if (isDbModule(selectedModule)) {
-      try {
-        setLoading(true);
-        const payload = frontendToPayload(selectedModule!, q);
-        if (isExisting && !qId.startsWith("new-")) {
-          await updateQuestion(selectedModule!, Number(qId), payload);
-          showToast("Question updated");
-        } else {
-          await createQuestion(selectedModule!, payload);
-          showToast("Question added");
-        }
-        await loadQuestionsForModule(selectedModule!, mode);
-      } catch (err) {
-        showToast((err as Error).message || "Save failed", "error");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      if (isExisting) { 
-        setQuestions(questions.map(ex => ((ex as { id: string }).id === qId ? q : ex))); 
-        showToast("Question updated"); 
-      } else { 
-        setQuestions([...questions, q]); 
-        showToast("Question added"); 
-      }
-    }
+    const exists = questions.find(ex => (ex as { id: string }).id === qId);
+    if (exists) { setQuestions(questions.map(ex => ((ex as { id: string }).id === qId ? q : ex))); showToast("Question updated"); }
+    else { setQuestions([...questions, q]); showToast("Question added"); }
     setEditingQuestion(null);
   };
 
-  const handleDeleteQuestion = async (id: string) => {
-    if (isDbModule(selectedModule)) {
-      try {
-        setLoading(true);
-        await apiDeleteQuestion(selectedModule!, Number(id));
-        showToast("Question deleted");
-        await loadQuestionsForModule(selectedModule!, mode);
-      } catch (err) {
-        showToast((err as Error).message || "Delete failed", "error");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      setQuestions(questions.filter(q => (q as { id: string }).id !== id));
-      showToast("Question deleted");
-    }
-    setDeleteConfirm(null);
-  };
-
-  const handleImport = async (imported: AnyQuestion[]) => {
-    if (isDbModule(selectedModule)) {
-      try {
-        setLoading(true);
-        const payloads = imported.map(q => frontendToPayload(selectedModule!, q));
-        const res = await bulkImportQuestions(selectedModule!, payloads);
-        showToast(`Imported ${res.imported} questions`);
-        await loadQuestionsForModule(selectedModule!, mode);
-      } catch (err) {
-        showToast((err as Error).message || "Import failed", "error");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      setQuestions([...questions, ...imported]);
-      showToast(`${imported.length} questions imported`);
-    }
-    setView("list");
-  };
-
-  const handleClearAll = () => {
-    if (isDbModule(selectedModule)) {
-      showToast("Clear All not supported for DB modules yet", "error");
-    } else {
-      setQuestions([]);
-      showToast("All questions cleared");
-    }
-    setClearConfirm(false);
-  };
-
+  const handleDeleteQuestion = (id: string) => { setQuestions(questions.filter(q => (q as { id: string }).id !== id)); setDeleteConfirm(null); showToast("Question deleted"); };
+  const handleImport = (imported: AnyQuestion[]) => { setQuestions([...questions, ...imported]); setView("list"); showToast(`${imported.length} imported`); };
+  const handleClearAll = () => { setQuestions([]); setClearConfirm(false); showToast("Bank cleared"); };
   const handleExportJson = () => {
-    const data = JSON.stringify(questions, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `originbi-${selectedModule}-questions.json`;
-    link.click();
-    showToast("Export successful");
+    const blob = new Blob([JSON.stringify(questions, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href = url; a.download = `${selectedModule}_${mode}.json`; a.click(); URL.revokeObjectURL(url); showToast("JSON exported");
   };
 
   // ─── LANDING ───
@@ -348,10 +180,8 @@ export default function AdminQuestionsManager() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at, idx) => {
                 const accent = ACCENT_COLORS[at];
-                // Note: For counts, we still show Trial/Main but for DB modules it might be simplified
-                const trialCount = isDbModule(at) ? questions.length : loadQuestions(at, "trial").length;
-                const mainCount = isDbModule(at) ? 0 : loadQuestions(at, "main").length;
-
+                const trialCount = loadQuestions(at, "trial").length;
+                const mainCount = loadQuestions(at, "main").length;
                 return (
                   <motion.button
                     key={at}
@@ -374,15 +204,13 @@ export default function AdminQuestionsManager() {
 
                     <div className="flex items-center gap-5 mb-6 bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
                       <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">{isDbModule(at) ? "Database" : "Trial"}</span>
+                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Trial</span>
                         <span className="text-xs font-bold text-slate-900 dark:text-white">{trialCount} Qs</span>
                       </div>
-                      {!isDbModule(at) && (
-                        <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
-                          <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Main</span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">{mainCount} Qs</span>
-                        </div>
-                      )}
+                      <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
+                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Main</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">{mainCount} Qs</span>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">
@@ -448,16 +276,10 @@ export default function AdminQuestionsManager() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!isDbModule(selectedModule) ? (
-              <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
-                <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
-                <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
-              </div>
-            ) : (
-              <div className="px-4 py-1.5 rounded-xl border border-brand-green/20 bg-brand-green/5 backdrop-blur-md text-[10px] font-black text-brand-green uppercase tracking-widest">
-                Database Sync Active
-              </div>
-            )}
+            <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
+              <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
+              <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
+            </div>
             <ThemeToggle />
           </div>
         </div>
@@ -521,7 +343,7 @@ export default function AdminQuestionsManager() {
         {/* LIST CONTAINER - Using dashboard-glass-card for consistency */}
         <div className="dashboard-glass-card !rounded-3xl p-8 min-h-[600px] dark:bg-white/[0.04]">
           {view === "json-import" ? (
-            <JsonImportPanel assessmentType={selectedModule} onImport={handleImport} onCancel={() => setView("list")} />
+            <JsonImportPanel assessmentType={selectedModule} mode={mode} onImport={handleImport} onCancel={() => setView("list")} />
           ) : (
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -546,12 +368,7 @@ export default function AdminQuestionsManager() {
               </div>
 
 
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-32 text-center">
-                  <div className="w-12 h-12 border-4 border-brand-green border-t-transparent rounded-full animate-spin mb-4" />
-                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Synchronizing Database...</p>
-                </div>
-              ) : filtered.length === 0 ? (
+              {filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="w-20 h-20 rounded-3xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 flex items-center justify-center mb-6 opacity-40">
                     <AlertCircle size={32} className="text-slate-400" />
@@ -563,7 +380,7 @@ export default function AdminQuestionsManager() {
               ) : (
                 <div className="grid gap-4">
                   {filtered.map((q, qIdx) => (
-                    <QuestionCard key={(q as any).id} question={q} index={qIdx} assessmentType={selectedModule!} onEdit={() => setEditingQuestion(q)} onDelete={() => setDeleteConfirm((q as any).id)} />
+                    <QuestionCard key={(q as { id: string }).id} question={q} index={qIdx} assessmentType={selectedModule} onEdit={() => setEditingQuestion(q)} onDelete={() => setDeleteConfirm((q as { id: string }).id)} />
                   ))}
                 </div>
               )}
@@ -606,7 +423,7 @@ export default function AdminQuestionsManager() {
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">Purging all {questions.length} entries from the bank. This is irreversible.</p>
+                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">Purging all {questions.length} entries from the {mode} {selectedModule} bank. This is irreversible.</p>
                 <div className="mt-8 flex w-full gap-3">
                   <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
                   <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Purge Bank</button>
