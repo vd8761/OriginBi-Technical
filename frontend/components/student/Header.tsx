@@ -2,20 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from 'next/navigation';
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import ThemeToggle from '../ui/ThemeToggle';
 import Logo from '../ui/Logo';
+import { useSession } from "@/lib/contexts/SessionContext";
 import {
     DashboardIcon,
     JobsIcon,
     ProfileIcon,
-    AssessmentNewIcon,
-    CounsellorIcon,
-    DebriefIcon,
-    RoadmapIcon,
-    ExploreIcon,
     NotificationIcon,
-    NotificationWithDotIcon,
     MenuIcon,
     MarkAllReadIcon,
     SettingsIcon,
@@ -23,7 +17,9 @@ import {
     BrainIcon,
     ReportTriangleIcon,
     LogoutIcon,
+    NoNotificationsIcon,
 } from '../icons';
+import { capitalizeWords, getAvatarColor } from "../../lib/utils";
 
 interface HeaderProps {
     onLogout?: () => void;
@@ -37,12 +33,23 @@ interface NavItemProps {
     active?: boolean;
     isMobile?: boolean;
     onClick?: () => void;
-    index?: number;
 }
 
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isMobile, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`flex items-center gap-2 rounded-full transition-all duration-200 cursor-pointer ${
+            isMobile ? "w-full py-3.5 px-5 gap-3 text-[14px] justify-start" : "px-3 py-2 sm:px-4 sm:py-2 text-[11.5px] font-semibold tracking-tight border"
+        } ${active
+            ? "bg-brand-green text-white border-transparent shadow-none"
+            : "bg-gray-50 border border-gray-200 text-gray-600 dark:bg-white/[0.06] dark:border-white/[0.12] dark:text-gray-300 hover:bg-gray-100 hover:text-black hover:border-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+        }`}
+    >
+        <span className={`transition-colors ${active ? "text-white" : "text-brand-green dark:text-white"}`}>{icon}</span>
+        <span className={`${isMobile ? 'inline' : 'hidden lg:inline'}`}>{label}</span>
+    </button>
+);
 
-
-// Refined SaaS-style Notification Item
 const NotificationItem: React.FC<{
     icon?: React.ReactNode;
     title: string;
@@ -51,53 +58,38 @@ const NotificationItem: React.FC<{
     isNew?: boolean;
     onClick?: () => void;
 }> = ({ icon, title, message, time, isNew, onClick }) => (
-    <motion.div
+    <div
         onClick={onClick}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ backgroundColor: "rgba(30, 211, 106, 0.03)" }}
-        className="flex items-start gap-3 p-3.5 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors relative group border border-transparent hover:border-gray-100 dark:hover:border-white/[0.04]"
+        className="flex items-start justify-between p-3 px-1.5 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors duration-200 cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0"
     >
-        {icon && (
-            <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-gray-50 dark:bg-white/[0.04] text-gray-400 dark:text-gray-300 border border-gray-200/50 dark:border-white/[0.06] group-hover:text-brand-green group-hover:border-brand-green/30 transition-colors">
-                {icon}
-            </div>
-        )}
-        <div className="flex-grow min-w-0 pr-2">
-            <div className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-semibold text-gray-900 dark:text-white group-hover:text-brand-green transition-colors leading-none">
+        <div className="flex items-start space-x-3 min-w-0 pr-4 w-full">
+            {icon && (
+                <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-white/10 text-brand-green">
+                    {icon}
+                </div>
+            )}
+            <div className="flex-grow min-w-0 flex flex-col pt-0.5">
+                <div className="text-[14px] font-semibold text-gray-900 dark:text-white w-full">
                     {title}
-                </span>
-                {time && (
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium shrink-0">
-                        {time}
-                    </span>
-                )}
+                </div>
+                <div className="text-[13px] text-gray-500 dark:text-gray-400 mt-1 w-full font-medium">
+                    {message}
+                </div>
             </div>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                {message}
-            </p>
         </div>
-        {isNew && (
-            <span className="w-1.5 h-1.5 bg-brand-green rounded-full shrink-0 mt-2 shadow-[0_0_6px_rgba(30,211,106,0.6)]" />
-        )}
-    </motion.div>
-);
-
-// Clean pill-shaped NavItem matching reference design
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isMobile, onClick }) => (
-    <motion.button
-        onClick={onClick}
-        whileTap={{ scale: 0.97 }}
-        className={`relative flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-full text-[11.5px] font-semibold tracking-tight transition-all duration-300 border ${
-            active
-                ? "bg-brand-green text-white border-brand-green shadow-lg shadow-brand-green/20"
-                : "bg-gray-50 border-gray-200 text-gray-600 dark:bg-white/[0.06] dark:border-white/[0.12] dark:text-gray-300 hover:bg-gray-100 hover:text-black hover:border-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
-        } ${isMobile ? 'w-full justify-start py-3.5 px-5 gap-3 text-[14px]' : ''}`}
-    >
-        <span className={`transition-colors ${active ? "text-white" : "text-brand-green"}`}>{icon}</span>
-        <span className={`${isMobile ? '' : 'hidden lg:inline'}`}>{label}</span>
-    </motion.button>
+        <div className="flex flex-col items-end flex-shrink-0 space-y-2 pt-1 h-full">
+            {isNew ? (
+                <div className="w-2 h-2 bg-brand-green rounded-full shadow-[0_0_8px_rgba(30,211,106,0.6)]"></div>
+            ) : (
+                <div className="w-2 h-2"></div>
+            )}
+            {time && (
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap pt-2">
+                    {time}
+                </span>
+            )}
+        </div>
+    </div>
 );
 
 const Header: React.FC<HeaderProps> = ({
@@ -105,82 +97,41 @@ const Header: React.FC<HeaderProps> = ({
     currentView,
     onNavigate,
 }) => {
+    const { user, logout, updateProfile } = useSession();
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("All");
-    const [scrolled, setScrolled] = useState(false);
     
     const profileMenuRef = useRef<HTMLDivElement>(null);
     const notificationsMenuRef = useRef<HTMLDivElement>(null);
     const mobileMenuRef = useRef<HTMLDivElement>(null);
-    const pathname = usePathname();
-    const router = useRouter();
-    const { scrollY } = useScroll();
-
-    // Scroll-aware header effect
-    const headerOpacity = useTransform(scrollY, [0, 50], [0.95, 0.98]);
-    const headerBlur = useTransform(scrollY, [0, 50], [12, 20]);
-    const headerBorder = useTransform(scrollY, [0, 50], [0.08, 0.15]);
-
-    useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
-    const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
 
     useEffect(() => {
         const loadProfile = async () => {
-            let email = '';
-            if (typeof window !== 'undefined') {
-                const stored = localStorage.getItem('originbi:user-profile');
-                if (stored) {
-                    try {
-                        const parsed = JSON.parse(stored);
-                        setUserProfile({ name: parsed.name, email: parsed.email });
-                        email = parsed.email || '';
-                    } catch (e) {
-                        console.error("Failed to parse user profile", e);
-                    }
-                }
-            }
+            if (!user?.email) return;
 
-            if (email) {
-                try {
-                    const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
-                    const res = await fetch(`${studentServiceUrl}/student/profile`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email }),
+            try {
+                const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
+                const res = await fetch(`${studentServiceUrl}/student/profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: user.email }),
+                });
+                if (res.ok) {
+                    const profileData = await res.json();
+                    const freshName = profileData?.fullName || profileData?.metadata?.fullName || user.name;
+                    updateProfile({
+                        name: freshName,
                     });
-                    if (res.ok) {
-                        const profileData = await res.json();
-                        const freshName = profileData?.fullName || profileData?.metadata?.fullName || 'Student';
-                        setUserProfile({
-                            name: freshName,
-                            email: email,
-                        });
-                        // Sync back to localStorage
-                        const stored = localStorage.getItem('originbi:user-profile');
-                        const parsed = stored ? JSON.parse(stored) : {};
-                        localStorage.setItem('originbi:user-profile', JSON.stringify({
-                            ...parsed,
-                            name: freshName,
-                            email: email,
-                        }));
-                    }
-                } catch (e) {
-                    console.error("Error background fetching profile in header", e);
                 }
+            } catch (e) {
+                console.error("Error background fetching profile in header", e);
             }
         };
 
         loadProfile();
-    }, []);
+    }, [user?.email]);
 
     // Mock unread count
     const [unreadCount, setUnreadCount] = useState(3);
@@ -211,11 +162,8 @@ const Header: React.FC<HeaderProps> = ({
 
     const isDashboardActive = currentView === 'dashboard';
     const isAssessmentActive = currentView === 'assessment';
-    const isRoadmapsActive = currentView === 'roadmaps';
-    const isCounsellorActive = currentView === 'counsellor';
-    const isExploreActive = currentView === 'explore';
-    const isDebriefActive = currentView === 'debrief';
     const isProfileSettingsActive = currentView === 'profile';
+    const isExploreActive = currentView === 'explore';
 
     const renderNavItems = (isMobile: boolean) => (
         <>
@@ -225,7 +173,6 @@ const Header: React.FC<HeaderProps> = ({
                 active={isDashboardActive}
                 isMobile={isMobile}
                 onClick={() => handleNavClick("dashboard")}
-                index={0}
             />
             <NavItem
                 icon={<BrainIcon className="w-4 h-4" />}
@@ -233,7 +180,6 @@ const Header: React.FC<HeaderProps> = ({
                 active={isExploreActive}
                 isMobile={isMobile}
                 onClick={() => handleNavClick("explore")}
-                index={1}
             />
             <NavItem
                 icon={<JobsIcon />}
@@ -241,7 +187,6 @@ const Header: React.FC<HeaderProps> = ({
                 active={isAssessmentActive}
                 isMobile={isMobile}
                 onClick={() => handleNavClick("assessment")}
-                index={2}
             />
             <NavItem
                 icon={<ReportTriangleIcon fillColor={(currentView === 'aptitude-results' || currentView === 'debrief') ? '#FFFFFF' : '#1ED36A'} />}
@@ -249,7 +194,6 @@ const Header: React.FC<HeaderProps> = ({
                 active={currentView === 'aptitude-results' || currentView === 'debrief'}
                 isMobile={isMobile}
                 onClick={() => handleNavClick("aptitude-results")}
-                index={3}
             />
             <NavItem
                 icon={<ProfileIcon />}
@@ -257,54 +201,25 @@ const Header: React.FC<HeaderProps> = ({
                 active={isProfileSettingsActive}
                 isMobile={isMobile}
                 onClick={() => handleNavClick("profile")}
-                index={4}
             />
         </>
     );
 
     return (
-        <motion.header
-            style={{
-                opacity: headerOpacity,
-                backdropFilter: `blur(${headerBlur}px)`,
-            }}
-            className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-600 h-[64px] sm:h-[72px] ${
-                scrolled 
-                    ? "bg-white/[0.98] dark:bg-[#19211C]/[0.98] shadow-xl shadow-black/[0.04] border-b border-gray-200/[0.6] dark:border-white/[0.08]" 
-                    : "bg-white/[0.96] dark:bg-[#19211C]/[0.96] border-b border-gray-100/[0.8] dark:border-white/[0.06]"
-            }`}
-        >
-            {/* Refined gradient background */}
-            <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-brand-green/[0.03] via-transparent to-emerald-500/[0.02] opacity-0"
-                animate={{ opacity: scrolled ? 0.4 : 0 }}
-                transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
-            />
-
-            <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between h-full relative z-10">
+        <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 dark:bg-[#19211C]/95 backdrop-blur-xl border-b border-[#E0E0E0] dark:border-white/[0.08] shadow-none h-[64px] sm:h-[72px]">
+            <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between h-full relative z-10">
                 <div className="flex items-center gap-3 lg:gap-4">
-                    <motion.button
+                    <button
                         id="mobile-menu-btn"
                         className="md:hidden text-gray-700 dark:text-white p-2 rounded-[12px] hover:bg-gray-100 dark:hover:bg-white/[0.08] transition-all cursor-pointer"
                         onClick={() => setMobileMenuOpen((p) => !p)}
-                        whileTap={{ scale: 0.92 }}
                     >
                         <MenuIcon className="w-6 h-6" />
-                    </motion.button>
+                    </button>
 
-                    <motion.div 
-                        className="relative"
-                        whileHover={{ scale: 1.015 }}
-                        transition={{ type: "spring", stiffness: 350, damping: 25 }}
-                    >
+                    <div className="relative">
                         <Logo className="h-5 lg:h-5.5" />
-                        {/* Refined glow behind logo */}
-                        <motion.div
-                            className="absolute inset-0 bg-brand-green/[0.15] blur-3xl -z-10"
-                            animate={{ opacity: [0.25, 0.4, 0.25] }}
-                            transition={{ duration: 4, ease: [0.32, 0.72, 0, 1], repeat: Infinity }}
-                        />
-                    </motion.div>
+                    </div>
 
                     <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 ml-2 lg:ml-3">
                         {renderNavItems(false)}
@@ -312,212 +227,213 @@ const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3 lg:gap-4">
-                    <motion.div 
-                        className="hidden sm:block"
-                        whileHover={{ scale: 1.03 }}
-                        transition={{ type: "spring", stiffness: 350, damping: 25 }}
-                    >
+                    <div className="hidden sm:block">
                         <ThemeToggle />
-                    </motion.div>
+                    </div>
 
                     <div className="relative" ref={notificationsMenuRef}>
-                        <motion.button
+                        <button
                             onClick={() => setNotificationsOpen(!isNotificationsOpen)}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            className={`w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center transition-all relative cursor-pointer shadow-sm ${
+                            className={`w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center transition-all relative cursor-pointer ${
                                 isNotificationsOpen
-                                    ? "bg-brand-green text-white shadow-lg shadow-brand-green/[0.25]"
+                                    ? "bg-brand-green text-white border-transparent"
                                     : "bg-white border border-gray-200 text-gray-600 dark:bg-white/[0.04] dark:border-white/[0.08] dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.08] hover:border-gray-300"
                             }`}
                         >
                             <NotificationIcon className="w-[15px] h-[15px] fill-current" />
                             {unreadCount > 0 && (
-                                <motion.span 
-                                    className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center ${
-                                        isNotificationsOpen 
-                                            ? "bg-white text-brand-green" 
-                                            : "bg-brand-green text-white border-2 border-white dark:border-[#19211C]"
-                                    } text-[10px] font-bold rounded-full px-1.5 shadow-md`}
-                                    animate={{ scale: [1, 1.08, 1] }}
-                                    transition={{ duration: 2.5, ease: [0.32, 0.72, 0, 1], repeat: Infinity }}
-                                >
+                                <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center ${
+                                    isNotificationsOpen 
+                                        ? "bg-white text-brand-green border-transparent" 
+                                        : "bg-brand-green text-white border-white dark:border-[#19211C]"
+                                } border-2 text-[10px] font-bold rounded-full px-1 shadow-sm`}>
                                     {unreadCount}
-                                </motion.span>
+                                </span>
                             )}
-                        </motion.button>
+                        </button>
 
-                        <AnimatePresence>
-                            {isNotificationsOpen && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                                    transition={{ duration: 0.15, ease: "easeOut" }}
-                                    className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[64px] sm:top-full mt-2 sm:mt-4 w-auto sm:w-[380px] bg-white/95 dark:bg-[#121915]/95 backdrop-blur-md rounded-2xl shadow-xl z-[100] border border-gray-150 dark:border-white/[0.08] overflow-hidden"
-                                >
-                                    <div className="p-4 pb-3 border-b border-gray-100 dark:border-white/[0.06]">
-                                        <div className="flex justify-between items-center">
-                                            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">Notifications</h3>
-                                            <motion.button 
-                                                onClick={() => setNotificationsOpen(false)} 
-                                                className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/[0.08]"
-                                                whileHover={{ rotate: 90 }}
-                                                transition={{ duration: 0.15 }}
-                                            >
-                                                <XIcon className="w-4 h-4" />
-                                            </motion.button>
-                                        </div>
-                                    </div>
-
-                                    {/* Sub-Header Tabs */}
-                                    <div className="px-4 py-2 bg-gray-50/50 dark:bg-white/[0.01] border-b border-gray-100 dark:border-white/[0.06] flex justify-between items-center gap-2">
-                                        <div className="flex gap-1.5">
-                                            {["All", "Assessment", "History"].map((tab) => (
-                                                <button
-                                                    key={tab}
-                                                    onClick={() => setActiveTab(tab)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                                        activeTab === tab
-                                                            ? "bg-brand-green/10 text-brand-green dark:bg-brand-green/20"
-                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                                                    }`}
-                                                >
-                                                    {tab}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <button 
-                                            onClick={() => setUnreadCount(0)} 
-                                            className="flex items-center gap-1 text-brand-green text-xs hover:text-emerald-600 font-bold transition-colors"
+                        {isNotificationsOpen && (
+                            <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[64px] sm:top-full mt-2 sm:mt-6 w-auto sm:w-[480px] md:w-[540px] notification-glass-card p-0 z-[100] animate-slide-down overflow-hidden text-gray-900 dark:text-white cursor-default">
+                                <div className="p-5 pb-4">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-[17px] font-semibold tracking-wide text-gray-900 dark:text-white">
+                                            Notifications
+                                        </h3>
+                                        <button
+                                            onClick={() => setNotificationsOpen(false)}
+                                            className="w-[27px] h-[27px] bg-gray-100 dark:bg-white/10 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
                                         >
-                                            <MarkAllReadIcon className="w-3.5 h-3.5" />
-                                            <span>Mark all</span>
+                                            <svg
+                                                className="w-3.5 h-3.5 text-brand-green"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="3.5"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
                                         </button>
                                     </div>
 
-                                    <div className="max-h-[300px] overflow-y-auto p-2.5 space-y-1">
-                                        <NotificationItem
-                                            title="Assessment Report Ready"
-                                            message="Your detailed aptitude report is now available for review."
-                                            time="2h ago"
-                                            isNew={unreadCount > 0}
-                                            icon={<JobsIcon className="w-3.5 h-3.5" />}
-                                        />
-                                        <NotificationItem
-                                            title="New Achievement Unlocked"
-                                            message="You've successfully completed the first level of Technical Training."
-                                            time="5h ago"
-                                            isNew={unreadCount > 1}
-                                            icon={<SettingsIcon className="w-3.5 h-3.5" />}
-                                        />
+                                    <div className="h-px bg-gray-200 dark:bg-white/10 mb-4" />
+
+                                    <div className="flex justify-between items-center flex-wrap gap-y-3 gap-x-6">
+                                        <div className="flex flex-wrap gap-2">
+                                            {["All", "Assessment", "History"].map((tab) => (
+                                                <button
+                                                    key={tab}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveTab(tab);
+                                                    }}
+                                                    className={`px-4 py-1 rounded-full text-[13px] transition-colors ${activeTab === tab
+                                                        ? "bg-brand-green text-white font-semibold"
+                                                        : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 font-medium"
+                                                        }`}
+                                                >
+                                                    {tab === "All" && unreadCount > 0
+                                                        ? `All (${unreadCount})`
+                                                        : tab}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setUnreadCount(0);
+                                            }}
+                                            className="flex items-center gap-1.5 text-brand-green text-[13px] hover:text-green-400 transition-colors bg-transparent border-none flex-shrink-0 ml-auto"
+                                        >
+                                            <MarkAllReadIcon />
+                                            <span className="font-medium tracking-wide">
+                                                Mark all read
+                                            </span>
+                                        </button>
                                     </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                                </div>
+
+                                <div className="max-h-[300px] overflow-y-auto px-2 pb-4 custom-scrollbar">
+                                    {unreadCount > 0 ? (
+                                        <div className="divide-y divide-gray-100 dark:divide-white/5">
+                                            <NotificationItem
+                                                title="Assessment Report Ready"
+                                                message="Your detailed aptitude report is now available for review."
+                                                time="2h ago"
+                                                isNew={unreadCount > 0}
+                                                icon={<JobsIcon className="w-4 h-4 text-brand-green" />}
+                                                onClick={() => { if (unreadCount > 0) setUnreadCount(prev => Math.max(0, prev - 1)); }}
+                                            />
+                                            <NotificationItem
+                                                title="New Achievement Unlocked"
+                                                message="You've successfully completed the first level of Technical Training."
+                                                time="5h ago"
+                                                isNew={unreadCount > 1}
+                                                icon={<SettingsIcon className="w-4 h-4 text-brand-green" />}
+                                                onClick={() => { if (unreadCount > 1) setUnreadCount(prev => Math.max(0, prev - 1)); }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="p-8 pb-12 flex flex-col items-center justify-center text-center">
+                                            <NoNotificationsIcon className="w-[100px] h-auto mb-4 text-[#19211C] dark:text-white" />
+                                            <p className="text-gray-900 dark:text-white font-medium text-[15px]">
+                                                No Notifications Yet
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="w-px h-6 bg-gradient-to-b from-gray-200 to-gray-300 dark:from-white/[0.08] dark:to-white/[0.04] hidden lg:block mx-2"></div>
 
                     <div className="relative" ref={profileMenuRef}>
-                        <motion.button
+                        <button
                             onClick={() => setProfileOpen(!isProfileOpen)}
-                            whileHover={{ scale: 1.015 }}
-                            whileTap={{ scale: 0.985 }}
                             className="flex items-center gap-2.5 focus:outline-none cursor-pointer p-1.5 rounded-[12px] hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all"
                         >
-                            <motion.div 
-                                className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-gradient-to-br from-brand-green/[0.08] to-emerald-500/[0.04] border border-brand-green/[0.15] flex items-center justify-center overflow-hidden relative"
-                                whileHover={{ rotate: 4 }}
-                            >
-                                <ProfileIcon className="w-4.5 h-4.5 text-brand-green" />
-                                <motion.div
-                                    className="absolute inset-0 bg-brand-green/[0.15]"
-                                    animate={{ opacity: [0, 0.4, 0] }}
-                                    transition={{ duration: 2.5, ease: [0.32, 0.72, 0, 1], repeat: Infinity }}
+                            {!user ? (
+                                <div className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse flex-shrink-0"></div>
+                            ) : (
+                                <img
+                                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Student')}&background=${getAvatarColor(user.name || 'Student')}&color=fff&length=2`}
+                                    alt="User Avatar"
+                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-gray-200 dark:border-white/10"
                                 />
-                            </motion.div>
-                            <div className="hidden lg:block text-left">
-                                <p className="text-[14px] font-bold text-gray-900 dark:text-white leading-tight tracking-tight">{userProfile?.name || "Student"}</p>
-                                <p className="text-[12px] text-gray-500 dark:text-gray-400 leading-tight font-medium tracking-tight">Technical Portal</p>
-                            </div>
-                            <motion.div
-                                animate={{ rotate: isProfileOpen ? 180 : 0 }}
-                                transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                            >
-                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                            </motion.div>
-                        </motion.button>
- 
-                        <AnimatePresence>
-                            {isProfileOpen && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -12, scale: 0.96 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -12, scale: 0.96 }}
-                                    transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                                    className="absolute right-0 top-full mt-4 w-72 bg-white dark:bg-[#19211C] rounded-[16px] shadow-2xl shadow-black/[0.08] z-[100] border border-gray-100 dark:border-white/[0.08] overflow-hidden"
-                                >
-                                    <div className="px-5 py-4 border-b border-gray-100 dark:border-white/[0.06] bg-gradient-to-r from-gray-50 to-white dark:from-white/[0.04] dark:to-transparent">
-                                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate tracking-tight">{userProfile?.name || "Student"}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1 font-medium tracking-tight">{userProfile?.email || "student@originbi.com"}</p>
+                            )}
+                            <div className="hidden lg:block text-left mr-1">
+                                {!user ? (
+                                    <div className="flex flex-col gap-1">
+                                        <span className="h-3 w-20 bg-gray-200 dark:bg-gray-800 rounded animate-pulse"></span>
+                                        <span className="h-2.5 w-12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse"></span>
                                     </div>
-
+                                ) : (
+                                    <>
+                                        <p className="text-[14px] font-bold text-gray-900 dark:text-white leading-tight tracking-tight">
+                                            {capitalizeWords(user.name) || "Student"}
+                                        </p>
+                                        <p className="text-[12px] text-gray-500 dark:text-gray-400 leading-tight font-medium tracking-tight">
+                                            {user.email || "student@originbi.com"}
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform hidden sm:block ${isProfileOpen ? "rotate-180" : ""}`} />
+                        </button>
+ 
+                            {isProfileOpen && (
+                                <div className="absolute right-0 top-full mt-4 w-72 bg-white dark:bg-[#19211C] rounded-[16px] shadow-2xl shadow-black/[0.08] z-[100] border border-gray-100 dark:border-white/[0.08] overflow-hidden">
+                                    <div className="px-5 py-4 border-b border-gray-100 dark:border-white/[0.06] bg-gradient-to-r from-gray-50 to-white dark:from-white/[0.04] dark:to-transparent">
+                                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate tracking-tight">{user?.name || "Student"}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1 font-medium tracking-tight">{user?.email || "student@originbi.com"}</p>
+                                    </div>
+ 
                                     <div className="p-2">
-                                        <motion.button
+                                        <button
                                             onClick={() => handleNavClick("profile")}
-                                            whileHover={{ x: 4 }}
-                                            className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 rounded-[10px] hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all font-medium"
+                                            className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 rounded-[10px] hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all font-medium cursor-pointer"
                                         >
                                             <SettingsIcon className="w-4 h-4 mr-3" />
                                             Settings
-                                        </motion.button>
-                                        <motion.button
-                                            onClick={onLogout}
-                                            whileHover={{ x: 4 }}
-                                            className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 rounded-[10px] hover:bg-red-50 dark:hover:bg-red-900/[0.08] transition-all font-medium mt-1"
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                logout();
+                                                if (onLogout) onLogout();
+                                            }}
+                                            className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 rounded-[10px] hover:bg-red-50 dark:hover:bg-red-900/[0.08] transition-all font-medium mt-1 cursor-pointer"
                                         >
                                             <LogoutIcon className="w-4 h-4 mr-3" />
                                             Logout
-                                        </motion.button>
+                                        </button>
                                     </div>
-                                </motion.div>
+                                </div>
                             )}
-                        </AnimatePresence>
                     </div>
                 </div>
             </div>
 
-            <AnimatePresence>
-                {isMobileMenuOpen && (
-                    <motion.div
-                        ref={mobileMenuRef}
-                        initial={{ opacity: 0, y: -16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -16 }}
-                        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-                        className="md:hidden absolute top-full left-0 w-full bg-white dark:bg-[#19211C] shadow-2xl shadow-black/[0.08] z-40 border-t border-gray-100 dark:border-white/[0.08]"
-                    >
-                        <nav className="flex flex-col p-6 space-y-2">
-                            {renderNavItems(true)}
-                            <div className="border-t border-gray-100 dark:border-white/[0.08] my-4 pt-6">
-                                <div className="flex justify-between items-center px-4">
-                                    <span className="text-sm font-bold text-gray-500 tracking-tight">Theme</span>
-                                    <ThemeToggle />
-                                </div>
+            {isMobileMenuOpen && (
+                <div
+                    ref={mobileMenuRef}
+                    className="md:hidden absolute top-full left-0 w-full bg-white dark:bg-[#19211C] shadow-2xl shadow-black/[0.08] z-40 border-t border-gray-100 dark:border-white/[0.08]"
+                >
+                    <nav className="flex flex-col p-6 space-y-2">
+                        {renderNavItems(true)}
+                        <div className="border-t border-gray-100 dark:border-white/[0.08] my-4 pt-6">
+                            <div className="flex justify-between items-center px-4">
+                                <span className="text-sm font-bold text-gray-500 tracking-tight">Theme</span>
+                                <ThemeToggle />
                             </div>
-                        </nav>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </motion.header>
+                        </div>
+                    </nav>
+                </div>
+            )}
+        </header>
     );
 };
-
-const XIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-);
 
 export default Header;

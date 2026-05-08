@@ -47,9 +47,10 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 };
 
 // Inner component that uses search params
+import { useSession } from "@/lib/contexts/SessionContext";
+
 function HomeContent() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string>("Student");
+  const { isLoggedIn, user, isLoading } = useSession();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
@@ -63,10 +64,14 @@ function HomeContent() {
     }
   }, [searchParams]);
 
-  const handleLoginSuccess = (name?: string) => {
-    if (name) setUserName(name);
-    setIsLoggedIn(true);
-  };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAFA] dark:bg-brand-dark-primary gap-4">
+        <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
+        <p className="text-sm font-bold text-slate-500 dark:text-brand-text-secondary uppercase tracking-widest animate-pulse">Loading experience...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -80,9 +85,9 @@ function HomeContent() {
       </AnimatePresence>
       
       {!isLoggedIn ? (
-        <Login onLoginSuccess={handleLoginSuccess} />
+        <Login onLoginSuccess={() => {}} />
       ) : (
-        <AssessmentPortal userName={userName} />
+        <AssessmentPortal userName={user?.name} />
       )}
     </>
   );
