@@ -5,6 +5,7 @@ import { AssessmentController } from './controllers/assessment.controller';
 import { AdminQuestionService } from './services/admin-question.service';
 import { AssessmentService } from './services/assessment.service';
 import { CodeExecutionService } from './services/code-execution.service';
+import { EvaluationService } from './services/evaluation.service';
 import * as Entities from '../../entities';
 
 const entities = Object.values(Entities).filter(e => typeof e === 'function');
@@ -21,11 +22,13 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     AdminQuestionService,
     AssessmentService,
     CodeExecutionService,
+    EvaluationService,
   ],
   exports: [
     AdminQuestionService,
     AssessmentService,
     CodeExecutionService,
+    EvaluationService,
   ],
 })
 export class AssessmentModule {}

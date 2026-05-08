@@ -1,27 +1,27 @@
 "use client";
 
 import React from "react";
-import AptitudeEngine from "../../../components/assessment/aptitude/AptitudeEngine";
+import AptitudeEngine, { type AttemptSubmitResult } from "../../../components/assessment/aptitude/AptitudeEngine";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-
-interface AptitudeResult {
-    overallScore: number;
-    accuracy: number;
-    timeTakenSeconds: number;
-    sections: { name: string; score: number; weight: string }[];
-}
+import { useAssessmentTracker } from "../../../lib/assessmentTracker";
 
 function AptitudeAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const { markAssessmentComplete } = useAssessmentTracker();
 
-    const handleComplete = (result: AptitudeResult) => {
-        const sections = result.sections || [];
-        const overallScore = result.overallScore;
-        const accuracy = result.accuracy;
+    const handleComplete = (result: AttemptSubmitResult) => {
+        const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
+        const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
+        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
+        const accuracy = accuracyBase > 0 ? Math.round((result.correctCount / accuracyBase) * 100) : 0;
+        const overallScore = Math.max(0, Math.round(result.totalScore));
         const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
+        const sections = [
+            { name: "Overall", score: accuracy, weight: "100%" },
+        ];
 
         // Generate insights
         const insights: { type: "strength" | "improvement" | "time"; text: string }[] = [];
@@ -70,8 +70,16 @@ function AptitudeAssessmentContent() {
             window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
         }
 
+        // Mark complete in tracker (generates notifications & suggestions)
+        markAssessmentComplete("aptitude", {
+            totalScore: overallScore,
+            correctCount: result.correctCount,
+            wrongCount: result.wrongCount,
+            timeTakenSeconds: result.timeTakenSeconds,
+        });
+
         // Redirect to dashboard
-        router.push('/?completed=aptitude');
+        router.push('/student/dashboard?completed=aptitude');
     };
 
     return (

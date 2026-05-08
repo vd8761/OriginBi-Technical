@@ -20,68 +20,25 @@ export interface MncQuestion {
     topic: string;
     text: string;
     options: Option[];
+    difficulty?: string;
+    marks?: number;
+    negativeMarks?: number;
 }
 
-const MOCK_MNC_QUESTIONS: MncQuestion[] = [
-    {
-        id: "mq1",
-        topic: "Data Structures",
-        text: "What is the time complexity of searching for an element in a balanced Binary Search Tree (BST)?",
-        options: [
-            { id: "o1", text: "O(1)" },
-            { id: "o2", text: "O(n)" },
-            { id: "o3", text: "O(log n)" },
-            { id: "o4", text: "O(n log n)" },
-        ],
-    },
-    {
-        id: "mq2",
-        topic: "Algorithms",
-        text: "Which of the following sorting algorithms has the best worst-case time complexity?",
-        options: [
-            { id: "o1", text: "Bubble Sort" },
-            { id: "o2", text: "Selection Sort" },
-            { id: "o3", text: "Quick Sort" },
-            { id: "o4", text: "Merge Sort" },
-        ],
-    },
-    {
-        id: "mq3",
-        topic: "Dynamic Programming",
-        text: "In Dynamic Programming, the technique of storing the results of expensive function calls and returning the cached result when the same inputs occur again is called:",
-        options: [
-            { id: "o1", text: "Recursion" },
-            { id: "o2", text: "Memoization" },
-            { id: "o3", text: "Tabulation" },
-            { id: "o4", text: "Backtracking" },
-        ],
-    },
-    {
-        id: "mq4",
-        topic: "Graph Theory",
-        text: "Which data structure is typically used for Breadth-First Search (BFS) traversal of a graph?",
-        options: [
-            { id: "o1", text: "Stack" },
-            { id: "o2", text: "Queue" },
-            { id: "o3", text: "Priority Queue" },
-            { id: "o4", text: "Hash Map" },
-        ],
-    },
-    {
-        id: "mq5",
-        topic: "System Design",
-        text: "In the context of the CAP theorem, what does the 'A' stand for?",
-        options: [
-            { id: "o1", text: "Atomicity" },
-            { id: "o2", text: "Availability" },
-            { id: "o3", text: "Accessibility" },
-            { id: "o4", text: "Aggregation" },
-        ],
-    },
-];
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
+}
 
 interface MNCEngineProps {
-    onComplete: (answers: Record<string, string>) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
     userId?: number;
     mode?: 'trial' | 'main';
@@ -110,6 +67,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(MNC_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(MNC_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
@@ -119,6 +77,21 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const normalizeQuestions = (items: any[]): MncQuestion[] => items.map((q: any) => ({
+        id: String(q.id ?? q.questionId ?? q.question_id),
+        topic: q.topic ?? q.category ?? q.topic_group ?? "General",
+        text: q.text ?? q.questionText ?? q.question_text ?? "",
+        options: Array.isArray(q.options)
+            ? q.options.map((opt: any) => ({
+                id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+            }))
+            : [],
+        difficulty: q.difficulty ?? undefined,
+        marks: q.marks !== undefined ? Number(q.marks) : undefined,
+        negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
+    }));
 
     useEffect(() => {
         const fetchAttempt = async () => {
@@ -137,9 +110,12 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                 }
 
                 const data = await response.json();
-                setAttemptToken(data.attemptToken);
-                setQuestions(data.questions || []);
-                setTimeLeft(Number(data.durationSeconds || 1800));
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setQuestions(Array.isArray(data.questions) ? normalizeQuestions(data.questions) : []);
+                const duration = Number(data.durationSeconds || MNC_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -206,7 +182,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                 throw new Error("Failed to submit assessment.");
             }
 
-            onComplete(answers);
+            const result = await response.json();
+            onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
@@ -271,7 +248,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                 <div className="flex items-center gap-3">
                     <TimerDisplay 
                         time={timeLeft} 
-                        total={MNC_TOTAL_TIME} 
+                        total={totalTime} 
                         theme={theme} 
                     />
                     <div className="hidden scale-90 lg:block">

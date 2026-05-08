@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Header from "./Header";
 import { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
@@ -35,22 +35,27 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
 
 interface AssessmentPortalProps {
   userName?: string;
+  initialView?: AssessmentView;
 }
 
 type AssessmentMode = "trial" | "main";
 
-const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student" }) => {
+const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", initialView = "dashboard" }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showMncModal, setShowMncModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
+  const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
-  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [completionPopup, setCompletionPopup] = useState<{
+    completed: AssessmentId;
+    next: AssessmentId | null;
+  } | null>(null);
 
   const filteredExams = useMemo(() => {
     const baseExams = EXAMS.filter((exam) => exam.available);
@@ -64,6 +69,59 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     setSelectedExam(exam);
     setShowDetailModal(true);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (currentView !== "dashboard") return;
+    const completed = searchParams.get("completed") as AssessmentId | null;
+    if (!completed) return;
+
+    const recommendedOrder: AssessmentId[] = ["aptitude", "communication", "coding", "mnc", "role"];
+
+    // Read from assessmentTracker storage
+    const savedCompleted = (() => {
+      const raw = window.localStorage.getItem("completed_assessments");
+      if (!raw) return [];
+      try {
+        return JSON.parse(raw) as Array<{ assessmentCode?: string }>;
+      } catch {
+        return [];
+      }
+    })();
+
+    // Also read from progress.ts storage (originbi:assessment-results)
+    const savedResults = (() => {
+      const raw = window.localStorage.getItem("originbi:assessment-results");
+      if (!raw) return {};
+      try {
+        return JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })();
+
+    // Build the full set of completed assessment IDs from both sources
+    const completedCodes = new Set<AssessmentId>([
+      // from assessmentTracker
+      ...savedCompleted.map((c) => c.assessmentCode).filter(Boolean) as AssessmentId[],
+      // from progress.ts results (keys are assessment IDs)
+      ...Object.keys(savedResults).filter(k =>
+        recommendedOrder.includes(k as AssessmentId)
+      ) as AssessmentId[],
+    ]);
+
+    // Add the one just completed
+    completedCodes.add(completed);
+
+    // Find the next incomplete assessment in recommended order
+    const next = recommendedOrder.find((id) => !completedCodes.has(id)) ?? null;
+
+    // Only show popup if there's actually a next assessment to suggest
+    if (next !== null) {
+      setCompletionPopup({ completed, next });
+    }
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [currentView, searchParams]);
 
   const launchAssessment = (examId: string, mode: AssessmentMode) => {
     if (examId === "coding") {
@@ -136,7 +194,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       />
 
       {/* Next Step Notification Alert */}
-      {showNextStepAlert && currentView === "dashboard" && (
+      {completionPopup && currentView === "dashboard" && (
         <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
           <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -148,25 +206,43 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
               <div className="flex-1">
                 <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-tight">
-                  Aptitude Cleared!
+                  {(EXAMS.find((e) => e.id === completionPopup.completed)?.title ?? "Assessment")} Cleared!
                 </h4>
                 <p className="mt-1.5 text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
-                  Excellent work on Logic. Start the{" "}
-                  <strong className="text-slate-800 dark:text-white">Communication Assessment</strong>{" "}
-                  next to unlock Technical Groupings and discover your true Role-Fit.
+                  {completionPopup.next ? (
+                    <>
+                      Great work on{" "}
+                      <strong className="text-slate-800 dark:text-white">
+                        {EXAMS.find((e) => e.id === completionPopup.completed)?.title ?? "this assessment"}
+                      </strong>
+                      . Start{" "}
+                      <strong className="text-slate-800 dark:text-white">
+                        {EXAMS.find((e) => e.id === completionPopup.next)?.title ?? "the next assessment"}
+                      </strong>{" "}
+                      next to keep building your profile.
+                    </>
+                  ) : (
+                    <>
+                      Great work completing all available assessments. Review your results and insights to plan your next steps.
+                    </>
+                  )}
                 </p>
                 <div className="mt-4 flex items-center gap-3">
                   <button
                     onClick={() => {
-                      setShowNextStepAlert(false);
+                      const next = completionPopup.next ? EXAMS.find((e) => e.id === completionPopup.next) : null;
+                      setCompletionPopup(null);
                       setCurrentView("assessment");
+                      if (next) {
+                        handleSelectExam(next);
+                      }
                     }}
                     className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"
                   >
                     View Assessments
                   </button>
                   <button
-                    onClick={() => setShowNextStepAlert(false)}
+                    onClick={() => setCompletionPopup(null)}
                     className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors"
                   >
                     Maybe later
@@ -175,7 +251,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             </div>
             <button
-              onClick={() => setShowNextStepAlert(false)}
+              onClick={() => setCompletionPopup(null)}
               className="absolute top-3 right-3 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

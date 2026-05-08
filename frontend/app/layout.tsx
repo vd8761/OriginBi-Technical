@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
 import { SessionProvider } from "@/lib/contexts/SessionContext";
+import { CachePruner } from "@/components/CachePruner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +38,7 @@ export default function RootLayout({
       >
         <SessionProvider>
           <ThemeProvider>
+            <CachePruner />
             {children}
           </ThemeProvider>
         </SessionProvider>

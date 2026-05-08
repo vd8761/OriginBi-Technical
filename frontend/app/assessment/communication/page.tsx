@@ -1,50 +1,49 @@
 "use client";
 
 import React from 'react';
-import CommunicationEngine, { type CommunicationAnswers } from '../../../components/assessment/communication/CommunicationEngine';
+import CommunicationEngine, { type AttemptSubmitResult } from '../../../components/assessment/communication/CommunicationEngine';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { useAssessmentTracker } from '../../../lib/assessmentTracker';
 
 function CommunicationAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const { markAssessmentComplete } = useAssessmentTracker();
 
-    const handleComplete = (answers: CommunicationAnswers) => {
-        // Simulate scoring based on completion
+    const handleComplete = (result: AttemptSubmitResult) => {
+        const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
+        const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
+        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
+        const accuracy = accuracyBase > 0 ? Math.round((result.correctCount / accuracyBase) * 100) : 0;
+        const overallScore = Math.max(0, Math.round(result.totalScore));
+        const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
         const sections = [
-            { name: "Listening", score: 75 + Math.floor(Math.random() * 20), weight: "25%" },
-            { name: "Speaking", score: 70 + Math.floor(Math.random() * 25), weight: "25%" },
-            { name: "Reading", score: 80 + Math.floor(Math.random() * 15), weight: "25%" },
-            { name: "Writing", score: 72 + Math.floor(Math.random() * 20), weight: "25%" },
+            { name: "Overall", score: accuracy, weight: "100%" },
         ];
-        
-        const overallScore = Math.round(sections.reduce((sum, s) => sum + s.score, 0) / sections.length);
-        
-        // Generate insights
+
         const insights = [
             { type: "strength" as const, text: "Good comprehension skills demonstrated in reading and listening sections." },
             { type: "improvement" as const, text: "Practice structured responses for better speaking clarity." },
             { type: "time" as const, text: "Well-paced responses throughout the assessment." },
         ];
 
-        // Save results
-        const result = {
+        const assessmentResult = {
             assessmentId: "communication" as const,
             completedAt: new Date().toISOString(),
             overallScore,
-            accuracy: overallScore,
-            timeTaken: "30 min",
+            accuracy,
+            timeTaken: `${timeTakenMinutes} min`,
             sections,
             insights,
         };
 
         const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
-        existingResults.communication = result;
+        existingResults.communication = assessmentResult;
         localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
         window.dispatchEvent(new CustomEvent("originbi:results-changed"));
 
-        // Mark as paid
         const paidAssessments = JSON.parse(localStorage.getItem("originbi:paid-assessments") || "[]");
         if (!paidAssessments.includes("communication")) {
             paidAssessments.push("communication");
@@ -52,7 +51,14 @@ function CommunicationAssessmentContent() {
             window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
         }
 
-        router.push('/?completed=communication');
+        markAssessmentComplete("communication", {
+            totalScore: overallScore,
+            correctCount: result.correctCount,
+            wrongCount: result.wrongCount,
+            timeTakenSeconds: result.timeTakenSeconds,
+        });
+
+        router.push('/student/dashboard?completed=communication');
     };
 
     return (

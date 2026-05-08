@@ -1,52 +1,49 @@
 "use client";
 
 import React from 'react';
-import RoleEngine from '../../../components/assessment/role/RoleEngine';
+import RoleEngine, { type AttemptSubmitResult } from '../../../components/assessment/role/RoleEngine';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { useAssessmentTracker } from '../../../lib/assessmentTracker';
 
 function RoleAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const { markAssessmentComplete } = useAssessmentTracker();
 
-    const handleComplete = (answers: Record<string, string>) => {
-        // Generate scores based on role assessment sections
+    const handleComplete = (result: AttemptSubmitResult) => {
+        const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
+        const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
+        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
+        const accuracy = accuracyBase > 0 ? Math.round((result.correctCount / accuracyBase) * 100) : 0;
+        const overallScore = Math.max(0, Math.round(result.totalScore));
+        const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
         const sections = [
-            { name: "Conceptual MCQs", score: 70 + Math.floor(Math.random() * 25), weight: "45%" },
-            { name: "Scenario Decisions", score: 75 + Math.floor(Math.random() * 20), weight: "35%" },
-            { name: "Priority Calls", score: 80 + Math.floor(Math.random() * 15), weight: "10%" },
-            { name: "Reflection Prompts", score: 72 + Math.floor(Math.random() * 20), weight: "10%" },
+            { name: "Overall", score: accuracy, weight: "100%" },
         ];
-        
-        const overallScore = Math.round(
-            sections.reduce((sum, s) => sum + (s.score * parseInt(s.weight) / 100), 0)
-        );
-        
-        // Generate insights for role fit
+
         const insights = [
             { type: "strength" as const, text: "Strong conceptual understanding of domain fundamentals." },
             { type: "improvement" as const, text: "Consider exploring scenarios with higher complexity levels." },
             { type: "time" as const, text: "Good decision speed with thoughtful responses." },
         ];
 
-        // Save results
-        const result = {
+        const assessmentResult = {
             assessmentId: "role" as const,
             completedAt: new Date().toISOString(),
             overallScore,
-            accuracy: overallScore,
-            timeTaken: "45 min",
+            accuracy,
+            timeTaken: `${timeTakenMinutes} min`,
             sections,
             insights,
         };
 
         const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
-        existingResults.role = result;
+        existingResults.role = assessmentResult;
         localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
         window.dispatchEvent(new CustomEvent("originbi:results-changed"));
 
-        // Mark as paid
         const paidAssessments = JSON.parse(localStorage.getItem("originbi:paid-assessments") || "[]");
         if (!paidAssessments.includes("role")) {
             paidAssessments.push("role");
@@ -54,7 +51,14 @@ function RoleAssessmentContent() {
             window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
         }
 
-        router.push('/?completed=role');
+        markAssessmentComplete("role", {
+            totalScore: overallScore,
+            correctCount: result.correctCount,
+            wrongCount: result.wrongCount,
+            timeTakenSeconds: result.timeTakenSeconds,
+        });
+
+        router.push('/student/dashboard?completed=role');
     };
 
     return (

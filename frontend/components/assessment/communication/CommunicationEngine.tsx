@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import AudioTaskComponent from "./TaskTypes/AudioTask";
@@ -7,11 +7,12 @@ import ReadingTaskComponent from "./TaskTypes/ReadingTask";
 import WritingTaskComponent from "./TaskTypes/WritingTask";
 import McqTaskComponent from "./TaskTypes/McqTask";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
 
 const COMMUNICATION_TOTAL_TIME = 45 * 60;
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -59,6 +60,18 @@ export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTas
 export type CommunicationAnswer = Record<string, string> | { audioBlobUrl: string } | { text: string };
 export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
+}
+
 const taskCopy: Record<TaskType, { label: string; hint: string; accent: string }> = {
     audio: { label: "Audio Comprehension", hint: "Listen carefully and select the best answers.", accent: "Listening" },
     reading: { label: "Reading Clarity", hint: "Analyze the passage and respond precisely.", accent: "Reading" },
@@ -88,7 +101,7 @@ const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | unde
 };
 
 interface CommunicationEngineProps {
-    onComplete: (data: CommunicationAnswers) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
     userId?: number;
     mode?: 'trial' | 'main';
@@ -102,6 +115,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [timeLeft, setTimeLeft] = useState(COMMUNICATION_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(COMMUNICATION_TOTAL_TIME);
     const [answers, setAnswers] = useState<CommunicationAnswers>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -113,8 +127,197 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    const cacheRestoredRef = useRef(false);
+
+    // ── Cache hook (grammar module is the backend name for communication) ──
+    const cacheAnswers = useMemo(() => {
+        const out: Record<string, any> = {};
+        for (const [k, v] of Object.entries(answers)) {
+            out[k] = { raw: v };
+        }
+        return out;
+    }, [answers]);
+
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'grammar',
+        assessmentCode,
+        questions:       tasks,
+        expiresAt:       undefined,
+        answers:         cacheAnswers,
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // Restore session from cache when available
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setTasks(normalizeTasks(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: CommunicationAnswers = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (val && typeof val === 'object' && 'raw' in val) {
+                    restored[qId] = (val as any).raw;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
+
+    const normalizeOptions = (items: any[]) => (Array.isArray(items)
+        ? items.map((opt: any) => ({
+            id: String(opt.id ?? opt.optionId ?? opt.option_id),
+            text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+        }))
+        : []);
+
+    const mapTaskType = (raw: string) => {
+        const type = String(raw || '').toLowerCase();
+        if (type === 'listening_mcq') return 'audio' as const;
+        if (type === 'reading_mcq') return 'reading' as const;
+        if (type === 'speaking') return 'speaking' as const;
+        if (type === 'writing') return 'writing' as const;
+        return 'mcq' as const;
+    };
+
+    const normalizeTasks = (items: any[]): AssessmentTask[] => items.map((q: any, idx: number) => {
+        const id = String(q.id ?? q.questionId ?? q.question_id ?? `task-${idx + 1}`);
+        const taskType = mapTaskType(q.taskType ?? q.task_type ?? q.type);
+        const instructions = q.instructions ?? taskCopy[taskType]?.hint ?? "Answer the question.";
+        const options = normalizeOptions(q.options);
+        const questionText = q.text ?? q.questionText ?? q.question_text ?? "";
+
+        if (taskType === "audio") {
+            return {
+                id,
+                type: "audio",
+                instructions,
+                audioUrl: q.audioUrl ?? q.audio_url ?? "",
+                questions: [{ id, text: questionText, options }],
+            } as AudioTask;
+        }
+
+        if (taskType === "reading") {
+            return {
+                id,
+                type: "reading",
+                instructions,
+                passage: q.passage ?? q.passageText ?? q.passage_text ?? "",
+                questions: [{ id, text: questionText, options }],
+            } as ReadingTask;
+        }
+
+        if (taskType === "speaking") {
+            const rubric = q.rubric ?? q.rubric_json ?? {};
+            return {
+                id,
+                type: "speaking",
+                instructions,
+                prompt: q.prompt ?? questionText,
+                prepTimeSeconds: Number(rubric.prepTimeSeconds ?? 30),
+                recordTimeSeconds: Number(rubric.recordTimeSeconds ?? 120),
+            } as SpeakingTask;
+        }
+
+        if (taskType === "writing") {
+            const rubric = q.rubric ?? q.rubric_json ?? {};
+            return {
+                id,
+                type: "writing",
+                instructions,
+                prompt: q.prompt ?? questionText,
+                minWords: rubric.minWords ?? undefined,
+                maxWords: rubric.maxWords ?? undefined,
+            } as WritingTask;
+        }
+
+        return {
+            id,
+            type: "mcq",
+            instructions,
+            questions: [{ id, text: questionText, options }],
+        } as McqTask;
+    });
+
+    const blobUrlToBase64 = async (url: string) => {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error("Failed to read audio data"));
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    const buildSubmissionPayload = useCallback(async () => {
+        const payload: Record<string, any> = {};
+
+        for (const task of tasks) {
+            const answer = answers[task.id];
+            if (!answer) continue;
+
+            if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
+                const map = answer as Record<string, string>;
+                Object.entries(map).forEach(([questionId, optionId]) => {
+                    if (optionId) payload[questionId] = optionId;
+                });
+                continue;
+            }
+
+            if (task.type === "writing") {
+                const text = (answer as { text?: string }).text ?? String(answer ?? "");
+                if (text) payload[task.id] = { text };
+                continue;
+            }
+
+            if (task.type === "speaking") {
+                const audioBlobUrl = (answer as { audioBlobUrl?: string }).audioBlobUrl;
+                if (audioBlobUrl) {
+                    const audioBase64 = await blobUrlToBase64(audioBlobUrl);
+                    payload[task.id] = { audioBase64 };
+                }
+            }
+        }
+
+        return payload;
+    }, [answers, tasks]);
 
     useEffect(() => {
+        if (!isCacheRestored) return; // Wait until cache resolution finishes
+
+        // Skip API call if cache already restored tasks
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
         const fetchAttempt = async () => {
             try {
                 setIsLoading(true);
@@ -131,9 +334,12 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 }
 
                 const data = await response.json();
-                setAttemptToken(data.attemptToken);
-                setTasks(data.questions || []);
-                setTimeLeft(Number(data.durationSeconds || 2700));
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setTasks(Array.isArray(data.questions) ? normalizeTasks(data.questions) : []);
+                const duration = Number(data.durationSeconds || COMMUNICATION_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -142,7 +348,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
 
     const currentTask = tasks[currentIndex];
     const totalTasks = tasks.length;
@@ -177,23 +383,26 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         if (!attemptToken || isSubmitting) return;
         setIsSubmitting(true);
         try {
+            const submissionAnswers = await buildSubmissionPayload();
             const response = await fetch(`${API_BASE}/api/assessment/grammar/attempts/${attemptToken}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ answers }),
+                body: JSON.stringify({ answers: submissionAnswers }),
             });
 
             if (!response.ok) {
                 throw new Error("Failed to submit assessment.");
             }
 
-            onComplete(answers);
+            const result = await response.json();
+            await clearSession();
+            onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
             setIsSubmitting(false);
         }
-    }, [answers, attemptToken, isSubmitting, onComplete]);
+    }, [attemptToken, buildSubmissionPayload, clearSession, isSubmitting, onComplete]);
 
     const handleConfirmSubmit = () => {
         setShowSubmitModal(true);
@@ -228,6 +437,8 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
             ...prev,
             [taskId]: answerData,
         }));
+        // Persist to cache immediately (wrap in raw so it survives JSON round-trip)
+        cacheSaveAnswer(taskId, { raw: answerData });
     };
 
     const handleMarkReview = () => {
@@ -319,6 +530,22 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
                     <div className="hidden sm:block">
@@ -334,7 +561,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 <div className="flex items-center gap-3">
                     <TimerDisplay 
                         time={timeLeft} 
-                        total={COMMUNICATION_TOTAL_TIME} 
+                        total={totalTime} 
                         theme={theme} 
                     />
                     <div className="hidden scale-90 lg:block">
