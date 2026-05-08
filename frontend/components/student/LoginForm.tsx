@@ -4,13 +4,14 @@ import React, { useState, FormEvent, FocusEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { EyeIcon, EyeOffIcon } from '../icons';
+import { useSession } from '@/lib/contexts/SessionContext';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
 
 // configureAmplify(); // ensure Amplify is configured
 
 interface LoginFormProps {
-  onLoginSuccess: (userName?: string) => void;
+  onLoginSuccess?: (userName?: string) => void;
   buttonClass?: string;
   portalMode?: 'student' | 'corporate' | 'admin';
 }
@@ -21,6 +22,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   portalMode: _portalMode,
 }) => {
   const router = useRouter();
+  const { login } = useSession();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [values, setValues] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -109,12 +111,8 @@ const LoginForm: React.FC<LoginFormProps> = ({
       }
 
       const loginData = await loginRes.json();
-      
-      // Store tokens if present in response
-      if (loginData.AuthenticationResult?.AccessToken) {
-        localStorage.setItem('originbi:access-token', loginData.AuthenticationResult.AccessToken);
-        localStorage.setItem('originbi:id-token', loginData.AuthenticationResult.IdToken);
-      }
+      const accessToken = loginData.AuthenticationResult?.AccessToken || "";
+      const idToken = loginData.AuthenticationResult?.IdToken || "";
 
       // 2. Retrieve Student Profile to get the correct display name
       let displayName = '';
@@ -141,14 +139,16 @@ const LoginForm: React.FC<LoginFormProps> = ({
           .replace(/\b\w/g, (l) => l.toUpperCase());
       }
 
-      // 3. Save profile to localStorage as progress.ts expects it
-      localStorage.setItem('originbi:user-profile', JSON.stringify({
+      // 3. Update session reactively (which will also save to localStorage)
+      login(accessToken, idToken, {
         name: displayName,
         email: values.email,
         joinedAt: new Date().toISOString(),
-      }));
+      });
 
-      onLoginSuccess(displayName);
+      if (onLoginSuccess) {
+        onLoginSuccess(displayName);
+      }
 
     } catch (error: any) {
       setGeneralError(error.message || 'Login failed. Please check your credentials.');

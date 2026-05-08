@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param } from '@nestjs/common';
 import { AssessmentService } from '../services/assessment.service';
 
 @Controller('assessment')
@@ -24,9 +24,10 @@ export class AssessmentController {
   async submitAttempt(
     @Param('module') module: string,
     @Param('token') token: string,
-    @Body() body: any
+    @Body() body: { answers: Record<string, string> }
   ) {
-    const data = await this.assessmentService.submitAttempt(module, token, body);
+    const data = await this.assessmentService.submitAttempt(module, token, body.answers);
     return data;
   }
+
 }

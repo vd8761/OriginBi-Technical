@@ -142,6 +142,19 @@
     @apply bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.02)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.15)] rounded-2xl;
   }
 
+  .notification-glass-card {
+    background-color: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(24px);
+    border-radius: 1rem;
+    box-shadow: none;
+  }
+
+  :is(.dark, .dark *) .notification-glass-card {
+    background-color: rgba(17, 24, 20, 0.98);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
   .dashboard-glass-card {
     @apply bg-white/80 dark:bg-white/[0.04] backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.2)] rounded-3xl;
   }

@@ -229,11 +229,17 @@ export class AssessmentService {
         ? this.shuffleWithSeed(questions, shuffleSeed) 
         : questions;
 
-      for (let i = 0; i < shuffled.length; i++) {
+      let finalQuestions = shuffled;
+      const questionLimit = Number(assessment.question_limit || 0);
+      if (questionLimit > 0 && shuffled.length > questionLimit) {
+        finalQuestions = shuffled.slice(0, questionLimit);
+      }
+
+      for (let i = 0; i < finalQuestions.length; i++) {
         await queryRunner.query(
           `INSERT INTO ${config.junction} (${config.attemptIdCol}, ${config.idCol}, display_order)
            VALUES ($1, $2, $3)`,
-          [attemptId, shuffled[i][config.idCol], i + 1],
+          [attemptId, finalQuestions[i][config.idCol], i + 1],
         );
       }
 
@@ -292,7 +298,7 @@ export class AssessmentService {
     const textColumn = config.questions === 'tech_coding_questions' ? 'q.problem_statement' : 'q.question_text';
 
     const questionRows = await this.dataSource.query(
-      `SELECT aq.display_order, q.${config.idCol} as question_id,
+      `SELECT aq.display_order, q.${config.idCol} as question_id, ass.difficulty_marks, ass.difficulty_negative_marks,
               ${textColumn} as question_text${difficultySelect}${extraSelect},
               COALESCE(
                 json_agg(
@@ -303,18 +309,27 @@ export class AssessmentService {
               ) as options
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-       LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
        GROUP BY aq.display_order, q.${config.idCol}, ${textColumn}${difficultyGroup}${extraGroup}
        ORDER BY aq.display_order ASC`,
       [attemptId],
     );
 
-    return questionRows.map((q: any) => {
-      let finalOptions = q.options;
-      if (shuffleOptions) {
-        finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
-      }
+    // Fetch options separately to avoid massive duplication in join or complex aggregations for simple mapping
+    const questions = [];
+    for (const q of questionRows) {
+        const options = await this.dataSource.query(
+            `SELECT option_id::text as id, option_text as text 
+             FROM ${config.options} 
+             WHERE ${config.idCol} = $1 
+             ORDER BY option_id ASC`,
+            [q[config.idCol]]
+        );
+
+        let finalOptions = options;
+        if (shuffleOptions) {
+            finalOptions = this.shuffleWithSeed(options, seed + q[config.idCol]);
+        }
 
       const base: any = {
         id: q.question_id,
@@ -709,5 +724,190 @@ export class AssessmentService {
     const config = configs[module];
     if (!config) throw new BadRequestException(`Unknown module: ${module}`);
     return config;
+  }
+
+  async submitAttempt(module: string, token: string, answers: Record<string, string>) {
+    const dbModule = module === 'communication' ? 'grammar' : module;
+    const tableMap: Record<string, { attempts: string; questions: string; junction: string; idCol: string; options: string; attemptIdCol: string; catCol: string }> = {
+      aptitude: { 
+          attempts: 'tech_aptitude_attempts', 
+          questions: 'tech_aptitude_questions', 
+          junction: 'tech_aptitude_attempt_questions', 
+          idCol: 'aptitude_question_id',
+          options: 'tech_aptitude_options',
+          attemptIdCol: 'aptitude_attempt_id',
+          catCol: 'subcategory'
+      },
+      grammar: { 
+          attempts: 'tech_grammar_attempts', 
+          questions: 'tech_grammar_questions', 
+          junction: 'tech_grammar_attempt_questions', 
+          idCol: 'grammar_question_id',
+          options: 'tech_grammar_options',
+          attemptIdCol: 'grammar_attempt_id',
+          catCol: 'task_type'
+      },
+      mnc: { 
+          attempts: 'tech_mnc_attempts', 
+          questions: 'tech_mnc_questions', 
+          junction: 'tech_mnc_attempt_questions', 
+          idCol: 'mnc_question_id',
+          options: 'tech_mnc_options',
+          attemptIdCol: 'mnc_attempt_id',
+          catCol: 'topic_group'
+      },
+      role: { 
+          attempts: 'tech_role_attempts', 
+          questions: 'tech_role_questions', 
+          junction: 'tech_role_attempt_questions', 
+          idCol: 'role_question_id',
+          options: 'tech_role_options',
+          attemptIdCol: 'role_attempt_id',
+          catCol: 'domain'
+      }
+    };
+
+    const config = tableMap[dbModule];
+    if (!config) throw new BadRequestException(`Module ${module} not supported`);
+
+    const attemptRows = await this.dataSource.query(
+      `SELECT * FROM ${config.attempts} WHERE attempt_token = $1`,
+      [token]
+    );
+    const attempt = attemptRows[0];
+    if (!attempt) throw new NotFoundException('Attempt not found');
+    if (attempt.status !== 'in_progress') {
+      throw new BadRequestException('Attempt is already submitted or closed');
+    }
+
+    const attemptId = attempt[config.attemptIdCol];
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Fetch all questions in this attempt with correct option id and marks
+      const attemptQuestions = await queryRunner.query(
+        `SELECT aq.*, q.correct_option_id, q.marks, q.negative_marks, q.${config.catCol} as category, q.difficulty, ass.difficulty_marks, ass.difficulty_negative_marks, ass.negative_mark_enabled, ass.negative_mark_value
+         FROM ${config.junction} aq
+         JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+         JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+         WHERE aq.${config.attemptIdCol} = $1`,
+        [attemptId]
+      );
+
+      let totalPositive = 0;
+      let totalNegative = 0;
+      let correctCount = 0;
+      const totalCount = attemptQuestions.length;
+
+      const sectionMap: Record<string, { name: string; score: number; maxScore: number; answeredCount: number; totalCount: number }> = {};
+
+      for (const aq of attemptQuestions) {
+        const questionIdStr = String(aq[config.idCol]);
+        const selectedOptionId = answers ? answers[questionIdStr] : undefined;
+        const category = aq.category || 'General';
+
+        if (!sectionMap[category]) {
+          sectionMap[category] = {
+            name: category,
+            score: 0,
+            maxScore: 0,
+            answeredCount: 0,
+            totalCount: 0,
+          };
+        }
+
+        const diffMarks = aq.difficulty_marks ? (typeof aq.difficulty_marks === 'string' ? JSON.parse(aq.difficulty_marks) : aq.difficulty_marks) : {};
+        const diffNegMarks = aq.difficulty_negative_marks ? (typeof aq.difficulty_negative_marks === 'string' ? JSON.parse(aq.difficulty_negative_marks) : aq.difficulty_negative_marks) : {};
+
+        const difficulty = aq.difficulty || 'medium';
+        const questionMarks = Number(diffMarks[difficulty] !== undefined ? diffMarks[difficulty] : (aq.marks || 1));
+        
+        let questionNegMarks = 0;
+        if (aq.negative_mark_enabled) {
+          questionNegMarks = Number(diffNegMarks[difficulty] !== undefined ? diffNegMarks[difficulty] : (aq.negative_marks || aq.negative_mark_value || 0));
+        }
+
+        sectionMap[category].totalCount += 1;
+        sectionMap[category].maxScore += questionMarks;
+
+        let isCorrect: boolean | null = null;
+        let scoreAwarded = 0;
+        let negativeApplied = 0;
+
+        if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
+          sectionMap[category].answeredCount += 1;
+          const isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
+
+          if (isCorrectAnswer) {
+            isCorrect = true;
+            scoreAwarded = questionMarks;
+            negativeApplied = 0;
+            totalPositive += scoreAwarded;
+            correctCount += 1;
+            sectionMap[category].score += scoreAwarded;
+          } else {
+            isCorrect = false;
+            scoreAwarded = 0;
+            negativeApplied = questionNegMarks;
+            totalNegative += negativeApplied;
+            sectionMap[category].score -= negativeApplied;
+          }
+
+          await queryRunner.query(
+            `UPDATE ${config.junction}
+             SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW()
+             WHERE attempt_question_id = $5`,
+            [selectedOptionId, isCorrect, scoreAwarded, negativeApplied, aq.attempt_question_id]
+          );
+        } else {
+          // If no answer selected, clear the fields
+          await queryRunner.query(
+            `UPDATE ${config.junction}
+             SET selected_option_id = NULL, is_correct = NULL, score_awarded = 0, negative_applied = 0, answered_at = NULL
+             WHERE attempt_question_id = $1`,
+            [aq.attempt_question_id]
+          );
+        }
+      }
+
+      const rawTotalScore = totalPositive - totalNegative;
+      const totalScore = rawTotalScore < 0 ? 0 : rawTotalScore; // Keep total non-negative
+      const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+      const now = new Date();
+      const startedAt = new Date(attempt.started_at);
+      const timeTakenSeconds = Math.max(0, Math.round((now.getTime() - startedAt.getTime()) / 1000));
+
+      // 2. Update the main attempt table
+      await queryRunner.query(
+        `UPDATE ${config.attempts}
+         SET status = 'submitted', submitted_at = $1, positive_score = $2, negative_score = $3, total_score = $4, time_taken_seconds = $5, updated_at = NOW()
+         WHERE ${config.attemptIdCol} = $6`,
+        [now, totalPositive, totalNegative, totalScore, timeTakenSeconds, attemptId]
+      );
+
+      await queryRunner.commitTransaction();
+
+      const sections = Object.values(sectionMap).map(sec => ({
+        name: sec.name,
+        score: sec.score < 0 ? 0 : sec.score,
+        weight: `${sec.score}/${sec.maxScore}`,
+      }));
+
+      return {
+        overallScore: totalScore,
+        accuracy,
+        timeTakenSeconds,
+        sections,
+      };
+    } catch (error) {
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      this.logger.error(`submitAttempt (${module}) error:`, error);
+      throw new InternalServerErrorException('Failed to submit assessment attempt');
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

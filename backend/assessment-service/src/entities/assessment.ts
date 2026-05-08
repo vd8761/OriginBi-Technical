@@ -44,6 +44,24 @@ export class TechAssessment {
     @Column({ name: "total_questions", type: "int" })
     totalQuestions!: number;
 
+    @Column({ name: "question_limit", type: "int", default: 0 })
+    questionLimit!: number;
+
+    @Column({ name: "categories", type: "jsonb", nullable: true })
+    categories!: any;
+
+    @Column({ name: "difficulty_marks", type: "jsonb", nullable: true })
+    difficultyMarks!: any;
+
+    @Column({ name: "difficulty_negative_marks", type: "jsonb", nullable: true })
+    difficultyNegativeMarks!: any;
+
+    @Column({ name: "tab_switch_limit", type: "int", default: 0 })
+    tabSwitchLimit!: number;
+
+    @Column({ name: "anti_copy_enabled", type: "boolean", default: false })
+    antiCopyEnabled!: boolean;
+
     @Column({ name: "shuffle_questions", type: "boolean" })
     shuffleQuestions!: boolean;
 
