@@ -117,6 +117,75 @@ const getTraitImage = (archetype: string): string => {
   return map[archetype] || "/student_traits/Creative_Thinker.png";
 };
 
+// ── Sub-components (rendered outside main component to avoid IIFE issues) ──
+const RingChart: React.FC<{ results: Record<string, AssessmentResult> }> = ({ results }) => {
+  const metrics = [
+    { r: 70, score: results.aptitude?.overallScore || 0, color: "#10b981" },
+    { r: 56, score: results.communication?.overallScore || 0, color: "#06b6d4" },
+    { r: 42, score: results.coding?.overallScore || 0, color: "#f59e0b" },
+  ].filter(m => m.score > 0);
+  const avg = metrics.length > 0
+    ? Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length)
+    : 0;
+
+  return (
+    <>
+      {metrics.map((m, i) => {
+        const c = 2 * Math.PI * m.r;
+        const dash = (m.score / 100) * c;
+        return (
+          <motion.circle
+            key={m.r}
+            cx="80" cy="80" r={m.r}
+            fill="none"
+            stroke={m.color}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${c}`}
+            initial={{ strokeDashoffset: c }}
+            animate={{ strokeDashoffset: 0 }}
+            transition={{ delay: 0.5 + i * 0.15, duration: 0.8 }}
+          />
+        );
+      })}
+      <text x="80" y="75" textAnchor="middle" className="fill-gray-900 text-2xl font-black" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
+        {avg}
+      </text>
+      <text x="80" y="90" textAnchor="middle" className="fill-gray-500 text-[8px] font-bold uppercase tracking-wider" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
+        Growth
+      </text>
+    </>
+  );
+};
+
+const Legend: React.FC<{ results: Record<string, AssessmentResult> }> = ({ results }) => {
+  const dims = [
+    { key: "aptitude", label: "Aptitude", color: "#10b981" },
+    { key: "communication", label: "Communication", color: "#06b6d4" },
+    { key: "coding", label: "Coding", color: "#f59e0b" },
+    { key: "mnc", label: "MNC Career", color: "#6366f1" },
+    { key: "role", label: "Role Based", color: "#84cc16" },
+  ];
+  const completedDims = dims.filter(d => results[d.key]?.overallScore);
+
+  if (completedDims.length === 0) return <div className="h-4" />;
+
+  return (
+    <div className="space-y-3">
+      {completedDims.map((dim) => {
+        const score = results[dim.key]!.overallScore;
+        return (
+          <div key={dim.key} className="flex items-center gap-3">
+            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dim.color }} />
+            <span className="text-sm font-bold text-gray-900 flex-1">{dim.label}</span>
+            <span className="text-sm font-black text-gray-900">{score}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // ── Component ──
 const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExam, onStartExam }) => {
   const router = useRouter();
@@ -126,9 +195,6 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
     notifications, 
     markNotificationRead, 
     clearAllNotifications,
-    getNextRecommended,
-    getOverallProgress,
-    completed,
   } = useAssessmentTracker();
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
@@ -155,7 +221,6 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
           transition={{ duration: 0.6 }}
           className="lg:col-span-3 relative rounded-3xl overflow-hidden min-h-[360px]"
         >
-          {/* Background image only */}
           <div className="absolute inset-0">
             <img
               src={getTraitImage(identity.archetype)}
@@ -222,158 +287,29 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                   <circle cx="80" cy="80" r="56" fill="none" stroke="#f3f4f6" strokeWidth="6" />
                   <circle cx="80" cy="80" r="42" fill="none" stroke="#f3f4f6" strokeWidth="6" />
 
-                  {(() => {
-                    const metrics = [
-                      { r: 70, score: results.aptitude?.overallScore || 0, color: "#10b981" },
-                      { r: 56, score: results.communication?.overallScore || 0, color: "#06b6d4" },
-                      { r: 42, score: results.coding?.overallScore || 0, color: "#f59e0b" },
-                    ].filter(m => m.score > 0);
-                    const avg = metrics.length > 0
-                      ? Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length)
-                      : 0;
-
-                    return (
-                      <>
-                        {metrics.map((m, i) => {
-                          const c = 2 * Math.PI * m.r;
-                          const dash = (m.score / 100) * c;
-                          return (
-                            <motion.circle
-                              key={m.r}
-                              cx="80" cy="80" r={m.r}
-                              fill="none"
-                              stroke={m.color}
-                              strokeWidth="6"
-                              strokeLinecap="round"
-                              strokeDasharray={`${dash} ${c}`}
-                              initial={{ strokeDashoffset: c }}
-                              animate={{ strokeDashoffset: 0 }}
-                              transition={{ delay: 0.5 + i * 0.15, duration: 0.8 }}
-                            />
-                          );
-                        })}
-                        <text x="80" y="75" textAnchor="middle" className="fill-gray-900 text-2xl font-black" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
-                          {avg}
-                        </text>
-                        <text x="80" y="90" textAnchor="middle" className="fill-gray-500 text-[8px] font-bold uppercase tracking-wider" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
-                          Growth
-                        </text>
-                      </>
-                    );
-                  })()}
+                  <RingChart results={results} />
                 </svg>
               </div>
             </div>
 
             {/* Legend */}
             <div className="flex-1">
-              {(() => {
-                const dims = [
-                  { key: "aptitude", label: "Aptitude", color: "#10b981" },
-                  { key: "communication", label: "Communication", color: "#06b6d4" },
-                  { key: "coding", label: "Coding", color: "#f59e0b" },
-                  { key: "mnc", label: "MNC Career", color: "#6366f1" },
-                  { key: "role", label: "Role Based", color: "#84cc16" },
-                ];
-                const completedDims = dims.filter(d => results[d.key]?.overallScore);
-
-                if (completedDims.length === 0) return null;
-
-                return (
-                  <div className="space-y-3">
-                    {completedDims.map((dim) => {
-                      const score = results[dim.key]!.overallScore;
-                      return (
-                        <div key={dim.key} className="flex items-center gap-3">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dim.color }} />
-                          <span className="text-sm font-bold text-gray-900 flex-1">{dim.label}</span>
-                          <span className="text-sm font-black text-gray-900">{score}%</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              <Legend results={results} />
             </div>
           </motion.section>
         )}
       </div>
 
       {/* ===== NOTIFICATIONS & PROGRESS ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Notifications */}
-        <div className="lg:col-span-2">
+      {notifications.length > 0 && (
+        <div>
           <AssessmentNotifications
             notifications={notifications}
             onMarkRead={markNotificationRead}
             onClearAll={clearAllNotifications}
           />
         </div>
-
-        {/* Progress Card */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="rounded-2xl bg-gradient-to-br from-[#1ed36a]/10 to-[#1ed36a]/5 border border-[#1ed36a]/20 p-6"
-        >
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Your Progress</h3>
-          {(() => {
-            const progress = getOverallProgress();
-            return (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 font-medium">Completed</span>
-                  <span className="font-bold text-gray-900">{progress.completed}/{progress.total}</span>
-                </div>
-                <div className="h-3 bg-white rounded-full overflow-hidden border border-gray-200">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress.percentage}%` }}
-                    transition={{ delay: 0.5, duration: 0.8 }}
-                    className="h-full bg-[#1ed36a] rounded-full"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>{progress.percentage}% complete</span>
-                  <span>{progress.inProgress} in progress</span>
-                </div>
-
-                {/* Next Recommended */}
-                {(() => {
-                  const next = getNextRecommended();
-                  if (!next) return null;
-                  const exam = EXAMS.find(e => e.id === next);
-                  if (!exam) return null;
-                  return (
-                    <div className="mt-4 pt-4 border-t border-[#1ed36a]/20">
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Recommended Next</p>
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center"
-                          style={{ background: `${exam.accentColor}20`, color: exam.accentColor }}
-                        >
-                          {exam.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-900 truncate">{exam.title}</p>
-                          <p className="text-xs text-gray-500">{exam.questions} questions · {exam.duration}</p>
-                        </div>
-                        <button
-                          onClick={() => onStartExam(exam)}
-                          className="px-3 py-1.5 rounded-lg bg-[#1ed36a] text-white text-xs font-bold hover:bg-[#17b55a] transition-colors"
-                        >
-                          Start
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })()}
-        </motion.section>
-      </div>
+      )}
 
       {/* ===== RESULTS: Clean list layout (NOT card grid) ===== */}
       <motion.section

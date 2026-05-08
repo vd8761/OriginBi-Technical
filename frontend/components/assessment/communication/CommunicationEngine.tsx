@@ -59,6 +59,18 @@ export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTas
 export type CommunicationAnswer = Record<string, string> | { audioBlobUrl: string } | { text: string };
 export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
+}
+
 const taskCopy: Record<TaskType, { label: string; hint: string; accent: string }> = {
     audio: { label: "Audio Comprehension", hint: "Listen carefully and select the best answers.", accent: "Listening" },
     reading: { label: "Reading Clarity", hint: "Analyze the passage and respond precisely.", accent: "Reading" },
@@ -88,7 +100,7 @@ const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | unde
 };
 
 interface CommunicationEngineProps {
-    onComplete: (data: CommunicationAnswers) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
     userId?: number;
     mode?: 'trial' | 'main';
@@ -102,6 +114,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [timeLeft, setTimeLeft] = useState(COMMUNICATION_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(COMMUNICATION_TOTAL_TIME);
     const [answers, setAnswers] = useState<CommunicationAnswers>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -113,6 +126,125 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const normalizeOptions = (items: any[]) => (Array.isArray(items)
+        ? items.map((opt: any) => ({
+            id: String(opt.id ?? opt.optionId ?? opt.option_id),
+            text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+        }))
+        : []);
+
+    const mapTaskType = (raw: string) => {
+        const type = String(raw || '').toLowerCase();
+        if (type === 'listening_mcq') return 'audio' as const;
+        if (type === 'reading_mcq') return 'reading' as const;
+        if (type === 'speaking') return 'speaking' as const;
+        if (type === 'writing') return 'writing' as const;
+        return 'mcq' as const;
+    };
+
+    const normalizeTasks = (items: any[]): AssessmentTask[] => items.map((q: any, idx: number) => {
+        const id = String(q.id ?? q.questionId ?? q.question_id ?? `task-${idx + 1}`);
+        const taskType = mapTaskType(q.taskType ?? q.task_type ?? q.type);
+        const instructions = q.instructions ?? taskCopy[taskType]?.hint ?? "Answer the question.";
+        const options = normalizeOptions(q.options);
+        const questionText = q.text ?? q.questionText ?? q.question_text ?? "";
+
+        if (taskType === "audio") {
+            return {
+                id,
+                type: "audio",
+                instructions,
+                audioUrl: q.audioUrl ?? q.audio_url ?? "",
+                questions: [{ id, text: questionText, options }],
+            } as AudioTask;
+        }
+
+        if (taskType === "reading") {
+            return {
+                id,
+                type: "reading",
+                instructions,
+                passage: q.passage ?? q.passageText ?? q.passage_text ?? "",
+                questions: [{ id, text: questionText, options }],
+            } as ReadingTask;
+        }
+
+        if (taskType === "speaking") {
+            const rubric = q.rubric ?? q.rubric_json ?? {};
+            return {
+                id,
+                type: "speaking",
+                instructions,
+                prompt: q.prompt ?? questionText,
+                prepTimeSeconds: Number(rubric.prepTimeSeconds ?? 30),
+                recordTimeSeconds: Number(rubric.recordTimeSeconds ?? 120),
+            } as SpeakingTask;
+        }
+
+        if (taskType === "writing") {
+            const rubric = q.rubric ?? q.rubric_json ?? {};
+            return {
+                id,
+                type: "writing",
+                instructions,
+                prompt: q.prompt ?? questionText,
+                minWords: rubric.minWords ?? undefined,
+                maxWords: rubric.maxWords ?? undefined,
+            } as WritingTask;
+        }
+
+        return {
+            id,
+            type: "mcq",
+            instructions,
+            questions: [{ id, text: questionText, options }],
+        } as McqTask;
+    });
+
+    const blobUrlToBase64 = async (url: string) => {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error("Failed to read audio data"));
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    const buildSubmissionPayload = useCallback(async () => {
+        const payload: Record<string, any> = {};
+
+        for (const task of tasks) {
+            const answer = answers[task.id];
+            if (!answer) continue;
+
+            if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
+                const map = answer as Record<string, string>;
+                Object.entries(map).forEach(([questionId, optionId]) => {
+                    if (optionId) payload[questionId] = optionId;
+                });
+                continue;
+            }
+
+            if (task.type === "writing") {
+                const text = (answer as { text?: string }).text ?? String(answer ?? "");
+                if (text) payload[task.id] = { text };
+                continue;
+            }
+
+            if (task.type === "speaking") {
+                const audioBlobUrl = (answer as { audioBlobUrl?: string }).audioBlobUrl;
+                if (audioBlobUrl) {
+                    const audioBase64 = await blobUrlToBase64(audioBlobUrl);
+                    payload[task.id] = { audioBase64 };
+                }
+            }
+        }
+
+        return payload;
+    }, [answers, tasks]);
 
     useEffect(() => {
         const fetchAttempt = async () => {
@@ -131,9 +263,12 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 }
 
                 const data = await response.json();
-                setAttemptToken(data.attemptToken);
-                setTasks(data.questions || []);
-                setTimeLeft(Number(data.durationSeconds || 2700));
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setTasks(Array.isArray(data.questions) ? normalizeTasks(data.questions) : []);
+                const duration = Number(data.durationSeconds || COMMUNICATION_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -177,23 +312,25 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         if (!attemptToken || isSubmitting) return;
         setIsSubmitting(true);
         try {
+            const submissionAnswers = await buildSubmissionPayload();
             const response = await fetch(`${API_BASE}/api/assessment/grammar/attempts/${attemptToken}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ answers }),
+                body: JSON.stringify({ answers: submissionAnswers }),
             });
 
             if (!response.ok) {
                 throw new Error("Failed to submit assessment.");
             }
 
-            onComplete(answers);
+            const result = await response.json();
+            onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
             setIsSubmitting(false);
         }
-    }, [answers, attemptToken, isSubmitting, onComplete]);
+    }, [attemptToken, buildSubmissionPayload, isSubmitting, onComplete]);
 
     const handleConfirmSubmit = () => {
         setShowSubmitModal(true);
@@ -355,7 +492,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 <div className="flex items-center gap-3">
                     <TimerDisplay 
                         time={timeLeft} 
-                        total={COMMUNICATION_TOTAL_TIME} 
+                        total={totalTime} 
                         theme={theme} 
                     />
                     <div className="hidden scale-90 lg:block">

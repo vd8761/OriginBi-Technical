@@ -43,75 +43,26 @@ export interface ScenarioQuestion extends BaseRoleQuestion {
 
 export type RoleQuestion = ConceptualQuestion | ScenarioQuestion;
 
-const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
-    {
-        id: "rq1",
-        type: "conceptual",
-        category: "API Design",
-        subCategory: "REST Fundamentals",
-        text: "Which of the following is NOT a valid HTTP method used in RESTful APIs?",
-        options: [
-            { id: "o1", text: "PATCH" },
-            { id: "o2", text: "FETCH" },
-            { id: "o3", text: "OPTIONS" },
-            { id: "o4", text: "DELETE" },
-        ],
-    },
-    {
-        id: "rq2",
-        type: "scenario",
-        title: "Frontend Optimization",
-        scenarioContext: "The UI freezes for 3-5 seconds when rendering a table containing 10,000 user records at once.",
-        ticketId: "INC-8942",
-        priority: "High",
-        reportedBy: "QA Team",
-        text: "What is the most optimal frontend architecture solution to resolve this performance bottleneck?",
-        options: [
-            { id: "o1", text: "Increase the memory limit of the user's browser via settings." },
-            { id: "o2", text: "Implement virtualization/windowing to only render visible rows." },
-            { id: "o3", text: "Move the rendering logic to a Web Worker." },
-            { id: "o4", text: "Debounce the API call that fetches the 10,000 records." },
-        ],
-    },
-    {
-        id: "rq3",
-        type: "conceptual",
-        category: "Frontend Core",
-        subCategory: "React State Management",
-        text: "In React, what happens when you call setState() multiple times synchronously in the same event handler?",
-        options: [
-            { id: "o1", text: "React immediately re-renders after every call." },
-            { id: "o2", text: "React throws an infinite loop error." },
-            { id: "o3", text: "React batches the updates and performs a single re-render." },
-            { id: "o4", text: "Only the first setState() call is executed." },
-        ],
-    },
-    {
-        id: "rq4",
-        type: "scenario",
-        title: "API Reliability",
-        scenarioContext: "A critical e-commerce checkout API is returning a 502 Bad Gateway error intermittently during peak traffic hours.",
-        ticketId: "INC-9011",
-        priority: "Critical",
-        reportedBy: "Automated Alerts",
-        text: "As a Backend Engineer investigating the issue, what is the most likely root cause?",
-        options: [
-            { id: "o1", text: "The database connection string is permanently incorrect." },
-            { id: "o2", text: "A reverse proxy, like Nginx, is timing out or failing to communicate with the upstream application servers." },
-            { id: "o3", text: "The client-side JavaScript is sending malformed JSON payloads." },
-            { id: "o4", text: "A recent CSS deployment broke the checkout button." },
-        ],
-    },
-];
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 interface RoleEngineProps {
-    onComplete: (answers: Record<string, string>) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
     userId?: number;
     roleName?: string;
     mode?: 'trial' | 'main';
+}
+
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
 }
 
 const formatTime = (seconds: number) => {
@@ -134,6 +85,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(ROLE_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(ROLE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
@@ -143,6 +95,41 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const normalizeQuestions = (items: any[]): RoleQuestion[] => items.map((q: any, idx: number) => {
+        const id = String(q.id ?? q.questionId ?? q.question_id);
+        const rawType = String(q.type ?? q.questionType ?? q.question_type ?? "mcq").toLowerCase();
+        const isScenario = rawType === "scenario";
+        const options = Array.isArray(q.options)
+            ? q.options.map((opt: any) => ({
+                id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+            }))
+            : [];
+
+        if (isScenario) {
+            return {
+                id,
+                type: "scenario",
+                title: q.title ?? `${q.category ?? q.domain ?? "Scenario"} Case ${idx + 1}`,
+                scenarioContext: q.scenarioContext ?? q.scenario_context ?? "Scenario details will appear here.",
+                ticketId: q.ticketId ?? q.ticket_id,
+                priority: q.priority ?? q.priority_level,
+                reportedBy: q.reportedBy ?? q.reported_by,
+                text: q.text ?? q.questionText ?? q.question_text ?? "",
+                options,
+            } as ScenarioQuestion;
+        }
+
+        return {
+            id,
+            type: "conceptual",
+            category: q.category ?? q.domain ?? "General",
+            subCategory: q.subCategory ?? q.sub_category,
+            text: q.text ?? q.questionText ?? q.question_text ?? "",
+            options,
+        } as ConceptualQuestion;
+    });
 
     useEffect(() => {
         const fetchAttempt = async () => {
@@ -161,9 +148,12 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                 }
 
                 const data = await response.json();
-                setAttemptToken(data.attemptToken);
-                setQuestions(data.questions || []);
-                setTimeLeft(Number(data.durationSeconds || 1800));
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setQuestions(Array.isArray(data.questions) ? normalizeQuestions(data.questions) : []);
+                const duration = Number(data.durationSeconds || ROLE_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -218,7 +208,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                 throw new Error("Failed to submit assessment.");
             }
 
-            onComplete(answers);
+            const result = await response.json();
+            onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
@@ -374,7 +365,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                 <div className="flex items-center gap-3">
                     <TimerDisplay 
                         time={timeLeft} 
-                        total={ROLE_TOTAL_TIME} 
+                        total={totalTime} 
                         theme={theme} 
                     />
                     <div className="hidden scale-90 lg:block">

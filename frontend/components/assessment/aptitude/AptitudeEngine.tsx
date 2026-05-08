@@ -21,16 +21,26 @@ interface Question {
     text: string;
     imageUrl?: string;
     options: Option[];
+    difficulty?: string;
+    marks?: number;
+    negativeMarks?: number;
+    explanation?: string;
 }
-interface AptitudeResult {
-    overallScore: number;
-    accuracy: number;
+
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
     timeTakenSeconds: number;
-    sections: { name: string; score: number; weight: string }[];
+    status?: string;
 }
 
 interface AptitudeEngineProps {
-    onComplete: (result: AptitudeResult) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
     userId?: number;
     mode?: 'trial' | 'main';
@@ -51,7 +61,7 @@ const labelForIndex = (index: number) => String.fromCharCode(65 + index);
 
 const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     onComplete,
-    assessmentCode = "APTITUDE_DEFAULT",
+    assessmentCode = "TECH_APT_001",
     userId,
     mode = 'main',
 }) => {
@@ -59,6 +69,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(APTITUDE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
@@ -69,6 +80,23 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const normalizeQuestions = (items: any[]): Question[] => items.map((q: any) => ({
+        id: String(q.id ?? q.questionId ?? q.question_id),
+        category: q.category ?? q.subcategory ?? "General",
+        text: q.text ?? q.questionText ?? q.question_text ?? "",
+        imageUrl: q.imageUrl ?? q.image_url ?? undefined,
+        options: Array.isArray(q.options)
+            ? q.options.map((opt: any) => ({
+                id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+            }))
+            : [],
+        difficulty: q.difficulty ?? undefined,
+        marks: q.marks !== undefined ? Number(q.marks) : undefined,
+        negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
+        explanation: q.explanation ?? undefined,
+    }));
 
     const currentQuestion = questions[currentIndex];
     const totalQuestions = questions.length;
@@ -98,15 +126,23 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 }
 
                 const data = await response.json();
-                setAttemptToken(data.token || data.attemptToken);
-                // Note: Backend returns token, expiresAt, totalQuestions - questions fetched separately
-                const questionsRes = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${data.token}/questions`);
-                if (!questionsRes.ok) {
-                    throw new Error("Failed to fetch questions");
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+
+                let fetchedQuestions = data.questions;
+                if (!Array.isArray(fetchedQuestions) && token) {
+                    const questionsRes = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${token}/questions`);
+                    if (!questionsRes.ok) {
+                        throw new Error("Failed to fetch questions");
+                    }
+                    const questionsData = await questionsRes.json();
+                    fetchedQuestions = questionsData.questions;
                 }
-                const questionsData = await questionsRes.json();
-                setQuestions(questionsData.questions || []);
-                setTimeLeft(Number(data.durationSeconds || 3600));
+
+                setQuestions(Array.isArray(fetchedQuestions) ? normalizeQuestions(fetchedQuestions) : []);
+                const duration = Number(data.durationSeconds || APTITUDE_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -295,7 +331,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 <div className="flex items-center gap-3">
                     <TimerDisplay 
                         time={timeLeft} 
-                        total={APTITUDE_TOTAL_TIME} 
+                        total={totalTime} 
                         theme={theme} 
                     />
                     <div className="hidden scale-90 lg:block">

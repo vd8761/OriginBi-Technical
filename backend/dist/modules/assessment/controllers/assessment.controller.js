@@ -31,8 +31,8 @@ let AssessmentController = class AssessmentController {
         const data = await this.assessmentService.getAttemptQuestions(token);
         return data;
     }
-    async submitAptitudeAttempt(token, body) {
-        const data = await this.assessmentService.submitAptitudeAttempt(token, body);
+    async submitAttempt(module, token, body) {
+        const data = await this.assessmentService.submitAttempt(module, token, body);
         return data;
     }
 };
@@ -53,13 +53,14 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AssessmentController.prototype, "getAttemptQuestions", null);
 __decorate([
-    (0, common_1.Post)('aptitude/attempts/:token/submit'),
-    __param(0, (0, common_1.Param)('token')),
-    __param(1, (0, common_1.Body)()),
+    (0, common_1.Post)(':module/attempts/:token/submit'),
+    __param(0, (0, common_1.Param)('module')),
+    __param(1, (0, common_1.Param)('token')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
-], AssessmentController.prototype, "submitAptitudeAttempt", null);
+], AssessmentController.prototype, "submitAttempt", null);
 exports.AssessmentController = AssessmentController = __decorate([
     (0, common_1.Controller)('assessment'),
     __metadata("design:paramtypes", [assessment_service_1.AssessmentService])

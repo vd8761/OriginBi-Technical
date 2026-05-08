@@ -1,43 +1,62 @@
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import MNCEngine from '@/components/assessment/mnc/MNCEngine';
+import MNCEngine, { type AttemptSubmitResult } from '@/components/assessment/mnc/MNCEngine';
+import { useAssessmentTracker } from '../../../lib/assessmentTracker';
 
 export default function MNCAssessmentPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
-    const [isCompleted, setIsCompleted] = useState(false);
+    const { markAssessmentComplete } = useAssessmentTracker();
 
-    const handleComplete = (answers: Record<string, string>) => {
-        console.log("MNC Assessment Completed:", answers);
-        setIsCompleted(true);
-        // In a real app, you would save the results here
-        setTimeout(() => {
-            router.push('/assessment-portal');
-        }, 2000);
+    const handleComplete = (result: AttemptSubmitResult) => {
+        const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
+        const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
+        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
+        const accuracy = accuracyBase > 0 ? Math.round((result.correctCount / accuracyBase) * 100) : 0;
+        const overallScore = Math.max(0, Math.round(result.totalScore));
+        const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
+        const sections = [
+            { name: "Overall", score: accuracy, weight: "100%" },
+        ];
+
+        const assessmentResult = {
+            assessmentId: "mnc" as const,
+            completedAt: new Date().toISOString(),
+            overallScore,
+            accuracy,
+            timeTaken: `${timeTakenMinutes} min`,
+            sections,
+            insights: [
+                { type: "strength" as const, text: "Strong problem-solving approach in aptitude sections." },
+                { type: "improvement" as const, text: "Practice time management for complex reasoning scenarios." },
+                { type: "time" as const, text: "Completed within allocated time with good accuracy." },
+            ],
+        };
+
+        const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
+        existingResults.mnc = assessmentResult;
+        localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
+        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
+
+        const paidAssessments = JSON.parse(localStorage.getItem("originbi:paid-assessments") || "[]");
+        if (!paidAssessments.includes("mnc")) {
+            paidAssessments.push("mnc");
+            localStorage.setItem("originbi:paid-assessments", JSON.stringify(paidAssessments));
+            window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
+        }
+
+        markAssessmentComplete("mnc", {
+            totalScore: overallScore,
+            correctCount: result.correctCount,
+            wrongCount: result.wrongCount,
+            timeTakenSeconds: result.timeTakenSeconds,
+        });
+
+        router.push('/student/dashboard?completed=mnc');
     };
-
-    if (isCompleted) {
-        return (
-            <div className="min-h-screen w-full bg-brand-light-secondary dark:bg-brand-dark-primary flex items-center justify-center p-6">
-                <div className="max-w-md w-full rounded-3xl border border-brand-green/20 bg-white dark:bg-brand-dark-secondary p-10 text-center shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand-green/10 mb-6">
-                        <svg className="w-10 h-10 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                    </div>
-                    <h1 className="text-2xl font-bold text-brand-text-light-primary dark:text-brand-text-primary mb-2">
-                        Assessment Submitted!
-                    </h1>
-                    <p className="text-brand-text-light-secondary dark:text-brand-text-secondary mb-0 leading-relaxed text-sm">
-                        Your responses have been recorded successfully. Redirecting you to the portal...
-                    </p>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen w-full">

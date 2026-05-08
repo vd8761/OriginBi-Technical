@@ -20,9 +20,13 @@ export class AssessmentController {
     return data;
   }
 
-  @Post('aptitude/attempts/:token/submit')
-  async submitAptitudeAttempt(@Param('token') token: string, @Body() body: any) {
-    const data = await this.assessmentService.submitAptitudeAttempt(token, body);
+  @Post(':module/attempts/:token/submit')
+  async submitAttempt(
+    @Param('module') module: string,
+    @Param('token') token: string,
+    @Body() body: any
+  ) {
+    const data = await this.assessmentService.submitAttempt(module, token, body);
     return data;
   }
 }

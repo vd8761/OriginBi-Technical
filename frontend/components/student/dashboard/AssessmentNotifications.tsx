@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { AssessmentNotification } from "@/lib/assessmentTracker";
 
@@ -54,6 +54,7 @@ const AssessmentNotifications: React.FC<AssessmentNotificationsProps> = ({
 }) => {
   const router = useRouter();
   const unreadCount = notifications.filter(n => !n.read).length;
+  if (notifications.length === 0) return null;
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -88,16 +89,13 @@ const AssessmentNotifications: React.FC<AssessmentNotificationsProps> = ({
     }
   };
 
-  if (notifications.length === 0) {
-    return null;
-  }
-
   return (
     <motion.section
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl bg-white border border-gray-200 overflow-hidden"
     >
+      <>
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -124,17 +122,15 @@ const AssessmentNotifications: React.FC<AssessmentNotificationsProps> = ({
 
       {/* Notification List */}
       <div className="divide-y divide-gray-100">
-        <AnimatePresence>
-          {notifications.map((notif) => (
-            <motion.div
-              key={notif.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className={`p-4 flex items-start gap-4 ${getBgColor(notif.type)} ${
-                !notif.read ? "bg-opacity-70" : "bg-opacity-40"
-              }`}
-            >
+        {notifications.map((notif) => (
+          <motion.div
+            key={notif.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={`p-4 flex items-start gap-4 ${getBgColor(notif.type)} ${
+              !notif.read ? "bg-opacity-70" : "bg-opacity-40"
+            }`}
+          >
               <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center">
                 {getIcon(notif.type)}
               </div>
@@ -169,8 +165,8 @@ const AssessmentNotifications: React.FC<AssessmentNotificationsProps> = ({
               </div>
             </motion.div>
           ))}
-        </AnimatePresence>
       </div>
+      </>
     </motion.section>
   );
 };
