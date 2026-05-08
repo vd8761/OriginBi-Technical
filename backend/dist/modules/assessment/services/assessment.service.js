@@ -91,18 +91,19 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
         await queryRunner.connect();
         await queryRunner.startTransaction();
         try {
+            const dbModule = module === 'communication' ? 'grammar' : module;
             let assessment;
             if (assessmentId) {
-                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = $2`, [assessmentId, module]);
+                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = $2`, [assessmentId, dbModule]);
                 assessment = assessments[0];
             }
             else if (assessmentCode) {
-                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = $2`, [assessmentCode, module]);
+                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = $2`, [assessmentCode, dbModule]);
                 assessment = assessments[0];
             }
             else {
                 // Fallback: Get the latest active assessment for this module
-                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`, [module]);
+                const assessments = await queryRunner.query(`SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`, [dbModule]);
                 assessment = assessments[0];
             }
             if (!assessment)
@@ -278,7 +279,7 @@ let AssessmentService = AssessmentService_1 = class AssessmentService {
                 }
             };
             const moduleType = (token.startsWith('APT-') ? 'aptitude' :
-                token.startsWith('GRA-') ? 'grammar' :
+                (token.startsWith('GRA-') || token.startsWith('COM-')) ? 'grammar' :
                     token.startsWith('MNC-') ? 'mnc' :
                         token.startsWith('ROL-') ? 'role' : 'aptitude');
             const config = tableMap[moduleType];

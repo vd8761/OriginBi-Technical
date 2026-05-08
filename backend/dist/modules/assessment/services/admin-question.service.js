@@ -47,6 +47,13 @@ const MODULE_CONFIGS = {
         optionsFk: 'role_question_id',
         categoryColumn: 'domain',
     },
+    communication: {
+        questionTable: 'tech_grammar_questions',
+        idColumn: 'grammar_question_id',
+        optionsTable: 'tech_grammar_options',
+        optionsFk: 'grammar_question_id',
+        categoryColumn: 'task_type',
+    },
 };
 let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
     dataSource;
@@ -58,13 +65,14 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
     async ensureDefaultAssessment(queryRunner, module, createdById) {
         const code = `${module.toUpperCase()}_DEFAULT`;
         const name = `Default ${module.charAt(0).toUpperCase() + module.slice(1)} Assessment`;
+        const dbModule = module === 'communication' ? 'grammar' : module;
         const rows = await queryRunner.query(`INSERT INTO tech_assessments
           (assessment_code, assessment_name, module_type, total_time_minutes,
            total_questions, shuffle_questions, shuffle_options,
            negative_mark_enabled, negative_mark_value, status, created_by)
        VALUES ($1, $2, $3, 60, 0, TRUE, TRUE, FALSE, NULL, 'active', $4)
        ON CONFLICT (assessment_code) DO UPDATE SET updated_at = NOW()
-       RETURNING assessment_id`, [code, name, module, createdById]);
+       RETURNING assessment_id`, [code, name, dbModule, createdById]);
         return Number(rows[0].assessment_id);
     }
     async resolveUserId(queryRunner, userId) {
@@ -386,7 +394,7 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
             let imported = 0;
             for (const q of questionList) {
                 try {
-                    const category = q.category || q.subcategory || q.topic_group || q.task_type || q.domain || 'General';
+                    const category = q.category || q.subcategory || q.topic_group || q.task_type || q.taskType || q.domain || 'General';
                     const questionText = q.questionText || q.text || q.question_text;
                     if (!questionText)
                         continue;
@@ -409,7 +417,8 @@ let AdminQuestionService = AdminQuestionService_1 = class AdminQuestionService {
                     imported++;
                 }
                 catch (e) {
-                    this.logger.warn(`Import item failed: ${e.message}`);
+                    this.logger.error(`Import item failed: ${e.message}`);
+                    throw e; // Rethrow to trigger transaction rollback
                 }
             }
             await queryRunner.query(`UPDATE tech_assessments

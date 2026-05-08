@@ -35,6 +35,8 @@ var TechAttemptStatus;
 })(TechAttemptStatus || (exports.TechAttemptStatus = TechAttemptStatus = {}));
 var TechGrammarTaskType;
 (function (TechGrammarTaskType) {
+    TechGrammarTaskType["mcq"] = "mcq";
+    TechGrammarTaskType["reading"] = "reading";
     TechGrammarTaskType["listening_mcq"] = "listening_mcq";
     TechGrammarTaskType["reading_mcq"] = "reading_mcq";
     TechGrammarTaskType["speaking"] = "speaking";

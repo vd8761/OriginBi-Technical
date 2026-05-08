@@ -29,7 +29,6 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         return {
           id: baseId, category: item.category || "QA", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          explanation: item.explanation || "",
         } as AptitudeQuestion;
       }
       case "mnc": {
@@ -40,7 +39,6 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         return {
           id: baseId, topic: item.topic || "General", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          explanation: item.explanation || "",
         } as MNCQuestion;
       }
       case "communication": {
@@ -74,7 +72,6 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         const rq: RoleQuestion = {
           id: baseId, questionType: item.questionType || "conceptual", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          explanation: item.explanation || "",
         };
         if (item.category) rq.category = item.category;
         if (item.subCategory) rq.subCategory = item.subCategory;
