@@ -129,7 +129,7 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
     setError(null);
     try {
       const parsed = JSON.parse(jsonText);
-      if (!Array.isArray(parsed)) throw new Error("JSON must be an array.");
+      if (!Array.isArray(parsed)) throw new Error("Data must be a list of questions.");
       if (parsed.length === 0) throw new Error("Array is empty.");
       setPreview(parseQuestions(parsed, assessmentType));
     } catch (e: unknown) {
@@ -223,10 +223,10 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => setPreview(null)} className="px-5 py-2 rounded-lg border border-[#17201b]/10 text-[11px] font-black uppercase tracking-wider text-[#17201b] dark:text-white transition-all">
-                Edit JSON
+                Go Back
               </button>
               <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white hover:bg-brand-green/90">
-                Commit Import
+                Finish Import
               </button>
             </div>
           </div>

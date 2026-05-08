@@ -289,7 +289,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                  {assessmentType === "mnc" && (
                   <div className="sm:col-span-2">
                     <CustomSelect
-                      label="Topic Vector"
+                      label="Core Topic"
                       value={mncTopic}
                       onChange={setMncTopic}
                       options={MNC_TOPICS.map(t => ({ label: t, value: t }))}
@@ -300,12 +300,12 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                   <>
                     <div className="sm:col-span-2">
                       <CustomSelect
-                        label="Question Logic"
+                        label="Question Type"
                         value={roleType}
                         onChange={(v) => setRoleType(v as RoleQuestionType)}
                         options={[
-                          { label: 'Conceptual Assessment', value: 'conceptual' },
-                          { label: 'Simulation / Scenario', value: 'scenario' }
+                          { label: 'Knowledge Check', value: 'conceptual' },
+                          { label: 'Real-world Case', value: 'scenario' }
                         ]}
                       />
                     </div>
@@ -316,8 +316,8 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                       </>
                     ) : (
                       <div className="sm:col-span-2 space-y-3">
-                        <div><label className={labelCls}>Simulation Title</label><input value={scenarioTitle} onChange={e => setScenarioTitle(e.target.value)} className={inputCls} placeholder="System Outage" /></div>
-                        <div><label className={labelCls}>Context</label><textarea value={scenarioContext} onChange={e => setScenarioContext(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Simulation context..." /></div>
+                        <div><label className={labelCls}>Case Study Title</label><input value={scenarioTitle} onChange={e => setScenarioTitle(e.target.value)} className={inputCls} placeholder="System Outage" /></div>
+                        <div><label className={labelCls}>Description</label><textarea value={scenarioContext} onChange={e => setScenarioContext(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Describe the situation..." /></div>
                         <div className="grid grid-cols-3 gap-2">
                            <div><label className={labelCls}>Ticket ID</label><input value={ticketId} onChange={e => setTicketId(e.target.value)} className={inputCls} placeholder="INC-001" /></div>
                            <div className="mt-[-2px]"><CustomSelect
@@ -326,7 +326,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                              onChange={(v) => setPriority(v as any)}
                              options={["Low", "Medium", "High", "Critical"].map(p => ({ label: p, value: p }))}
                            /></div>
-                           <div><label className={labelCls}>Unit</label><input value={reportedBy} onChange={e => setReportedBy(e.target.value)} className={inputCls} placeholder="Support" /></div>
+                           <div><label className={labelCls}>Reported By</label><input value={reportedBy} onChange={e => setReportedBy(e.target.value)} className={inputCls} placeholder="Support Team" /></div>
                         </div>
                       </div>
                     )}
@@ -336,7 +336,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                   <>
                     <div className="sm:col-span-2">
                       <CustomSelect
-                        label="Task Modality"
+                        label="Test Type"
                         value={commTaskType}
                         onChange={(v) => setCommTaskType(v as CommTaskType)}
                         options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({ label: v, value: k }))}
@@ -403,7 +403,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                       })}
                     </div>
                   </div>
-                  <div><label className={labelCls}>Rationale</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={1} placeholder="Correct explanation..." /></div>
+                  <div><label className={labelCls}>Explanation</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={1} placeholder="Why is this correct?" /></div>
                 </div>
               ) : (
                 ["mcq", "reading", "audio"].includes(commTaskType) && (
@@ -440,7 +440,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
 
             {errors.length > 0 && (
               <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-in shake duration-500">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1.5">Validation Errors</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1.5">Please fix these issues</p>
                 {errors.map((e, i) => <p key={i} className="text-[10px] font-bold text-red-600 dark:text-red-400 leading-relaxed">• {e}</p>)}
               </div>
             )}
