@@ -36,9 +36,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} antialiased min-h-full flex flex-col`}
       >
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider>
+            <CachePruner />
+            {children}
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );
