@@ -29,7 +29,7 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
     { id: "opt_2", text: "" }, { id: "opt_3", text: "" },
   ]);
   const [correctId, setCorrectId] = useState("opt_0");
-  const [explanation, setExplanation] = useState("");
+
   
   // DB-backed fields
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
@@ -84,19 +84,19 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
       case "aptitude": {
         const aq = question as AptitudeQuestion;
         setText(aq.text); setOptions(aq.options); setCorrectId(aq.correctOptionId);
-        setExplanation(aq.explanation || ""); setAptCategory(aq.category);
+        setAptCategory(aq.category);
         break;
       }
       case "mnc": {
         const mq = question as MNCQuestion;
         setText(mq.text); setOptions(mq.options); setCorrectId(mq.correctOptionId);
-        setExplanation(mq.explanation || ""); setMncTopic(mq.topic);
+        setMncTopic(mq.topic);
         break;
       }
       case "role": {
         const rq = question as RoleQuestion;
         setText(rq.text); setOptions(rq.options); setCorrectId(rq.correctOptionId);
-        setExplanation(rq.explanation || ""); setRoleType(rq.questionType);
+        setRoleType(rq.questionType);
         setRoleCategory(rq.category || ""); setRoleSubCategory(rq.subCategory || "");
         setScenarioTitle(rq.title || ""); setScenarioContext(rq.scenarioContext || "");
         setTicketId(rq.ticketId || ""); setPriority(rq.priority || "Medium");
@@ -188,14 +188,14 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
 
     switch (assessmentType) {
       case "aptitude":
-        onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined } as AptitudeQuestion);
+        onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId } as AptitudeQuestion);
         break;
       case "mnc":
-        onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined } as MNCQuestion);
+        onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId } as MNCQuestion);
         break;
       case "role":
         onSave({
-          ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, explanation: explanation.trim() || undefined,
+          ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId,
           ...(roleType === "conceptual" ? { category: roleCategory, subCategory: roleSubCategory } : {}),
           ...(roleType === "scenario" ? { title: scenarioTitle, scenarioContext, ticketId, priority, reportedBy } : {}),
         } as RoleQuestion);
