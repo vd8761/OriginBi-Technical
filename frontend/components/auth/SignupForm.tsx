@@ -191,7 +191,6 @@ const SignupForm: React.FC = () => {
     countryCode: "+91",
     phone: "",
     password: "",
-    role: "",
   });
   const [formErrors] = useState<Record<string, string>>({});
 
@@ -201,19 +200,58 @@ const SignupForm: React.FC = () => {
     { value: "OTHER", label: "Other" },
   ];
 
-  const roleOptions = [
-    { value: "SCHOOL_STUDENT", label: "School Student" },
-    { value: "COLLEGE_STUDENT", label: "College Student" },
-    { value: "EMPLOYEE", label: "Employee" },
-  ];
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Basic Validation
+    if (!formData.name || !formData.email || !formData.phone || !formData.password) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    try {
+      const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
+      const response = await fetch(`${studentServiceUrl}/student/register/tech`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          full_name: formData.name,
+          email: formData.email,
+          mobile_number: formData.phone,
+          country_code: formData.countryCode,
+          password: formData.password,
+          gender: formData.gender,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.message || "Registration failed. Please try again.");
+      }
+
+      alert("Registration successful! You can now log in.");
+      // Optionally reset form or switch to login tab here
+      setFormData({
+        name: "",
+        gender: "MALE",
+        email: "",
+        countryCode: "+91",
+        phone: "",
+        password: "",
+      });
+
+    } catch (error: any) {
+      alert(error.message);
+    }
   };
 
   return (
@@ -307,16 +345,7 @@ const SignupForm: React.FC = () => {
         </div>
       </div>
 
-      {/* Role */}
-      <CustomSelect
-        label="Role"
-        required
-        options={roleOptions}
-        value={formData.role}
-        onChange={(val) => setFormData((prev) => ({ ...prev, role: val }))}
-        placeholder="Select your role"
-        error={formErrors.role}
-      />
+
 
       {/* Submit Button */}
       <button
