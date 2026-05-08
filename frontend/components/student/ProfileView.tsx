@@ -13,6 +13,7 @@ import {
     LinkedInIcon
 } from '../icons';
 import { capitalizeWords, getAvatarColor, getInitials } from '../../lib/utils';
+import { useSession } from '@/lib/contexts/SessionContext';
 
 interface UserProfile {
     name: string;
@@ -26,32 +27,17 @@ interface ProfileViewProps {
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
+    const { user: sessionUser, updateProfile } = useSession();
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchUserProfile = async () => {
-            let email = typeof window !== 'undefined' ? (sessionStorage.getItem('userEmail') || localStorage.getItem('userEmail')) : null;
-            let name = 'Student';
-            let mobile = 'Not provided';
-            let programCode = 'COLLEGE_STUDENT';
-
-            // 1. Load from localStorage cache first
-            if (typeof window !== 'undefined') {
-                const stored = localStorage.getItem('originbi:user-profile');
-                if (stored) {
-                    try {
-                        const parsed = JSON.parse(stored);
-                        email = parsed.email || email;
-                        name = parsed.name || name;
-                        mobile = parsed.mobile_number || parsed.mobileNumber || mobile;
-                        programCode = parsed.programCode || programCode;
-                    } catch (e) {
-                        console.error("Failed to parse stored user profile", e);
-                    }
-                }
-            }
+            const email = sessionUser?.email;
+            const name = sessionUser?.name || 'Student';
+            const mobile = sessionUser?.mobile_number || 'Not provided';
+            const programCode = sessionUser?.programCode || 'COLLEGE_STUDENT';
 
             const cachedProfile: UserProfile = {
                 name,
@@ -63,7 +49,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
             setUser(cachedProfile);
             setIsLoading(false);
 
-            // 2. Fetch fresh profile from API in background to ensure accurate information
+            // Fetch fresh profile from API in background to ensure accurate information
             if (email) {
                 try {
                     const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
@@ -82,14 +68,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
                         };
                         setUser(freshProfile);
 
-                        // Sync back to cache
-                        localStorage.setItem('originbi:user-profile', JSON.stringify({
+                        // Sync back to SessionContext reactively
+                        updateProfile({
                             name: freshProfile.name,
-                            email: freshProfile.email,
                             mobile_number: freshProfile.mobile_number,
                             programCode: freshProfile.programCode,
-                            joinedAt: profileData?.createdAt || new Date().toISOString()
-                        }));
+                        });
                     }
                 } catch (err) {
                     console.error("Failed background fetch of fresh student profile", err);
@@ -98,7 +82,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
         };
 
         fetchUserProfile();
-    }, []);
+    }, [sessionUser?.email]);
 
     if (isLoading) {
         return (

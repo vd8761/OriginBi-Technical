@@ -55,6 +55,14 @@ export interface ApiAssessment {
     total_questions: number;
     status: string;
     created_at: string;
+    question_limit?: number;
+    categories?: string[] | string;
+    difficulty_marks?: Record<string, number> | string;
+    difficulty_negative_marks?: Record<string, number> | string;
+    tab_switch_limit?: number;
+    anti_copy_enabled?: boolean;
+    shuffle_questions?: boolean;
+    shuffle_options?: boolean;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────
@@ -172,5 +180,17 @@ export async function fetchAssessments(module?: string): Promise<ApiAssessment[]
     const result = await apiFetch<{ data: ApiAssessment[] }>(
         `${ADMIN_BASE}/assessments${qs}`
     );
+    return result.data;
+}
+
+export async function updateAssessment(
+    id: number,
+    payload: Partial<ApiAssessment>
+): Promise<ApiAssessment> {
+    const url = `${ADMIN_BASE}/assessments/${id}`;
+    const result = await apiFetch<{ data: ApiAssessment }>(url, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+    });
     return result.data;
 }
