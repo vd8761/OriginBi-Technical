@@ -7,9 +7,9 @@
     "shared"
   ],
   "scripts": {
-    "start": "nest start",
-    "dev": "nest start --watch",
-    "build": "nest build",
+    "start": "npm run start --workspace=assessment-service",
+    "dev": "npm run dev --workspace=assessment-service",
+    "build": "npm run build --workspace=assessment-service",
     "db:init": "ts-node src/db/init.ts",
     "db:seed": "ts-node src/db/seed.ts"
   },

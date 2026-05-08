@@ -77,6 +77,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     if (!completed) return;
 
     const recommendedOrder: AssessmentId[] = ["aptitude", "communication", "coding", "mnc", "role"];
+
+    // Read from assessmentTracker storage
     const savedCompleted = (() => {
       const raw = window.localStorage.getItem("completed_assessments");
       if (!raw) return [];
@@ -86,10 +88,38 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return [];
       }
     })();
-    const completedCodes = new Set(savedCompleted.map((c) => c.assessmentCode).filter(Boolean) as AssessmentId[]);
+
+    // Also read from progress.ts storage (originbi:assessment-results)
+    const savedResults = (() => {
+      const raw = window.localStorage.getItem("originbi:assessment-results");
+      if (!raw) return {};
+      try {
+        return JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })();
+
+    // Build the full set of completed assessment IDs from both sources
+    const completedCodes = new Set<AssessmentId>([
+      // from assessmentTracker
+      ...savedCompleted.map((c) => c.assessmentCode).filter(Boolean) as AssessmentId[],
+      // from progress.ts results (keys are assessment IDs)
+      ...Object.keys(savedResults).filter(k =>
+        recommendedOrder.includes(k as AssessmentId)
+      ) as AssessmentId[],
+    ]);
+
+    // Add the one just completed
     completedCodes.add(completed);
+
+    // Find the next incomplete assessment in recommended order
     const next = recommendedOrder.find((id) => !completedCodes.has(id)) ?? null;
-    setCompletionPopup({ completed, next });
+
+    // Only show popup if there's actually a next assessment to suggest
+    if (next !== null) {
+      setCompletionPopup({ completed, next });
+    }
     window.history.replaceState({}, "", window.location.pathname);
   }, [currentView, searchParams]);
 

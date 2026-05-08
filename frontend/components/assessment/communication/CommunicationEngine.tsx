@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import AudioTaskComponent from "./TaskTypes/AudioTask";
@@ -7,11 +7,12 @@ import ReadingTaskComponent from "./TaskTypes/ReadingTask";
 import WritingTaskComponent from "./TaskTypes/WritingTask";
 import McqTaskComponent from "./TaskTypes/McqTask";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
 
 const COMMUNICATION_TOTAL_TIME = 45 * 60;
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -126,6 +127,68 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    const cacheRestoredRef = useRef(false);
+
+    // ── Cache hook (grammar module is the backend name for communication) ──
+    const cacheAnswers = useMemo(() => {
+        const out: Record<string, any> = {};
+        for (const [k, v] of Object.entries(answers)) {
+            out[k] = { raw: v };
+        }
+        return out;
+    }, [answers]);
+
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'grammar',
+        assessmentCode,
+        questions:       tasks,
+        expiresAt:       undefined,
+        answers:         cacheAnswers,
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // Restore session from cache when available
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setTasks(normalizeTasks(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: CommunicationAnswers = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (val && typeof val === 'object' && 'raw' in val) {
+                    restored[qId] = (val as any).raw;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
 
     const normalizeOptions = (items: any[]) => (Array.isArray(items)
         ? items.map((opt: any) => ({
@@ -247,6 +310,14 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     }, [answers, tasks]);
 
     useEffect(() => {
+        if (!isCacheRestored) return; // Wait until cache resolution finishes
+
+        // Skip API call if cache already restored tasks
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
         const fetchAttempt = async () => {
             try {
                 setIsLoading(true);
@@ -277,7 +348,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
 
     const currentTask = tasks[currentIndex];
     const totalTasks = tasks.length;
@@ -324,13 +395,14 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
             }
 
             const result = await response.json();
+            await clearSession();
             onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
             setIsSubmitting(false);
         }
-    }, [attemptToken, buildSubmissionPayload, isSubmitting, onComplete]);
+    }, [attemptToken, buildSubmissionPayload, clearSession, isSubmitting, onComplete]);
 
     const handleConfirmSubmit = () => {
         setShowSubmitModal(true);
@@ -365,6 +437,8 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
             ...prev,
             [taskId]: answerData,
         }));
+        // Persist to cache immediately (wrap in raw so it survives JSON round-trip)
+        cacheSaveAnswer(taskId, { raw: answerData });
     };
 
     const handleMarkReview = () => {
@@ -456,6 +530,22 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
                     <div className="hidden sm:block">

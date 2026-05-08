@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "start": "nest start",
+    "dev": "nest start --watch",
     "start:dev": "nest start --watch",
     "build": "nest build",
     "db:init": "ts-node src/db/init.ts",

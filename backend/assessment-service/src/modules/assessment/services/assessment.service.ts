@@ -126,7 +126,7 @@ export class AssessmentService {
       const shuffleSeed = crypto.randomBytes(8).toString('hex');
 
       // Table mapping
-      const tableMap: Record<string, { attempts: string; questions: string; junction: string; idCol: string; options: string; attemptIdCol: string }> = {
+      const tableMap: Record<string, { attempts: string; questions: string; junction: string; idCol: string; options: string | null; attemptIdCol: string }> = {
         aptitude: { 
             attempts: 'tech_aptitude_attempts', 
             questions: 'tech_aptitude_questions', 
@@ -158,48 +158,67 @@ export class AssessmentService {
             idCol: 'role_question_id',
             options: 'tech_role_options',
             attemptIdCol: 'role_attempt_id'
+        },
+        coding: {
+            attempts: 'tech_coding_attempts',
+            questions: 'tech_coding_questions',
+            junction: 'tech_coding_attempt_questions',
+            idCol: 'coding_question_id',
+            options: null,
+            attemptIdCol: 'coding_attempt_id'
         }
       };
 
       const config = tableMap[module];
       if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
 
-      const attemptResult = await queryRunner.query(
-        `INSERT INTO ${config.attempts}
-            (${attemptColumns.join(', ')})
-         VALUES (${attemptValues.join(', ')})
-         RETURNING *`,
-        attemptParams,
-      );
+      // Coding module doesn't have shuffle_seed column
+      let attemptResult;
+      if (module === 'coding') {
+        attemptResult = await queryRunner.query(
+          `INSERT INTO ${config.attempts}
+              (assessment_id, user_id, attempt_token, status, started_at, expires_at, created_at, updated_at)
+           VALUES ($1, $2, $3, 'in_progress', $4, $5, NOW(), NOW())
+           RETURNING *`,
+          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt],
+        );
+      } else {
+        attemptResult = await queryRunner.query(
+          `INSERT INTO ${config.attempts}
+              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
+           RETURNING *`,
+          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+        );
+      }
       const attemptId = attemptResult[0][config.attemptIdCol];
       this.logger.log(`[DEBUG ${module}] Step 6: Attempt created with ID: ${attemptId}`);
 
-      const requestedMode = mode === 'trial' ? 'trial' : 'main';
-      const questionsHasMode = await this.hasColumn(config.questions, 'mode');
-      const questionWhere = questionsHasMode
-        ? `assessment_id = $1 AND status = 'active' AND (mode = $2 OR mode IS NULL)`
-        : `assessment_id = $1 AND status = 'active'`;
-      const questionParams = questionsHasMode
-        ? [assessment.assessment_id, requestedMode]
-        : [assessment.assessment_id];
+      let requestedMode = mode === 'trial' ? 'trial' : 'main';
+      let questions = [];
 
-      this.logger.log(`[DEBUG ${module}] Step 7: Looking for questions in ${config.questions}`);
-      let questions = await queryRunner.query(
-        `SELECT ${config.idCol} FROM ${config.questions} WHERE ${questionWhere}`,
-        questionParams,
-      );
-      this.logger.log(`[DEBUG ${module}] Step 8: Found ${questions.length} questions`);
+      const isCoding = module === 'coding';
 
-      if (questions.length === 0 && requestedMode === 'trial') {
-        this.logger.warn(`No trial questions found, falling back to main mode`);
-        const mainWhere = questionsHasMode
-          ? `assessment_id = $1 AND status = 'active' AND (mode = 'main' OR mode IS NULL)`
-          : `assessment_id = $1 AND status = 'active'`;
+      if (isCoding) {
         questions = await queryRunner.query(
-          `SELECT ${config.idCol} FROM ${config.questions} WHERE ${mainWhere}`,
+          `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active'`,
           [assessment.assessment_id],
         );
-        this.logger.log(`[DEBUG ${module}] Step 8b: Found ${questions.length} questions from main mode fallback`);
+      } else {
+        questions = await queryRunner.query(
+          `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = $2`,
+          [assessment.assessment_id, requestedMode],
+        );
+        
+        // Fallback to main mode if trial mode has no questions
+        if (questions.length === 0 && requestedMode === 'trial') {
+          this.logger.warn(`No trial questions found for ${module}, falling back to main mode`);
+          requestedMode = 'main';
+          questions = await queryRunner.query(
+            `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = 'main'`,
+            [assessment.assessment_id],
+          );
+        }
       }
 
       if (questions.length === 0) {
@@ -244,11 +263,41 @@ export class AssessmentService {
   }
 
   private async getAttemptQuestionsByConfig(attemptId: number, config: any, shuffleOptions: boolean, seed: string) {
+    // Determine which extra columns to select based on the module table
+    const isAptitude = config.questions === 'tech_aptitude_questions';
+    const isGrammar  = config.questions === 'tech_grammar_questions';
+    const isRole     = config.questions === 'tech_role_questions';
+    const isMnc      = config.questions === 'tech_mnc_questions';
+
+    // Build extra SELECT columns
+    let extraSelect = '';
+    let extraGroup  = '';
+    if (isAptitude) {
+      extraSelect = ', q.image_url, q.marks, q.negative_marks';
+      extraGroup  = ', q.image_url, q.marks, q.negative_marks';
+    } else if (isGrammar) {
+      extraSelect = ', q.task_type, q.audio_url, q.passage_text, q.reference_answer, q.marks, q.negative_marks';
+      extraGroup  = ', q.task_type, q.audio_url, q.passage_text, q.reference_answer, q.marks, q.negative_marks';
+    } else if (isRole) {
+      extraSelect = ', q.domain, q.question_type, q.scenario_context, q.marks, q.negative_marks';
+      extraGroup  = ', q.domain, q.question_type, q.scenario_context, q.marks, q.negative_marks';
+    } else if (isMnc) {
+      extraSelect = ', q.topic_group, q.marks, q.negative_marks';
+      extraGroup  = ', q.topic_group, q.marks, q.negative_marks';
+    }
+
+    const difficultySelect = !isRole ? ', q.difficulty' : '';
+    const difficultyGroup = !isRole ? ', q.difficulty' : '';
+
+    const textColumn = config.questions === 'tech_coding_questions' ? 'q.problem_statement' : 'q.question_text';
+
     const questionRows = await this.dataSource.query(
-      `SELECT aq.display_order, q.${config.idCol} as question_id, q.question_text, q.image_url, q.difficulty,
+      `SELECT aq.display_order, q.${config.idCol} as question_id,
+              ${textColumn} as question_text${difficultySelect}${extraSelect},
               COALESCE(
                 json_agg(
                   json_build_object('id', o.option_id::text, 'text', o.option_text)
+                  ORDER BY o.option_id
                 ) FILTER (WHERE o.option_id IS NOT NULL),
                 '[]'::json
               ) as options
@@ -256,24 +305,44 @@ export class AssessmentService {
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
        LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
-       GROUP BY aq.display_order, q.${config.idCol}, q.question_text, q.image_url, q.difficulty
+       GROUP BY aq.display_order, q.${config.idCol}, ${textColumn}${difficultyGroup}${extraGroup}
        ORDER BY aq.display_order ASC`,
       [attemptId],
     );
 
     return questionRows.map((q: any) => {
-        let finalOptions = q.options;
-        if (shuffleOptions) {
-          finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
-        }
-        return {
-          id: q.question_id,
-          text: q.question_text,
-          imageUrl: q.image_url,
-          difficulty: q.difficulty,
-          options: finalOptions,
-        };
-      });
+      let finalOptions = q.options;
+      if (shuffleOptions) {
+        finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
+      }
+
+      const base: any = {
+        id: q.question_id,
+        text: q.question_text,
+        difficulty: q.difficulty,
+        options: finalOptions,
+        marks: q.marks ? Number(q.marks) : undefined,
+        negativeMarks: q.negative_marks ? Number(q.negative_marks) : undefined,
+      };
+
+      if (isAptitude && q.image_url)    base.imageUrl = q.image_url;
+      if (isGrammar) {
+        base.taskType      = q.task_type;
+        base.audioUrl      = q.audio_url;
+        base.passageText   = q.passage_text;
+        base.referenceAnswer = q.reference_answer;
+      }
+      if (isRole) {
+        base.type            = q.question_type === 'scenario' ? 'scenario' : 'conceptual';
+        base.category        = q.domain;
+        base.scenarioContext = q.scenario_context;
+      }
+      if (isMnc) {
+        base.topic = q.topic_group;
+      }
+
+      return base;
+    });
   }
 
   async startAptitudeAttempt(data: any) {
