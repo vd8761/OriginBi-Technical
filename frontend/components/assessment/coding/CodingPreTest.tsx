@@ -36,11 +36,9 @@ const checklist = [
 const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClose }) => {
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6 sm:px-6">
-            <button
-                type="button"
-                aria-label="Close coding pre-test"
-                className="absolute inset-0 bg-[#0f1712]/70 backdrop-blur-sm"
-                onClick={onClose}
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+                aria-hidden="true"
             />
 
             <section

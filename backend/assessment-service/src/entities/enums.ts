@@ -31,6 +31,8 @@ export enum TechAttemptStatus {
 }
 
 export enum TechGrammarTaskType {
+    mcq = "mcq",
+    reading = "reading",
     listening_mcq = "listening_mcq",
     reading_mcq = "reading_mcq",
     speaking = "speaking",

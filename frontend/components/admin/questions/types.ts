@@ -41,7 +41,6 @@ export interface AptitudeQuestion {
   text: string;
   options: QuestionOption[];
   correctOptionId: string;
-  explanation?: string;
   // DB-aligned fields
   assessmentId?: number;
   difficulty?: DifficultyLevel;
@@ -68,7 +67,6 @@ export interface MNCQuestion {
   text: string;
   options: QuestionOption[];
   correctOptionId: string;
-  explanation?: string;
   // DB-aligned fields
   assessmentId?: number;
   difficulty?: DifficultyLevel;
@@ -129,7 +127,6 @@ export interface RoleQuestion {
   text: string;
   options: QuestionOption[];
   correctOptionId: string;
-  explanation?: string;
   // Conceptual fields
   category?: string;
   subCategory?: string;
@@ -197,8 +194,7 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
       { "text": "No change" },
       { "text": "5% increase" }
     ],
-    "correctOptionIndex": 0,
-    "explanation": "25% decrease then 20% increase: 0.75 × 1.20 = 0.90, so 10% decrease."
+    "correctOptionIndex": 0
   }
 ]`,
   mnc: `[
@@ -211,8 +207,7 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
       { "text": "O(log n)" },
       { "text": "O(n log n)" }
     ],
-    "correctOptionIndex": 2,
-    "explanation": "A balanced BST has O(log n) search complexity."
+    "correctOptionIndex": 2
   }
 ]`,
   communication: `[
@@ -276,8 +271,7 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
       { "text": "OPTIONS" },
       { "text": "DELETE" }
     ],
-    "correctOptionIndex": 1,
-    "explanation": "FETCH is not a standard HTTP method."
+    "correctOptionIndex": 1
   },
   {
     "questionType": "scenario",

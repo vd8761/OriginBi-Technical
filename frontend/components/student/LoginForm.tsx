@@ -76,11 +76,85 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const emailPart = values.email.split('@')[0];
-    const formattedName = emailPart
-      .replace(/[._-]/g, ' ')
-      .replace(/\b\w/g, (l) => l.toUpperCase());
-    onLoginSuccess(formattedName);
+    setGeneralError('');
+    setErrors({ email: '', password: '' });
+
+    const emailErr = validateEmail(values.email);
+    const passErr = validatePassword(values.password);
+
+    if (emailErr || passErr) {
+      setErrors({ email: emailErr, password: passErr });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const authServiceUrl = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:4002';
+      const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || 'http://localhost:4004';
+
+      // 1. Authenticate with Auth Service (Cognito Login)
+      const loginRes = await fetch(`${authServiceUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: values.email,
+          password: values.password,
+        }),
+      });
+
+      if (!loginRes.ok) {
+        const errData = await loginRes.json().catch(() => null);
+        throw new Error(errData?.message || 'Invalid email or password.');
+      }
+
+      const loginData = await loginRes.json();
+      
+      // Store tokens if present in response
+      if (loginData.AuthenticationResult?.AccessToken) {
+        localStorage.setItem('originbi:access-token', loginData.AuthenticationResult.AccessToken);
+        localStorage.setItem('originbi:id-token', loginData.AuthenticationResult.IdToken);
+      }
+
+      // 2. Retrieve Student Profile to get the correct display name
+      let displayName = '';
+      try {
+        const profileRes = await fetch(`${studentServiceUrl}/student/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: values.email }),
+        });
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          displayName = profileData?.fullName || profileData?.metadata?.fullName || '';
+        }
+      } catch (profileErr) {
+        console.error('Failed to fetch user profile, falling back to email name', profileErr);
+      }
+
+      // Fallback name if profile fetch has no name or fails
+      if (!displayName) {
+        const emailPart = values.email.split('@')[0];
+        displayName = emailPart
+          .replace(/[._-]/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+      }
+
+      // 3. Save profile to localStorage as progress.ts expects it
+      localStorage.setItem('originbi:user-profile', JSON.stringify({
+        name: displayName,
+        email: values.email,
+        joinedAt: new Date().toISOString(),
+      }));
+
+      onLoginSuccess(displayName);
+
+    } catch (error: any) {
+      setGeneralError(error.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isEmailInvalid = touched.email && !!errors.email;

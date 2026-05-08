@@ -203,13 +203,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
               </div>
             )}
 
-            {/* Explanation */}
-            {(question as AptitudeQuestion).explanation && (
-              <div className="rounded-xl bg-brand-green/5 p-4 border border-dashed border-brand-green/20">
-                <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-1.5">Technical Rationale</p>
-                <p className="text-[11px] font-bold leading-relaxed text-[#17201b] dark:text-white">{(question as AptitudeQuestion).explanation}</p>
-              </div>
-            )}
+
           </div>
         </div>
       )}

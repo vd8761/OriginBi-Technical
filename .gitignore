@@ -43,3 +43,7 @@ next-env.d.ts
 /tmp
 
 .claude/
+
+# build output
+dist/
+**/dist/

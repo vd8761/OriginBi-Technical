@@ -27,8 +27,9 @@ import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  AlertCircle, ArrowLeft,
+  AlertCircle, ArrowLeft, Filter,
 } from "lucide-react";
+import CustomSelect from "@/components/ui/CustomSelect";
 import {
   AptitudeIcon,
   CommunicationIcon,
@@ -519,22 +520,21 @@ export default function AdminQuestionsManager() {
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
         <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6">
           {/* Filter Tabs - Now on the left */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm overflow-x-auto scrollbar-hide">
-            <button 
-              onClick={() => setFilterCategory("all")} 
-              className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
-            >
-              All ({questions.length})
-            </button>
-            {filterCats.map(cat => (
-              <button 
-                key={cat.key} 
-                onClick={() => setFilterCategory(cat.key)} 
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
-              >
-                {cat.label} ({categoryCounts[cat.key] || 0})
-              </button>
-            ))}
+          <div className="flex items-center gap-3 w-full xl:w-auto">
+            <div className="w-full sm:w-64">
+              <CustomSelect
+                label="Filter by Category"
+                value={filterCategory}
+                onChange={setFilterCategory}
+                options={[
+                  { label: `All Questions (${questions.length})`, value: "all" },
+                  ...filterCats.map(cat => ({
+                    label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
+                    value: cat.key
+                  }))
+                ]}
+              />
+            </div>
           </div>
           
           {/* Action Buttons: Export, Clear, Bulk Import, Add New */}
@@ -602,16 +602,16 @@ export default function AdminQuestionsManager() {
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-32 text-center">
                   <div className="w-12 h-12 border-4 border-brand-green border-t-transparent rounded-full animate-spin mb-4" />
-                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Synchronizing Database...</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Loading questions...</p>
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="w-20 h-20 rounded-3xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 flex items-center justify-center mb-6 opacity-40">
                     <AlertCircle size={32} className="text-slate-400" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Zero Results Found</h3>
-                  <p className="mt-2 text-sm text-slate-900 dark:text-white max-w-xs leading-relaxed">No question vectors found for the current filter scope. Try adjusting your search query.</p>
-                  <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Reset Explorer</button>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">No Questions Found</h3>
+                  <p className="mt-2 text-sm text-slate-900 dark:text-white max-w-xs leading-relaxed">We couldn't find any questions matching your search. Try adjusting your filters or search terms.</p>
+                  <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Clear Filters</button>
                 </div>
               ) : (
                 <QuestionTable 
@@ -641,11 +641,11 @@ export default function AdminQuestionsManager() {
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Entry?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently purge the question vector from the repository.</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Question?</h3>
+                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently remove the question from this bank.</p>
                 <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
-                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Confirm</button>
+                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
+                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Delete</button>
                 </div>
               </div>
             </motion.div>
@@ -661,10 +661,10 @@ export default function AdminQuestionsManager() {
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">Purging all {questions.length} entries from the bank. This is irreversible.</p>
+                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This will remove all {questions.length} questions from this bank. This action cannot be undone.</p>
                 <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Abort</button>
-                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Purge Bank</button>
+                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
+                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Clear All</button>
                 </div>
               </div>
             </motion.div>
