@@ -15,13 +15,14 @@ import CustomSelect from "@/components/ui/CustomSelect";
 interface QuestionEditorProps {
   question: AnyQuestion | null;
   assessmentType: AssessmentType;
+  categories?: string[];
   onSave: (q: AnyQuestion) => void;
   onCancel: () => void;
 }
 
 const LABELS = ["A", "B", "C", "D", "E", "F"];
 
-export default function QuestionEditor({ question, assessmentType, onSave, onCancel }: QuestionEditorProps) {
+export default function QuestionEditor({ question, assessmentType, categories = [], onSave, onCancel }: QuestionEditorProps) {
   // Common state
   const [text, setText] = useState("");
   const [options, setOptions] = useState<QuestionOption[]>([
@@ -67,7 +68,13 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
 
   // Populate from existing question
   useEffect(() => {
-    if (!question) return;
+    if (!question) {
+      if (categories && categories.length > 0) {
+        if (assessmentType === "aptitude") setAptCategory(categories[0]);
+        else if (assessmentType === "mnc") setMncTopic(categories[0]);
+      }
+      return;
+    }
     const q = question as any;
     const diff = q.difficulty || "medium";
     setDifficulty(diff);
@@ -282,7 +289,11 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                       label="Aptitude Category"
                       value={aptCategory}
                       onChange={setAptCategory}
-                      options={APTITUDE_CATEGORIES.map(c => ({ label: APTITUDE_CATEGORY_LABELS[c], value: c }))}
+                      options={
+                        categories && categories.length > 0
+                          ? categories.map(c => ({ label: c, value: c }))
+                          : APTITUDE_CATEGORIES.map(c => ({ label: APTITUDE_CATEGORY_LABELS[c], value: c }))
+                      }
                     />
                   </div>
                  )}
@@ -292,7 +303,11 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                       label="Core Topic"
                       value={mncTopic}
                       onChange={setMncTopic}
-                      options={MNC_TOPICS.map(t => ({ label: t, value: t }))}
+                      options={
+                        categories && categories.length > 0
+                          ? categories.map(t => ({ label: t, value: t }))
+                          : MNC_TOPICS.map(t => ({ label: t, value: t }))
+                      }
                     />
                   </div>
                  )}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   AnyQuestion, AssessmentType, QuestionMode,
   ASSESSMENT_TYPE_LABELS, ASSESSMENT_TYPE_DESCRIPTIONS,
@@ -19,7 +20,10 @@ import {
   clearQuestions as apiClearQuestions,
   ApiQuestion,
   CreateQuestionPayload,
+  fetchAssessments,
+  ApiAssessment,
 } from "./api";
+import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
 import JsonImportPanel from "./JsonImportPanel";
@@ -35,6 +39,7 @@ import {
   CommunicationIcon,
   MNCIcon,
   RoleIcon,
+  ArrowRightWithoutLineIcon,
 } from "@/components/icons";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -149,6 +154,7 @@ const isDbModule = (m: AssessmentType | null): m is AssessmentType =>
   m === "aptitude" || m === "mnc" || m === "communication" || m === "role";
 
 export default function AdminQuestionsManager() {
+  const router = useRouter();
   const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(null);
   const [mode, setMode] = useState<QuestionMode>("trial");
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
@@ -166,6 +172,7 @@ export default function AdminQuestionsManager() {
   const [clearConfirm, setClearConfirm] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
 
   // ─── Load questions: API for DB modules, localStorage for others ─────────────
   const loadQuestionsForModule = useCallback(async (module: AssessmentType, m: QuestionMode) => {
@@ -231,6 +238,27 @@ export default function AdminQuestionsManager() {
     setSearchQuery("");
   }, [selectedModule, mode, loadQuestionsForModule]);
 
+  // Load active assessment configuration details when selectedModule changes
+  useEffect(() => {
+    if (!selectedModule) {
+      setActiveAssessment(null);
+      return;
+    }
+
+    const loadAssessmentDetails = async () => {
+      try {
+        const assessments = await fetchAssessments(selectedModule);
+        if (assessments && assessments.length > 0) {
+          setActiveAssessment(assessments[0]);
+        }
+      } catch (err) {
+        console.error("Failed to load assessment details:", err);
+      }
+    };
+
+    loadAssessmentDetails();
+  }, [selectedModule]);
+
   // Auto-save to localStorage ONLY for non-DB modules
   useEffect(() => {
     if (!selectedModule || isDbModule(selectedModule)) return;
@@ -243,7 +271,27 @@ export default function AdminQuestionsManager() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const filterCats = useMemo(() => selectedModule ? getFilterCategories(selectedModule) : [], [selectedModule]);
+  const filterCats = useMemo(() => {
+    if (!selectedModule) return [];
+    
+    if (activeAssessment && activeAssessment.categories) {
+      let cats: string[] = [];
+      if (Array.isArray(activeAssessment.categories)) {
+        cats = activeAssessment.categories;
+      } else if (typeof activeAssessment.categories === "string") {
+        try {
+          cats = JSON.parse(activeAssessment.categories);
+        } catch {
+          cats = [];
+        }
+      }
+      if (cats.length > 0) {
+        return cats.map(c => ({ key: c, label: c }));
+      }
+    }
+    
+    return getFilterCategories(selectedModule);
+  }, [selectedModule, activeAssessment]);
 
   const filtered = useMemo(() => {
     if (!selectedModule) return [];
@@ -391,13 +439,6 @@ export default function AdminQuestionsManager() {
             <div className="flex items-center gap-6">
               <Logo className="h-5" />
               <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
-              
-              {/* Breadcrumbs for Landing */}
-              <nav className="hidden md:flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
-                <span className="text-brand-green">Admin Hub</span>
-                <span className="text-slate-900 dark:text-white/40">/</span>
-                <span className="text-slate-900 dark:text-white">Question Banks</span>
-              </nav>
             </div>
             <ThemeToggle />
           </div>
@@ -406,7 +447,18 @@ export default function AdminQuestionsManager() {
         <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Assessment Modules</h2>
+              <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
+                <span className="text-black dark:text-white font-medium">
+                  Admin Hub
+                </span>
+                <span className="mx-2 text-gray-400 dark:text-gray-600">
+                  <ArrowRightWithoutLineIcon className="w-3 h-3 text-black dark:text-white" />
+                </span>
+                <span className="text-brand-green font-semibold">
+                  Question Banks
+                </span>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">Assessment Modules</h2>
               <p className="text-sm text-slate-900 dark:text-white mt-1">Select a module to manage its question library</p>
             </div>
 
@@ -417,9 +469,8 @@ export default function AdminQuestionsManager() {
                 const mainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
 
                 return (
-                  <button
+                  <div
                     key={at}
-                    onClick={() => { setSelectedModule(at); setView("list"); }}
                     className="dashboard-glass-card !rounded-3xl p-6 flex flex-col transition-all duration-300 group h-full hover:border-brand-green/30 text-left dark:bg-white/[0.05]"
                   >
                     <div className="flex gap-4 mb-4">
@@ -445,19 +496,42 @@ export default function AdminQuestionsManager() {
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">
-                      {MODULE_TAGS[at].map((tag, tIdx) => (
-                        <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
-                      ))}
+                      {((at === "aptitude" || at === "mnc" || at === "communication" || at === "role") && activeAssessment && at === selectedModule && activeAssessment.categories) ? (
+                        (Array.isArray(activeAssessment.categories) ? activeAssessment.categories : JSON.parse(activeAssessment.categories as string)).slice(0, 4).map((tag: string, tIdx: number) => (
+                          <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
+                        ))
+                      ) : (
+                        MODULE_TAGS[at].map((tag, tIdx) => (
+                          <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
+                        ))
+                      )}
                     </div>
 
                     <div className="h-px w-full bg-slate-100 dark:bg-white/5 mb-6" />
 
-                    <div className="flex items-center justify-end">
-                      <div className="px-6 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-full bg-brand-green text-white shadow-md transition-all">
+                    <div className="flex items-center justify-between gap-3">
+                      {isDbModule(at) ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/questions/settings?module=${at}`);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-semibold text-slate-700 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm cursor-pointer"
+                        >
+                          <Settings size={13} className="text-brand-green" />
+                          <span>Settings</span>
+                        </button>
+                      ) : (
+                        <div />
+                      )}
+                      <button 
+                        onClick={() => { setSelectedModule(at); setView("list"); }}
+                        className="px-4 py-2 text-xs font-semibold rounded-lg bg-brand-green text-white shadow-md hover:bg-brand-green/90 transition-all active:scale-95"
+                      >
                         Manage Questions
-                      </div>
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -483,28 +557,8 @@ export default function AdminQuestionsManager() {
       <header className="fixed top-0 left-0 right-0 w-full z-50 h-[64px] sm:h-[72px] bg-white/[0.9] dark:bg-[#19211C]/[0.9] backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
         <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
           <div className="flex items-center gap-6">
-            <button onClick={() => { setSelectedModule(null); setView("list"); }} className="group flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">
-              <ArrowLeft className="w-4 h-4 text-brand-green transition-transform" />
-            </button>
-            
-            {/* Breadcrumbs for Management */}
-            <nav className="hidden md:flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
-              <button onClick={() => setSelectedModule(null)} className="text-slate-400 hover:text-brand-green transition-colors">Admin Hub</button>
-              <span className="text-slate-900 dark:text-white/40">/</span>
-              <button onClick={() => setSelectedModule(null)} className="text-slate-400 hover:text-brand-green transition-colors">Question Banks</button>
-              <span className="text-slate-900 dark:text-white/40">/</span>
-              <span className="text-brand-green">{ASSESSMENT_TYPE_LABELS[selectedModule]}</span>
-            </nav>
-
-            <div className="md:hidden flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl text-white shadow-lg [&_svg]:w-5 [&_svg]:h-5" style={{ background: accent.gradient }}>
-                {MODULE_ICONS[selectedModule]}
-              </div>
-              <div className="leading-tight">
-                <p className="text-[13px] font-bold text-slate-900 dark:text-white tracking-tight">{ASSESSMENT_TYPE_LABELS[selectedModule]}</p>
-                <p className="text-[10px] font-black text-brand-green tracking-widest uppercase">Management</p>
-              </div>
-            </div>
+            <Logo className="h-5" />
+            <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
@@ -517,6 +571,29 @@ export default function AdminQuestionsManager() {
       </header>
 
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
+        {/* Header / breadcrumb */}
+        <div className="mb-6">
+          <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
+            <button onClick={() => setSelectedModule(null)} className="hover:underline hover:text-brand-green transition-colors cursor-pointer text-black dark:text-white font-medium">
+              Admin Hub
+            </button>
+            <span className="mx-2 text-gray-400 dark:text-gray-600">
+              <ArrowRightWithoutLineIcon className="w-3 h-3 text-black dark:text-white" />
+            </span>
+            <button onClick={() => setSelectedModule(null)} className="hover:underline hover:text-brand-green transition-colors cursor-pointer text-black dark:text-white font-medium">
+              Question Banks
+            </button>
+            <span className="mx-2 text-gray-400 dark:text-gray-600">
+              <ArrowRightWithoutLineIcon className="w-3 h-3 text-black dark:text-white" />
+            </span>
+            <span className="text-brand-green font-semibold">
+              {ASSESSMENT_TYPE_LABELS[selectedModule]}
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-black dark:text-white mt-1.5">
+            {ASSESSMENT_TYPE_LABELS[selectedModule]}
+          </h1>
+        </div>
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
         <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6">
           {/* Filter Tabs - Now on the left */}
@@ -559,6 +636,16 @@ export default function AdminQuestionsManager() {
               <Upload size={16} className="text-brand-green" />
             </button>
  
+            {isDbModule(selectedModule) && (
+              <button 
+                onClick={() => router.push(`/admin/questions/settings?module=${selectedModule}`)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
+              >
+                <Settings size={16} className="text-brand-green" />
+                <span>Settings</span>
+              </button>
+            )}
+
             <button 
               onClick={() => setEditingQuestion("new")} 
               className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all"
@@ -629,9 +716,16 @@ export default function AdminQuestionsManager() {
 
       <AnimatePresence>
         {editingQuestion !== null && (
-          <QuestionEditor question={editingQuestion === "new" ? null : editingQuestion} assessmentType={selectedModule} onSave={handleSaveQuestion} onCancel={() => setEditingQuestion(null)} />
+          <QuestionEditor 
+            question={editingQuestion === "new" ? null : editingQuestion} 
+            assessmentType={selectedModule} 
+            categories={filterCats.map(c => c.key)}
+            onSave={handleSaveQuestion} 
+            onCancel={() => setEditingQuestion(null)} 
+          />
         )}
       </AnimatePresence>
+
 
       {/* Delete/Clear Modals styled with OriginBI theme */}
       <AnimatePresence>

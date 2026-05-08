@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param } from '@nestjs/common';
 import { AssessmentService } from '../services/assessment.service';
 
 @Controller('assessment')
@@ -17,6 +17,16 @@ export class AssessmentController {
     // Currently getAttemptQuestions is still a bit aptitude-specific, 
     // but startAttempt already returns questions which is what the frontend needs.
     const data = await this.assessmentService.getAttemptQuestions(token);
+    return data;
+  }
+
+  @Post(':module/attempts/:token/submit')
+  async submitAttempt(
+    @Param('module') module: string,
+    @Param('token') token: string,
+    @Body() body: { answers: Record<string, string> }
+  ) {
+    const data = await this.assessmentService.submitAttempt(module, token, body.answers);
     return data;
   }
 }

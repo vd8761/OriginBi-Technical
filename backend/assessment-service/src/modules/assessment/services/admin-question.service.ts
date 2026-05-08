@@ -67,15 +67,31 @@ export class AdminQuestionService {
     const name = `Default ${module.charAt(0).toUpperCase() + module.slice(1)} Assessment`;
     
     const dbModule = module === 'communication' ? 'grammar' : module;
+    
+    let defaultCats = '[]';
+    if (dbModule === 'aptitude') defaultCats = '["QA", "LR", "DI", "AR", "VA"]';
+    else if (dbModule === 'mnc') defaultCats = '["Data Structures", "Algorithms", "Dynamic Programming", "Graph Theory", "System Design", "OOP", "Databases", "Networking", "OS Concepts", "General"]';
+    else if (dbModule === 'grammar') defaultCats = '["audio", "reading", "speaking", "writing", "mcq"]';
+    else if (dbModule === 'role') defaultCats = '["conceptual", "scenario"]';
+
     const rows = await queryRunner.query(
       `INSERT INTO tech_assessments
           (assessment_code, assessment_name, module_type, total_time_minutes,
            total_questions, shuffle_questions, shuffle_options,
-           negative_mark_enabled, negative_mark_value, status, created_by)
-       VALUES ($1, $2, $3, 60, 0, TRUE, TRUE, FALSE, NULL, 'active', $4)
+           negative_mark_enabled, negative_mark_value, status, created_by,
+           categories, difficulty_marks, difficulty_negative_marks, tab_switch_limit, anti_copy_enabled)
+       VALUES ($1, $2, $3, 60, 0, TRUE, TRUE, FALSE, NULL, 'active', $4, $5::jsonb, $6::jsonb, $7::jsonb, 0, FALSE)
        ON CONFLICT (assessment_code) DO UPDATE SET updated_at = NOW()
        RETURNING assessment_id`,
-      [code, name, dbModule, createdById]
+      [
+        code, 
+        name, 
+        dbModule, 
+        createdById, 
+        defaultCats, 
+        '{"easy": 1, "medium": 2, "hard": 5}', 
+        '{"easy": 0, "medium": 0.25, "hard": 0.25}'
+      ]
     );
     return Number(rows[0].assessment_id);
   }
@@ -500,13 +516,70 @@ export class AdminQuestionService {
       }
       return await this.dataSource.query(
         `SELECT assessment_id, assessment_code, assessment_name, module_type,
-                total_time_minutes, total_questions, status, created_at
+                total_time_minutes, total_questions, status, created_at,
+                question_limit, categories, difficulty_marks, difficulty_negative_marks,
+                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options
          FROM tech_assessments ${where} ORDER BY assessment_id DESC`,
         params,
       );
     } catch (error) {
       this.logger.error('listAssessments error:', error);
       throw new InternalServerErrorException('Failed to list assessments');
+    }
+  }
+
+  async updateAssessment(id: number, data: any) {
+    const { 
+      assessmentName, 
+      totalTimeMinutes, 
+      questionLimit, 
+      categories, 
+      difficultyMarks, 
+      difficultyNegativeMarks,
+      tabSwitchLimit,
+      antiCopyEnabled,
+      shuffleQuestions,
+      shuffleOptions
+    } = data;
+    
+    try {
+      await this.dataSource.query(
+        `UPDATE tech_assessments
+         SET assessment_name = COALESCE($1, assessment_name),
+             total_time_minutes = COALESCE($2, total_time_minutes),
+             question_limit = COALESCE($3, question_limit),
+             categories = COALESCE($4, categories),
+             difficulty_marks = COALESCE($5, difficulty_marks),
+             difficulty_negative_marks = COALESCE($6, difficulty_negative_marks),
+             tab_switch_limit = COALESCE($7, tab_switch_limit),
+             anti_copy_enabled = COALESCE($8, anti_copy_enabled),
+             shuffle_questions = COALESCE($9, shuffle_questions),
+             shuffle_options = COALESCE($10, shuffle_options),
+             updated_at = NOW()
+         WHERE assessment_id = $11`,
+        [
+          assessmentName !== undefined ? assessmentName : null,
+          totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
+          questionLimit !== undefined ? Number(questionLimit) : null,
+          categories !== undefined ? (typeof categories === 'string' ? categories : JSON.stringify(categories)) : null,
+          difficultyMarks !== undefined ? (typeof difficultyMarks === 'string' ? difficultyMarks : JSON.stringify(difficultyMarks)) : null,
+          difficultyNegativeMarks !== undefined ? (typeof difficultyNegativeMarks === 'string' ? difficultyNegativeMarks : JSON.stringify(difficultyNegativeMarks)) : null,
+          tabSwitchLimit !== undefined ? Number(tabSwitchLimit) : null,
+          antiCopyEnabled !== undefined ? Boolean(antiCopyEnabled) : null,
+          shuffleQuestions !== undefined ? Boolean(shuffleQuestions) : null,
+          shuffleOptions !== undefined ? Boolean(shuffleOptions) : null,
+          id
+        ]
+      );
+      
+      const rows = await this.dataSource.query(
+        `SELECT * FROM tech_assessments WHERE assessment_id = $1`,
+        [id]
+      );
+      return rows[0];
+    } catch (error) {
+      this.logger.error(`updateAssessment (${id}) error:`, error);
+      throw new InternalServerErrorException('Failed to update assessment configurations');
     }
   }
   async clearQuestions(module: ModuleType, mode?: string) {

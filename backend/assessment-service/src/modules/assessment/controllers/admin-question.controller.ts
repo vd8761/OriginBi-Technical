@@ -11,6 +11,12 @@ export class AdminQuestionController {
     return { data };
   }
 
+  @Put('assessments/:id')
+  async updateAssessment(@Param('id') id: string, @Body() body: any) {
+    const data = await this.adminQuestionService.updateAssessment(Number(id), body);
+    return { message: 'Assessment updated successfully', data };
+  }
+
   // ─── Generic Question Routes ──────────────────────────────────────────────────
 
   @Get(':module/questions')
