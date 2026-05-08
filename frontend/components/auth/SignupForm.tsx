@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
 import { COUNTRY_CODES } from "@/lib/countryCodes";
+import { AnimatePresence, motion } from "motion/react";
 
 /* ─── Chevron Icon ─── */
 const ChevronDownIcon = ({ className }: { className?: string }) => (
@@ -182,8 +183,14 @@ function CustomSelect({
 
 /* ═══════════════════════ SIGNUP FORM ═══════════════════════ */
 
-const SignupForm: React.FC = () => {
+interface SignupFormProps {
+  onSuccess?: () => void;
+}
+
+const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     gender: "MALE",
@@ -207,6 +214,13 @@ const SignupForm: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleProceedToLogin = () => {
+    setShowSuccessModal(false);
+    if (onSuccess) {
+      onSuccess();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -216,6 +230,7 @@ const SignupForm: React.FC = () => {
       return;
     }
 
+    setIsLoading(true);
     try {
       const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
       const response = await fetch(`${studentServiceUrl}/student/register/tech`, {
@@ -238,7 +253,7 @@ const SignupForm: React.FC = () => {
         throw new Error(errData?.message || "Registration failed. Please try again.");
       }
 
-      alert("Registration successful! You can now log in.");
+      setShowSuccessModal(true);
       // Optionally reset form or switch to login tab here
       setFormData({
         name: "",
@@ -251,6 +266,8 @@ const SignupForm: React.FC = () => {
 
     } catch (error: any) {
       alert(error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -350,10 +367,104 @@ const SignupForm: React.FC = () => {
       {/* Submit Button */}
       <button
         type="submit"
-        className="w-full h-14 mt-2 bg-brand-green hover:bg-brand-green/90 text-white text-base font-bold rounded-full transition-all active:scale-[0.98] cursor-pointer"
+        disabled={isLoading}
+        className="w-full h-14 mt-2 bg-brand-green hover:bg-brand-green/90 text-white text-base font-bold rounded-full transition-all active:scale-[0.98] cursor-pointer disabled:bg-brand-green/50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
       >
-        Create Account
+        {isLoading ? (
+          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        ) : (
+          "Create Account"
+        )}
       </button>
+
+      {/* Success Modal Popup */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop Overlay with Blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleProceedToLogin}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+              className="relative w-full max-w-[440px] bg-white dark:bg-[#111814] border border-brand-light-tertiary dark:border-brand-green/20 rounded-3xl p-8 shadow-2xl overflow-hidden text-center flex flex-col items-center z-10"
+            >
+              {/* Subtle ambient green glow in background */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-brand-green/10 rounded-full blur-3xl pointer-events-none" />
+
+              {/* Checkmark Animation Container */}
+              <div className="relative flex items-center justify-center w-20 h-20 bg-brand-green/10 dark:bg-brand-green/20 rounded-full mb-6 text-brand-green">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 10 }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-10 w-10"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <motion.path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ delay: 0.4, duration: 0.4, ease: "easeOut" }}
+                    />
+                  </svg>
+                </motion.div>
+                
+                {/* Decorative pinging lights */}
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-brand-green animate-ping opacity-75" />
+                <span className="absolute bottom-2 left-2 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping opacity-50" />
+              </div>
+
+              {/* Message Details */}
+              <h2 className="font-sans font-bold text-slate-800 dark:text-brand-text-primary text-2xl tracking-tight mb-3">
+                Account Created!
+              </h2>
+              <p className="font-sans text-slate-500 dark:text-brand-text-secondary text-sm leading-relaxed mb-8 px-2">
+                Your technical assessment profile has been successfully set up. Click below to login and start your assessment journey.
+              </p>
+
+              {/* Redirection Call-to-Action */}
+              <button
+                type="button"
+                onClick={handleProceedToLogin}
+                className="w-full h-12 bg-brand-green hover:bg-brand-green/90 text-white font-bold rounded-full shadow-lg shadow-brand-green/20 hover:shadow-brand-green/30 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 text-sm uppercase tracking-wider"
+              >
+                Proceed to Login
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </form>
   );
 };
