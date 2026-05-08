@@ -1,14 +1,11 @@
 {
-  "name": "originbi-technical-backend",
+  "name": "assessment-service",
   "version": "1.0.0",
+  "description": "Assessment Service for Technical Assessment Platform",
   "private": true,
-  "workspaces": [
-    "assessment-service",
-    "shared"
-  ],
   "scripts": {
     "start": "nest start",
-    "dev": "nest start --watch",
+    "start:dev": "nest start --watch",
     "build": "nest build",
     "db:init": "ts-node src/db/init.ts",
     "db:seed": "ts-node src/db/seed.ts"
@@ -29,6 +26,13 @@
     "typeorm": "^0.3.21"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.0.21"
+    "@nestjs/cli": "^11.0.21",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "@types/pg": "^8.11.10",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3"
   }
 }

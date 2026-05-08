@@ -21,7 +21,7 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <div className="w-12 h-12 border-4 border-brand-green border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Synchronizing Database...</p>
+        <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Loading questions...</p>
       </div>
     );
   }

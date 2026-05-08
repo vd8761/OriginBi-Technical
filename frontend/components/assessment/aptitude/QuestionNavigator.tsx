@@ -44,7 +44,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     return (
         <div className="flex h-full flex-col gap-4">
             {/* Progress Section */}
-            <div className={`flex items-center ${isCollapsed ? 'justify-center py-2' : 'gap-4 p-4 rounded-md border border-brand-green/15 bg-white/40 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5'}`}>
+            <div className={`flex items-center ${isCollapsed ? 'justify-center py-2' : 'gap-4 p-4 rounded-md border border-brand-green/15 bg-white dark:border-white/10 dark:bg-white/5'}`}>
                 <div className={`shrink-0 rounded-full p-1.5 ${isCollapsed ? 'h-12 w-12' : 'h-16 w-16'}`} style={progressRingStyle}>
                     <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#111a15]">
                         <span className={`${isCollapsed ? 'text-[10px]' : 'text-sm'} font-black text-[#17201b] dark:text-white`}>{safeProgress}%</span>
@@ -64,7 +64,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             
             {/* Status Summary Section */}
             {!isCollapsed && (
-                <div className="rounded-lg border border-brand-green/15 bg-white/40 p-4 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-brand-green/15 bg-white p-4 dark:border-white/5 dark:bg-white/[0.03]">
                     <div className="grid grid-cols-3 gap-1.5">
                         <div className="flex flex-col items-center justify-center rounded-md border border-brand-green/20 bg-brand-green/[0.08] p-2 transition-colors hover:bg-brand-green/[0.12] dark:bg-brand-green/10">
                             <span className="text-lg font-black text-brand-green leading-none">{answeredCount}</span>
@@ -106,7 +106,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                                 title={`${q.category} - Question ${q.number}`}
                                 aria-current={isActive ? "step" : undefined}
                                 className={`relative flex items-center justify-center rounded-md border text-sm font-bold transition-all duration-200 focus:outline-none ${isActive
-                                        ? "z-10 border-brand-green ring-2 ring-brand-green ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15] scale-105"
+                                        ? "z-10 border-brand-green ring-2 ring-brand-green ring-offset-2 ring-offset-[#f6f8f5] dark:ring-offset-[#111a15]"
                                         : ""
                                     } ${stateStyles[q.state]} ${isCollapsed ? 'h-10 w-10' : 'h-10 w-full'}`}
                             >

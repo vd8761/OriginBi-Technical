@@ -31,18 +31,70 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     useEffect(() => {
-        const fetchUserProfile = () => {
-            const email = typeof window !== 'undefined' ? (sessionStorage.getItem('userEmail') || localStorage.getItem('userEmail')) : null;
-            
-            const mockUser: UserProfile = {
-                name: 'Shyam Sundar',
-                email: email || 'shyam.sundar@originbi.com',
-                mobile_number: '+91 98765 43210',
-                programCode: 'COLLEGE_STUDENT',
+        const fetchUserProfile = async () => {
+            let email = typeof window !== 'undefined' ? (sessionStorage.getItem('userEmail') || localStorage.getItem('userEmail')) : null;
+            let name = 'Student';
+            let mobile = 'Not provided';
+            let programCode = 'COLLEGE_STUDENT';
+
+            // 1. Load from localStorage cache first
+            if (typeof window !== 'undefined') {
+                const stored = localStorage.getItem('originbi:user-profile');
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        email = parsed.email || email;
+                        name = parsed.name || name;
+                        mobile = parsed.mobile_number || parsed.mobileNumber || mobile;
+                        programCode = parsed.programCode || programCode;
+                    } catch (e) {
+                        console.error("Failed to parse stored user profile", e);
+                    }
+                }
+            }
+
+            const cachedProfile: UserProfile = {
+                name,
+                email: email || 'student@originbi.com',
+                mobile_number: mobile,
+                programCode,
             };
 
-            setUser(mockUser);
+            setUser(cachedProfile);
             setIsLoading(false);
+
+            // 2. Fetch fresh profile from API in background to ensure accurate information
+            if (email) {
+                try {
+                    const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
+                    const res = await fetch(`${studentServiceUrl}/student/profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email }),
+                    });
+                    if (res.ok) {
+                        const profileData = await res.json();
+                        const freshProfile: UserProfile = {
+                            name: profileData?.fullName || profileData?.metadata?.fullName || cachedProfile.name,
+                            email: email,
+                            mobile_number: profileData?.mobileNumber || profileData?.metadata?.mobileNumber || cachedProfile.mobile_number,
+                            programCode: profileData?.programCode || cachedProfile.programCode,
+                        };
+                        setUser(freshProfile);
+
+                        // Sync back to cache
+                        localStorage.setItem('originbi:user-profile', JSON.stringify({
+                            name: freshProfile.name,
+                            email: freshProfile.email,
+                            mobile_number: freshProfile.mobile_number,
+                            programCode: freshProfile.programCode,
+                            joinedAt: profileData?.createdAt || new Date().toISOString()
+                        }));
+                    }
+                } catch (err) {
+                    console.error("Failed background fetch of fresh student profile", err);
+                }
+            }
         };
 
         fetchUserProfile();

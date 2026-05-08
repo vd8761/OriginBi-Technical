@@ -29,7 +29,6 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         return {
           id: baseId, category: item.category || "QA", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          explanation: item.explanation || "",
         } as AptitudeQuestion;
       }
       case "mnc": {
@@ -40,7 +39,6 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         return {
           id: baseId, topic: item.topic || "General", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          explanation: item.explanation || "",
         } as MNCQuestion;
       }
       case "communication": {
@@ -74,7 +72,6 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         const rq: RoleQuestion = {
           id: baseId, questionType: item.questionType || "conceptual", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          explanation: item.explanation || "",
         };
         if (item.category) rq.category = item.category;
         if (item.subCategory) rq.subCategory = item.subCategory;
@@ -129,7 +126,7 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
     setError(null);
     try {
       const parsed = JSON.parse(jsonText);
-      if (!Array.isArray(parsed)) throw new Error("JSON must be an array.");
+      if (!Array.isArray(parsed)) throw new Error("Data must be a list of questions.");
       if (parsed.length === 0) throw new Error("Array is empty.");
       setPreview(parseQuestions(parsed, assessmentType));
     } catch (e: unknown) {
@@ -223,10 +220,10 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => setPreview(null)} className="px-5 py-2 rounded-lg border border-[#17201b]/10 text-[11px] font-black uppercase tracking-wider text-[#17201b] dark:text-white transition-all">
-                Edit JSON
+                Go Back
               </button>
               <button onClick={() => onImport(preview)} className="px-6 py-2 rounded-lg bg-brand-green text-[11px] font-black uppercase tracking-wider text-white hover:bg-brand-green/90">
-                Commit Import
+                Finish Import
               </button>
             </div>
           </div>
@@ -240,9 +237,16 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
               return (
                 <div key={(q as { id: string }).id} className={`group rounded-xl border transition-all duration-300 ${isExpanded ? "bg-white dark:bg-white/[0.04] border-brand-green/30 shadow-md" : "bg-white/50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/20"
                   }`}>
-                  <button
+                  <div
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                    className="flex w-full items-center gap-3 p-3 text-left"
+                    className="flex w-full cursor-pointer items-center gap-3 p-3 text-left"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setExpandedIdx(isExpanded ? null : idx);
+                      }
+                    }}
                   >
                     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-black transition-colors ${isExpanded ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"
                       }`}>
@@ -259,14 +263,21 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button onClick={(e) => { e.stopPropagation(); handleRemoveFromPreview(idx); }} className="rounded-md p-1.5 text-red-400/40 hover:bg-red-500 hover:text-white transition-all">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleRemoveFromPreview(idx); 
+                        }} 
+                        className="rounded-md p-1.5 text-red-400/40 hover:bg-red-500 hover:text-white transition-all"
+                        title="Remove from list"
+                      >
                         <Trash2 size={12} />
                       </button>
                       <div className={`p-1 rounded-md ${isExpanded ? "text-brand-green" : "text-[#17201b] dark:text-white"}`}>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </div>
                     </div>
-                  </button>
+                  </div>
 
                   {isExpanded && (
                     <div className="px-3.5 pb-3.5">

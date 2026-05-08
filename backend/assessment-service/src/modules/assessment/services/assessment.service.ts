@@ -79,17 +79,18 @@ export class AssessmentService {
 
     try {
       this.logger.log(`[DEBUG ${module}] Step 1: Connected to DB, transaction started`);
+      const dbModule = module === 'communication' ? 'grammar' : module;
       let assessment;
       if (assessmentId) {
         const assessments = await queryRunner.query(
           `SELECT * FROM tech_assessments WHERE assessment_id = $1 AND module_type = $2`,
-          [assessmentId, module]
+          [assessmentId, dbModule]
         );
         assessment = assessments[0];
       } else if (assessmentCode) {
         const assessments = await queryRunner.query(
           `SELECT * FROM tech_assessments WHERE assessment_code = $1 AND module_type = $2`,
-          [assessmentCode, module]
+          [assessmentCode, dbModule]
         );
         assessment = assessments[0];
         
@@ -106,7 +107,7 @@ export class AssessmentService {
         // Fallback: Get the latest active assessment for this module
         const assessments = await queryRunner.query(
           `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`,
-          [module]
+          [dbModule]
         );
         assessment = assessments[0];
       }
@@ -124,46 +125,45 @@ export class AssessmentService {
       const attemptToken = `${module.substring(0, 3).toUpperCase()}-${crypto.randomUUID()}`;
       const shuffleSeed = crypto.randomBytes(8).toString('hex');
 
-      const config = this.getModuleConfig(module);
-      this.logger.log(`[DEBUG ${module}] Step 4: Config loaded for ${config.attempts}`);
+      // Table mapping
+      const tableMap: Record<string, { attempts: string; questions: string; junction: string; idCol: string; options: string; attemptIdCol: string }> = {
+        aptitude: { 
+            attempts: 'tech_aptitude_attempts', 
+            questions: 'tech_aptitude_questions', 
+            junction: 'tech_aptitude_attempt_questions', 
+            idCol: 'aptitude_question_id',
+            options: 'tech_aptitude_options',
+            attemptIdCol: 'aptitude_attempt_id'
+        },
+        grammar: { 
+            attempts: 'tech_grammar_attempts', 
+            questions: 'tech_grammar_questions', 
+            junction: 'tech_grammar_attempt_questions', 
+            idCol: 'grammar_question_id',
+            options: 'tech_grammar_options',
+            attemptIdCol: 'grammar_attempt_id'
+        },
+        mnc: { 
+            attempts: 'tech_mnc_attempts', 
+            questions: 'tech_mnc_questions', 
+            junction: 'tech_mnc_attempt_questions', 
+            idCol: 'mnc_question_id',
+            options: 'tech_mnc_options',
+            attemptIdCol: 'mnc_attempt_id'
+        },
+        role: { 
+            attempts: 'tech_role_attempts', 
+            questions: 'tech_role_questions', 
+            junction: 'tech_role_attempt_questions', 
+            idCol: 'role_question_id',
+            options: 'tech_role_options',
+            attemptIdCol: 'role_attempt_id'
+        }
+      };
 
-      const attemptColumns = [
-        'assessment_id',
-        'user_id',
-        'attempt_token',
-        'status',
-        'started_at',
-        'expires_at',
-        'created_at',
-        'updated_at',
-      ];
-      const attemptValues = [
-        '$1',
-        '$2',
-        '$3',
-        `'in_progress'`,
-        '$4',
-        '$5',
-        'NOW()',
-        'NOW()',
-      ];
-      const attemptParams: any[] = [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt];
+      const config = tableMap[module];
+      if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
 
-      const attemptsHasShuffleSeed = await this.hasColumn(config.attempts, 'shuffle_seed');
-      if (attemptsHasShuffleSeed) {
-        attemptColumns.splice(3, 0, 'shuffle_seed');
-        attemptValues.splice(3, 0, `$${attemptParams.length + 1}`);
-        attemptParams.push(shuffleSeed);
-      }
-
-      const attemptsHasMode = await this.hasColumn(config.attempts, 'mode');
-      if (attemptsHasMode) {
-        attemptColumns.push('mode');
-        attemptValues.push(`$${attemptParams.length + 1}`);
-        attemptParams.push(mode);
-      }
-
-      this.logger.log(`[DEBUG ${module}] Step 5: Inserting attempt with columns: ${attemptColumns.join(', ')}`);
       const attemptResult = await queryRunner.query(
         `INSERT INTO ${config.attempts}
             (${attemptColumns.join(', ')})
@@ -243,96 +243,37 @@ export class AssessmentService {
     }
   }
 
-  private async getAttemptQuestionsByConfig(
-    attemptId: number,
-    config: ModuleConfig,
-    shuffleOptions: boolean,
-    seed: string,
-  ) {
-    const textColumn = config.questions === 'tech_coding_questions'
-      ? 'q.problem_statement as question_text'
-      : 'q.question_text';
-    const hasDifficulty = config.questions !== 'tech_role_questions';
-    const selectColumns = [
-      'aq.display_order',
-      `q.${config.idCol} as question_id`,
-      textColumn,
-      ...(hasDifficulty ? ['q.difficulty'] : []),
-      ...config.selectColumns,
-    ];
-    const groupByTextColumn = config.questions === 'tech_coding_questions'
-      ? 'q.problem_statement'
-      : 'q.question_text';
-    const groupByColumns = [
-      'aq.display_order',
-      `q.${config.idCol}`,
-      groupByTextColumn,
-      ...(hasDifficulty ? ['q.difficulty'] : []),
-      ...config.groupByColumns,
-    ];
-
-    const optionsSelect = config.options
-      ? `COALESCE(
-            json_agg(
-              json_build_object('id', o.option_id::text, 'text', o.option_text)
-            ) FILTER (WHERE o.option_id IS NOT NULL),
-            '[]'::json
-         ) as options`
-      : `'[]'::json as options`;
-
-    const joinOptions = config.options
-      ? `LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}`
-      : '';
-
+  private async getAttemptQuestionsByConfig(attemptId: number, config: any, shuffleOptions: boolean, seed: string) {
     const questionRows = await this.dataSource.query(
-      `SELECT ${selectColumns.join(', ')}, ${optionsSelect}
+      `SELECT aq.display_order, q.${config.idCol} as question_id, q.question_text, q.image_url, q.difficulty,
+              COALESCE(
+                json_agg(
+                  json_build_object('id', o.option_id::text, 'text', o.option_text)
+                ) FILTER (WHERE o.option_id IS NOT NULL),
+                '[]'::json
+              ) as options
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-       ${joinOptions}
+       LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
-       GROUP BY ${groupByColumns.join(', ')}
+       GROUP BY aq.display_order, q.${config.idCol}, q.question_text, q.image_url, q.difficulty
        ORDER BY aq.display_order ASC`,
       [attemptId],
     );
 
     return questionRows.map((q: any) => {
-      let finalOptions = q.options;
-      if (shuffleOptions && Array.isArray(q.options)) {
-        finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
-      }
-      const mapped: any = {
-        id: q.question_id,
-        text: q.question_text,
-        options: finalOptions || [],
-      };
-      if (q.difficulty !== undefined && q.difficulty !== null) mapped.difficulty = q.difficulty;
-
-      if (q.image_url !== undefined) mapped.imageUrl = q.image_url;
-      if (q.category !== undefined) mapped.category = q.category;
-      if (q.marks !== undefined) mapped.marks = Number(q.marks);
-      if (q.negative_marks !== undefined) mapped.negativeMarks = Number(q.negative_marks);
-      if (q.explanation !== undefined) mapped.explanation = q.explanation;
-      if (q.question_type !== undefined) mapped.questionType = q.question_type;
-      if (q.scenario_context !== undefined) mapped.scenarioContext = q.scenario_context;
-      if (q.task_type !== undefined) mapped.taskType = q.task_type;
-      if (q.audio_url !== undefined) mapped.audioUrl = q.audio_url;
-      if (q.passage_text !== undefined) mapped.passage = q.passage_text;
-      if (q.reference_answer !== undefined) mapped.referenceAnswer = q.reference_answer;
-      if (q.rubric_json !== undefined) mapped.rubric = q.rubric_json;
-      if (q.title !== undefined) mapped.title = q.title;
-      if (q.statement !== undefined) mapped.statement = q.statement;
-      if (q.startercode !== undefined) mapped.starterCode = q.startercode;
-      if (q.starterfiles !== undefined) mapped.starterFiles = q.starterfiles;
-      if (q.entryfile !== undefined) mapped.entryFile = q.entryfile;
-      if (q.limits !== undefined) mapped.limits = q.limits;
-      if (q.sampleio !== undefined) mapped.sampleIo = q.sampleio;
-      if (q.allowedlanguages !== undefined) mapped.allowedLanguages = q.allowedlanguages;
-      if (q.inputformat !== undefined) mapped.inputFormat = q.inputformat;
-      if (q.outputformat !== undefined) mapped.outputFormat = q.outputformat;
-      if (q.constraints !== undefined) mapped.constraints = q.constraints;
-
-      return mapped;
-    });
+        let finalOptions = q.options;
+        if (shuffleOptions) {
+          finalOptions = this.shuffleWithSeed(q.options, `${seed}_${q.question_id}`);
+        }
+        return {
+          id: q.question_id,
+          text: q.question_text,
+          imageUrl: q.image_url,
+          difficulty: q.difficulty,
+          options: finalOptions,
+        };
+      });
   }
 
   async startAptitudeAttempt(data: any) {
@@ -342,7 +283,7 @@ export class AssessmentService {
   async getAttemptQuestions(token: string) {
     try {
       const moduleType = (token.startsWith('APT-') ? 'aptitude' : 
-                         token.startsWith('GRA-') ? 'grammar' :
+                         (token.startsWith('GRA-') || token.startsWith('COM-')) ? 'grammar' :
                          token.startsWith('MNC-') ? 'mnc' :
                          token.startsWith('ROL-') ? 'role' : 'aptitude');
 

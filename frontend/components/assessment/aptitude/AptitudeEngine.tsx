@@ -266,45 +266,9 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     if (loadError || questions.length === 0) {
         return (
             <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 dark:bg-red-500/5">
-                    <AlertCircle size={32} />
-                </div>
-                <h2 className="mb-2 text-xl font-black text-[#17201b] dark:text-white">
-                    {questions.length === 0 ? "Question Bank Empty" : "Initialization Failed"}
-                </h2>
-                <p className="mb-8 max-w-md text-center text-sm font-medium text-slate-500 dark:text-slate-400">
-                    {loadError || `No active ${mode} questions were found for this assessment. Please contact support or check your admin settings.`}
+                <p className="text-lg text-slate-500 dark:text-slate-400">
+                    No Questions Found
                 </p>
-                <div className="flex gap-3">
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-brand-green/20 bg-white px-6 text-sm font-bold text-[#17201b] transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white"
-                    >
-                        <RotateCcw size={16} />
-                        Retry Sync
-                    </button>
-                    <button 
-                        onClick={() => window.location.href = '/'}
-                        className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-green px-6 text-sm font-bold text-white shadow-lg shadow-brand-green/20 transition hover:bg-[#19be5e]"
-                    >
-                        Return Home
-                    </button>
-                </div>
-                
-                <div className="mt-12 flex flex-col items-center">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/20">System Status</p>
-                    <div className="mt-2 flex items-center gap-4 rounded-lg bg-white/50 p-2 px-4 backdrop-blur-sm dark:bg-white/5">
-                        <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 rounded-full bg-brand-green" />
-                            <span className="text-[9px] font-bold text-slate-500 uppercase">API: Online</span>
-                        </div>
-                        <div className="h-3 w-px bg-slate-200 dark:bg-white/10" />
-                        <div className="flex items-center gap-2">
-                            <div className={`h-1.5 w-1.5 rounded-full ${questions.length > 0 ? 'bg-brand-green' : 'bg-red-500'}`} />
-                            <span className="text-[9px] font-bold text-slate-500 uppercase">Data: {questions.length > 0 ? 'Ready' : 'Empty'}</span>
-                        </div>
-                    </div>
-                </div>
             </div>
         );
     }
@@ -655,7 +619,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                             <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/60">Review your assessment summary before finalizing your submission.</p>
 
                             <div className="mt-4 flex items-center gap-2 rounded-full border border-brand-green/10 bg-brand-green/[0.03] px-4 py-1.5 dark:border-white/5 dark:bg-white/5">
-                                <div className="h-2 w-2 animate-pulse rounded-full bg-brand-green" />
+                                <div className="h-2 w-2 rounded-full bg-brand-green" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-brand-green">
                                     Time Remaining: {formatTime(timeLeft)}
                                 </span>

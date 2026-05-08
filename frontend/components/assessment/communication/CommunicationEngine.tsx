@@ -400,30 +400,9 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     if (loadError || tasks.length === 0) {
         return (
             <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 dark:bg-red-500/5">
-                    <AlertCircle size={32} />
-                </div>
-                <h2 className="mb-2 text-xl font-black text-[#17201b] dark:text-white">
-                    {tasks.length === 0 ? "Task Bank Empty" : "Initialization Failed"}
-                </h2>
-                <p className="mb-8 max-w-md text-center text-sm font-medium text-slate-500 dark:text-slate-400">
-                    {loadError || `No active ${mode} tasks were found for this communication assessment. Please check your admin settings.`}
+                <p className="text-lg text-slate-500 dark:text-slate-400">
+                    No Questions Found
                 </p>
-                <div className="flex gap-3">
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-brand-green/20 bg-white px-6 text-sm font-bold text-[#17201b] transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 dark:text-white"
-                    >
-                        <RotateCcw size={16} />
-                        Retry Sync
-                    </button>
-                    <button 
-                        onClick={() => window.location.href = '/'}
-                        className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-green px-6 text-sm font-bold text-white shadow-lg shadow-brand-green/20 transition hover:bg-[#19be5e]"
-                    >
-                        Return Home
-                    </button>
-                </div>
             </div>
         );
     }

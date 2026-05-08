@@ -20,6 +20,7 @@ import {
   type PricingTier,
 } from "@/lib/exams";
 import DashboardContent from "./dashboard/DashboardContent";
+import ProfileView from "./ProfileView";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -303,6 +304,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             handleStartExam={handleModalStart}
             setShowDetailModal={setShowDetailModal}
           />
+        ) : currentView === "profile" ? (
+          <ProfileView onNavigate={(view) => setCurrentView(view as any)} />
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">

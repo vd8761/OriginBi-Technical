@@ -614,38 +614,30 @@ export class EvaluationService {
     tableName: string,
     result: EvaluationResult
   ): Promise<void> {
+    // Only update columns that exist in the schema for all attempt tables.
+    // Extended analytics columns (accuracy, percentile_rank, etc.) are NOT in the
+    // current schema — store them in the existing JSON-compatible fields or add a
+    // migration before enabling those updates.
+    const idCol = tableName.replace('tech_', '').replace('_attempts', '') + '_attempt_id';
+
     await this.dataSource.query(`
       UPDATE ${tableName}
-      SET 
-        status = $1,
-        submitted_at = $2,
-        total_score = $3,
-        positive_score = $4,
-        negative_score = $5,
-        accuracy = $6,
-        completion_rate = $7,
-        time_taken_seconds = $8,
-        percentile_rank = $9,
-        reliability_score = $10,
-        is_certified = $11,
-        certificate_id = $12,
-        section_breakdown = $13,
-        updated_at = NOW()
-      WHERE ${tableName.replace('tech_', '').replace('_attempts', '')}_attempt_id = $14
+      SET
+        status          = $1,
+        submitted_at    = $2,
+        total_score     = $3,
+        positive_score  = $4,
+        negative_score  = $5,
+        time_taken_seconds = $6,
+        updated_at      = NOW()
+      WHERE ${idCol} = $7
     `, [
       result.status,
       result.completedAt,
       result.scoreMetrics.netScore,
       result.scoreMetrics.positiveScore,
       result.scoreMetrics.negativeScore,
-      result.scoreMetrics.accuracy,
-      result.scoreMetrics.completionRate,
       result.timeMetrics.timeTaken,
-      result.scoreMetrics.percentileRank,
-      result.reliabilityMetrics.confidenceScore,
-      result.isCertified,
-      result.certificateId,
-      JSON.stringify(result.sections),
       attemptId,
     ]);
   }

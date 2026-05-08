@@ -9,109 +9,116 @@ interface CommunicationPreTestProps {
 }
 
 const metrics = [
-    { label: "Tasks", value: "40" },
-    { label: "Duration", value: "45 min" },
-    { label: "Mode", value: "Audio + text" },
-    { label: "Attempts", value: "1 out of 2" },
+    { label: "Sections", value: "3 Tasks" },
+    { label: "Duration", value: "20 min" },
+    { label: "Format", value: "Audio/Text" },
+    { label: "Attempts", value: "1 out of 1" },
 ];
 
 const checklist = [
-    "Allow microphone access when the browser asks.",
-    "Use headphones or a quiet room for speaking tasks.",
-    "Keep audio playback enabled before beginning.",
-    "Ensure all tasks are completed before submission.",
+    "Ensure your microphone is connected and working.",
+    "Be in a quiet environment for the speaking section.",
+    "Do not refresh the page during the recording phases.",
+    "Complete all tasks in one continuous sitting.",
 ];
 
-const skills = ["Listening", "Speaking", "Reading", "Writing"];
+const modules = [
+    { title: "Listening", desc: "Comprehension & context" },
+    { title: "Speaking", desc: "Clarity & articulation" },
+    { title: "Writing", desc: "Grammar & structure" },
+];
 
 const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({ 
     onStart, 
     onClose,
-    accentColor = '#1ED36A',
-    gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
+    accentColor = '#06b6d4',
+    gradient = 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
     mode = 'main'
 }) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
-            <button
-                type="button"
-                className="absolute inset-0 bg-[#0f1712]/70 backdrop-blur-sm"
-                onClick={onClose}
-                aria-label="Close communication assessment intro"
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+                aria-hidden="true"
             />
 
             <section
                 role="dialog"
                 aria-modal="true"
-                aria-labelledby="communication-pretest-title"
-                className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-brand-green/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
+                className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#111a15]"
             >
-                <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:px-6 sm:py-5 dark:border-white/10">
-
-                    <div className="flex items-start gap-5">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 sm:p-8 dark:border-white/10">
+                    <div className="flex items-start gap-6">
                         <div 
-                            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg [&_svg]:h-7 [&_svg]:w-7"
+                            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg text-white"
                             style={{ background: gradient || accentColor }}
                         >
-                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 0 1-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8Z" />
+                            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                             </svg>
                         </div>
-                        <div>
-
-                            <h2 id="communication-pretest-title" className="text-xl font-bold leading-tight text-slate-900 dark:text-white tracking-tight sm:text-2xl">
-                                Communication Assessment ({mode === 'trial' ? 'Trial' : 'Main'})
-                            </h2>
-                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-slate-500 dark:text-white/60 sm:text-sm">
-                                Evaluate workplace communication through listening prompts, speaking responses, reading tasks, and writing exercises.
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                                    Communication
+                                </h2>
+                                {mode === 'trial' && (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
+                                        Trial Assessment
+                                    </span>
+                                )}
+                            </div>
+                            <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-white/60">
+                                Evaluating linguistic proficiency, listening precision, and professional articulation.
                             </p>
                         </div>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b]/40 transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white/40"
-
-                        aria-label="Close"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-[#06b6d4] hover:text-[#06b6d4] dark:border-white/10"
                     >
-                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fillRule="evenodd" d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 1 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
                         </svg>
                     </button>
                 </header>
 
-                <div className="overflow-y-auto p-4 sm:p-5">
-                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
-                        <div>
-                            <h3 className="text-base font-bold text-[#17201b] dark:text-white">What this test covers</h3>
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                {skills.map((skill) => (
-                                    <div key={skill} className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-3 text-sm font-medium text-[#17201b] dark:border-white/10 dark:bg-white/5 dark:text-white">
-
-                                        {skill}
-                                    </div>
-                                ))}
+                <div className="overflow-y-auto p-6 sm:p-8">
+                    <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
+                        <div className="space-y-8">
+                            <div>
+                                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Focus areas</h3>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    {modules.map((m) => (
+                                        <div key={m.title} className="rounded-xl border border-[#06b6d4]/10 bg-[#06b6d4]/5 p-4 dark:border-white/10 dark:bg-white/5">
+                                            <p className="text-sm font-black uppercase tracking-wider text-[#06b6d4] mb-1">{m.title}</p>
+                                            <p className="text-xs font-bold text-slate-600 dark:text-white/50">{m.desc}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
-                            <h3 className="mt-5 text-base font-bold text-[#17201b] dark:text-white">Start checklist</h3>
-                            <div className="mt-3 space-y-2.5">
-                                {checklist.map((point) => (
-                                    <div key={point} className="flex items-start gap-3">
-                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-sm bg-brand-green" />
-                                        <p className="text-[13px] font-medium leading-5 text-[#17201b]/80 dark:text-white/80 sm:text-sm">{point}</p>
-                                    </div>
-                                ))}
+                            <div>
+                                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Environment Check</h3>
+                                <div className="space-y-3">
+                                    {checklist.map((point) => (
+                                        <div key={point} className="flex items-start gap-3">
+                                            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#06b6d4]" />
+                                            <p className="text-sm font-medium text-slate-600 dark:text-white/70">{point}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
-                        <aside className="rounded-lg border border-brand-green/10 bg-brand-green/5 p-4 dark:border-white/10 dark:bg-white/5">
-                            <h3 className="text-sm font-bold text-[#17201b] dark:text-white">Session snapshot</h3>
-                            <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
+                        <aside className="h-fit rounded-2xl border border-[#06b6d4]/10 bg-[#06b6d4]/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-[#06b6d4] mb-4">Specs</h3>
+                            <div className="space-y-4">
                                 {metrics.map((metric) => (
-                                    <div key={metric.label} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
-                                        <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">{metric.label}</span>
-                                        <strong className="text-sm font-bold text-[#17201b] dark:text-white">{metric.value}</strong>
-
+                                    <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-[#06b6d4]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
+                                        <span className="text-xs font-bold text-slate-500 dark:text-white/40">{metric.label}</span>
+                                        <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
                                     </div>
                                 ))}
                             </div>
@@ -119,18 +126,18 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
                     </div>
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-end sm:px-6 dark:border-white/10 dark:bg-[#111a15]">
+                <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-6 sm:flex-row sm:items-center sm:justify-end sm:px-8 dark:border-white/10 dark:bg-transparent">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-[13px] font-bold text-slate-600 transition hover:bg-slate-50 focus:outline-none dark:border-white/15 dark:bg-transparent dark:text-white"
+                        className="px-8 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 dark:text-white/40 dark:hover:text-white transition-all"
                     >
                         Go back
                     </button>
                     <button
                         type="button"
                         onClick={() => onStart(mode)}
-                        className="inline-flex min-h-10 items-center justify-center rounded-full bg-brand-green px-8 text-[13px] font-bold text-white transition hover:bg-[#1bb85c] active:scale-95"
+                        className="rounded-lg bg-[#06b6d4] px-10 py-3 text-[11px] font-bold uppercase tracking-wider text-white transition-all hover:bg-[#0891b2]"
                     >
                         Begin test
                     </button>

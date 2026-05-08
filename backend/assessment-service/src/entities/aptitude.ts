@@ -72,9 +72,6 @@ export class TechAptitudeQuestion {
     })
     negativeMarks!: number;
 
-    @Column({ name: "explanation", type: "text", nullable: true })
-    explanation!: string | null;
-
     @Column({
         name: "status",
         type: "enum",
