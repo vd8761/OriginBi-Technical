@@ -27,8 +27,9 @@ import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  AlertCircle, ArrowLeft,
+  AlertCircle, ArrowLeft, Filter,
 } from "lucide-react";
+import CustomSelect from "@/components/ui/CustomSelect";
 import {
   AptitudeIcon,
   CommunicationIcon,
@@ -519,22 +520,21 @@ export default function AdminQuestionsManager() {
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
         <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6">
           {/* Filter Tabs - Now on the left */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm overflow-x-auto scrollbar-hide">
-            <button 
-              onClick={() => setFilterCategory("all")} 
-              className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${filterCategory === "all" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
-            >
-              All ({questions.length})
-            </button>
-            {filterCats.map(cat => (
-              <button 
-                key={cat.key} 
-                onClick={() => setFilterCategory(cat.key)} 
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat.key ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5"}`}
-              >
-                {cat.label} ({categoryCounts[cat.key] || 0})
-              </button>
-            ))}
+          <div className="flex items-center gap-3 w-full xl:w-auto">
+            <div className="w-full sm:w-64">
+              <CustomSelect
+                label="Filter by Category"
+                value={filterCategory}
+                onChange={setFilterCategory}
+                options={[
+                  { label: `All Questions (${questions.length})`, value: "all" },
+                  ...filterCats.map(cat => ({
+                    label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
+                    value: cat.key
+                  }))
+                ]}
+              />
+            </div>
           </div>
           
           {/* Action Buttons: Export, Clear, Bulk Import, Add New */}

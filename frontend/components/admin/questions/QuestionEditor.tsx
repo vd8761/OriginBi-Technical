@@ -403,7 +403,6 @@ export default function QuestionEditor({ question, assessmentType, onSave, onCan
                       })}
                     </div>
                   </div>
-                  <div><label className={labelCls}>Explanation</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={1} placeholder="Why is this correct?" /></div>
                 </div>
               ) : (
                 ["mcq", "reading", "audio"].includes(commTaskType) && (

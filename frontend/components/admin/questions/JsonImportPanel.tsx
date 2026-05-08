@@ -240,9 +240,16 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
               return (
                 <div key={(q as { id: string }).id} className={`group rounded-xl border transition-all duration-300 ${isExpanded ? "bg-white dark:bg-white/[0.04] border-brand-green/30 shadow-md" : "bg-white/50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/20"
                   }`}>
-                  <button
+                  <div
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                    className="flex w-full items-center gap-3 p-3 text-left"
+                    className="flex w-full cursor-pointer items-center gap-3 p-3 text-left"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setExpandedIdx(isExpanded ? null : idx);
+                      }
+                    }}
                   >
                     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-black transition-colors ${isExpanded ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"
                       }`}>
@@ -259,14 +266,21 @@ export default function JsonImportPanel({ assessmentType, onImport, onCancel }: 
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button onClick={(e) => { e.stopPropagation(); handleRemoveFromPreview(idx); }} className="rounded-md p-1.5 text-red-400/40 hover:bg-red-500 hover:text-white transition-all">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleRemoveFromPreview(idx); 
+                        }} 
+                        className="rounded-md p-1.5 text-red-400/40 hover:bg-red-500 hover:text-white transition-all"
+                        title="Remove from list"
+                      >
                         <Trash2 size={12} />
                       </button>
                       <div className={`p-1 rounded-md ${isExpanded ? "text-brand-green" : "text-[#17201b] dark:text-white"}`}>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </div>
                     </div>
-                  </button>
+                  </div>
 
                   {isExpanded && (
                     <div className="px-3.5 pb-3.5">

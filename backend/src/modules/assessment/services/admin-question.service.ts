@@ -91,7 +91,6 @@ export class AdminQuestionService {
         text: o.option_text,
       })),
       correctOptionId: row.correct_option_id ? Number(row.correct_option_id) : null,
-      explanation: row.explanation,
       marks: Number(row.marks),
       negativeMarks: Number(row.negative_marks),
       status: row.status,
@@ -210,7 +209,6 @@ export class AdminQuestionService {
       questionText,
       options,
       correctOptionIndex = 0,
-      explanation,
       marks = 1,
       negativeMarks = 0,
       status = 'active',
@@ -236,10 +234,10 @@ export class AdminQuestionService {
       const qInsert = await queryRunner.query(
         `INSERT INTO ${config.questionTable}
             (assessment_id, ${config.categoryColumn}, difficulty, question_text, image_url,
-             correct_option_id, marks, negative_marks, explanation, status, mode)
-         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10)
+             correct_option_id, marks, negative_marks, status, mode)
+         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9)
          RETURNING *`,
-        [assessmentId, category, difficulty, questionText, imageUrl, marks, negativeMarks, explanation || null, status, mode],
+        [assessmentId, category, difficulty, questionText, imageUrl, marks, negativeMarks, status, mode],
       );
       const questionRow = qInsert[0];
       const questionId = questionRow[config.idColumn];
@@ -283,7 +281,7 @@ export class AdminQuestionService {
 
   async updateQuestion(module: ModuleType, id: number, data: any) {
     const config = MODULE_CONFIGS[module];
-    const { category, difficulty, questionText, options, correctOptionIndex, explanation, marks, negativeMarks, status, mode, imageUrl } = data;
+    const { category, difficulty, questionText, options, correctOptionIndex, marks, negativeMarks, status, mode, imageUrl } = data;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -304,7 +302,6 @@ export class AdminQuestionService {
       if (category !== undefined) { updates.push(`${config.categoryColumn} = $${pIdx++}`); params.push(category); }
       if (difficulty !== undefined) { updates.push(`difficulty = $${pIdx++}`); params.push(difficulty); }
       if (questionText !== undefined) { updates.push(`question_text = $${pIdx++}`); params.push(questionText); }
-      if (explanation !== undefined) { updates.push(`explanation = $${pIdx++}`); params.push(explanation || null); }
       if (marks !== undefined) { updates.push(`marks = $${pIdx++}`); params.push(marks); }
       if (negativeMarks !== undefined) { updates.push(`negative_marks = $${pIdx++}`); params.push(negativeMarks); }
       if (status !== undefined) { updates.push(`status = $${pIdx++}`); params.push(status); }
@@ -442,10 +439,10 @@ export class AdminQuestionService {
 
           const qInsert = await queryRunner.query(
             `INSERT INTO ${config.questionTable}
-                (assessment_id, ${config.categoryColumn}, difficulty, question_text, correct_option_id, marks, negative_marks, explanation, status, mode)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
+                (assessment_id, ${config.categoryColumn}, difficulty, question_text, correct_option_id, marks, negative_marks, status, mode)
+             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
              RETURNING ${config.idColumn}`,
-            [assessmentId, category, q.difficulty || 'medium', questionText, q.marks ?? 1, q.negativeMarks ?? 0, q.explanation || null, q.status || 'active', q.mode || 'trial'],
+            [assessmentId, category, q.difficulty || 'medium', questionText, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'],
           );
           const newQId = qInsert[0][config.idColumn];
 

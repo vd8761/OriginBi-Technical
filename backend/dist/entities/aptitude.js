@@ -28,7 +28,6 @@ let TechAptitudeQuestion = class TechAptitudeQuestion {
     correctOptionId;
     marks;
     negativeMarks;
-    explanation;
     status;
     createdAt;
     updatedAt;
@@ -102,10 +101,6 @@ __decorate([
     }),
     __metadata("design:type", Number)
 ], TechAptitudeQuestion.prototype, "negativeMarks", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ name: "explanation", type: "text", nullable: true }),
-    __metadata("design:type", Object)
-], TechAptitudeQuestion.prototype, "explanation", void 0);
 __decorate([
     (0, typeorm_1.Column)({
         name: "status",
