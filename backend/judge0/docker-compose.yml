@@ -1,0 +1,58 @@
+x-logging:
+  &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 100M
+
+services:
+  server:
+    image: mrkushalsm/judge0:cgv2
+    volumes:
+      # FIX 1: Changed mount path to /etc/judge0.conf
+      - ./judge0.conf:/etc/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    privileged: true
+    # FIX 2: Added env_file so it picks up your passwords/settings
+    env_file: judge0.conf
+    environment:
+      - JUDGE0_ALLOW_UNSAFE_EXECUTION=true
+    <<: *default-logging
+    restart: always
+
+  workers:
+    image: mrkushalsm/judge0:cgv2
+    command: ["./scripts/workers"]
+    volumes:
+      # FIX 1: Changed mount path to /etc/judge0.conf
+      - ./judge0.conf:/etc/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    # FIX 2: Added env_file
+    env_file: judge0.conf
+    environment:
+      - JUDGE0_ALLOW_UNSAFE_EXECUTION=true
+    <<: *default-logging
+    restart: always
+
+  db:
+    image: postgres:16.2
+    env_file: judge0.conf
+    volumes:
+      - data:/var/lib/postgresql/data/
+    <<: *default-logging
+    restart: always
+
+  redis:
+    image: redis:7.2.4
+    command: [
+      "bash", "-c",
+      'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"'
+    ]
+    env_file: judge0.conf
+    <<: *default-logging
+    restart: always
+
+volumes:
+  data:

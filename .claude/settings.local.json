@@ -6,7 +6,11 @@
       "Bash(cp \"C:\\\\Users\\\\Sriharan\\\\.claude\\\\projects\\\\D--Folders-TouchMark-OriginBi-Technical\\\\863275a4-196e-4ff1-830f-5545317b4ce0\\\\tool-results\\\\webfetch-1777918926230-yi1854.bin\" /tmp/design.tar.gz)",
       "Bash(mkdir -p /tmp/design)",
       "Bash(tar -xzf /tmp/design.tar.gz -C /tmp/design)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(npm install *)",
+      "Bash(curl -s -X POST \"http://localhost:2358/submissions?base64_encoded=true&wait=true\" -H \"Content-Type: application/json\" -d \"{\\\\\"language_id\\\\\":71,\\\\\"source_code\\\\\":\\\\\"$\\(printf 'print\\(int\\(input\\(\\)\\) * 2\\)')",
+      "Bash(grep -qE \"Ready|ready in|Local:\" \"C:\\\\\\\\Users\\\\\\\\Sriharan\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--Folders-TouchMark-OriginBi-Technical\\\\\\\\ef081e41-5083-4a10-b0fd-ba8b234ae26a\\\\\\\\tasks\\\\\\\\bgrmf4et7.output\")",
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\Sriharan\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--Folders-TouchMark-OriginBi-Technical\\\\\\\\ef081e41-5083-4a10-b0fd-ba8b234ae26a\\\\\\\\tasks\\\\\\\\bgrmf4et7.output\")"
     ]
   }
 }
