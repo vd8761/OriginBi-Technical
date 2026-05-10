@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
+import { ApiError, registerUser } from "@/lib/api";
 import { COUNTRY_CODES } from "@/lib/countryCodes";
 
 /* ─── Chevron Icon ─── */
@@ -182,7 +183,11 @@ function CustomSelect({
 
 /* ═══════════════════════ SIGNUP FORM ═══════════════════════ */
 
-const SignupForm: React.FC = () => {
+interface SignupFormProps {
+  onSignupSuccess?: (userName?: string) => void;
+}
+
+const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -193,7 +198,9 @@ const SignupForm: React.FC = () => {
     password: "",
     role: "",
   });
-  const [formErrors] = useState<Record<string, string>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generalError, setGeneralError] = useState("");
 
   const genderOptions = [
     { value: "MALE", label: "Male" },
@@ -210,14 +217,54 @@ const SignupForm: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setGeneralError("");
+    setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!formData.name.trim()) nextErrors.name = "Full name is required.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+    if (!formData.phone.trim()) nextErrors.phone = "Mobile number is required.";
+    if (formData.password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    if (!formData.role) nextErrors.role = "Select your role.";
+    setFormErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setIsSubmitting(true);
+    setGeneralError("");
+    try {
+      const session = await registerUser({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        gender: formData.gender,
+        countryCode: formData.countryCode,
+        phone: formData.phone,
+        role: formData.role,
+      });
+      onSignupSuccess?.(session.registration.fullName || session.user.email);
+    } catch (err) {
+      setGeneralError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to create account. Check that the exam engine is running.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      {generalError && (
+        <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">
+          {generalError}
+        </div>
+      )}
       {/* Name & Gender */}
       <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr] gap-4">
         {/* Full Name */}
@@ -232,7 +279,9 @@ const SignupForm: React.FC = () => {
             onChange={handleChange}
             placeholder="Enter your full name"
             className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.name ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 text-sm font-normal text-slate-800 dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+            disabled={isSubmitting}
           />
+          {formErrors.name && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.name}</p>}
         </div>
 
         {/* Gender Toggle (Reference Style) */}
@@ -271,7 +320,9 @@ const SignupForm: React.FC = () => {
           onChange={handleChange}
           placeholder="name@example.com"
           className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.email ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 text-sm font-normal text-slate-800 dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+          disabled={isSubmitting}
         />
+        {formErrors.email && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.email}</p>}
       </div>
 
       {/* Mobile Input (Reference Style) */}
@@ -296,6 +347,7 @@ const SignupForm: React.FC = () => {
             onChange={handleChange}
             placeholder="Min 8 characters"
             className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.password ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 pr-12 text-sm font-normal text-slate-800 dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+            disabled={isSubmitting}
           />
           <button
             type="button"
@@ -305,6 +357,7 @@ const SignupForm: React.FC = () => {
             {passwordVisible ? <EyeIcon className="h-5 w-5 text-brand-green" /> : <EyeOffIcon className="h-5 w-5 text-brand-green" />}
           </button>
         </div>
+        {formErrors.password && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.password}</p>}
       </div>
 
       {/* Role */}
@@ -313,7 +366,10 @@ const SignupForm: React.FC = () => {
         required
         options={roleOptions}
         value={formData.role}
-        onChange={(val) => setFormData((prev) => ({ ...prev, role: val }))}
+        onChange={(val) => {
+          setFormData((prev) => ({ ...prev, role: val }));
+          setFormErrors((prev) => ({ ...prev, role: "" }));
+        }}
         placeholder="Select your role"
         error={formErrors.role}
       />
@@ -321,9 +377,10 @@ const SignupForm: React.FC = () => {
       {/* Submit Button */}
       <button
         type="submit"
-        className="w-full h-14 mt-2 bg-brand-green hover:bg-brand-green/90 text-white text-base font-bold rounded-full transition-all active:scale-[0.98] cursor-pointer"
+        disabled={isSubmitting}
+        className="w-full h-14 mt-2 bg-brand-green hover:bg-brand-green/90 text-white text-base font-bold rounded-full transition-all active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:bg-brand-green/50"
       >
-        Create Account
+        {isSubmitting ? "Creating..." : "Create Account"}
       </button>
     </form>
   );

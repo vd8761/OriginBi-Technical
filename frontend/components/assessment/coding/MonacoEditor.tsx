@@ -425,9 +425,11 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const changeListenerRef = useRef<{ dispose: () => void } | null>(null);
     const tooltipTeardownRef = useRef<(() => void) | null>(null);
 
-    onChangeRef.current = onChange;
-    valueRef.current = value;
-    pathRef.current = path;
+    useEffect(() => {
+        onChangeRef.current = onChange;
+        valueRef.current = value;
+        pathRef.current = path;
+    }, [onChange, path, value]);
 
     useEffect(() => {
         onFormatRef.current = onFormat;

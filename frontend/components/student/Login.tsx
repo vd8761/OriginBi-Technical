@@ -141,7 +141,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   exit={{ opacity: 0, scale: 0.98, y: -10 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
-                  <SignupForm />
+                  <SignupForm onSignupSuccess={(name) => onLoginSuccess(name)} />
                   <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
                     <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                       Already have an account?{" "}

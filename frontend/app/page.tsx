@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Login from "@/components/student/Login";
 import AssessmentPortal from "@/components/student/AssessmentPortal";
 import { motion, AnimatePresence } from "framer-motion";
+import { getSession, logoutUser } from "@/lib/api";
 
 // Completion Toast Component
 const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose: () => void }) => {
@@ -50,23 +51,58 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 function HomeContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string>("Student");
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    getSession()
+      .then((session) => {
+        if (session) {
+          setUserName(session.registration.fullName || session.user.email);
+          setIsLoggedIn(true);
+        }
+      })
+      .catch(() => {
+        setIsLoggedIn(false);
+      })
+      .finally(() => setBootstrapping(false));
+  }, []);
 
   useEffect(() => {
     // Check for completion parameter
     const completed = searchParams.get("completed");
     if (completed) {
-      setShowCompletionToast(completed);
+      const id = window.setTimeout(() => setShowCompletionToast(completed), 0);
       // Clean up URL
       window.history.replaceState({}, "", window.location.pathname);
+      return () => window.clearTimeout(id);
     }
   }, [searchParams]);
 
   const handleLoginSuccess = (name?: string) => {
     if (name) setUserName(name);
     setIsLoggedIn(true);
+    const next = searchParams.get("next");
+    if (next?.startsWith("/")) {
+      router.push(next);
+    }
   };
+
+  const handleLogout = async () => {
+    await logoutUser().catch(() => undefined);
+    setIsLoggedIn(false);
+    setUserName("Student");
+  };
+
+  if (bootstrapping) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -82,7 +118,7 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal userName={userName} />
+        <AssessmentPortal userName={userName} onLogout={handleLogout} />
       )}
     </>
   );

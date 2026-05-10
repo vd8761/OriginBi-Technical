@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Header from "./Header";
-import ExamCarousel, { Exam } from "./ExamCarousel";
+import { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
 import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
@@ -20,7 +20,6 @@ import {
   type PricingTier,
 } from "@/lib/exams";
 import DashboardContent from "./dashboard/DashboardContent";
-import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -35,9 +34,10 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
 
 interface AssessmentPortalProps {
   userName?: string;
+  onLogout?: () => void;
 }
 
-const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student" }) => {
+const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", onLogout }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -47,10 +47,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
   const [showNextStepAlert, setShowNextStepAlert] = useState(true);
-  const { isPaid } = usePaidAssessments();
   const router = useRouter();
-
-  const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
 
   const filteredExams = useMemo(() => {
     const baseExams = EXAMS.filter((exam) => exam.available);
@@ -83,7 +80,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     } else if (exam.id === "role") {
       setShowRoleModal(true);
     } else if (exam.id === "coding") {
-      router.push("/assessment/coding");
+      router.push("/explore/coding");
     } else if (exam.id === "mnc") {
       setShowMncModal(true);
     }
@@ -100,8 +97,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       <Header
         currentView={currentHeaderView}
-        onNavigate={(view) => setCurrentView(view)}
-        onLogout={() => console.log("Logging out...")}
+        onNavigate={(view) => {
+          if (["dashboard", "assessment", "profile", "details", "explore"].includes(view)) {
+            setCurrentView(view as AssessmentView);
+          }
+        }}
+        onLogout={() => onLogout?.()}
       />
 
       {/* Next Step Notification Alert */}
@@ -158,8 +159,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[100px] sm:pt-[108px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={EXAMS as any}
-            examDetails={EXAM_DETAILS as any}
+            assessments={EXAMS}
+            examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
             }}

@@ -33,14 +33,15 @@ const writeSet = (storageKey: string, eventName: string, set: Set<string>) => {
 };
 
 const useKeyedSet = (storageKey: string, eventName: string) => {
-    const [set, setLocal] = useState<Set<string>>(() => new Set());
+    const [set, setLocal] = useState<Set<string>>(() => readSet(storageKey));
 
     useEffect(() => {
-        setLocal(readSet(storageKey));
+        const id = window.setTimeout(() => setLocal(readSet(storageKey)), 0);
         const sync = () => setLocal(readSet(storageKey));
         window.addEventListener("storage", sync);
         window.addEventListener(eventName, sync);
         return () => {
+            window.clearTimeout(id);
             window.removeEventListener("storage", sync);
             window.removeEventListener(eventName, sync);
         };

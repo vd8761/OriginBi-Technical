@@ -2,8 +2,8 @@
 
 import React, { useState, FormEvent, FocusEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { EyeIcon, EyeOffIcon } from '../icons';
+import { ApiError, loginUser } from '@/lib/api';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
 
@@ -17,10 +17,7 @@ interface LoginFormProps {
 
 const LoginForm: React.FC<LoginFormProps> = ({
   onLoginSuccess,
-  buttonClass: _buttonClass,
-  portalMode: _portalMode,
 }) => {
-  const router = useRouter();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [values, setValues] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -76,11 +73,28 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const emailPart = values.email.split('@')[0];
-    const formattedName = emailPart
-      .replace(/[._-]/g, ' ')
-      .replace(/\b\w/g, (l) => l.toUpperCase());
-    onLoginSuccess(formattedName);
+    const nextErrors = {
+      email: validateEmail(values.email),
+      password: validatePassword(values.password),
+    };
+    setErrors(nextErrors);
+    setTouched({ email: true, password: true });
+    if (nextErrors.email || nextErrors.password) return;
+
+    setIsSubmitting(true);
+    setGeneralError('');
+    try {
+      const session = await loginUser(values.email, values.password);
+      onLoginSuccess(session.registration.fullName || session.user.email);
+    } catch (err) {
+      setGeneralError(
+        err instanceof ApiError
+          ? err.message
+          : 'Unable to login. Check that the exam engine is running.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isEmailInvalid = touched.email && !!errors.email;

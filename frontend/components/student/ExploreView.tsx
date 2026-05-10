@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRightIcon, LockIcon } from '../icons';
 import type { Exam } from './ExamCarousel';
 import { usePaidAssessments, codingPaymentKey, type PaymentKey } from '@/lib/payments';
 import { CODING_LANGUAGES } from '@/lib/exams';
+import { listAssignments, type Assignment } from '@/lib/api';
 
 type Track = 'core' | 'technical' | 'career';
 type ExploreFilter = 'all' | Track;
@@ -54,7 +55,24 @@ const TRACK_ORDER: Track[] = ['core', 'technical', 'career'];
 
 const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onNavigateToDetails }) => {
     const [filter, setFilter] = useState<ExploreFilter>('all');
+    const [assignments, setAssignments] = useState<Assignment[]>([]);
     const { isPaid } = usePaidAssessments();
+
+    const refreshAssignments = useCallback(async () => {
+        try {
+            const data = await listAssignments();
+            setAssignments(data.assignments);
+        } catch {
+            setAssignments([]);
+        }
+    }, []);
+
+    useEffect(() => {
+        const id = window.setTimeout(() => {
+            void refreshAssignments();
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, [refreshAssignments]);
 
     const grouped = useMemo(() => {
         const map: Record<Track, ExploreExam[]> = { core: [], technical: [], career: [] };
@@ -133,7 +151,7 @@ const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onN
 
                             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                                 {exams.map((exam) => {
-                                    const paidStatus = computePaidStatus(exam.id, isPaid);
+                                    const paidStatus = computePaidStatus(exam.id, isPaid, assignments);
                                     return (
                                         <ExploreAssessmentCard
                                             key={exam.id}
@@ -185,10 +203,17 @@ type PaidStatus = { kind: 'none' } | { kind: 'paid' } | { kind: 'partial'; count
 const computePaidStatus = (
     examId: string,
     isPaid: (key: PaymentKey) => boolean,
+    assignments: Assignment[],
 ): PaidStatus => {
     if (examId === 'coding') {
         const total = CODING_LANGUAGES.length;
-        const count = CODING_LANGUAGES.filter((lang) => isPaid(codingPaymentKey(lang.id))).length;
+        const count = CODING_LANGUAGES.filter((lang) => {
+            const key = codingPaymentKey(lang.id);
+            return assignments.some((assignment) => (
+                assignment.assignmentRef === key &&
+                assignment.status === 'active'
+            ));
+        }).length;
         if (count === 0) return { kind: 'none' };
         return { kind: 'partial', count, total };
     }

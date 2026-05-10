@@ -60,6 +60,12 @@
 
 @custom-variant dark (&:is(.dark, .dark *));
 
+:root {
+  --font-geist-sans: 'Haskoy', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-geist-mono: 'Cascadia Code', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-jakarta: 'Haskoy', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 @theme {
   --color-brand-green: #1ed36a;
   --color-brand-light-primary: #ffffff;

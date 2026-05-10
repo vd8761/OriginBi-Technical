@@ -11,7 +11,7 @@ import type { Exam } from "../ExamCarousel";
 interface DashboardContentProps {
   userName: string;
   handleSelectExam: (exam: Exam) => void;
-  handleStartExam: (exam: Exam, tier?: any) => void;
+  handleStartExam: (exam: Exam) => void;
   setShowDetailModal: (v: boolean) => void;
 }
 

@@ -104,7 +104,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
     const navigatorQuestions: NavigatorQuestion[] = MOCK_MNC_QUESTIONS.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
-        let state: QuestionState = isMarked ? "marked" : (isAnswered ? "answered" : "unanswered");
+        const state: QuestionState = isMarked ? "marked" : (isAnswered ? "answered" : "unanswered");
 
         return {
             id: question.id,
