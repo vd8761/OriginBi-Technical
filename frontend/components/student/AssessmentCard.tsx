@@ -16,7 +16,8 @@ interface AssessmentCardProps {
     accentColor?: string;
     gradient?: string;
     onDetailsClick: () => void;
-    onStartClick: () => void;
+    onTrialClick: () => void;
+    onMainClick: () => void;
 }
 
 const AssessmentCard: React.FC<AssessmentCardProps> = ({
@@ -35,7 +36,8 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
     accentColor = '#1ED36A',
     gradient,
     onDetailsClick,
-    onStartClick,
+    onTrialClick,
+    onMainClick,
 }) => {
     return (
         <div 
@@ -104,13 +106,13 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             <div className="flex items-center justify-end">
                 <div className="flex gap-2">
                     <button
-                        onClick={onStartClick}
+                        onClick={onTrialClick}
                         className="px-5 py-2 text-xs font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
                     >
                         Trial
                     </button>
                     <button 
-                        onClick={onStartClick}
+                        onClick={onMainClick}
                         className={`px-6 py-2 text-xs font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
                             available 
                                 ? 'bg-brand-green text-white hover:bg-[#1bb85c] shadow-brand-green/20' 

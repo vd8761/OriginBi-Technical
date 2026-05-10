@@ -1,75 +1,43 @@
 "use client";
 
-import React from 'react';
-import AptitudeEngine from '../../../components/assessment/aptitude/AptitudeEngine';
-import { useRouter } from 'next/navigation';
+import React from "react";
+import AptitudeEngine, { type AttemptSubmitResult } from "../../../components/assessment/aptitude/AptitudeEngine";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { useAssessmentTracker } from "../../../lib/assessmentTracker";
 
-// Correct answers for scoring
-const CORRECT_ANSWERS: Record<string, string> = {
-    q1: "o2", // 5% decrease
-    q2: "o2", // (1/8)
-    q3: "o2", // $50,000
-    q4: "o3", // Figure C
-};
-
-// Section mapping for detailed results
-const QUESTION_SECTIONS: Record<string, string> = {
-    q1: "Quantitative Aptitude",
-    q2: "Logical Reasoning",
-    q3: "Data Interpretation",
-    q4: "Abstract Reasoning",
-};
-
-export default function AptitudeAssessmentPage() {
+function AptitudeAssessmentContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const { markAssessmentComplete } = useAssessmentTracker();
 
-    const handleComplete = (answers: Record<string, string>) => {
-        // Calculate score
-        let correct = 0;
-        const sectionScores: Record<string, { correct: number; total: number }> = {
-            "Quantitative Aptitude": { correct: 0, total: 0 },
-            "Logical Reasoning": { correct: 0, total: 0 },
-            "Data Interpretation": { correct: 0, total: 0 },
-            "Abstract Reasoning": { correct: 0, total: 0 },
-        };
-
-        Object.entries(answers).forEach(([questionId, answerId]) => {
-            const section = QUESTION_SECTIONS[questionId];
-            if (section) {
-                sectionScores[section].total++;
-                if (CORRECT_ANSWERS[questionId] === answerId) {
-                    correct++;
-                    sectionScores[section].correct++;
-                }
-            }
-        });
-
-        const totalQuestions = Object.keys(CORRECT_ANSWERS).length;
-        const overallScore = Math.round((correct / totalQuestions) * 100);
-        const accuracy = Math.round((correct / Math.max(1, Object.keys(answers).length)) * 100);
-
-        // Calculate section scores
-        const sections = Object.entries(sectionScores).map(([name, scores]) => ({
-            name,
-            score: scores.total > 0 ? Math.round((scores.correct / scores.total) * 100) : 0,
-            weight: "25%",
-        }));
+    const handleComplete = (result: AttemptSubmitResult) => {
+        const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
+        const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
+        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
+        const accuracy = accuracyBase > 0 ? Math.round((result.correctCount / accuracyBase) * 100) : 0;
+        const overallScore = Math.max(0, Math.round(result.totalScore));
+        const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
+        const sections = [
+            { name: "Overall", score: accuracy, weight: "100%" },
+        ];
 
         // Generate insights
         const insights: { type: "strength" | "improvement" | "time"; text: string }[] = [];
-        const strongSections = sections.filter(s => s.score >= 75);
-        const weakSections = sections.filter(s => s.score < 50);
+        const strongSections = sections.filter((s) => s.score >= 75);
+        const weakSections = sections.filter((s) => s.score < 50);
 
         if (strongSections.length > 0) {
             insights.push({
                 type: "strength",
-                text: `Strong performance in ${strongSections.map(s => s.name).join(", ")}. Your logical reasoning abilities are well-developed.`
+                text: `Strong performance in ${strongSections.map((s) => s.name).join(", ")}. Your logical reasoning abilities are well-developed.`
             });
         }
         if (weakSections.length > 0) {
             insights.push({
                 type: "improvement",
-                text: `Focus on improving ${weakSections.map(s => s.name).join(", ")} to increase your overall score.`
+                text: `Focus on improving ${weakSections.map((s) => s.name).join(", ")} to increase your overall score.`
             });
         }
         insights.push({
@@ -78,19 +46,19 @@ export default function AptitudeAssessmentPage() {
         });
 
         // Save results to localStorage
-        const result = {
+        const assessmentResult = {
             assessmentId: "aptitude" as const,
             completedAt: new Date().toISOString(),
             overallScore,
             accuracy,
-            timeTaken: "60 min",
+            timeTaken: `${timeTakenMinutes} min`,
             sections,
             insights,
         };
 
         // Save to localStorage
         const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
-        existingResults.aptitude = result;
+        existingResults.aptitude = assessmentResult;
         localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
         window.dispatchEvent(new CustomEvent("originbi:results-changed"));
 
@@ -102,13 +70,36 @@ export default function AptitudeAssessmentPage() {
             window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
         }
 
+        // Mark complete in tracker (generates notifications & suggestions)
+        markAssessmentComplete("aptitude", {
+            totalScore: overallScore,
+            correctCount: result.correctCount,
+            wrongCount: result.wrongCount,
+            timeTakenSeconds: result.timeTakenSeconds,
+        });
+
         // Redirect to dashboard
-        router.push('/?completed=aptitude');
+        router.push('/student/dashboard?completed=aptitude');
     };
 
     return (
         <div className="min-h-screen w-full">
-            <AptitudeEngine onComplete={handleComplete} />
+            <AptitudeEngine onComplete={handleComplete} mode={mode} />
         </div>
+    );
+}
+
+export default function AptitudeAssessmentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen w-full flex items-center justify-center bg-brand-light-secondary dark:bg-brand-dark-primary">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
+                    <p className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Initializing Assessment Engine...</p>
+                </div>
+            </div>
+        }>
+            <AptitudeAssessmentContent />
+        </Suspense>
     );
 }

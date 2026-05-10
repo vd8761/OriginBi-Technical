@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, ZoomIn, Search } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import TimerDisplay from "../shared/TimerDisplay";
+import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
+
+const APTITUDE_TOTAL_TIME = 3600;
 
 interface Option {
     id: string;
@@ -16,91 +22,235 @@ interface Question {
     text: string;
     imageUrl?: string;
     options: Option[];
+    difficulty?: string;
+    marks?: number;
+    negativeMarks?: number;
+    explanation?: string;
 }
 
-const MOCK_QUESTIONS: Question[] = [
-    {
-        id: "q1",
-        category: "QA",
-        text: "If the price of a book is first decreased by 25% and then increased by 20%, then the net change in the price will be:",
-        options: [
-            { id: "o1", text: "10% decrease" },
-            { id: "o2", text: "5% decrease" },
-            { id: "o3", text: "No change" },
-            { id: "o4", text: "5% increase" },
-        ],
-    },
-    {
-        id: "q2",
-        category: "LR",
-        text: "Look at this series: 2, 1, (1/2), (1/4), ... What number should come next?",
-        options: [
-            { id: "o1", text: "(1/3)" },
-            { id: "o2", text: "(1/8)" },
-            { id: "o3", text: "(2/8)" },
-            { id: "o4", text: "(1/16)" },
-        ],
-    },
-    {
-        id: "q3",
-        category: "DI",
-        text: "Based on the chart below, what was the total revenue in Q3?",
-        imageUrl: "/assessment/q3_chart.png",
-        options: [
-            { id: "o1", text: "$45,000" },
-            { id: "o2", text: "$50,000" },
-            { id: "o3", text: "$55,000" },
-            { id: "o4", text: "$60,000" },
-        ],
-    },
-    {
-        id: "q4",
-        category: "AR",
-        text: "Which of the following figures is the odd one out?",
-        imageUrl: "/assessment/q4_figures.png",
-        options: [
-            { id: "o1", text: "Figure A" },
-            { id: "o2", text: "Figure B" },
-            { id: "o3", text: "Figure C" },
-            { id: "o4", text: "Figure D" },
-        ],
-    },
-];
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
+}
 
 interface AptitudeEngineProps {
-    onComplete: (answers: Record<string, string>) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
+    assessmentCode?: string;
+    userId?: number;
+    mode?: 'trial' | 'main';
 }
 
-const labels = ["A", "B", "C", "D"];
-
 const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${remainingSeconds}`;
+    const safe = Math.max(0, seconds);
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+const labelForIndex = (index: number) => String.fromCharCode(65 + index);
+
+const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
+    onComplete,
+    assessmentCode = "TECH_APT_001",
+    userId,
+    mode = 'main',
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(3600);
+    const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(APTITUDE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+    const { theme } = useTheme();
+    const [questions, setQuestions] = useState<Question[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    // Ref to prevent double-fetching when cache restoration already set questions
+    const cacheRestoredRef = useRef(false);
 
-    const currentQuestion = MOCK_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_QUESTIONS.length;
+    // ── Cache hook ──────────────────────────────────────────────
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'aptitude',
+        assessmentCode,
+        questions,
+        expiresAt:       undefined,
+        answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // Restore session from cache when it is loaded
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setQuestions(normalizeQuestions(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: Record<string, string> = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
+                    restored[qId] = val.optionId as string;
+                } else if (typeof val === 'string') {
+                    restored[qId] = val;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
+
+    const normalizeQuestions = (items: any[]): Question[] => items.map((q: any) => ({
+        id: String(q.id ?? q.questionId ?? q.question_id),
+        category: q.category ?? q.subcategory ?? "General",
+        text: q.text ?? q.questionText ?? q.question_text ?? "",
+        imageUrl: q.imageUrl ?? q.image_url ?? undefined,
+        options: Array.isArray(q.options)
+            ? q.options.map((opt: any) => ({
+                id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+            }))
+            : [],
+        difficulty: q.difficulty ?? undefined,
+        marks: q.marks !== undefined ? Number(q.marks) : undefined,
+        negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
+        explanation: q.explanation ?? undefined,
+    }));
+
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
-    const markedCount = markedForReview.size;
-    const safeProgress = Math.round((answeredCount / totalQuestions) * 100);
+    const safeProgress = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const isLastQuestion = currentIndex === totalQuestions - 1;
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
+    const currentQuestionId = currentQuestion?.id ?? "";
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestionId] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestionId) : false;
 
 
     useEffect(() => {
+        if (!isCacheRestored) return; // Wait until cache resolution finishes
+
+        // If we already restored from cache, skip the fetch
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text().catch(() => "Unknown error");
+                    console.error("API Error:", response.status, errorText);
+                    throw new Error(`Failed to load questions: ${response.status} - ${errorText}`);
+                }
+
+                const data = await response.json();
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+
+                let fetchedQuestions = data.questions;
+                if (!Array.isArray(fetchedQuestions) && token) {
+                    const questionsRes = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${token}/questions`);
+                    if (!questionsRes.ok) {
+                        throw new Error("Failed to fetch questions");
+                    }
+                    const questionsData = await questionsRes.json();
+                    fetchedQuestions = questionsData.questions;
+                }
+
+                setQuestions(Array.isArray(fetchedQuestions) ? normalizeQuestions(fetchedQuestions) : []);
+                const duration = Number(data.durationSeconds || APTITUDE_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
+
+    const handleSubmitAttempt = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => "Unknown error");
+                console.error("Submit API Error:", response.status, errorText);
+                throw new Error(`Submit failed: ${response.status} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            // Clear cache after successful submission
+            await clearSession();
+            onComplete(result);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, clearSession, isSubmitting, onComplete]);
+
+    useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
-            onComplete(answers);
+            setShowSubmitModal(false);
+            handleSubmitAttempt();
             return;
         }
 
@@ -109,9 +259,9 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [answers, onComplete, timeLeft]);
+    }, [attemptToken, handleSubmitAttempt, isLoading, timeLeft]);
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
 
@@ -130,13 +280,18 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     });
 
     const handleOptionSelect = (optionId: string) => {
-        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
+        const newAnswers = { ...answers, [currentQuestion.id]: optionId };
+        setAnswers(newAnswers);
+        // Persist to cache immediately
+        cacheSaveAnswer(currentQuestion.id, { optionId });
     };
 
     const handleClear = () => {
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
+        // Remove from cache
+        cacheSaveAnswer(currentQuestion.id, {});
     };
 
     const handleMarkReview = () => {
@@ -147,17 +302,23 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
             newMarked.add(currentQuestion.id);
         }
         setMarkedForReview(newMarked);
+        // Persist navigation state
+        cacheSaveNavigation(currentIndex, [...newMarked], timeLeft);
     };
 
     const handleNext = () => {
         if (!isLastQuestion) {
-            setCurrentIndex((prev) => prev + 1);
+            const nextIndex = currentIndex + 1;
+            setCurrentIndex(nextIndex);
+            cacheSaveNavigation(nextIndex, [...markedForReview], timeLeft);
         }
     };
 
     const handlePrev = () => {
         if (currentIndex > 0) {
-            setCurrentIndex((prev) => prev - 1);
+            const prevIndex = currentIndex - 1;
+            setCurrentIndex(prevIndex);
+            cacheSaveNavigation(prevIndex, [...markedForReview], timeLeft);
         }
     };
 
@@ -166,13 +327,50 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
     };
 
     const confirmSubmit = () => {
-        onComplete(answers);
+        setShowSubmitModal(false);
+        handleSubmitAttempt();
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (loadError || questions.length === 0) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
+                <p className="text-lg text-slate-500 dark:text-slate-400">
+                    No Questions Found
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
+
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4 animate-spin-once" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
 
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
@@ -189,14 +387,11 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Time left
-                        </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
-                            {formatTime(timeLeft)}
-                        </p>
-                    </div>
+                    <TimerDisplay 
+                        time={timeLeft} 
+                        total={totalTime} 
+                        theme={theme} 
+                    />
                     <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
@@ -205,15 +400,26 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
                         title="Question Map"
                     >
-                        <LayoutGrid size={20} className="text-brand-green" />
+                        <SidebarMobileIcon className="text-brand-green" />
+                    </button>
+                    <button 
+                        onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+                        className={`hidden lg:flex h-10 w-10 items-center justify-center rounded-lg border transition shadow-sm ${
+                            isDesktopSidebarOpen 
+                            ? 'border-brand-green/50 bg-brand-green/10 text-brand-green dark:border-brand-green/30 dark:bg-brand-green/10' 
+                            : 'border-brand-green/20 bg-white hover:border-brand-green dark:border-white/10 dark:bg-white/5 text-brand-green'
+                        }`}
+                        title="Toggle Question Map"
+                    >
+                        {isDesktopSidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
                     </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
+            <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
 
                 {/* Question Area */}
-                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
                     {/* Top Progress Bar */}
                     <div className="h-1 w-full bg-brand-green/5">
                         <div 
@@ -325,7 +531,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                                                 ? "bg-brand-green text-[#0f1712]"
                                                 : "bg-brand-green/10 text-brand-green"
                                         }`}>
-                                            {labels[index]}
+                                            {labelForIndex(index)}
                                         </span>
                                         <span className={`text-sm font-semibold leading-6 ${
                                             isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"
@@ -370,17 +576,24 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                 </section>
 
                 {/* Sidebar (Desktop only) */}
-                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
-                    <QuestionNavigator
-                        questions={navigatorQuestions}
-                        currentIndex={currentIndex}
-                        onSelect={(idx) => {
-                            setCurrentIndex(idx);
-                            setIsSidebarOpen(false);
-                        }}
-                        progressPercent={safeProgress}
-                    />
-                </aside>
+                <motion.aside 
+                    initial={false}
+                    animate={{ width: isDesktopSidebarOpen ? 300 : 80 }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                    className="hidden shrink-0 relative lg:block lg:min-h-0 rounded-xl border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] overflow-hidden"
+                >
+                    <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
+                        <QuestionNavigator
+                            questions={navigatorQuestions}
+                            currentIndex={currentIndex}
+                            onSelect={(idx) => {
+                                setCurrentIndex(idx);
+                            }}
+                            progressPercent={safeProgress}
+                            isCollapsed={!isDesktopSidebarOpen}
+                        />
+                    </div>
+                </motion.aside>
             </main>
 
             {/* Mobile Drawer */}
@@ -500,7 +713,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({ onComplete }) => {
                             <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/60">Review your assessment summary before finalizing your submission.</p>
 
                             <div className="mt-4 flex items-center gap-2 rounded-full border border-brand-green/10 bg-brand-green/[0.03] px-4 py-1.5 dark:border-white/5 dark:bg-white/5">
-                                <div className="h-2 w-2 animate-pulse rounded-full bg-brand-green" />
+                                <div className="h-2 w-2 rounded-full bg-brand-green" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-brand-green">
                                     Time Remaining: {formatTime(timeLeft)}
                                 </span>

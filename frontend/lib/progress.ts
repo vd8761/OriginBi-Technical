@@ -66,7 +66,7 @@ export interface AssessmentResult {
   accuracy: number;
   timeTaken: string; // e.g. "48 min"
   sections: SectionResult[];
-  insights: { type: "strength" | "improvement" | "time"; text: string }[];
+  insights: { type: "strength" | "improvement" | "time" | "pattern"; text: string }[];
   archetypeSnapshot?: string; // e.g. "Analytical Thinker"
 }
 

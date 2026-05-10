@@ -233,10 +233,10 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
             <h2 className="text-[24px] sm:text-[28px] font-bold text-brand-text-light-primary dark:text-white tracking-tight">Assessment Library</h2>
             <p className="text-[13px] text-brand-text-light-secondary dark:text-white/40 mt-1">Filter by track or browse all available assessments.</p>
           </div>
-          <div className="flex items-center gap-1.5 p-1.5 rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white/70 dark:bg-white/[0.03]">
+          <div className="flex items-center gap-1.5 p-1.5 rounded-2xl border border-gray-100 dark:border-white/10 dark:border-white/[0.06] bg-white/70 dark:bg-white/[0.03]">
             {[{ l: "All", v: "all" }, ...tracks.map(t => ({ l: TRACK_META[t].label, v: t }))].map(f => (
               <button key={f.v} onClick={() => setActiveTrack(f.v)}
-                className={`px-4 py-2 rounded-xl text-[12px] font-bold transition-all ${activeTrack === f.v ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-brand-text-light-secondary dark:text-white/50 hover:bg-gray-50 dark:hover:bg-white/[0.05]"}`}>
+                className={`px-4 py-2 rounded-xl text-[12px] font-bold transition-all ${activeTrack === f.v ? "bg-brand-green text-white shadow-md shadow-brand-green/20" : "text-brand-text-light-secondary dark:text-white/50 hover:bg-gray-50 dark:bg-white/5 dark:hover:bg-white/[0.05]"}`}>
                 {f.l}
               </button>
             ))}
@@ -261,7 +261,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * idx }}
-                className="group relative rounded-[1.5rem] border border-gray-200/50 dark:border-white/[0.08] bg-white dark:bg-brand-dark-secondary/80 overflow-hidden hover:shadow-2xl hover:shadow-brand-green/10 transition-all duration-500"
+                className="group relative rounded-[1.5rem] border border-gray-200 dark:border-white/[0.08]/50 dark:border-white/[0.08] bg-white dark:bg-brand-dark-secondary/80 overflow-hidden hover:shadow-2xl hover:shadow-brand-green/10 transition-all duration-500"
               >
                 {/* Animated Gradient Background on Hover */}
                 <div 
@@ -298,7 +298,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                         Available Now
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-white/40">
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-slate-500 dark:text-white/40">
                         <LockIcon className="w-3.5 h-3.5" />
                         Coming Soon
                       </span>
@@ -323,7 +323,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                         {exam.title}
                       </h3>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-brand-text-light-secondary dark:text-white/60">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 dark:bg-white/10 text-brand-text-light-secondary dark:text-white/60">
                           {exam.difficulty}
                         </span>
                         <span className="text-xs text-brand-text-light-secondary/60 dark:text-white/40">
@@ -365,7 +365,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                         {valueProp.benefits.slice(0, 4).map((benefit, i) => (
                           <li 
                             key={i} 
-                            className="text-xs text-brand-text-light-secondary dark:text-white/60 flex items-start gap-2 p-2 rounded-lg bg-gray-50 dark:bg-white/5"
+                            className="text-xs text-brand-text-light-secondary dark:text-white/60 flex items-start gap-2 p-2 rounded-lg bg-gray-50 dark:bg-white/5 dark:bg-white/5"
                           >
                             <span 
                               className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
@@ -388,7 +388,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                       {detail.skills.slice(0, 3).map(s => (
                         <span 
                           key={s.title} 
-                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/[0.08] text-xs font-medium text-brand-text-light-primary dark:text-white/80 border border-gray-100 dark:border-white/[0.06]"
+                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/[0.08] text-xs font-medium text-brand-text-light-primary dark:text-white/80 border border-gray-100 dark:border-white/10 dark:border-white/[0.06]"
                         >
                           {s.title}
                         </span>
@@ -418,7 +418,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                       {detail.skills.slice(0, 3).map(s => (
                         <span 
                           key={s.title} 
-                          className="px-2.5 py-1 rounded-lg bg-gray-50 dark:bg-white/5 text-xs font-medium text-brand-text-light-primary dark:text-white/70 border border-gray-100 dark:border-white/[0.06]"
+                          className="px-2.5 py-1 rounded-lg bg-gray-50 dark:bg-white/5 dark:bg-white/5 text-xs font-medium text-brand-text-light-primary dark:text-white/70 border border-gray-100 dark:border-white/10 dark:border-white/[0.06]"
                         >
                           {s.title}
                         </span>
@@ -432,7 +432,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                       whileHover={{ scale: 1.02 }} 
                       whileTap={{ scale: 0.98 }} 
                       onClick={() => onSelectExam(exam.id as AssessmentId)}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] text-sm font-semibold text-brand-text-light-primary dark:text-white hover:border-brand-green/40 hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/[0.08] dark:border-white/[0.1] text-sm font-semibold text-brand-text-light-primary dark:text-white hover:border-brand-green/40 hover:bg-gray-50 dark:bg-white/5 dark:hover:bg-white/5 transition-all"
                     >
                       <EyeIcon className="w-4 h-4" />
                       View Details
@@ -448,7 +448,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                         <ChevronRightIcon className="w-4 h-4" />
                       </motion.button>
                     ) : (
-                      <span className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-400 text-sm font-semibold">
+                      <span className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 dark:bg-white/10 dark:bg-white/5 text-gray-400 text-sm font-semibold">
                         <LockIcon className="w-4 h-4" />
                         Coming Soon
                       </span>
@@ -498,7 +498,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
           ].map((s, i) => (
             <motion.div key={s.step} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 + i * 0.1 }}
               whileHover={{ y: -4 }}
-              className="relative rounded-2xl border border-gray-100 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.03] p-7 group hover:shadow-lg transition-all">
+              className="relative rounded-2xl border border-gray-100 dark:border-white/10 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.03] p-7 group hover:shadow-lg transition-all">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center border" style={{ background: `${s.color}10`, borderColor: `${s.color}25` }}>
                   <span style={{ color: s.color }}><s.icon className="w-5 h-5" /></span>
@@ -527,7 +527,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
           ].map((f, i) => (
             <motion.div key={f.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 + i * 0.08 }}
               whileHover={{ y: -3 }}
-              className="rounded-2xl border border-gray-100 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.03] p-6 hover:shadow-md transition-all">
+              className="rounded-2xl border border-gray-100 dark:border-white/10 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.03] p-6 hover:shadow-md transition-all">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 border" style={{ background: `${f.color}10`, borderColor: `${f.color}25` }}>
                 <span style={{ color: f.color }}><f.icon className="w-5 h-5" /></span>
               </div>

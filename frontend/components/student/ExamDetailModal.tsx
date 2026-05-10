@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 interface PricingTier {
   id: string;
@@ -58,6 +58,12 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveTab("overview");
+    setSelectedTier(null);
+  }, [exam?.id, isOpen]);
 
   if (!isOpen || !exam || !detail) return null;
 

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
+import { SessionProvider } from "@/lib/contexts/SessionContext";
+import { CachePruner } from "@/components/CachePruner";
 
 export const metadata: Metadata = {
   title: "OriginBI Technical Assessment",
@@ -17,9 +19,12 @@ export default function RootLayout({
       <body
         className="antialiased min-h-full flex flex-col"
       >
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider>
+            <CachePruner />
+            {children}
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

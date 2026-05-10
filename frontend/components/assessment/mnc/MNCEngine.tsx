@@ -2,8 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import TimerDisplay from "../shared/TimerDisplay";
+import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+
+const MNC_TOTAL_TIME = 30 * 60;
 
 export interface Option {
     id: string;
@@ -15,93 +20,119 @@ export interface MncQuestion {
     topic: string;
     text: string;
     options: Option[];
+    difficulty?: string;
+    marks?: number;
+    negativeMarks?: number;
 }
 
-const MOCK_MNC_QUESTIONS: MncQuestion[] = [
-    {
-        id: "mq1",
-        topic: "Data Structures",
-        text: "What is the time complexity of searching for an element in a balanced Binary Search Tree (BST)?",
-        options: [
-            { id: "o1", text: "O(1)" },
-            { id: "o2", text: "O(n)" },
-            { id: "o3", text: "O(log n)" },
-            { id: "o4", text: "O(n log n)" },
-        ],
-    },
-    {
-        id: "mq2",
-        topic: "Algorithms",
-        text: "Which of the following sorting algorithms has the best worst-case time complexity?",
-        options: [
-            { id: "o1", text: "Bubble Sort" },
-            { id: "o2", text: "Selection Sort" },
-            { id: "o3", text: "Quick Sort" },
-            { id: "o4", text: "Merge Sort" },
-        ],
-    },
-    {
-        id: "mq3",
-        topic: "Dynamic Programming",
-        text: "In Dynamic Programming, the technique of storing the results of expensive function calls and returning the cached result when the same inputs occur again is called:",
-        options: [
-            { id: "o1", text: "Recursion" },
-            { id: "o2", text: "Memoization" },
-            { id: "o3", text: "Tabulation" },
-            { id: "o4", text: "Backtracking" },
-        ],
-    },
-    {
-        id: "mq4",
-        topic: "Graph Theory",
-        text: "Which data structure is typically used for Breadth-First Search (BFS) traversal of a graph?",
-        options: [
-            { id: "o1", text: "Stack" },
-            { id: "o2", text: "Queue" },
-            { id: "o3", text: "Priority Queue" },
-            { id: "o4", text: "Hash Map" },
-        ],
-    },
-    {
-        id: "mq5",
-        topic: "System Design",
-        text: "In the context of the CAP theorem, what does the 'A' stand for?",
-        options: [
-            { id: "o1", text: "Atomicity" },
-            { id: "o2", text: "Availability" },
-            { id: "o3", text: "Accessibility" },
-            { id: "o4", text: "Aggregation" },
-        ],
-    },
-];
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
+}
 
 interface MNCEngineProps {
-    onComplete: (answers: Record<string, string>) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
+    assessmentCode?: string;
+    userId?: number;
+    mode?: 'trial' | 'main';
 }
 
 const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${remainingSeconds}`;
+    const safe = Math.max(0, seconds);
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
 const labels = ["A", "B", "C", "D"];
 
-const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+const MNCEngine: React.FC<MNCEngineProps> = ({ 
+    onComplete,
+    assessmentCode = "MNC_DEFAULT",
+    userId,
+    mode = 'main'
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(30 * 60);
+    const [timeLeft, setTimeLeft] = useState(MNC_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(MNC_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+    const { theme } = useTheme();
+    const [questions, setQuestions] = useState<MncQuestion[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const currentQuestion = MOCK_MNC_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_MNC_QUESTIONS.length;
+    const normalizeQuestions = (items: any[]): MncQuestion[] => items.map((q: any) => ({
+        id: String(q.id ?? q.questionId ?? q.question_id),
+        topic: q.topic ?? q.category ?? q.topic_group ?? "General",
+        text: q.text ?? q.questionText ?? q.question_text ?? "",
+        options: Array.isArray(q.options)
+            ? q.options.map((opt: any) => ({
+                id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+            }))
+            : [],
+        difficulty: q.difficulty ?? undefined,
+        marks: q.marks !== undefined ? Number(q.marks) : undefined,
+        negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
+    }));
+
+    useEffect(() => {
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/mnc/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load MNC questions.");
+                }
+
+                const data = await response.json();
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setQuestions(Array.isArray(data.questions) ? normalizeQuestions(data.questions) : []);
+                const duration = Number(data.durationSeconds || MNC_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId, mode]);
+
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
-    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+    const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const isLastQuestion = currentIndex === totalQuestions - 1;
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_MNC_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
         const state: QuestionState = isMarked ? "marked" : (isAnswered ? "answered" : "unanswered");
@@ -116,16 +147,18 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
         };
     });
 
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestion.id] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestion.id) : false;
 
     const handleClear = () => {
+        if (!currentQuestion) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
     };
 
     const handleMarkReview = () => {
+        if (!currentQuestion) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentQuestion.id)) {
             newMarked.delete(currentQuestion.id);
@@ -135,22 +168,62 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
         setMarkedForReview(newMarked);
     };
 
-    const completeAssessment = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const completeAssessment = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/mnc/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            const result = await response.json();
+            onComplete(result);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, isSubmitting, onComplete]);
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             completeAssessment();
             return;
         }
         const timer = window.setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
         return () => window.clearInterval(timer);
-    }, [completeAssessment, timeLeft]);
+    }, [completeAssessment, timeLeft, isLoading, attemptToken]);
 
     const handleOptionSelect = (optionId: string) => {
+        if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (loadError || questions.length === 0) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
+                <p className="text-lg text-slate-500 dark:text-slate-400">
+                    No Questions Found
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
@@ -173,14 +246,11 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Time left
-                        </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
-                            {formatTime(timeLeft)}
-                        </p>
-                    </div>
+                    <TimerDisplay 
+                        time={timeLeft} 
+                        total={totalTime} 
+                        theme={theme} 
+                    />
                     <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
@@ -189,13 +259,24 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
                         title="Question Map"
                     >
-                        <LayoutGrid size={20} className="text-brand-green" />
+                        <SidebarMobileIcon className="text-brand-green" />
+                    </button>
+                    <button 
+                        onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+                        className={`hidden lg:flex h-10 w-10 items-center justify-center rounded-lg border transition shadow-sm ${
+                            isDesktopSidebarOpen 
+                            ? 'border-brand-green/50 bg-brand-green/10 text-brand-green dark:border-brand-green/30 dark:bg-brand-green/10' 
+                            : 'border-brand-green/20 bg-white hover:border-brand-green dark:border-white/10 dark:bg-white/5 text-brand-green'
+                        }`}
+                        title="Toggle Question Map"
+                    >
+                        {isDesktopSidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
                     </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
-                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+            <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
+                <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
                     <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
@@ -310,14 +391,22 @@ const MNCEngine: React.FC<MNCEngineProps> = ({ onComplete }) => {
                     </div>
                 </section>
 
-                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
-                    <QuestionNavigator 
-                        questions={navigatorQuestions}
-                        currentIndex={currentIndex}
-                        onSelect={setCurrentIndex}
-                        progressPercent={progressPercent}
-                    />
-                </aside>
+                <motion.aside 
+                    initial={false}
+                    animate={{ width: isDesktopSidebarOpen ? 300 : 80 }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                    className="hidden shrink-0 relative lg:block lg:min-h-0 rounded-xl border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] overflow-hidden"
+                >
+                    <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
+                        <QuestionNavigator 
+                            questions={navigatorQuestions}
+                            currentIndex={currentIndex}
+                            onSelect={setCurrentIndex}
+                            progressPercent={progressPercent}
+                            isCollapsed={!isDesktopSidebarOpen}
+                        />
+                    </div>
+                </motion.aside>
             </main>
 
             {showSubmitModal && (
