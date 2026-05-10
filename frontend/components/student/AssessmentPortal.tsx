@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Header from "./Header";
-import ExamCarousel, { Exam } from "./ExamCarousel";
+import { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
 import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
@@ -20,7 +20,7 @@ import {
   type PricingTier,
 } from "@/lib/exams";
 import DashboardContent from "./dashboard/DashboardContent";
-import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
+import ProfileView from "./ProfileView";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -35,22 +35,27 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
 
 interface AssessmentPortalProps {
   userName?: string;
+  initialView?: AssessmentView;
 }
 
-const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student" }) => {
+type AssessmentMode = "trial" | "main";
+
+const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", initialView = "dashboard" }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showMncModal, setShowMncModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [currentView, setCurrentView] = useState<AssessmentView>("dashboard");
+  const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
-  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
-  const { isPaid } = usePaidAssessments();
+  const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
   const router = useRouter();
-
-  const readyExams = useMemo(() => EXAMS.filter((exam) => exam.available), []);
+  const searchParams = useSearchParams();
+  const [completionPopup, setCompletionPopup] = useState<{
+    completed: AssessmentId;
+    next: AssessmentId | null;
+  } | null>(null);
 
   const filteredExams = useMemo(() => {
     const baseExams = EXAMS.filter((exam) => exam.available);
@@ -65,28 +70,112 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     setShowDetailModal(true);
   };
 
-  const handleStartExam = (exam: Exam, tier?: PricingTier) => {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (currentView !== "dashboard") return;
+    const completed = searchParams.get("completed") as AssessmentId | null;
+    if (!completed) return;
+
+    const recommendedOrder: AssessmentId[] = ["aptitude", "communication", "coding", "mnc", "role"];
+
+    // Read from assessmentTracker storage
+    const savedCompleted = (() => {
+      const raw = window.localStorage.getItem("completed_assessments");
+      if (!raw) return [];
+      try {
+        return JSON.parse(raw) as Array<{ assessmentCode?: string }>;
+      } catch {
+        return [];
+      }
+    })();
+
+    // Also read from progress.ts storage (originbi:assessment-results)
+    const savedResults = (() => {
+      const raw = window.localStorage.getItem("originbi:assessment-results");
+      if (!raw) return {};
+      try {
+        return JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })();
+
+    // Build the full set of completed assessment IDs from both sources
+    const completedCodes = new Set<AssessmentId>([
+      // from assessmentTracker
+      ...savedCompleted.map((c) => c.assessmentCode).filter(Boolean) as AssessmentId[],
+      // from progress.ts results (keys are assessment IDs)
+      ...Object.keys(savedResults).filter(k =>
+        recommendedOrder.includes(k as AssessmentId)
+      ) as AssessmentId[],
+    ]);
+
+    // Add the one just completed
+    completedCodes.add(completed);
+
+    // Find the next incomplete assessment in recommended order
+    const next = recommendedOrder.find((id) => !completedCodes.has(id)) ?? null;
+
+    // Only show popup if there's actually a next assessment to suggest
+    if (next !== null) {
+      setCompletionPopup({ completed, next });
+    }
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [currentView, searchParams]);
+
+  const launchAssessment = (examId: string, mode: AssessmentMode) => {
+    if (examId === "coding") {
+      router.push(`/assessment/coding?mode=${mode}`);
+      return;
+    }
+
+    if (examId === "aptitude") {
+      setShowAptitudeModal(true);
+      return;
+    }
+
+    if (examId === "communication") {
+      setShowCommunicationModal(true);
+      return;
+    }
+
+    if (examId === "role") {
+      setShowRoleModal(true);
+      return;
+    }
+
+    if (examId === "mnc") {
+      setShowMncModal(true);
+    }
+  };
+
+  const openAssessmentFlow = (exam: Exam, mode: AssessmentMode) => {
     if (!exam.available) {
       setSelectedExam(exam);
       setShowDetailModal(true);
       return;
     }
 
+    setAssessmentMode(mode);
+    launchAssessment(exam.id, mode);
+  };
+
+  const handleCardTrialStart = (exam: Exam) => {
+    openAssessmentFlow(exam, "trial");
+  };
+
+  const handleCardMainStart = (exam: Exam) => {
+    openAssessmentFlow(exam, "main");
+  };
+
+  const handleModalStart = (exam: Exam, tier?: PricingTier) => {
     if (tier) {
       console.log(`Processing payment for ${exam.title} - ${tier.name} tier: ₹${tier.price}`);
+      openAssessmentFlow(exam, "main");
+      return;
     }
 
-    if (exam.id === "aptitude") {
-      setShowAptitudeModal(true);
-    } else if (exam.id === "communication") {
-      setShowCommunicationModal(true);
-    } else if (exam.id === "role") {
-      setShowRoleModal(true);
-    } else if (exam.id === "coding") {
-      router.push("/assessment/coding");
-    } else if (exam.id === "mnc") {
-      setShowMncModal(true);
-    }
+    openAssessmentFlow(exam, "trial");
   };
 
   const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
@@ -105,7 +194,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       />
 
       {/* Next Step Notification Alert */}
-      {showNextStepAlert && currentView === "dashboard" && (
+      {completionPopup && currentView === "dashboard" && (
         <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
           <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -117,25 +206,43 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
               <div className="flex-1">
                 <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-tight">
-                  Aptitude Cleared!
+                  {(EXAMS.find((e) => e.id === completionPopup.completed)?.title ?? "Assessment")} Cleared!
                 </h4>
                 <p className="mt-1.5 text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
-                  Excellent work on Logic. Start the{" "}
-                  <strong className="text-slate-800 dark:text-white">Communication Assessment</strong>{" "}
-                  next to unlock Technical Groupings and discover your true Role-Fit.
+                  {completionPopup.next ? (
+                    <>
+                      Great work on{" "}
+                      <strong className="text-slate-800 dark:text-white">
+                        {EXAMS.find((e) => e.id === completionPopup.completed)?.title ?? "this assessment"}
+                      </strong>
+                      . Start{" "}
+                      <strong className="text-slate-800 dark:text-white">
+                        {EXAMS.find((e) => e.id === completionPopup.next)?.title ?? "the next assessment"}
+                      </strong>{" "}
+                      next to keep building your profile.
+                    </>
+                  ) : (
+                    <>
+                      Great work completing all available assessments. Review your results and insights to plan your next steps.
+                    </>
+                  )}
                 </p>
                 <div className="mt-4 flex items-center gap-3">
                   <button
                     onClick={() => {
-                      setShowNextStepAlert(false);
+                      const next = completionPopup.next ? EXAMS.find((e) => e.id === completionPopup.next) : null;
+                      setCompletionPopup(null);
                       setCurrentView("assessment");
+                      if (next) {
+                        handleSelectExam(next);
+                      }
                     }}
                     className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"
                   >
                     View Assessments
                   </button>
                   <button
-                    onClick={() => setShowNextStepAlert(false)}
+                    onClick={() => setCompletionPopup(null)}
                     className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors"
                   >
                     Maybe later
@@ -144,7 +251,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             </div>
             <button
-              onClick={() => setShowNextStepAlert(false)}
+              onClick={() => setCompletionPopup(null)}
               className="absolute top-3 right-3 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -155,7 +262,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         </div>
       )}
 
-      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[100px] sm:pt-[108px]">
+      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
             assessments={EXAMS as any}
@@ -173,33 +280,26 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                   Explore and start your technical evaluations
                 </p>
               </div>
-              <button
-                onClick={() => setCurrentView("dashboard")}
-                className="px-5 py-2.5 rounded-xl border border-brand-light-tertiary/70 dark:border-white/10 bg-brand-light-primary/80 dark:bg-white/5 text-sm font-semibold text-brand-text-light-primary dark:text-brand-text-primary hover:bg-brand-light-primary transition-all"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-
-            <div className="relative flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
-              {FILTERS.map((item) => {
-                const isActive = filter === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setFilter(item.value)}
-                    className={
-                      "relative px-5 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 border " +
-                      (isActive
-                        ? "text-white bg-brand-green shadow-md"
-                        : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
-                    }
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
+              <div className="relative flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-[#111a15]/70 backdrop-blur-md shadow-sm">
+                {FILTERS.map((item) => {
+                  const isActive = filter === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFilter(item.value)}
+                      className={
+                        "relative px-5 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 border " +
+                        (isActive
+                          ? "text-white bg-brand-green shadow-md"
+                          : "text-brand-text-light-secondary dark:text-brand-text-secondary hover:text-brand-text-light-primary dark:hover:text-brand-text-primary hover:bg-brand-light-secondary dark:hover:bg-white/5")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -221,7 +321,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                   accentColor={exam.accentColor}
                   gradient={exam.gradient}
                   onDetailsClick={() => handleSelectExam(exam)}
-                  onStartClick={() => handleStartExam(exam)}
+                  onTrialClick={() => handleCardTrialStart(exam)}
+                  onMainClick={() => handleCardMainStart(exam)}
                 />
               ))}
             </div>
@@ -230,9 +331,11 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           <DashboardContent
             userName={userName}
             handleSelectExam={handleSelectExam}
-            handleStartExam={handleStartExam}
+            handleStartExam={handleModalStart}
             setShowDetailModal={setShowDetailModal}
           />
+        ) : currentView === "profile" ? (
+          <ProfileView onNavigate={(view) => setCurrentView(view as any)} />
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
@@ -265,13 +368,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         onClose={() => setShowDetailModal(false)}
         onStart={(exam, tier) => {
           setShowDetailModal(false);
-          handleStartExam(exam, tier);
+          handleModalStart(exam, tier);
         }}
       />
 
       {showAptitudeModal && (
         <AptitudePreTest
-          onStart={() => router.push("/assessment/aptitude")}
+          mode={assessmentMode}
+          onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
           onClose={() => setShowAptitudeModal(false)}
           accentColor={EXAMS.find(e => e.id === 'aptitude')?.accentColor}
           gradient={EXAMS.find(e => e.id === 'aptitude')?.gradient}
@@ -280,7 +384,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {showCommunicationModal && (
         <CommunicationPreTest
-          onStart={() => router.push("/assessment/communication")}
+          mode={assessmentMode}
+          onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
           onClose={() => setShowCommunicationModal(false)}
           accentColor={EXAMS.find(e => e.id === 'communication')?.accentColor}
           gradient={EXAMS.find(e => e.id === 'communication')?.gradient}
@@ -289,7 +394,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {showRoleModal && (
         <RolePreTest
-          onStart={() => router.push("/assessment/role")}
+          mode={assessmentMode}
+          onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
           onClose={() => setShowRoleModal(false)}
           accentColor={EXAMS.find(e => e.id === 'role')?.accentColor}
           gradient={EXAMS.find(e => e.id === 'role')?.gradient}
@@ -298,7 +404,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {showMncModal && (
         <MNCPreTest
-          onStart={() => router.push("/assessment/mnc")}
+          mode={assessmentMode}
+          onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
           onClose={() => setShowMncModal(false)}
           accentColor={EXAMS.find(e => e.id === 'mnc')?.accentColor}
           gradient={EXAMS.find(e => e.id === 'mnc')?.gradient}

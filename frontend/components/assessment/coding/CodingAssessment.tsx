@@ -33,6 +33,7 @@ const CURRENT_Q_KEY = "ob_current_q";
 
 interface CodingAssessmentProps {
     lang: string;
+    onComplete?: (score: number) => void;
 }
 
 const formatTime = (secs: number) => {
@@ -465,7 +466,7 @@ const ProctorToast: React.FC<ProctorToastProps> = ({ visible, title, desc }) => 
     </div>
 );
 
-const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
+const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, onComplete }) => {
     const router = useRouter();
     const { markCompleted } = useCompletedAssessments();
     const languageLabel = LANG_META[lang]?.label ?? lang;
@@ -712,7 +713,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang }) => {
         timer.clear();
         markCompleted(codingPaymentKey(lang));
         clearStorage();
-    }, [timer, markCompleted, lang, clearStorage]);
+        // Call external handler if provided
+        const solvedCount = Object.values(statuses).filter(s => s === "solved").length;
+        const score = Math.round((solvedCount / QUESTIONS.length) * 100);
+        onComplete?.(score);
+    }, [timer, markCompleted, lang, clearStorage, statuses, onComplete]);
 
     const handleBackToExplore = () => {
         router.push("/explore/coding");

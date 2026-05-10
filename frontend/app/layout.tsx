@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
+import { SessionProvider } from "@/lib/contexts/SessionContext";
+import { CachePruner } from "@/components/CachePruner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,9 +36,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} antialiased min-h-full flex flex-col`}
       >
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider>
+            <CachePruner />
+            {children}
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import AudioTaskComponent from "./TaskTypes/AudioTask";
@@ -7,8 +7,15 @@ import ReadingTaskComponent from "./TaskTypes/ReadingTask";
 import WritingTaskComponent from "./TaskTypes/WritingTask";
 import McqTaskComponent from "./TaskTypes/McqTask";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import TimerDisplay from "../shared/TimerDisplay";
+import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
+
+const COMMUNICATION_TOTAL_TIME = 45 * 60;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export type TaskType = "audio" | "speaking" | "reading" | "writing" | "mcq";
 
@@ -53,80 +60,16 @@ export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTas
 export type CommunicationAnswer = Record<string, string> | { audioBlobUrl: string } | { text: string };
 export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
-const MOCK_TASKS: AssessmentTask[] = [
-    {
-        id: "task_1",
-        type: "audio",
-        instructions: "Listen to the audio clip and answer the questions below.",
-        audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-        questions: [
-            {
-                id: "q1",
-                text: "What is the primary topic of the announcement?",
-                options: [
-                    { id: "opt_1", text: "Quarterly financial results" },
-                    { id: "opt_2", text: "New office policies" },
-                    { id: "opt_3", text: "Upcoming company retreat" },
-                    { id: "opt_4", text: "Software update schedule" },
-                ],
-            },
-        ],
-    },
-    {
-        id: "task_2",
-        type: "reading",
-        instructions: "Read the following business email and answer the questions.",
-        passage: "Subject: Urgent Update on Project Alpha Delivery\\n\\nTeam,\\n\\nI am writing to inform you that the delivery date for Project Alpha has been moved up by two weeks. The client has requested an expedited timeline due to an upcoming product launch on their end. This means our new target for Phase 1 completion is now October 15th, rather than November 1st.\\n\\nPlease review your current workload and let me know by EOD tomorrow if this compressed schedule poses any critical risks to your deliverables. We will hold a brief stand-up meeting on Thursday morning at 9:00 AM to discuss mitigation strategies.\\n\\nBest regards,\\nSarah Jensen\\nProject Manager",
-        questions: [
-            {
-                id: "q3",
-                text: "What is the main reason for the schedule change?",
-                options: [
-                    { id: "opt_1", text: "The team was working too slowly." },
-                    { id: "opt_2", text: "The client has an upcoming product launch." },
-                    { id: "opt_3", text: "Sarah Jensen is going on leave." },
-                    { id: "opt_4", text: "There was an error in the original contract." },
-                ],
-            },
-        ],
-    },
-    {
-        id: "task_3",
-        type: "speaking",
-        instructions: "Read the prompt below. You will have 30 seconds to prepare and 90 seconds to record your response.",
-        prompt: "Imagine you are explaining a complex technical problem to a non-technical stakeholder. How would you approach the conversation to ensure they understand the core issue without getting lost in technical jargon?",
-        prepTimeSeconds: 30,
-        recordTimeSeconds: 90,
-    },
-    {
-        id: "task_4",
-        type: "writing",
-        instructions: "Draft an email response based on the scenario provided below.",
-        prompt: "Scenario: A key client has emailed you expressing frustration that a recent software update broke a critical feature they rely on. Draft a professional, empathetic email acknowledging the issue, explaining that the engineering team is actively working on a fix, and outlining the next steps for communication.",
-        minWords: 50,
-        maxWords: 200,
-    },
-    {
-        id: "task_5",
-        type: "mcq",
-        instructions: "Identify the correct grammatical structure or best response for the professional scenarios below.",
-        questions: [
-            {
-                id: "q_m1",
-                text: "Choose the most professional way to start a follow-up email after a meeting.",
-                options: [
-                    { id: "opt_1", text: "Hey, just checking in about what we talked about." },
-                    { id: "opt_2", text: "It was a pleasure meeting with you earlier today to discuss our project milestones." },
-                    { id: "opt_3", text: "I'm writing because I forgot to ask something in the meeting." },
-                    { id: "opt_4", text: "Did you have time to look at the notes I sent yet?" },
-                ],
-            },
-        ],
-    },
-];
-
-interface CommunicationEngineProps {
-    onComplete: (data: CommunicationAnswers) => void;
+export interface AttemptSubmitResult {
+    totalScore: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    status?: string;
 }
 
 const taskCopy: Record<TaskType, { label: string; hint: string; accent: string }> = {
@@ -138,42 +81,287 @@ const taskCopy: Record<TaskType, { label: string; hint: string; accent: string }
 };
 
 const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${remainingSeconds}`;
+    const safe = Math.max(0, seconds);
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
 const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | undefined) => {
     if (!answer) return false;
     if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
-        return task.questions.every((question) => Boolean((answer as Record<string, string>)[question.id]));
+        return (task as any).questions?.every((question: any) => Boolean((answer as Record<string, string>)[question.id]));
     }
     if (task.type === "speaking") {
         return "audioBlobUrl" in answer && Boolean(answer.audioBlobUrl);
     }
-    return "text" in answer && answer.text.trim().length > 0;
+    return "text" in answer && (answer as { text: string }).text.trim().length > 0;
 };
 
-const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete }) => {
+interface CommunicationEngineProps {
+    onComplete: (result: AttemptSubmitResult) => void;
+    assessmentCode?: string;
+    userId?: number;
+    mode?: 'trial' | 'main';
+}
+
+const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ 
+    onComplete,
+    assessmentCode = "COMMUNICATION_DEFAULT",
+    userId,
+    mode = 'main'
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [timeLeft, setTimeLeft] = useState(45 * 60);
+    const [timeLeft, setTimeLeft] = useState(COMMUNICATION_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(COMMUNICATION_TOTAL_TIME);
     const [answers, setAnswers] = useState<CommunicationAnswers>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+    const { theme } = useTheme();
+    const [tasks, setTasks] = useState<AssessmentTask[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    const cacheRestoredRef = useRef(false);
 
-    const currentTask = MOCK_TASKS[currentIndex];
-    const totalTasks = MOCK_TASKS.length;
+    // ── Cache hook (grammar module is the backend name for communication) ──
+    const cacheAnswers = useMemo(() => {
+        const out: Record<string, any> = {};
+        for (const [k, v] of Object.entries(answers)) {
+            out[k] = { raw: v };
+        }
+        return out;
+    }, [answers]);
+
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'grammar',
+        assessmentCode,
+        questions:       tasks,
+        expiresAt:       undefined,
+        answers:         cacheAnswers,
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // Restore session from cache when available
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setTasks(normalizeTasks(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: CommunicationAnswers = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (val && typeof val === 'object' && 'raw' in val) {
+                    restored[qId] = (val as any).raw;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
+
+    const normalizeOptions = (items: any[]) => (Array.isArray(items)
+        ? items.map((opt: any) => ({
+            id: String(opt.id ?? opt.optionId ?? opt.option_id),
+            text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+        }))
+        : []);
+
+    const mapTaskType = (raw: string) => {
+        const type = String(raw || '').toLowerCase();
+        if (type === 'listening_mcq') return 'audio' as const;
+        if (type === 'reading_mcq') return 'reading' as const;
+        if (type === 'speaking') return 'speaking' as const;
+        if (type === 'writing') return 'writing' as const;
+        return 'mcq' as const;
+    };
+
+    const normalizeTasks = (items: any[]): AssessmentTask[] => items.map((q: any, idx: number) => {
+        const id = String(q.id ?? q.questionId ?? q.question_id ?? `task-${idx + 1}`);
+        const taskType = mapTaskType(q.taskType ?? q.task_type ?? q.type);
+        const instructions = q.instructions ?? taskCopy[taskType]?.hint ?? "Answer the question.";
+        const options = normalizeOptions(q.options);
+        const questionText = q.text ?? q.questionText ?? q.question_text ?? "";
+
+        if (taskType === "audio") {
+            return {
+                id,
+                type: "audio",
+                instructions,
+                audioUrl: q.audioUrl ?? q.audio_url ?? "",
+                questions: [{ id, text: questionText, options }],
+            } as AudioTask;
+        }
+
+        if (taskType === "reading") {
+            return {
+                id,
+                type: "reading",
+                instructions,
+                passage: q.passage ?? q.passageText ?? q.passage_text ?? "",
+                questions: [{ id, text: questionText, options }],
+            } as ReadingTask;
+        }
+
+        if (taskType === "speaking") {
+            const rubric = q.rubric ?? q.rubric_json ?? {};
+            return {
+                id,
+                type: "speaking",
+                instructions,
+                prompt: q.prompt ?? questionText,
+                prepTimeSeconds: Number(rubric.prepTimeSeconds ?? 30),
+                recordTimeSeconds: Number(rubric.recordTimeSeconds ?? 120),
+            } as SpeakingTask;
+        }
+
+        if (taskType === "writing") {
+            const rubric = q.rubric ?? q.rubric_json ?? {};
+            return {
+                id,
+                type: "writing",
+                instructions,
+                prompt: q.prompt ?? questionText,
+                minWords: rubric.minWords ?? undefined,
+                maxWords: rubric.maxWords ?? undefined,
+            } as WritingTask;
+        }
+
+        return {
+            id,
+            type: "mcq",
+            instructions,
+            questions: [{ id, text: questionText, options }],
+        } as McqTask;
+    });
+
+    const blobUrlToBase64 = async (url: string) => {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error("Failed to read audio data"));
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    const buildSubmissionPayload = useCallback(async () => {
+        const payload: Record<string, any> = {};
+
+        for (const task of tasks) {
+            const answer = answers[task.id];
+            if (!answer) continue;
+
+            if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
+                const map = answer as Record<string, string>;
+                Object.entries(map).forEach(([questionId, optionId]) => {
+                    if (optionId) payload[questionId] = optionId;
+                });
+                continue;
+            }
+
+            if (task.type === "writing") {
+                const text = (answer as { text?: string }).text ?? String(answer ?? "");
+                if (text) payload[task.id] = { text };
+                continue;
+            }
+
+            if (task.type === "speaking") {
+                const audioBlobUrl = (answer as { audioBlobUrl?: string }).audioBlobUrl;
+                if (audioBlobUrl) {
+                    const audioBase64 = await blobUrlToBase64(audioBlobUrl);
+                    payload[task.id] = { audioBase64 };
+                }
+            }
+        }
+
+        return payload;
+    }, [answers, tasks]);
+
+    useEffect(() => {
+        if (!isCacheRestored) return; // Wait until cache resolution finishes
+
+        // Skip API call if cache already restored tasks
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+                const response = await fetch(`${API_BASE}/api/assessment/grammar/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load Communication questions.");
+                }
+
+                const data = await response.json();
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setTasks(Array.isArray(data.questions) ? normalizeTasks(data.questions) : []);
+                const duration = Number(data.durationSeconds || COMMUNICATION_TOTAL_TIME);
+                setTimeLeft(duration);
+                setTotalTime(duration);
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
+
+    const currentTask = tasks[currentIndex];
+    const totalTasks = tasks.length;
     
     const completedCount = useMemo(
-        () => MOCK_TASKS.filter((task) => isTaskComplete(task, answers[task.id])).length,
-        [answers],
+        () => tasks.filter((task) => isTaskComplete(task, answers[task.id])).length,
+        [answers, tasks],
     );
-    const progressPercent = Math.round((completedCount / totalTasks) * 100);
+    const progressPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const isLastTask = currentIndex === totalTasks - 1;
 
-    const navigatorTasks: NavigatorQuestion[] = MOCK_TASKS.map((task, index) => {
+    const navigatorTasks: NavigatorQuestion[] = tasks.map((task, index) => {
         const isAnswered = isTaskComplete(task, answers[task.id]);
         const isMarked = markedForReview.has(task.id);
 
@@ -191,15 +379,37 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
         };
     });
 
-    const confirmSubmit = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const confirmSubmit = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const submissionAnswers = await buildSubmissionPayload();
+            const response = await fetch(`${API_BASE}/api/assessment/grammar/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers: submissionAnswers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            const result = await response.json();
+            await clearSession();
+            onComplete(result);
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [attemptToken, buildSubmissionPayload, clearSession, isSubmitting, onComplete]);
 
     const handleConfirmSubmit = () => {
         setShowSubmitModal(true);
     };
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             confirmSubmit();
             return;
@@ -208,7 +418,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             setTimeLeft((prev) => prev - 1);
         }, 1000);
         return () => window.clearInterval(timer);
-    }, [confirmSubmit, timeLeft]);
+    }, [confirmSubmit, timeLeft, isLoading, attemptToken]);
 
     const handleNext = () => {
         if (!isLastTask) {
@@ -227,9 +437,12 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
             ...prev,
             [taskId]: answerData,
         }));
+        // Persist to cache immediately (wrap in raw so it survives JSON round-trip)
+        cacheSaveAnswer(taskId, { raw: answerData });
     };
 
     const handleMarkReview = () => {
+        if (!currentTask) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentTask.id)) {
             newMarked.delete(currentTask.id);
@@ -240,13 +453,33 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
     };
 
     const handleClear = () => {
+        if (!currentTask) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentTask.id];
         setAnswers(newAnswers);
     };
 
-    const isQuestionMarked = markedForReview.has(currentTask.id);
-    const isQuestionAnswered = isTaskComplete(currentTask, answers[currentTask.id]);
+    const isQuestionMarked = currentTask ? markedForReview.has(currentTask.id) : false;
+    const isQuestionAnswered = currentTask ? isTaskComplete(currentTask, answers[currentTask.id]) : false;
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (loadError || tasks.length === 0) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
+                <p className="text-lg text-slate-500 dark:text-slate-400">
+                    No Questions Found
+                </p>
+            </div>
+        );
+    }
 
     const renderTaskContent = () => {
         switch (currentTask.type) {
@@ -297,6 +530,22 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
                     <div className="hidden sm:block">
@@ -310,26 +559,37 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">Time left</p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
-                            {formatTime(timeLeft)}
-                        </p>
-                    </div>
+                    <TimerDisplay 
+                        time={timeLeft} 
+                        total={totalTime} 
+                        theme={theme} 
+                    />
                     <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
                     <button 
                         onClick={() => setIsSidebarOpen(true)}
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
+                        title="Question Map"
                     >
-                        <LayoutGrid size={20} className="text-brand-green" />
+                        <SidebarMobileIcon className="text-brand-green" />
+                    </button>
+                    <button 
+                        onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+                        className={`hidden lg:flex h-10 w-10 items-center justify-center rounded-lg border transition shadow-sm ${
+                            isDesktopSidebarOpen 
+                            ? 'border-brand-green/50 bg-brand-green/10 text-brand-green dark:border-brand-green/30 dark:bg-brand-green/10' 
+                            : 'border-brand-green/20 bg-white hover:border-brand-green dark:border-white/10 dark:bg-white/5 text-brand-green'
+                        }`}
+                        title="Toggle Question Map"
+                    >
+                        {isDesktopSidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
                     </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
-                <section className="flex min-h-[600px] flex-col rounded-lg border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+            <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
+                <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-lg border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
                     <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
@@ -415,14 +675,22 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ onComplete })
                     </div>
                 </section>
 
-                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
-                    <QuestionNavigator
-                        questions={navigatorTasks}
-                        currentIndex={currentIndex}
-                        onSelect={(idx) => setCurrentIndex(idx)}
-                        progressPercent={safeProgress}
-                    />
-                </aside>
+                <motion.aside 
+                    initial={false}
+                    animate={{ width: isDesktopSidebarOpen ? 300 : 80 }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                    className="hidden shrink-0 relative lg:block lg:min-h-0 rounded-xl border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] overflow-hidden"
+                >
+                    <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
+                        <QuestionNavigator
+                            questions={navigatorTasks}
+                            currentIndex={currentIndex}
+                            onSelect={(idx) => setCurrentIndex(idx)}
+                            progressPercent={safeProgress}
+                            isCollapsed={!isDesktopSidebarOpen}
+                        />
+                    </div>
+                </motion.aside>
             </main>
 
             <AnimatePresence>

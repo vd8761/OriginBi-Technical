@@ -1,0 +1,34 @@
+{
+  "name": "originbi-technical-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "assessment-service",
+    "shared"
+  ],
+  "scripts": {
+    "start": "npm run start --workspace=assessment-service",
+    "dev": "npm run dev --workspace=assessment-service",
+    "build": "npm run build --workspace=assessment-service",
+    "db:init": "ts-node src/db/init.ts",
+    "db:seed": "ts-node src/db/seed.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.19",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.19",
+    "@nestjs/platform-express": "^11.1.19",
+    "@nestjs/typeorm": "^11.0.1",
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "pg": "^8.13.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "typeorm": "^0.3.21"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.21"
+  }
+}
