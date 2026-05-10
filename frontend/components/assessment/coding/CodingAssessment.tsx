@@ -25,8 +25,11 @@ import {
 import {
     runAttemptCode,
     saveAttemptAnswer,
+    sendAttemptEvents,
+    sendAttemptHeartbeat,
     submitAttempt,
     type AnswerPayload,
+    type AttemptEventInput,
     type AttemptSnapshot,
     type CodeRunRequest,
     type CodeRunResponse,
@@ -541,6 +544,49 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
     });
     const lastReportedSwitch = useRef(0);
     const toastHideTimer = useRef<number | null>(null);
+    const eventQueueRef = useRef<AttemptEventInput[]>([]);
+
+    const flushTraceEvents = useCallback(
+        async (keepalive = false) => {
+            if (!backendAttemptId || eventQueueRef.current.length === 0) return;
+            const batch = eventQueueRef.current.splice(0, 200);
+            try {
+                await sendAttemptEvents(backendAttemptId, batch, { keepalive });
+            } catch {
+                eventQueueRef.current = [...batch, ...eventQueueRef.current].slice(0, 200);
+            }
+        },
+        [backendAttemptId],
+    );
+
+    const traceEvent = useCallback(
+        (
+            kind: string,
+            severity = 0,
+            payload: Record<string, unknown> = {},
+            localQuestionId?: number,
+        ) => {
+            if (!backendAttemptId) return;
+            const event: AttemptEventInput = {
+                occurred_at: new Date().toISOString(),
+                kind,
+                severity,
+                payload: {
+                    currentQuestion: currentQ + 1,
+                    ...payload,
+                },
+            };
+            if (localQuestionId != null) {
+                const examQuestionId = examQuestionByLocalId[localQuestionId];
+                if (examQuestionId) event.exam_question_id = examQuestionId;
+            }
+            eventQueueRef.current.push(event);
+            if (eventQueueRef.current.length >= 25) {
+                void flushTraceEvents();
+            }
+        },
+        [backendAttemptId, currentQ, examQuestionByLocalId, flushTraceEvents],
+    );
 
     const showViolationToast = useCallback((title: string, desc: string) => {
         setLastViolation({ title, desc });
@@ -557,8 +603,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         (type: ProctoringCounter, message: { title: string; desc: string }) => {
             setCounters((prev) => ({ ...prev, [type]: prev[type] + 1 }));
             showViolationToast(message.title, message.desc);
+            traceEvent(`proctor.${type}`, 2, {
+                title: message.title,
+                description: message.desc,
+            });
         },
-        [showViolationToast],
+        [showViolationToast, traceEvent],
     );
 
     useProctoring({
@@ -566,6 +616,27 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         settings: proctoring.settings,
         onViolation: handleProctorViolation,
     });
+
+    useEffect(() => {
+        if (!backendAttemptId) return;
+        const id = window.setInterval(() => {
+            void flushTraceEvents();
+        }, 5000);
+        return () => window.clearInterval(id);
+    }, [backendAttemptId, flushTraceEvents]);
+
+    useEffect(() => {
+        if (!backendAttemptId) return;
+        const flushOnExit = () => {
+            void flushTraceEvents(true);
+        };
+        window.addEventListener("pagehide", flushOnExit);
+        document.addEventListener("visibilitychange", flushOnExit);
+        return () => {
+            window.removeEventListener("pagehide", flushOnExit);
+            document.removeEventListener("visibilitychange", flushOnExit);
+        };
+    }, [backendAttemptId, flushTraceEvents]);
 
     // Load persisted state on mount (client only — avoid hydration mismatch)
     useEffect(() => {
@@ -667,6 +738,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         if (tabMonitor.count > lastReportedSwitch.current) {
             const newSwitches = tabMonitor.count - lastReportedSwitch.current;
             lastReportedSwitch.current = tabMonitor.count;
+            traceEvent("proctor.tab_switch", 2, {
+                newSwitches,
+                totalSwitches: tabMonitor.count,
+                hidden: tabMonitor.hidden,
+            });
             if (proctoring.settings.tabSwitchToast) {
                 // eslint-disable-next-line react-hooks/set-state-in-effect
                 showViolationToast(
@@ -676,7 +752,13 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             }
             void newSwitches;
         }
-    }, [tabMonitor.count, proctoring.settings.tabSwitchToast, showViolationToast]);
+    }, [
+        proctoring.settings.tabSwitchToast,
+        showViolationToast,
+        tabMonitor.count,
+        tabMonitor.hidden,
+        traceEvent,
+    ]);
 
     const triggerSave = useCallback(() => {
         setSaved(false);
@@ -733,6 +815,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             const state = stateOverride ?? statuses[qId] ?? "unattempted";
             const payload = payloadOverride ?? buildPayloadForQuestion(qId);
             await saveAttemptAnswer(backendAttemptId, examQuestionId, { state, payload });
+            traceEvent("answer.autosaved", 0, {
+                state,
+                hasFiles: Array.isArray(payload.files),
+                fileCount: payload.files?.length ?? 0,
+                payloadBytes: JSON.stringify(payload).length,
+            }, qId);
             setSaved(true);
         },
         [
@@ -740,6 +828,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             buildPayloadForQuestion,
             examQuestionByLocalId,
             statuses,
+            traceEvent,
             triggerSave,
         ],
     );
@@ -767,12 +856,14 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
     const handleMarkSolved = () => {
         const next: QStatus = qStatus === "solved" ? "unattempted" : "solved";
         setQuestionStatus(q.id, next);
+        traceEvent("question.status_changed", 0, { state: next, action: "mark_solved" }, q.id);
         void persistQuestion(q.id, next).catch(() => setSaved(false));
     };
 
     const handleFlag = () => {
         const next: QStatus = qStatus === "flagged" ? "unattempted" : "flagged";
         setQuestionStatus(q.id, next);
+        traceEvent("question.status_changed", 0, { state: next, action: "flag" }, q.id);
         void persistQuestion(q.id, next).catch(() => setSaved(false));
     };
 
@@ -788,6 +879,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             ...s,
             [qId]: nextState,
         }));
+        traceEvent("question.mcq_selected", 0, { selected: idx, state: nextState }, qId);
         void persistQuestion(qId, nextState, nextPayload).catch(() => setSaved(false));
     };
 
@@ -803,9 +895,13 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 ...s,
                 [qId]: s[qId] === "solved" || s[qId] === "flagged" ? s[qId] : "attempted",
             }));
+            traceEvent("workspace.changed", 0, {
+                fileCount: payload.files?.length ?? 0,
+                entryFile: payload.entryFile,
+            }, qId);
             triggerSave();
         },
-        [lang, mcqAnswers, triggerSave],
+        [lang, mcqAnswers, traceEvent, triggerSave],
     );
 
     const runCodeOnServer = useCallback(
@@ -818,6 +914,14 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 examQuestionId,
                 input,
             );
+            traceEvent("code.run_completed", response.type === "success" ? 0 : 1, {
+                mode: input.mode,
+                language: input.language,
+                runId: response.runId,
+                type: response.type,
+                summary: response.summary,
+                testResults: response.testResults?.length ?? 0,
+            }, qId);
             const payload: AnswerPayload = {
                 language: input.language,
                 files: input.files,
@@ -837,7 +941,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 summary: response.summary,
             };
         },
-        [backendAttemptId, examQuestionByLocalId, mcqAnswers],
+        [backendAttemptId, examQuestionByLocalId, mcqAnswers, traceEvent],
     );
 
     const clearStorage = useCallback(() => {
@@ -856,12 +960,22 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         setSubmitError("");
         try {
             if (backendAttemptId) {
+                traceEvent("attempt.submit_clicked", 0, {
+                    answeredQuestions: Object.keys(answerPayloads).length,
+                    statuses,
+                    timeRemaining: timer.time,
+                });
+                await flushTraceEvents();
                 const answers = QUESTIONS.map((question) => ({
                     examQuestionId: examQuestionByLocalId[question.id],
                     state: statuses[question.id] ?? "unattempted",
                     payload: buildPayloadForQuestion(question.id),
                 })).filter((answer) => !!answer.examQuestionId);
                 await submitAttempt(backendAttemptId, answers);
+                traceEvent("attempt.submit_succeeded", 0, {
+                    answerCount: answers.length,
+                });
+                await flushTraceEvents();
             }
             setSubmitted(true);
             timer.setRunning(false);
@@ -869,6 +983,10 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             clearStorage();
         } catch (err) {
             setSubmitError(err instanceof Error ? err.message : "Submit failed.");
+            traceEvent("attempt.submit_failed", 2, {
+                error: err instanceof Error ? err.message : "Submit failed.",
+            });
+            void flushTraceEvents();
             setSubmitted(false);
             timer.setRunning(true);
         }
@@ -877,8 +995,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         buildPayloadForQuestion,
         clearStorage,
         examQuestionByLocalId,
+        flushTraceEvents,
+        answerPayloads,
         statuses,
         timer,
+        traceEvent,
     ]);
 
     useEffect(() => {
@@ -890,6 +1011,62 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             return () => window.clearTimeout(id);
         }
     }, [handleConfirmSubmit, submitted, timer]);
+
+    const heartbeatStateRef = useRef<Record<string, unknown>>({});
+
+    useEffect(() => {
+        heartbeatStateRef.current = {
+            currentQuestion: currentQ + 1,
+            statuses,
+            counters,
+            tabSwitches: tabMonitor.count,
+            tabHidden: tabMonitor.hidden,
+            timeRemaining: timer.time,
+            saved,
+            language: lang,
+        };
+    }, [
+        counters,
+        currentQ,
+        lang,
+        saved,
+        statuses,
+        tabMonitor.count,
+        tabMonitor.hidden,
+        timer.time,
+    ]);
+
+    const resetTimer = timer.reset;
+
+    useEffect(() => {
+        if (!backendAttemptId || !hydrated || submitted) return;
+        const sendHeartbeat = async () => {
+            try {
+                const response = await sendAttemptHeartbeat(
+                    backendAttemptId,
+                    heartbeatStateRef.current,
+                );
+                const serverSeconds = Math.max(
+                    0,
+                    Math.floor(response.server_time_remaining_ms / 1000),
+                );
+                const currentTime = Number(heartbeatStateRef.current.timeRemaining ?? serverSeconds);
+                if (Math.abs(serverSeconds - currentTime) > 3) {
+                    resetTimer(serverSeconds);
+                }
+                if (response.status === "timed_out") {
+                    resetTimer(0);
+                }
+            } catch {
+                traceEvent("heartbeat.failed", 1, {
+                    timeRemaining: heartbeatStateRef.current.timeRemaining,
+                });
+            }
+        };
+        void sendHeartbeat();
+        const id = window.setInterval(sendHeartbeat, 15000);
+        return () => window.clearInterval(id);
+    }, [backendAttemptId, hydrated, resetTimer, submitted, traceEvent]);
 
     const handleBackToExplore = () => {
         router.push("/explore/coding");
@@ -1033,10 +1210,20 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 onSubmit={() => setShowSubmit(true)}
                 onPrev={() => {
                     void persistQuestion(q.id).catch(() => setSaved(false));
+                    traceEvent("question.navigate", 0, {
+                        from: q.id,
+                        to: Math.max(1, q.id - 1),
+                        direction: "previous",
+                    }, q.id);
                     setCurrentQ((i) => Math.max(0, i - 1));
                 }}
                 onNext={() => {
                     void persistQuestion(q.id).catch(() => setSaved(false));
+                    traceEvent("question.navigate", 0, {
+                        from: q.id,
+                        to: Math.min(QUESTIONS.length, q.id + 1),
+                        direction: "next",
+                    }, q.id);
                     setCurrentQ((i) => Math.min(QUESTIONS.length - 1, i + 1));
                 }}
                 onMarkSolved={handleMarkSolved}
@@ -1059,6 +1246,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                     statuses={statuses}
                     onSelect={(index) => {
                         void persistQuestion(q.id).catch(() => setSaved(false));
+                        traceEvent("question.navigate", 0, {
+                            from: q.id,
+                            to: QUESTIONS[index]?.id,
+                            direction: "sidebar",
+                        }, q.id);
                         setCurrentQ(index);
                     }}
                     theme={theme}

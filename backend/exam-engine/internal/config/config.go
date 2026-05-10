@@ -15,11 +15,11 @@ import (
 )
 
 type Config struct {
-	HTTPAddr        string
-	DatabaseURL     string
-	LogLevel        string
-	HeartbeatGrace  time.Duration
-	RunMigrations   bool
+	HTTPAddr               string
+	DatabaseURL            string
+	LogLevel               string
+	HeartbeatGrace         time.Duration
+	RunMigrations          bool
 	EnsurePartitionsOnBoot bool
 }
 

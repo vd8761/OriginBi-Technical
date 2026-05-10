@@ -150,6 +150,22 @@ export interface CodeRunResponse {
   runId: string;
 }
 
+export interface AttemptEventInput {
+  occurred_at: string;
+  kind: string;
+  severity?: number;
+  exam_question_id?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface HeartbeatResponse {
+  received_at: string;
+  rtt_ms: number;
+  server_time_remaining_ms: number;
+  deadline_at?: string;
+  status: string;
+}
+
 export interface Plugin {
   id: string;
   kind: string;
@@ -262,6 +278,34 @@ export async function runAttemptCode(
     {
       method: "POST",
       body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function sendAttemptHeartbeat(
+  attemptId: string,
+  clientState: Record<string, unknown>,
+): Promise<HeartbeatResponse> {
+  return apiFetch<HeartbeatResponse>(`/v1/attempts/${attemptId}/heartbeat`, {
+    method: "POST",
+    body: JSON.stringify({
+      sent_at: new Date().toISOString(),
+      client_state: clientState,
+    }),
+  });
+}
+
+export async function sendAttemptEvents(
+  attemptId: string,
+  events: AttemptEventInput[],
+  options: { keepalive?: boolean } = {},
+): Promise<{ accepted: number; rejected: number }> {
+  return apiFetch<{ accepted: number; rejected: number }>(
+    `/v1/attempts/${attemptId}/events`,
+    {
+      method: "POST",
+      body: JSON.stringify({ events }),
+      keepalive: options.keepalive,
     },
   );
 }

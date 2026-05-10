@@ -41,8 +41,8 @@ func TestDatabaseReady(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version < 9 {
-		t.Fatalf("expected migration version >= 9, got %d", version)
+	if version < 10 {
+		t.Fatalf("expected migration version >= 10, got %d", version)
 	}
 
 	requiredTables := []string{

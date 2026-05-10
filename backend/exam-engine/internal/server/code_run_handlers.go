@@ -128,7 +128,7 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := contextWithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	tests, err := s.loadRunTests(ctx, attemptID, principal.UserID, examQuestionID, req.Mode)
+	tests, err := s.loadRunTests(ctx, attemptID, principal.UserID, examQuestionID, req.Mode, req.Language)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "active attempt/question not found")
@@ -139,6 +139,19 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Mode == "tests" && len(tests) == 0 {
 		writeError(w, http.StatusBadRequest, "no test cases defined")
+		return
+	}
+
+	select {
+	case s.codeRunSem <- struct{}{}:
+		defer func() { <-s.codeRunSem }()
+	default:
+		_ = s.recordAttemptEvent(r.Context(), attemptID, "code_run_rejected", 2, &examQuestionID, map[string]any{
+			"reason":   "engine_busy",
+			"mode":     req.Mode,
+			"language": req.Language,
+		})
+		writeError(w, http.StatusTooManyRequests, "code runner is busy; retry shortly")
 		return
 	}
 
@@ -170,18 +183,23 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string) ([]dbTestCase, error) {
+func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string, language string) ([]dbTestCase, error) {
 	var exists int
 	err := s.pool.QueryRow(ctx, `
 		SELECT 1
 		FROM attempts a
+		JOIN exam_assignments assign ON assign.id = a.assignment_id
 		JOIN exam_questions eq
 		     ON eq.exam_version_id = a.exam_version_id
 		    AND eq.id = $2
 		WHERE a.id = $1
 		  AND a.candidate_user_id = $3
 		  AND a.status IN ('started','in_progress','paused')
-	`, attemptID, examQuestionID, userID).Scan(&exists)
+		  AND (
+		      assign.assignment_ref IS NULL
+		      OR assign.assignment_ref = 'coding:' || $4
+		  )
+	`, attemptID, examQuestionID, userID, language).Scan(&exists)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +290,16 @@ func (s *Server) persistRunStart(
 	`, runID, attemptID, answerID, submissionID, req.Mode, nullableCustomStdin(req)); err != nil {
 		return uuid.Nil, err
 	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_started", 0, &examQuestionID, map[string]any{
+		"runId":      runID.String(),
+		"mode":       req.Mode,
+		"language":   req.Language,
+		"entryFile":  req.EntryFile,
+		"fileCount":  len(req.Files),
+		"totalBytes": totalBytes,
+	}); err != nil {
+		return uuid.Nil, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return uuid.Nil, err
 	}
@@ -286,7 +314,7 @@ func (s *Server) executeJudge0(
 	tests []dbTestCase,
 ) (codeRunResponse, error) {
 	if req.Mode == "custom" {
-		r, err := postJudge0(ctx, payload, req.CustomStdin)
+		r, err := s.postJudge0(ctx, payload, req.CustomStdin)
 		if err != nil {
 			return codeRunResponse{}, err
 		}
@@ -302,7 +330,7 @@ func (s *Server) executeJudge0(
 	passCount := 0
 	var firstFail *judge0Result
 	for _, tc := range tests {
-		r, err := postJudge0(ctx, payload, tc.Stdin)
+		r, err := s.postJudge0(ctx, payload, tc.Stdin)
 		if err != nil {
 			return codeRunResponse{}, err
 		}
@@ -374,6 +402,11 @@ func (s *Server) persistRunFinish(
 		return err
 	}
 	defer tx.Rollback(ctx)
+
+	var attemptID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT attempt_id FROM code_runs WHERE id = $1`, runID).Scan(&attemptID); err != nil {
+		return err
+	}
 
 	statusID := 3
 	statusDesc := "Accepted"
@@ -450,23 +483,58 @@ func (s *Server) persistRunFinish(
 			}
 		}
 	}
+	severity := int16(0)
+	if resp.Type == "partial" {
+		severity = 1
+	} else if resp.Type != "success" {
+		severity = 2
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_finished", severity, nil, map[string]any{
+		"runId":       runID.String(),
+		"mode":        mode,
+		"type":        resp.Type,
+		"summary":     resp.Summary,
+		"statusId":    statusID,
+		"status":      statusDesc,
+		"testResults": len(resp.TestResults),
+	}); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 func (s *Server) finishRunWithError(ctx context.Context, runID uuid.UUID, msg string) error {
 	ctx, cancel := contextWithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	_, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var attemptID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT attempt_id FROM code_runs WHERE id = $1`, runID).Scan(&attemptID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
 		UPDATE code_runs
 		SET judge0_status_desc = 'Engine error',
 		    stderr = $2,
 		    finished_at = now()
 		WHERE id = $1
 	`, runID, msg)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_failed", 2, nil, map[string]any{
+		"runId": runID.String(),
+		"error": msg,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-func postJudge0(ctx context.Context, payload map[string]any, stdin string) (judge0Result, error) {
+func (s *Server) postJudge0(ctx context.Context, payload map[string]any, stdin string) (judge0Result, error) {
 	body := cloneMap(payload)
 	body["stdin"] = encodeBase64(stdin)
 	raw, err := json.Marshal(body)
@@ -478,7 +546,7 @@ func postJudge0(ctx context.Context, payload map[string]any, stdin string) (judg
 		return judge0Result{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.judgeHTTPClient.Do(req)
 	if err != nil {
 		return judge0Result{}, err
 	}

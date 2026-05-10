@@ -56,6 +56,19 @@ type snapshotResponse struct {
 	Answers          []answerSnapshotDTO   `json:"answers"`
 }
 
+type attemptFingerprint struct {
+	Snapshot *frozenAttemptSnapshot `json:"snapshot,omitempty"`
+}
+
+type frozenAttemptSnapshot struct {
+	AssignmentRef    string                `json:"assignmentRef"`
+	Language         string                `json:"language"`
+	ExamVersionID    string                `json:"examVersionId"`
+	TotalTimeSeconds int                   `json:"totalTimeSeconds"`
+	Questions        []snapshotQuestionDTO `json:"questions"`
+	CreatedAt        time.Time             `json:"createdAt"`
+}
+
 type saveAnswerRequest struct {
 	State   string          `json:"state"`
 	Payload json.RawMessage `json:"payload"`
@@ -96,19 +109,63 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	assignmentID, err := s.resolveAssignment(ctx, principal.UserID, req)
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "active assignment not found")
+		writeError(w, http.StatusInternalServerError, "db unavailable")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var assignmentID, examVersionID uuid.UUID
+	var assignmentRef string
+	var totalSeconds int
+	if req.AssignmentID != "" {
+		parsedID, err := uuid.Parse(req.AssignmentID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid assignmentId")
 			return
 		}
-		writeError(w, http.StatusBadRequest, err.Error())
+		err = tx.QueryRow(ctx, `
+			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds
+			FROM exam_assignments a
+			JOIN exam_versions ev ON ev.id = a.exam_version_id
+			WHERE a.id = $1
+			  AND a.candidate_user_id = $2
+			  AND a.status = 'active'
+			  AND now() >= COALESCE(a.available_from, '-infinity'::timestamptz)
+			  AND (a.available_until IS NULL OR now() <= a.available_until)
+			FOR UPDATE OF a
+		`, parsedID, principal.UserID).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds)
+	} else if req.AssignmentRef != "" {
+		err = tx.QueryRow(ctx, `
+			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds
+			FROM exam_assignments a
+			JOIN exam_versions ev ON ev.id = a.exam_version_id
+			WHERE a.candidate_user_id = $1
+			  AND a.assignment_ref = $2
+			  AND a.status = 'active'
+			  AND now() >= COALESCE(a.available_from, '-infinity'::timestamptz)
+			  AND (a.available_until IS NULL OR now() <= a.available_until)
+			ORDER BY a.created_at DESC
+			LIMIT 1
+			FOR UPDATE OF a
+		`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds)
+	} else {
+		writeError(w, http.StatusBadRequest, "assignmentId or assignmentRef is required")
+		return
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "active assignment not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "assignment lookup failed")
 		return
 	}
 
 	var doneAttemptID string
 	var doneStatus string
-	err = s.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id::text, status::text
 		FROM attempts
 		WHERE assignment_id = $1
@@ -130,7 +187,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var activeAttemptID uuid.UUID
-	err = s.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id
 		FROM attempts
 		WHERE assignment_id = $1
@@ -139,6 +196,16 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		LIMIT 1
 	`, assignmentID).Scan(&activeAttemptID)
 	if err == nil {
+		if err := s.recordAttemptEventTx(ctx, tx, activeAttemptID, "attempt_resumed", 0, nil, map[string]any{
+			"assignmentRef": assignmentRef,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "trace write failed")
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			writeError(w, http.StatusInternalServerError, "commit failed")
+			return
+		}
 		s.writeSnapshot(w, r, principal.UserID, activeAttemptID)
 		return
 	}
@@ -147,31 +214,43 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var examVersionID uuid.UUID
-	var totalSeconds int
-	err = s.pool.QueryRow(ctx, `
-		SELECT a.exam_version_id, ev.total_time_seconds
-		FROM exam_assignments a
-		JOIN exam_versions ev ON ev.id = a.exam_version_id
-		WHERE a.id = $1
-	`, assignmentID).Scan(&examVersionID, &totalSeconds)
+	frozen, err := s.buildFrozenSnapshot(ctx, tx, examVersionID, assignmentRef, totalSeconds)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "assignment exam lookup failed")
+		writeError(w, http.StatusInternalServerError, "snapshot build failed")
+		return
+	}
+	fingerprint, err := json.Marshal(attemptFingerprint{Snapshot: &frozen})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "snapshot encode failed")
 		return
 	}
 
 	now := time.Now().UTC()
 	deadline := now.Add(time.Duration(totalSeconds) * time.Second)
 	attemptID := uuid.New()
-	_, err = s.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO attempts (
 		    id, assignment_id, candidate_user_id, exam_version_id,
-		    status, started_at, deadline_at, time_remaining_ms, last_seen_at
+		    status, started_at, deadline_at, time_remaining_ms, last_seen_at,
+		    fingerprint
 		)
-		VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, $5)
-	`, attemptID, assignmentID, principal.UserID, examVersionID, now, deadline, totalSeconds*1000)
+		VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, $5, $8::jsonb)
+	`, attemptID, assignmentID, principal.UserID, examVersionID, now, deadline, totalSeconds*1000, fingerprint)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "attempt create failed")
+		return
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "attempt_started", 0, nil, map[string]any{
+		"assignmentRef": assignmentRef,
+		"language":      frozen.Language,
+		"questionCount": len(frozen.Questions),
+		"deadlineAt":    deadline,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "trace write failed")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		writeError(w, http.StatusInternalServerError, "commit failed")
 		return
 	}
 
@@ -293,14 +372,22 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	finalScore, gradingStatus, err := s.gradeAttemptTx(ctx, tx, attemptID, principal.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "grading failed")
+		return
+	}
+
 	var dto attemptDTO
 	var id, assignmentID, examVersionID uuid.UUID
 	var startedAt, submittedAt, deadlineAt sql.NullTime
 	err = tx.QueryRow(ctx, `
 		UPDATE attempts
-		SET status = 'submitted',
+		SET status = 'evaluated',
 		    submitted_at = now(),
 		    last_seen_at = now(),
+		    final_score = $3,
+		    grading_status = $4,
 		    time_remaining_ms = CASE
 		        WHEN deadline_at IS NULL THEN time_remaining_ms
 		        ELSE GREATEST(0, (extract(epoch FROM (deadline_at - now())) * 1000)::int)
@@ -310,7 +397,7 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 		  AND status IN ('started','in_progress','paused')
 		RETURNING id, assignment_id, exam_version_id, status::text,
 		          started_at, submitted_at, deadline_at, time_remaining_ms
-	`, attemptID, principal.UserID).Scan(
+	`, attemptID, principal.UserID, finalScore, gradingStatus).Scan(
 		&id, &assignmentID, &examVersionID, &dto.Status,
 		&startedAt, &submittedAt, &deadlineAt, &dto.TimeRemainingMs,
 	)
@@ -320,6 +407,14 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "submit failed")
+		return
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "attempt_submitted", 0, nil, map[string]any{
+		"finalScore":    finalScore,
+		"gradingStatus": gradingStatus,
+		"answerCount":   len(req.Answers),
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "trace write failed")
 		return
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -354,6 +449,7 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 	var resp snapshotResponse
 	var attemptIDOut, assignmentID, examVersionID uuid.UUID
 	var startedAt, submittedAt, deadlineAt sql.NullTime
+	var fingerprintBytes []byte
 	err := s.pool.QueryRow(ctx, `
 		SELECT a.id,
 		       a.assignment_id,
@@ -369,7 +465,8 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 		           ELSE COALESCE(a.time_remaining_ms, 0)
 		       END AS time_remaining_ms,
 		       COALESCE(assign.assignment_ref, ''),
-		       ev.total_time_seconds
+		       ev.total_time_seconds,
+		       a.fingerprint
 		FROM attempts a
 		JOIN exam_assignments assign ON assign.id = a.assignment_id
 		JOIN exam_versions ev ON ev.id = a.exam_version_id
@@ -385,6 +482,7 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 		&resp.Attempt.TimeRemainingMs,
 		&resp.AssignmentRef,
 		&resp.TotalTimeSeconds,
+		&fingerprintBytes,
 	)
 	if err != nil {
 		return snapshotResponse{}, err
@@ -396,6 +494,31 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 	resp.Attempt.SubmittedAt = nullTimePtr(submittedAt)
 	resp.Attempt.DeadlineAt = nullTimePtr(deadlineAt)
 	resp.Language = strings.TrimPrefix(resp.AssignmentRef, "coding:")
+
+	if len(fingerprintBytes) > 0 {
+		var fingerprint attemptFingerprint
+		if err := json.Unmarshal(fingerprintBytes, &fingerprint); err == nil && fingerprint.Snapshot != nil {
+			snap := fingerprint.Snapshot
+			if snap.AssignmentRef != "" {
+				resp.AssignmentRef = snap.AssignmentRef
+			}
+			if snap.Language != "" {
+				resp.Language = snap.Language
+			}
+			if snap.TotalTimeSeconds > 0 {
+				resp.TotalTimeSeconds = snap.TotalTimeSeconds
+			}
+			if len(snap.Questions) > 0 {
+				resp.Questions = snap.Questions
+				answers, err := s.loadAnswerSnapshots(ctx, examVersionID, attemptID)
+				if err != nil {
+					return snapshotResponse{}, err
+				}
+				resp.Answers = answers
+				return resp, nil
+			}
+		}
+	}
 
 	qRows, err := s.pool.Query(ctx, `
 		SELECT eq.id,
@@ -429,6 +552,15 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 		return snapshotResponse{}, qRows.Err()
 	}
 
+	answers, err := s.loadAnswerSnapshots(ctx, examVersionID, attemptID)
+	if err != nil {
+		return snapshotResponse{}, err
+	}
+	resp.Answers = answers
+	return resp, nil
+}
+
+func (s *Server) loadAnswerSnapshots(ctx context.Context, examVersionID uuid.UUID, attemptID uuid.UUID) ([]answerSnapshotDTO, error) {
 	aRows, err := s.pool.Query(ctx, `
 		SELECT eq.id,
 		       COALESCE(aqs.state::text, 'unattempted'),
@@ -443,27 +575,76 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 		ORDER BY eq.ordinal
 	`, examVersionID, attemptID)
 	if err != nil {
-		return snapshotResponse{}, err
+		return nil, err
 	}
 	defer aRows.Close()
-	resp.Answers = []answerSnapshotDTO{}
+	answers := []answerSnapshotDTO{}
 	for aRows.Next() {
 		var a answerSnapshotDTO
 		var eqID uuid.UUID
 		var payload []byte
 		var savedAt sql.NullTime
 		if err := aRows.Scan(&eqID, &a.State, &payload, &savedAt); err != nil {
-			return snapshotResponse{}, err
+			return nil, err
 		}
 		a.ExamQuestionID = eqID.String()
 		a.Payload = json.RawMessage(payload)
 		a.SavedAt = nullTimePtr(savedAt)
-		resp.Answers = append(resp.Answers, a)
+		answers = append(answers, a)
 	}
 	if aRows.Err() != nil {
-		return snapshotResponse{}, aRows.Err()
+		return nil, aRows.Err()
 	}
-	return resp, nil
+	return answers, nil
+}
+
+func (s *Server) buildFrozenSnapshot(
+	ctx context.Context,
+	tx pgx.Tx,
+	examVersionID uuid.UUID,
+	assignmentRef string,
+	totalSeconds int,
+) (frozenAttemptSnapshot, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT eq.id,
+		       qv.id,
+		       eq.ordinal,
+		       COALESCE(eq.score_override, qv.max_score)::float8,
+		       qv.body
+		FROM exam_questions eq
+		JOIN question_versions qv ON qv.id = eq.question_version_id
+		WHERE eq.exam_version_id = $1
+		ORDER BY eq.ordinal
+	`, examVersionID)
+	if err != nil {
+		return frozenAttemptSnapshot{}, err
+	}
+	defer rows.Close()
+
+	questions := []snapshotQuestionDTO{}
+	for rows.Next() {
+		var q snapshotQuestionDTO
+		var eqID, qvID uuid.UUID
+		var body []byte
+		if err := rows.Scan(&eqID, &qvID, &q.Ordinal, &q.Score, &body); err != nil {
+			return frozenAttemptSnapshot{}, err
+		}
+		q.ExamQuestionID = eqID.String()
+		q.QuestionVersionID = qvID.String()
+		q.Body = json.RawMessage(body)
+		questions = append(questions, q)
+	}
+	if rows.Err() != nil {
+		return frozenAttemptSnapshot{}, rows.Err()
+	}
+	return frozenAttemptSnapshot{
+		AssignmentRef:    assignmentRef,
+		Language:         strings.TrimPrefix(assignmentRef, "coding:"),
+		ExamVersionID:    examVersionID.String(),
+		TotalTimeSeconds: totalSeconds,
+		Questions:        questions,
+		CreatedAt:        time.Now().UTC(),
+	}, nil
 }
 
 func (s *Server) resolveAssignment(ctx context.Context, userID int64, req startAttemptRequest) (uuid.UUID, error) {
@@ -552,7 +733,201 @@ func (s *Server) saveAnswerTx(
 	`, uuid.New(), attemptID, examQuestionID, questionVersionID, []byte(payload), now); err != nil {
 		return time.Time{}, err
 	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "answer_saved", 0, &examQuestionID, map[string]any{
+		"state":        state,
+		"payloadBytes": len(payload),
+	}); err != nil {
+		return time.Time{}, err
+	}
 	return now, nil
+}
+
+type answerForGrade struct {
+	AnswerID          uuid.UUID
+	ExamQuestionID    uuid.UUID
+	QuestionVersionID uuid.UUID
+	MaxScore          float64
+	Body              []byte
+	Payload           []byte
+}
+
+func (s *Server) gradeAttemptTx(ctx context.Context, tx pgx.Tx, attemptID uuid.UUID, userID int64) (float64, string, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT ans.id,
+		       ans.exam_question_id,
+		       ans.question_version_id,
+		       COALESCE(eq.score_override, qv.max_score)::float8,
+		       qv.body,
+		       ans.payload
+		FROM attempts a
+		JOIN answers ans ON ans.attempt_id = a.id
+		JOIN exam_questions eq ON eq.id = ans.exam_question_id
+		JOIN question_versions qv ON qv.id = ans.question_version_id
+		WHERE a.id = $1 AND a.candidate_user_id = $2
+		ORDER BY eq.ordinal
+	`, attemptID, userID)
+	if err != nil {
+		return 0, "", err
+	}
+
+	answers := []answerForGrade{}
+	for rows.Next() {
+		var ans answerForGrade
+		if err := rows.Scan(
+			&ans.AnswerID,
+			&ans.ExamQuestionID,
+			&ans.QuestionVersionID,
+			&ans.MaxScore,
+			&ans.Body,
+			&ans.Payload,
+		); err != nil {
+			rows.Close()
+			return 0, "", err
+		}
+		answers = append(answers, ans)
+	}
+	if rows.Err() != nil {
+		rows.Close()
+		return 0, "", rows.Err()
+	}
+	rows.Close()
+
+	total := 0.0
+	for _, ans := range answers {
+		score, feedback, err := s.gradeAnswerTx(ctx, tx, ans)
+		if err != nil {
+			return 0, "", err
+		}
+		total += score
+		if _, err := tx.Exec(ctx, `
+			UPDATE answers
+			SET auto_score = $2,
+			    final_score = $2,
+			    auto_feedback = $3::jsonb,
+			    grading_status = 'auto_evaluated'
+			WHERE id = $1
+		`, ans.AnswerID, score, feedback); err != nil {
+			return 0, "", err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO evaluations (
+			    id, answer_id, evaluator_kind, status, score, feedback,
+			    completed_at, metadata
+			)
+			VALUES (
+			    $1, $2, 'auto', 'auto_evaluated', $3, $4, now(),
+			    jsonb_build_object('source', 'submit', 'attempt_id', $5::text)
+			)
+		`, uuid.New(), ans.AnswerID, score, string(feedback), attemptID); err != nil {
+			return 0, "", err
+		}
+	}
+	if len(answers) == 0 {
+		return 0, "auto_evaluated", nil
+	}
+	return total, "auto_evaluated", nil
+}
+
+func (s *Server) gradeAnswerTx(ctx context.Context, tx pgx.Tx, ans answerForGrade) (float64, []byte, error) {
+	var body struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(ans.Body, &body)
+	if body.Type == "mcq" {
+		return s.gradeMCQAnswerTx(ctx, tx, ans)
+	}
+	return s.gradeCodingAnswerTx(ctx, tx, ans)
+}
+
+func (s *Server) gradeMCQAnswerTx(ctx context.Context, tx pgx.Tx, ans answerForGrade) (float64, []byte, error) {
+	var payload struct {
+		MCQAnswer *int `json:"mcqAnswer"`
+	}
+	_ = json.Unmarshal(ans.Payload, &payload)
+
+	var correctOrdinal int
+	err := tx.QueryRow(ctx, `
+		SELECT ordinal
+		FROM question_options
+		WHERE question_version_id = $1 AND is_correct
+		ORDER BY ordinal
+		LIMIT 1
+	`, ans.QuestionVersionID).Scan(&correctOrdinal)
+	if errors.Is(err, pgx.ErrNoRows) {
+		feedback, _ := json.Marshal(map[string]any{
+			"type":   "mcq",
+			"status": "no_correct_option",
+		})
+		return 0, feedback, nil
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+
+	selected := -1
+	if payload.MCQAnswer != nil {
+		selected = *payload.MCQAnswer
+	}
+	correct := selected+1 == correctOrdinal || selected == correctOrdinal
+	score := 0.0
+	if correct {
+		score = ans.MaxScore
+	}
+	feedback, _ := json.Marshal(map[string]any{
+		"type":           "mcq",
+		"selected":       selected,
+		"correctOrdinal": correctOrdinal,
+		"correct":        correct,
+		"maxScore":       ans.MaxScore,
+	})
+	return score, feedback, nil
+}
+
+func (s *Server) gradeCodingAnswerTx(ctx context.Context, tx pgx.Tx, ans answerForGrade) (float64, []byte, error) {
+	var runID uuid.UUID
+	err := tx.QueryRow(ctx, `
+		SELECT id
+		FROM code_runs
+		WHERE answer_id = $1
+		  AND mode IN ('tests','final')
+		  AND finished_at IS NOT NULL
+		ORDER BY finished_at DESC
+		LIMIT 1
+	`, ans.AnswerID).Scan(&runID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		feedback, _ := json.Marshal(map[string]any{
+			"type":    "coding",
+			"status":  "not_run",
+			"summary": "No persisted test run was available before submit.",
+		})
+		return 0, feedback, nil
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+
+	var totalTests int
+	var passedTests int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*),
+		       COALESCE(SUM(CASE WHEN passed THEN 1 ELSE 0 END), 0)::int
+		FROM code_run_test_results
+		WHERE code_run_id = $1
+	`, runID).Scan(&totalTests, &passedTests); err != nil {
+		return 0, nil, err
+	}
+	score := 0.0
+	if totalTests > 0 {
+		score = ans.MaxScore * float64(passedTests) / float64(totalTests)
+	}
+	feedback, _ := json.Marshal(map[string]any{
+		"type":        "coding",
+		"runId":       runID.String(),
+		"passedTests": passedTests,
+		"totalTests":  totalTests,
+		"maxScore":    ans.MaxScore,
+	})
+	return score, feedback, nil
 }
 
 func validQuestionState(v string) bool {

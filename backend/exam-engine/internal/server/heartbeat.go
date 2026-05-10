@@ -69,14 +69,15 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		status      string
 		startedAt   *time.Time
 		deadlineAt  *time.Time
+		lastSeenAt  *time.Time
 		candidateID int64
 	)
 	err = tx.QueryRow(ctx, `
-		SELECT status, started_at, deadline_at, candidate_user_id
+		SELECT status, started_at, deadline_at, last_seen_at, candidate_user_id
 		FROM attempts
 		WHERE id = $1
 		FOR UPDATE
-	`, attemptID).Scan(&status, &startedAt, &deadlineAt, &candidateID)
+	`, attemptID).Scan(&status, &startedAt, &deadlineAt, &lastSeenAt, &candidateID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "attempt not found")
 		return
@@ -95,12 +96,37 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if lastSeenAt != nil {
+		gap := now.Sub(*lastSeenAt)
+		if gap > heartbeatGrace() {
+			severity := int16(2)
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO attempt_connectivity_gaps (
+				    id, attempt_id, started_at, ended_at, duration_ms, breached_grace
+				)
+				VALUES ($1, $2, $3, $4, $5, true)
+			`, uuid.New(), attemptID, *lastSeenAt, now, int(gap/time.Millisecond)); err != nil {
+				writeError(w, http.StatusInternalServerError, "connectivity gap write failed")
+				return
+			}
+			if err := s.recordAttemptEventTx(ctx, tx, attemptID, "connectivity_gap", severity, nil, map[string]any{
+				"startedAt":  lastSeenAt,
+				"endedAt":    now,
+				"durationMs": int(gap / time.Millisecond),
+			}); err != nil {
+				writeError(w, http.StatusInternalServerError, "trace write failed")
+				return
+			}
+		}
+	}
+
 	var remainingMs int
+	responseStatus := status
 	if deadlineAt != nil {
 		remaining := deadlineAt.Sub(now)
 		if remaining < 0 {
 			remaining = 0
-			status = "timed_out"
+			responseStatus = "timed_out"
 		}
 		remainingMs = int(remaining / time.Millisecond)
 	}
@@ -108,10 +134,9 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 	if _, err := tx.Exec(ctx, `
 		UPDATE attempts
 		SET last_seen_at      = $2,
-		    time_remaining_ms = $3,
-		    status            = COALESCE(NULLIF($4, '')::attempt_status, status)
+		    time_remaining_ms = $3
 		WHERE id = $1
-	`, attemptID, now, remainingMs, statusOnlyIfChanged(status)); err != nil {
+	`, attemptID, now, remainingMs); err != nil {
 		writeError(w, http.StatusInternalServerError, "update attempt failed")
 		return
 	}
@@ -139,7 +164,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		ReceivedAt:            now,
 		RTTMillis:             rtt,
 		ServerTimeRemainingMs: remainingMs,
-		Status:                status,
+		Status:                responseStatus,
 	}
 	if deadlineAt != nil {
 		resp.DeadlineAt = *deadlineAt
@@ -156,13 +181,6 @@ func heartbeatAcceptable(status string) bool {
 	}
 }
 
-func statusOnlyIfChanged(status string) string {
-	if status == "timed_out" {
-		return status
-	}
-	return ""
-}
-
 func nullableTime(t time.Time) any {
 	if t.IsZero() {
 		return nil
@@ -170,5 +188,8 @@ func nullableTime(t time.Time) any {
 	return t
 }
 
-var _ = (*int)(nil)
+func heartbeatGrace() time.Duration {
+	return envDurationSeconds("HEARTBEAT_GRACE_SECONDS", 60*time.Second)
+}
+
 var _ context.Context

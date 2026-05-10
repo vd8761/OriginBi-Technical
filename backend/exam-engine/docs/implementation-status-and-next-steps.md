@@ -1,6 +1,6 @@
 # Exam Engine Implementation Status and Next Steps
 
-Last updated: 2026-05-08
+Last updated: 2026-05-10
 
 This document summarizes the Go `backend/exam-engine/` implementation and the remaining backend work. The detailed schema source of truth is [database-plan.md](database-plan.md). Do not duplicate that whole schema here; use this file for implementation status and continuation context.
 
@@ -66,6 +66,8 @@ Implemented environment variables:
 - `ALLOWED_ORIGINS` - optional comma-separated CORS/origin allowlist.
 - `APP_ENV` - set to `production` to make cookies Secure by default.
 - `COOKIE_SECURE`, `COOKIE_DOMAIN`, `COOKIE_SAMESITE` - optional cookie deployment controls.
+- `DB_POOL_MAX_CONNS`, `DB_POOL_MIN_CONNS`, `DB_POOL_MAX_CONN_LIFETIME_SECONDS`, `DB_POOL_MAX_CONN_IDLE_SECONDS`, `DB_POOL_HEALTHCHECK_SECONDS` - pgx pool sizing/tuning for production replicas.
+- `JUDGE0_MAX_CONCURRENCY`, `JUDGE0_HTTP_TIMEOUT_SECONDS`, `JUDGE0_MAX_IDLE_CONNS`, `JUDGE0_MAX_IDLE_CONNS_PER_HOST` - per-engine Judge0 execution and HTTP connection controls.
 
 ### Database And Migrations
 
@@ -82,6 +84,7 @@ Implemented migration files:
 - `007_billing.sql` - optional pricing and purchases.
 - `008_seed_plugins.sql` - system organization and initial plugin catalog.
 - `009_identity_coding_runtime.sql` - users, registrations, sessions, assignment refs, coding pricing items, and the current Coding Assessment seed.
+- `010_runtime_traceability_and_load_indexes.sql` - active-attempt uniqueness and runtime/load indexes for attempts, answers, and code runs.
 
 The migration set reflects the schema direction in [database-plan.md](database-plan.md).
 
@@ -232,7 +235,9 @@ Start behavior:
 - Resumes an existing active attempt when present.
 - Creates a new attempt when no active attempt exists.
 - Sets `deadline_at` from the seeded exam duration.
-- Returns a snapshot.
+- Freezes the attempt snapshot into `attempts.fingerprint`.
+- Returns the frozen snapshot.
+- Writes `attempt_started` or `attempt_resumed` telemetry events.
 
 Snapshot behavior:
 
@@ -247,13 +252,19 @@ Autosave behavior:
 - Upserts `attempt_question_state`.
 - Upserts `answers.payload`.
 - Stores the client payload as JSONB.
+- Writes an `answer_saved` telemetry event in the same transaction.
 - Returns server `savedAt`.
 
 Submit behavior:
 
 - Runs in one transaction.
 - Persists all final answers first.
-- Updates the attempt to `submitted` only after required writes succeed.
+- Auto-grades MCQ answers from stored options.
+- Auto-grades coding answers from the latest persisted testcase run for each answer.
+- Writes `evaluations` rows for auto evaluation.
+- Updates `answers.auto_score`, `answers.final_score`, `answers.auto_feedback`, and `answers.grading_status`.
+- Updates the attempt to `evaluated` with `final_score` and `grading_status` only after required writes succeed.
+- Writes an `attempt_submitted` telemetry event in the same transaction.
 - Returns an error without changing the attempt status when persistence fails.
 
 ### Code Run Dispatch
@@ -284,6 +295,10 @@ Run behavior:
 - Persists stdout, stderr, compile output, Judge0 status, time, memory, and finish time.
 - For testcase mode, stores `code_run_test_results` with input, expected output, actual output, pass/fail, time, and memory.
 - Validates candidate file paths, duplicate paths, file count, total source size, entry file existence, and custom stdin size before persistence/execution.
+- Validates the requested coding language against the paid assignment language.
+- Uses a pooled Judge0 HTTP client instead of the default client.
+- Enforces per-engine code-run concurrency with `JUDGE0_MAX_CONCURRENCY`.
+- Writes `code_run_started`, `code_run_finished`, `code_run_failed`, and `code_run_rejected` telemetry events.
 - Limits Judge0 response decoding to avoid unbounded response bodies.
 
 Judge0 execution details:
@@ -310,12 +325,17 @@ Current behavior:
 - Verifies attempt ownership through the authenticated user id.
 - Heartbeat accepts `sent_at` and optional `client_state`.
 - Heartbeat updates `last_seen_at`, server-authoritative time remaining, and timeout status.
+- Heartbeat records breached connectivity gaps in `attempt_connectivity_gaps`.
 - Event ingest accepts batches up to 200 events and a 1 MB request body.
 - Event payloads are capped.
 - Events are inserted into partitioned telemetry tables.
 - Event summary counts are upserted.
 
-Frontend heartbeat and telemetry wiring is not implemented yet.
+Frontend heartbeat and telemetry wiring is implemented for the coding assessment:
+
+- Heartbeats are sent every 15 seconds while an attempt is active.
+- Client timer drift is corrected from the server-authoritative remaining time.
+- Proctoring violations, tab switches, question navigation, status changes, MCQ selections, workspace changes, autosaves, run completions, submit success/failure, and heartbeat failures are batched to `POST /events`.
 
 ### Health And Readiness
 
@@ -341,6 +361,10 @@ Implemented hardening:
 - Bootstrap disabled when `BOOTSTRAP_ADMIN_TOKEN` is unset.
 - Constant-time bootstrap token comparison.
 - Per-IP in-memory rate limiter for register, login, and bootstrap.
+- Env-tunable pgx pool sizing.
+- Per-replica Judge0 concurrency limit and pooled Judge0 HTTP client.
+- Active-attempt uniqueness index for duplicate-click/retry/load-balanced start safety.
+- Current plus upcoming telemetry partitions are ensured on boot.
 - Request body caps for auth/runtime/code-run/event endpoints.
 - Stricter registration, login, and code-run validation.
 - Backend regression tests for origin policy, bootstrap token behavior, cookie controls, registration validation, code-run validation, and rate limiting.
@@ -369,9 +393,8 @@ Backend gaps:
 - Backend-driven catalog APIs for all assessment tracks.
 - Fully dynamic coding question body/starter-code snapshot payloads.
 - Section navigation API.
-- Connectivity gap detector worker.
-- Objective auto-grader.
-- Final coding scorer that converts code run/test results into evaluation rows.
+- Background connectivity gap detector worker for gaps not observed by a returning heartbeat.
+- Hidden-test final judge worker; current submit grading uses the latest persisted visible testcase run.
 - Manual review queue API.
 - LLM evaluation dispatcher.
 - Result publication API.
@@ -389,17 +412,15 @@ Backend gaps:
 Recommended order:
 
 1. Add migration and handler tests for auth/session/purchase/attempt lifecycle.
-2. Move frontend heartbeat calls into the active coding assessment.
-3. Wire frontend proctoring events to event ingest.
-4. Add connectivity gap detector.
-5. Add objective auto-grader for MCQ-style questions.
-6. Add coding scoring policy based on test runs and saved final submissions.
-7. Add result publication API and candidate result display API.
-8. Add manual review API.
-9. Add LLM evaluation dispatcher behind explicit plugin entitlement.
-10. Add organization entitlement APIs for plugin and coding language allowlists.
-11. Replace seeded/static coding content with authoring-driven frozen snapshot payloads.
-12. Define the NestJS ownership contract:
+2. Add browser E2E coverage for signup/login, demo purchase, start/resume, autosave, code run, reload, submit, and DB verification.
+3. Add hidden-test final judge worker for submit-time grading.
+4. Add result publication API and candidate result display API.
+5. Add manual review API.
+6. Add LLM evaluation dispatcher behind explicit plugin entitlement.
+7. Add organization entitlement APIs for plugin and coding language allowlists.
+8. Add exam authoring APIs that write full starter-code/testcase snapshot payloads.
+9. Replace seeded/static coding content with authoring-driven frozen snapshot payloads.
+10. Define the NestJS ownership contract:
     - which tables NestJS may write,
     - which runtime tables only Go may write,
     - which reads should go through APIs rather than direct DB access.
@@ -421,16 +442,16 @@ Recommended order:
 Known local verification already completed during the implementation pass:
 
 - `go test ./...` passed from `backend/exam-engine` with a workspace-local Go cache.
-- Local compose Postgres on `localhost:55432` has been started and migrated through Goose version 9.
-- `DATABASE_URL=postgres://exam:exam@localhost:55432/exam?sslmode=disable go test ./internal/migrate -run TestDatabaseReady -count=1 -v` passed and verified required tables, coding prices, seeded coding exam questions, and plugin seeds.
+- Local compose Postgres on `localhost:55432` was previously migrated through Goose version 9; the current `010` migration still needs a live Docker/Postgres rerun.
 - Frontend TypeScript check passed with `npx tsc --noEmit`.
-- Full frontend lint now exits successfully with warnings only.
+- Focused frontend lint passed for `frontend/lib/api.ts` and `frontend/components/assessment/coding/CodingAssessment.tsx`.
 - Frontend production build now succeeds with `npm run build`.
 - Production-hardening unit tests now cover the critical security helper behavior in `internal/server`.
 
 Known blocked verification:
 
-- Browser end-to-end testing could not be completed because the Go engine was not reachable at `http://localhost:8088` and starting a background server was blocked by desktop approval.
+- Live DB migration verification for `010` is currently blocked because Docker Desktop/Postgres is not running locally.
+- Browser end-to-end testing still needs the Go engine running at `http://localhost:8088` and Judge0 at `http://localhost:2358`.
 - Judge0 was reachable at `http://localhost:2358` during the previous verification pass.
 - Full `npm run lint --if-present` still reports unrelated existing frontend lint errors outside the changed files.
 

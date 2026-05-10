@@ -20,14 +20,29 @@ import (
 )
 
 type Server struct {
-	pool    *db.Pool
-	logger  *slog.Logger
-	router  chi.Router
-	limiter *rateLimiter
+	pool            *db.Pool
+	logger          *slog.Logger
+	router          chi.Router
+	limiter         *rateLimiter
+	codeRunSem      chan struct{}
+	judgeHTTPClient *http.Client
 }
 
 func New(pool *db.Pool, logger *slog.Logger) *Server {
-	s := &Server{pool: pool, logger: logger, limiter: newRateLimiter()}
+	s := &Server{
+		pool:       pool,
+		logger:     logger,
+		limiter:    newRateLimiter(),
+		codeRunSem: make(chan struct{}, envInt("JUDGE0_MAX_CONCURRENCY", 12)),
+		judgeHTTPClient: &http.Client{
+			Timeout: envDurationSeconds("JUDGE0_HTTP_TIMEOUT_SECONDS", 95*time.Second),
+			Transport: &http.Transport{
+				MaxIdleConns:        envInt("JUDGE0_MAX_IDLE_CONNS", 100),
+				MaxIdleConnsPerHost: envInt("JUDGE0_MAX_IDLE_CONNS_PER_HOST", 32),
+				IdleConnTimeout:     envDurationSeconds("JUDGE0_IDLE_CONN_TIMEOUT_SECONDS", 90*time.Second),
+			},
+		},
+	}
 	s.router = s.routes()
 	return s
 }
@@ -232,6 +247,30 @@ func envBool(name string, fallback bool) bool {
 		return fallback
 	}
 	return v
+}
+
+func envInt(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+func envDurationSeconds(name string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return time.Duration(v) * time.Second
 }
 
 func secureCookies() bool {

@@ -135,7 +135,7 @@ func (s *Server) ingestEvents(w http.ResponseWriter, r *http.Request) {
 			lastAt time.Time
 		}{}
 		for _, ev := range req.Events {
-			if ev.Kind == "" || ev.OccurredAt.IsZero() {
+			if ev.Kind == "" || ev.OccurredAt.IsZero() || len(ev.Payload) > maxPayloadBytes {
 				continue
 			}
 			c := counts[ev.Kind]
