@@ -336,7 +336,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={EXAMS as any}
+            assessments={dynamicExams as any}
             examDetails={EXAM_DETAILS as any}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
