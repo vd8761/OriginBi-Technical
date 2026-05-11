@@ -51,7 +51,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
 
-  const handleNavigate = (view: AssessmentView) => {
+  const handleNavigate = (view: string) => {
     router.push(`/${view}`);
   };
 
@@ -138,8 +138,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }, [dynamicExams, filter]);
 
   const handleSelectExam = (exam: Exam) => {
-    setSelectedExam(exam);
-    setShowDetailModal(true);
+    router.push(`/explore/${exam.id}`);
   };
 
   useEffect(() => {

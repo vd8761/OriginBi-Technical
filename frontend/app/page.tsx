@@ -68,7 +68,7 @@ function HomeContent() {
 
   useEffect(() => {
     if (isLoggedIn && !isLoading) {
-      router.replace("/dashboard");
+      router.replace("/explore");
     }
   }, [isLoggedIn, isLoading, router]);
 
@@ -93,7 +93,7 @@ function HomeContent() {
       </AnimatePresence>
       
       {!isLoggedIn ? (
-        <Login onLoginSuccess={() => router.replace("/dashboard")} />
+        <Login onLoginSuccess={() => router.replace("/explore")} />
       ) : (
         <div className="min-h-screen flex items-center justify-center bg-[#f5fbf7] dark:bg-[#0f1712]">
           <div className="w-10 h-10 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />

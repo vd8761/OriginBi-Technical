@@ -103,6 +103,21 @@ const Header: React.FC<HeaderProps> = ({
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("All");
+    const [isResultsHash, setIsResultsHash] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const checkHash = () => {
+            setIsResultsHash(window.location.hash === "#results");
+        };
+        checkHash();
+        window.addEventListener("hashchange", checkHash);
+        window.addEventListener("popstate", checkHash);
+        return () => {
+            window.removeEventListener("hashchange", checkHash);
+            window.removeEventListener("popstate", checkHash);
+        };
+    }, []);
     
     const profileMenuRef = useRef<HTMLDivElement>(null);
     const notificationsMenuRef = useRef<HTMLDivElement>(null);
@@ -161,7 +176,8 @@ const Header: React.FC<HeaderProps> = ({
         setMobileMenuOpen(false);
     };
 
-    const isDashboardActive = currentView === 'dashboard';
+    const isDashboardActive = currentView === 'dashboard' && !isResultsHash;
+    const isMyScoreActive = currentView === 'dashboard' && isResultsHash;
     const isAssessmentActive = currentView === 'assessment';
     const isProfileSettingsActive = currentView === 'profile';
     const isExploreActive = currentView === 'explore';
@@ -190,11 +206,11 @@ const Header: React.FC<HeaderProps> = ({
                 onClick={() => handleNavClick("assessment")}
             />
             <NavItem
-                icon={<ReportTriangleIcon fillColor={(currentView === 'aptitude-results' || currentView === 'debrief') ? '#FFFFFF' : '#1ED36A'} />}
+                icon={<ReportTriangleIcon fillColor={isMyScoreActive ? '#FFFFFF' : '#1ED36A'} />}
                 label="My Score"
-                active={currentView === 'aptitude-results' || currentView === 'debrief'}
+                active={isMyScoreActive}
                 isMobile={isMobile}
-                onClick={() => handleNavClick("aptitude-results")}
+                onClick={() => handleNavClick("dashboard#results")}
             />
             <NavItem
                 icon={<ProfileIcon />}

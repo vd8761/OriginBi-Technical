@@ -313,6 +313,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
 
       {/* ===== RESULTS: Clean list layout (NOT card grid) ===== */}
       <motion.section
+        id="results"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
