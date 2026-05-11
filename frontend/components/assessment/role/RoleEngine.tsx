@@ -1,14 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import ConceptualQuestionComponent from "./QuestionTypes/ConceptualQuestion";
 import ScenarioQuestionComponent from "./QuestionTypes/ScenarioQuestion";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
 
 const ROLE_TOTAL_TIME = 30 * 60;
 
@@ -95,6 +96,63 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    // Prevent double-fetch when cache restoration already set questions
+    const cacheRestoredRef = useRef(false);
+
+    // ── Cache hook ──────────────────────────────────────────────
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'role',
+        assessmentCode,
+        questions,
+        expiresAt:       undefined,
+        answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // ── Restore session from cache on mount ──────────────────────
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setQuestions(normalizeQuestions(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: Record<string, string> = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
+                    restored[qId] = val.optionId as string;
+                } else if (typeof val === 'string') {
+                    restored[qId] = val;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
 
     const normalizeQuestions = (items: any[]): RoleQuestion[] => items.map((q: any, idx: number) => {
         const id = String(q.id ?? q.questionId ?? q.question_id);
@@ -132,6 +190,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     });
 
     useEffect(() => {
+        if (!isCacheRestored) return; // Wait until cache resolution finishes
+
+        // If we already restored from cache, skip the fetch — preserves question order
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
         const fetchAttempt = async () => {
             try {
                 setIsLoading(true);
@@ -162,7 +228,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
 
     const currentQuestion = questions[currentIndex];
     const totalQuestions = questions.length;
@@ -209,13 +275,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             }
 
             const result = await response.json();
+            await clearSession();
             onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
             setIsSubmitting(false);
         }
-    }, [answers, attemptToken, isSubmitting, onComplete]);
+    }, [answers, attemptToken, clearSession, isSubmitting, onComplete]);
 
     useEffect(() => {
         if (isLoading || !attemptToken) return;
@@ -234,11 +301,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     const handleOptionSelect = (optionId: string) => {
         if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
+        // Persist answer to cache immediately
+        cacheSaveAnswer(currentQuestion.id, { optionId });
 
         if (markedForReview.has(currentQuestion.id)) {
             const newMarked = new Set(markedForReview);
             newMarked.delete(currentQuestion.id);
             setMarkedForReview(newMarked);
+            cacheSaveNavigation(currentIndex, [...newMarked], timeLeft);
         }
     };
 
@@ -247,6 +317,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
+        cacheSaveAnswer(currentQuestion.id, {});
     };
 
     const handleMarkReview = () => {
@@ -258,17 +329,22 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             newMarked.add(currentQuestion.id);
         }
         setMarkedForReview(newMarked);
+        cacheSaveNavigation(currentIndex, [...newMarked], timeLeft);
     };
 
     const handleNext = () => {
         if (!isLastQuestion) {
-            setCurrentIndex((prev) => prev + 1);
+            const nextIndex = currentIndex + 1;
+            setCurrentIndex(nextIndex);
+            cacheSaveNavigation(nextIndex, [...markedForReview], timeLeft);
         }
     };
 
     const handlePrev = () => {
         if (currentIndex > 0) {
-            setCurrentIndex((prev) => prev - 1);
+            const prevIndex = currentIndex - 1;
+            setCurrentIndex(prevIndex);
+            cacheSaveNavigation(prevIndex, [...markedForReview], timeLeft);
         }
     };
 
@@ -326,6 +402,22 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-25" aria-hidden="true" />
+
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
