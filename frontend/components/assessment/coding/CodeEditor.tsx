@@ -4,9 +4,43 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic";
 import type { FileNode, Question } from "./data";
 import { getLimitsFor, type ExecutionLimits } from "./data";
-import { simulateRun, type RunResult } from "./simulateRun";
+import { runWithJudge0, type RunResult } from "./runWithJudge0";
+import { reindent } from "./reindent";
 import FileTabs from "./FileTabs";
 import FileTreePanel from "./FileTreePanel";
+
+export const PREFS_KEY = "originbi.coding.prefs";
+
+export interface CodingPrefs {
+    tabSize?: number;
+    findEnabled?: boolean;
+    suggestionsEnabled?: boolean;
+    lintsEnabled?: boolean;
+}
+
+export const readPrefs = (): CodingPrefs => {
+    if (typeof window === "undefined") return {};
+    try {
+        const raw = window.localStorage.getItem(PREFS_KEY);
+        return raw ? (JSON.parse(raw) as CodingPrefs) : {};
+    } catch {
+        return {};
+    }
+};
+
+export const writePrefs = (next: CodingPrefs) => {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+    } catch {
+        // ignore quota / privacy-mode errors
+    }
+};
+
+const sanitizeTabSize = (n: unknown): number => {
+    const v = typeof n === "number" ? n : parseInt(String(n ?? ""), 10);
+    return v === 2 || v === 4 || v === 8 ? v : 4;
+};
 
 const MonacoEditor = dynamic(() => import("./MonacoEditor"), {
     ssr: false,
@@ -41,6 +75,12 @@ interface CodeEditorProps {
     fontSize: number;
     theme: "dark" | "light";
     onCodeChange?: (code: string) => void;
+    /** When false, Ctrl+F find widget is disabled. Default true. */
+    findEnabled?: boolean;
+    /** When false, autocomplete is disabled. Default true. */
+    suggestionsEnabled?: boolean;
+    /** When false, language-service squiggles are hidden. Default true. */
+    lintsEnabled?: boolean;
 }
 
 const formatBytes = (bytes: number) => {
@@ -143,9 +183,10 @@ const OutputPanel: React.FC<{
             : isLimit
                 ? "#FFB703"
                 : "#ED2F34";
+    const isCustomRun = !result.testResults;
     const headline =
         result.type === "success"
-            ? "All Tests Passed"
+            ? isCustomRun ? "Run Successful" : "All Tests Passed"
             : result.type === "partial"
                 ? "Partial Pass"
                 : result.type === "compile-error"
@@ -346,6 +387,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     fontSize,
     theme,
     onCodeChange,
+    findEnabled = true,
+    suggestionsEnabled = true,
+    lintsEnabled = true,
 }) => {
     const initialFiles = useMemo(() => buildInitialFiles(question, lang), [question, lang]);
     const initialActive = useMemo(
@@ -353,18 +397,48 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         [question, lang, initialFiles],
     );
 
-    const [files, setFiles] = useState<FileNode[]>(initialFiles);
+    // Starters are authored at 4-space indent. If the user's saved pref differs,
+    // normalize once on mount so the editor opens at the requested indent.
+    const [files, setFiles] = useState<FileNode[]>(() => {
+        const pref = sanitizeTabSize(readPrefs().tabSize);
+        if (pref === 4) return initialFiles;
+        return initialFiles.map((f) => ({ ...f, content: reindent(f.content ?? "", 4, pref) }));
+    });
     const [activePath, setActivePath] = useState<string>(initialActive);
     const [openTabs, setOpenTabs] = useState<string[]>([initialActive]);
     const [treeOpen, setTreeOpen] = useState(true);
     const [result, setResult] = useState<RunResult | null>(null);
     const [running, setRunning] = useState(false);
     const [outputOpen, setOutputOpen] = useState(false);
-    const [outputHeight, setOutputHeight] = useState(220);
+    const [outputHeight, setOutputHeight] = useState(260);
     const [showLimits, setShowLimits] = useState(true);
+    const [bottomTab, setBottomTab] = useState<"input" | "output">("input");
+    const [customInput, setCustomInput] = useState("");
+    const [tabSize, setTabSizeState] = useState<number>(() => sanitizeTabSize(readPrefs().tabSize));
+    const prevTabSize = useRef<number>(tabSize);
     const prevQId = useRef(question.id);
-    const runTimer = useRef<number | null>(null);
-    const compileTimer = useRef<number | null>(null);
+
+    const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const setTabSize = useCallback(
+        (next: number) => {
+            const clamped = sanitizeTabSize(next);
+            const from = prevTabSize.current;
+            if (clamped === from) return;
+            // Apply file rewrites and tab-size update outside any state-updater function
+            // (calling setFiles inside another state's updater double-applies under
+            // React strict mode and corrupts the indentation).
+            setFiles((cur) =>
+                cur.map((f) => ({ ...f, content: reindent(f.content ?? "", from, clamped) })),
+            );
+            setTabSizeState(clamped);
+            prevTabSize.current = clamped;
+            writePrefs({ ...readPrefs(), tabSize: clamped });
+        },
+        [],
+    );
+    const runAbortRef = useRef<AbortController | null>(null);
 
     const limits = useMemo(() => getLimitsFor(lang, question.limits), [lang, question.limits]);
     const isLight = theme === "light";
@@ -373,7 +447,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     useEffect(() => {
         if (question.id !== prevQId.current) {
-            const next = buildInitialFiles(question, lang);
+            const raw = buildInitialFiles(question, lang);
+            const next =
+                tabSize === 4
+                    ? raw
+                    : raw.map((f) => ({ ...f, content: reindent(f.content ?? "", 4, tabSize) }));
             const entry = initialEntryFile(question, lang, next);
             setFiles(next);
             setOpenTabs([entry]);
@@ -381,15 +459,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             setResult(null);
             prevQId.current = question.id;
         }
-    }, [question, lang]);
+    }, [question, lang, tabSize]);
 
     useEffect(() => {
         onCodeChange?.(activeFile?.content ?? "");
     }, [activeFile?.content, onCodeChange]);
 
     useEffect(() => () => {
-        if (runTimer.current) window.clearTimeout(runTimer.current);
-        if (compileTimer.current) window.clearTimeout(compileTimer.current);
+        runAbortRef.current?.abort();
     }, []);
 
     const handleEditorChange = useCallback(
@@ -397,9 +474,19 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             setFiles((prev) =>
                 prev.map((f) => (f.path === activePath ? { ...f, content: next } : f)),
             );
+            setSaveState("saving");
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = setTimeout(() => {
+                setSaveState("saved");
+                saveTimerRef.current = null;
+            }, 500);
         },
         [activePath],
     );
+
+    useEffect(() => () => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    }, []);
 
     const openFile = useCallback((path: string) => {
         setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
@@ -421,33 +508,86 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         [activePath],
     );
 
-    const handleRun = useCallback(() => {
-        if (running) return;
-        const entry = files.find((f) => f.path === activePath) ?? files[0];
-        if (!entry) return;
-        setRunning(true);
-        setOutputOpen(true);
-
-        const compileMs = 200 + Math.random() * Math.min(800, limits.compileTimeoutMs * 0.4);
-        const runtimeMs = 600 + Math.random() * Math.min(900, limits.runtimeTimeoutMs * 0.4);
-
-        compileTimer.current = window.setTimeout(() => {
-            runTimer.current = window.setTimeout(() => {
-                const res = simulateRun(entry.content, lang, question.testCases, limits);
+    const executeRun = useCallback(
+        async (mode: "custom" | "tests") => {
+            if (running) return;
+            runAbortRef.current?.abort();
+            const controller = new AbortController();
+            runAbortRef.current = controller;
+            setRunning(true);
+            setOutputOpen(true);
+            setBottomTab("output");
+            try {
+                const res = await runWithJudge0({
+                    lang,
+                    files,
+                    entryFile: question.entryFile?.[lang] ?? activePath,
+                    limits,
+                    mode,
+                    customStdin: mode === "custom" ? customInput : undefined,
+                    testCases: mode === "tests" ? question.testCases : undefined,
+                    signal: controller.signal,
+                });
                 setResult(res);
+            } catch (e) {
+                if ((e as { name?: string })?.name === "AbortError") return;
+                const message = e instanceof Error ? e.message : String(e);
+                setResult({
+                    type: "error",
+                    stdout: "",
+                    stderr: `Failed to reach Judge0: ${message}`,
+                    testResults: null,
+                    time: "0ms",
+                    memory: "0 MB",
+                    summary: "Network or server error.",
+                });
+            } finally {
+                if (runAbortRef.current === controller) runAbortRef.current = null;
                 setRunning(false);
-            }, runtimeMs);
-        }, compileMs);
-    }, [files, activePath, lang, question.testCases, limits, running]);
+            }
+        },
+        [
+            running,
+            lang,
+            files,
+            activePath,
+            limits,
+            customInput,
+            question.entryFile,
+            question.testCases,
+        ],
+    );
+
+    const handleRun = useCallback(() => {
+        void executeRun("custom");
+    }, [executeRun]);
+
+    const handleRunTests = useCallback(() => {
+        void executeRun("tests");
+    }, [executeRun]);
 
     const handleReset = () => {
-        const next = buildInitialFiles(question, lang);
+        const raw = buildInitialFiles(question, lang);
+        const next =
+            tabSize === 4
+                ? raw
+                : raw.map((f) => ({ ...f, content: reindent(f.content ?? "", 4, tabSize) }));
         const entry = initialEntryFile(question, lang, next);
         setFiles(next);
         setOpenTabs([entry]);
         setActivePath(entry);
         setResult(null);
     };
+
+    const handleFormat = useCallback(() => {
+        setFiles((prev) =>
+            prev.map((f) =>
+                f.path === activePath
+                    ? { ...f, content: reindent(f.content ?? "", null, tabSize) }
+                    : f,
+            ),
+        );
+    }, [activePath, tabSize]);
 
     if (question.type === "mcq") {
         return (
@@ -534,7 +674,71 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     </svg>
                     Limits
                 </button>
+                <label
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold transition-all"
+                    style={{
+                        background: isLight ? "rgba(15,23,18,0.04)" : "rgba(255,255,255,0.04)",
+                        border: `1px solid ${chipBorder}`,
+                        color: subtle,
+                    }}
+                    title="Spaces per indent (Tab key)"
+                >
+                    <span className="uppercase tracking-[0.06em]">Indent</span>
+                    <select
+                        value={tabSize}
+                        onChange={(e) => setTabSize(parseInt(e.target.value, 10))}
+                        aria-label="Indent size in spaces"
+                        className="cursor-pointer border-0 bg-transparent text-[12px] font-bold outline-none"
+                        style={{ color: chipText }}
+                    >
+                        {[2, 4, 8].map((n) => (
+                            <option
+                                key={n}
+                                value={n}
+                                style={{ background: isLight ? "#FFFFFF" : "#111814" }}
+                            >
+                                {n}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <button
+                    type="button"
+                    onClick={handleFormat}
+                    title="Format / re-indent active file (Shift+Alt+F)"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold transition-all"
+                    style={{
+                        background: isLight ? "rgba(15,23,18,0.04)" : "rgba(255,255,255,0.04)",
+                        border: `1px solid ${chipBorder}`,
+                        color: subtle,
+                    }}
+                >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                        <line x1="4" y1="6" x2="20" y2="6" />
+                        <line x1="8" y1="12" x2="20" y2="12" />
+                        <line x1="6" y1="18" x2="20" y2="18" />
+                    </svg>
+                    Format
+                </button>
                 <div className="flex-1" />
+                <span
+                    aria-live="polite"
+                    className="flex items-center gap-1.5 text-[11px] font-semibold transition-opacity"
+                    style={{
+                        color: saveState === "saved" ? "#1ED36A" : isLight ? "rgba(15,23,18,0.55)" : "rgba(255,255,255,0.55)",
+                        opacity: 0.95,
+                    }}
+                    title={saveState === "saved" ? "Changes are kept in this session" : "Changes are being applied"}
+                >
+                    {saveState === "saved" ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                    ) : (
+                        <span className="h-2 w-2 rounded-full bg-current animate-pulse-soft" />
+                    )}
+                    {saveState === "saved" ? "Saved" : "Saving…"}
+                </span>
                 <button
                     type="button"
                     onClick={handleReset}
@@ -556,6 +760,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     type="button"
                     onClick={handleRun}
                     disabled={running}
+                    title="Run with Custom Input"
                     className="flex items-center gap-1.5 rounded-lg border border-[#1ED36A]/35 bg-[#1ED36A]/[0.12] px-4 py-1.5 text-[13px] font-bold text-[#1ED36A] transition-all hover:bg-[#1ED36A]/[0.18] disabled:cursor-not-allowed disabled:text-[#1ED36A]/50"
                 >
                     {running ? (
@@ -567,6 +772,20 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     )}
                     {running ? "Running…" : "Run"}
                 </button>
+                {(question.testCases?.length ?? 0) > 0 && (
+                    <button
+                        type="button"
+                        onClick={handleRunTests}
+                        disabled={running}
+                        title="Run all test cases"
+                        className="flex items-center gap-1.5 rounded-lg border border-[#1ED36A] bg-[#1ED36A] px-4 py-1.5 text-[13px] font-extrabold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Run Tests
+                    </button>
+                )}
             </div>
 
             {showLimits && <LimitsStrip limits={limits} theme={theme} />}
@@ -583,7 +802,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                                     })}
                                     active={activePath}
                                     onActivate={(p) => setActivePath(p)}
-                                    onClose={openTabs.length > 1 ? closeTab : undefined}
+                                    onClose={closeTab}
                                     theme={theme}
                                 />
                             </div>
@@ -616,9 +835,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                                     value={activeFile.content}
                                     language={lang}
                                     fontSize={fontSize}
+                                    tabSize={tabSize}
                                     theme={theme}
                                     readOnly={activeFile.readOnly}
                                     onChange={handleEditorChange}
+                                    onFormat={handleFormat}
+                                    findEnabled={findEnabled}
+                                    suggestionsEnabled={suggestionsEnabled}
+                                    lintsEnabled={lintsEnabled}
                                 />
                             )}
                         </div>
@@ -660,7 +884,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     )}
                 </div>
 
-                {outputOpen && (
+                {outputOpen ? (
                     <div
                         className="flex flex-shrink-0 flex-col border-t"
                         style={{
@@ -670,14 +894,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                         }}
                     >
                         <div
-                            className="flex flex-shrink-0 select-none cursor-ns-resize items-center gap-2 border-b px-3.5 py-2"
+                            className="flex flex-shrink-0 select-none cursor-ns-resize items-center gap-1 border-b px-3 py-1.5"
                             style={{ borderColor: outputBorder }}
                             onMouseDown={(e) => {
                                 const startY = e.clientY;
                                 const startH = outputHeight;
                                 const onMove = (me: MouseEvent) =>
                                     setOutputHeight(
-                                        Math.max(120, Math.min(500, startH - (me.clientY - startY))),
+                                        Math.max(140, Math.min(540, startH - (me.clientY - startY))),
                                     );
                                 const onUp = () => {
                                     document.removeEventListener("mousemove", onMove);
@@ -687,30 +911,91 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                                 document.addEventListener("mouseup", onUp);
                             }}
                         >
+                            {(["input", "output"] as const).map((tab) => {
+                                const active = bottomTab === tab;
+                                const label = tab === "input" ? "Custom Input" : "Output";
+                                return (
+                                    <button
+                                        key={tab}
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setBottomTab(tab);
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        className="cursor-pointer rounded-md border-0 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-colors"
+                                        style={{
+                                            background: active
+                                                ? "rgba(30,211,106,0.14)"
+                                                : "transparent",
+                                            color: active
+                                                ? "#1ED36A"
+                                                : isLight
+                                                    ? "rgba(15,23,18,0.5)"
+                                                    : "rgba(255,255,255,0.45)",
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
                             <div
                                 className="mx-auto h-[3px] w-7 flex-shrink-0 rounded-sm"
-                                style={{ background: isLight ? "rgba(15,23,18,0.18)" : "rgba(255,255,255,0.15)" }}
+                                style={{
+                                    background: isLight
+                                        ? "rgba(15,23,18,0.18)"
+                                        : "rgba(255,255,255,0.15)",
+                                }}
                             />
-                            <span
-                                className="flex-1 text-[11px] font-bold uppercase tracking-[0.08em]"
-                                style={{ color: isLight ? "rgba(15,23,18,0.5)" : "rgba(255,255,255,0.4)" }}
-                            >
-                                Output
-                            </span>
                             <button
                                 type="button"
-                                onClick={() => setOutputOpen(false)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOutputOpen(false);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
                                 className="cursor-pointer border-0 bg-transparent text-[14px] leading-none"
-                                style={{ color: isLight ? "rgba(15,23,18,0.4)" : "rgba(255,255,255,0.3)" }}
+                                style={{
+                                    color: isLight
+                                        ? "rgba(15,23,18,0.4)"
+                                        : "rgba(255,255,255,0.3)",
+                                }}
                             >
                                 ✕
                             </button>
                         </div>
-                        <OutputPanel result={result} running={running} theme={theme} />
+                        {bottomTab === "input" ? (
+                            <div className="flex flex-1 flex-col overflow-hidden">
+                                <div
+                                    className="flex-shrink-0 px-3.5 py-2 text-[10.5px]"
+                                    style={{
+                                        color: isLight
+                                            ? "rgba(15,23,18,0.5)"
+                                            : "rgba(255,255,255,0.45)",
+                                    }}
+                                >
+                                    Each newline is a separate stdin line. Used by the
+                                    <span className="font-bold"> Run </span>
+                                    button.
+                                </div>
+                                <textarea
+                                    value={customInput}
+                                    onChange={(e) => setCustomInput(e.target.value)}
+                                    spellCheck={false}
+                                    placeholder={"Type your input here…\nOne line per stdin entry."}
+                                    className="m-0 flex-1 resize-none border-0 bg-transparent px-3.5 pb-3 font-mono text-[12.5px] leading-[1.6] outline-none"
+                                    style={{
+                                        color: isLight
+                                            ? "rgba(15,23,18,0.85)"
+                                            : "rgba(255,255,255,0.85)",
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                            <OutputPanel result={result} running={running} theme={theme} />
+                        )}
                     </div>
-                )}
-
-                {!outputOpen && result && (
+                ) : (
                     <button
                         type="button"
                         onClick={() => setOutputOpen(true)}
@@ -718,21 +1003,26 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                         style={{
                             borderTop: `1px solid ${outputBorder}`,
                             background: isLight ? "rgba(15,23,18,0.03)" : "rgba(255,255,255,0.03)",
-                            color:
-                                result.type === "success"
+                            color: result
+                                ? result.type === "success"
                                     ? "#1ED36A"
                                     : result.type === "partial"
                                         ? "#FFB703"
-                                        : "#ED2F34",
+                                        : "#ED2F34"
+                                : isLight
+                                    ? "rgba(15,23,18,0.55)"
+                                    : "rgba(255,255,255,0.5)",
                         }}
                     >
                         <div className="h-1.5 w-1.5 rounded-full bg-current" />
-                        Show Output —{" "}
-                        {result.type === "success"
-                            ? "All Passed"
-                            : result.type === "partial"
-                                ? "Partial"
-                                : "Error"}
+                        {result
+                            ? `Show Output — ${result.type === "success"
+                                ? "All Passed"
+                                : result.type === "partial"
+                                    ? "Partial"
+                                    : "Error"
+                            }`
+                            : "Open Custom Input"}
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                             <polyline points="18 15 12 9 6 15" />
                         </svg>
