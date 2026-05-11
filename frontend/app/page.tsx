@@ -49,12 +49,24 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 // Inner component that uses search params
 import { useSession } from "@/lib/contexts/SessionContext";
 
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
+
 function HomeContent() {
   const { isLoggedIn, user, isLoading } = useSession();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
+  const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    // Check for view parameter
+    const viewParam = searchParams.get("view");
+    const validViews: AssessmentView[] = ["dashboard", "assessment", "profile", "details", "explore"];
+    if (viewParam && validViews.includes(viewParam as AssessmentView)) {
+      setInitialView(viewParam as AssessmentView);
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    
     // Check for completion parameter
     const completed = searchParams.get("completed");
     if (completed) {
@@ -87,7 +99,7 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={() => {}} />
       ) : (
-        <AssessmentPortal userName={user?.name} />
+        <AssessmentPortal userName={user?.name} initialView={initialView} />
       )}
     </>
   );

@@ -33,11 +33,13 @@ const writeSet = (storageKey: string, eventName: string, set: Set<string>) => {
 };
 
 const useKeyedSet = (storageKey: string, eventName: string) => {
-    const [set, setLocal] = useState<Set<string>>(() => new Set());
+    // Initialize from localStorage immediately to avoid empty set on first render
+    const [set, setLocal] = useState<Set<string>>(() => readSet(storageKey));
 
     useEffect(() => {
-        setLocal(readSet(storageKey));
         const sync = () => setLocal(readSet(storageKey));
+        // Sync on mount to ensure we have latest data
+        sync();
         window.addEventListener("storage", sync);
         window.addEventListener(eventName, sync);
         return () => {

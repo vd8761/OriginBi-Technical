@@ -57,6 +57,17 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     next: AssessmentId | null;
   } | null>(null);
 
+  // Read view from URL and sync with currentView
+  useEffect(() => {
+    const viewFromUrl = searchParams.get("view") as AssessmentView | null;
+    const validViews: AssessmentView[] = ["dashboard", "assessment", "profile", "details", "explore"];
+    if (viewFromUrl && validViews.includes(viewFromUrl)) {
+      setCurrentView(viewFromUrl);
+    } else if (initialView && initialView !== currentView) {
+      setCurrentView(initialView);
+    }
+  }, [searchParams, initialView]);
+
   const filteredExams = useMemo(() => {
     const baseExams = EXAMS.filter((exam) => exam.available);
     if (filter === "ready" || filter === "all") {
@@ -332,7 +343,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             userName={userName}
             handleSelectExam={handleSelectExam}
             handleStartExam={handleModalStart}
-            setShowDetailModal={setShowDetailModal}
           />
         ) : currentView === "profile" ? (
           <ProfileView onNavigate={(view) => setCurrentView(view as any)} />
