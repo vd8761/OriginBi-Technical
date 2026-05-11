@@ -111,7 +111,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     } = useAssessmentCache({
         token:           attemptToken,
         module:          'role',
-        assessmentCode,
+        assessmentCode:  `${assessmentCode}_main`,
         questions,
         expiresAt:       undefined,
         answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),

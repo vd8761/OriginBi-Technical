@@ -92,7 +92,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     } = useAssessmentCache({
         token:           attemptToken,
         module:          'mnc',
-        assessmentCode,
+        assessmentCode:  `${assessmentCode}_${mode}`,
         questions,
         expiresAt:       undefined,
         answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),

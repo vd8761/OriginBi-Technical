@@ -147,9 +147,9 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         saveNavigation: cacheSaveNavigation,
         clearSession,
     } = useAssessmentCache({
-        token:           attemptToken,
-        module:          'grammar',
-        assessmentCode,
+        token: attemptToken,
+        module: 'grammar',
+        assessmentCode: `${assessmentCode}_${mode}`,
         questions:       tasks,
         expiresAt:       undefined,
         answers:         cacheAnswers,

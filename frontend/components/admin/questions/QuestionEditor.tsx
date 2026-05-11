@@ -10,7 +10,7 @@ import {
 } from "./types";
 import { generateId } from "./storage";
 import { uploadQuestionAsset } from "./api";
-import { X, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { X, Plus, Trash2, CheckCircle2, Image, Music, UploadCloud } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 
 interface QuestionEditorProps {
@@ -35,7 +35,12 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   // Cloudflare R2 Upload States
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  
+  // Local File States (for deferred uploads on form save)
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [hasNewFile, setHasNewFile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // DB-backed fields
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
@@ -173,23 +178,35 @@ export default function QuestionEditor({ question, assessmentType, categories = 
     const u = [...commSubQuestions]; u[sqIdx] = { ...u[sqIdx], correctOptionId: optId }; setCommSubQuestions(u);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fileType: "image" | "audio") => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, fileType: "image" | "audio") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      setIsUploading(true);
-      const res = await uploadQuestionAsset(assessmentType, file);
-      if (fileType === "image") {
-        setImageUrl(res.url);
-      } else {
-        setAudioUrl(res.url);
-      }
-    } catch (err: any) {
-      alert(`Upload failed: ${err.message}`);
-    } finally {
-      setIsUploading(false);
+    if (previewUrl && previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
     }
+
+    const preview = URL.createObjectURL(file);
+    setLocalFile(file);
+    setPreviewUrl(preview);
+    setHasNewFile(true);
+
+    if (fileType === "image") {
+      setImageUrl(preview);
+    } else {
+      setAudioUrl(preview);
+    }
+  };
+
+  const handleClearFile = () => {
+    if (previewUrl && previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setLocalFile(null);
+    setPreviewUrl(null);
+    setImageUrl(null);
+    setAudioUrl(null);
+    setHasNewFile(false);
   };
 
   const validate = (): boolean => {
@@ -208,44 +225,66 @@ export default function QuestionEditor({ question, assessmentType, categories = 
     return errs.length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    const id = question ? (question as { id: string }).id : generateId();
+    
+    let finalImageUrl = imageUrl;
+    let finalAudioUrl = audioUrl;
 
-    const common = {
-      id,
-      difficulty,
-      marks,
-      negativeMarks: 0.25,
-      status,
-      assessmentId,
-    };
+    try {
+      setIsSaving(true);
 
-    switch (assessmentType) {
-      case "aptitude":
-        onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl } as AptitudeQuestion);
-        break;
-      case "mnc":
-        onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl } as MNCQuestion);
-        break;
-      case "role":
-        onSave({
-          ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl,
-          ...(roleType === "conceptual" ? { category: roleCategory, subCategory: roleSubCategory } : {}),
-          ...(roleType === "scenario" ? { title: scenarioTitle, scenarioContext, ticketId, priority, reportedBy } : {}),
-        } as RoleQuestion);
-        break;
-      case "communication":
-        onSave({
-          ...common, taskType: commTaskType, instructions: commInstructions.trim(),
-          ...(audioUrl ? { audioUrl } : {}),
-          ...(commPassage ? { passage: commPassage } : {}),
-          ...(commPrompt ? { prompt: commPrompt } : {}),
-          ...(commTaskType === "speaking" ? { prepTimeSeconds: commPrepTime, recordTimeSeconds: commRecordTime } : {}),
-          ...(commTaskType === "writing" ? { minWords: commMinWords, maxWords: commMaxWords } : {}),
-          ...(commSubQuestions.length > 0 ? { questions: commSubQuestions } : {}),
-        } as CommQuestion);
-        break;
+      // Upload file to R2 only on form submission
+      if (hasNewFile && localFile) {
+        const res = await uploadQuestionAsset(assessmentType, localFile);
+        if (localFile.type.startsWith("image/")) {
+          finalImageUrl = res.url;
+        } else if (localFile.type.startsWith("audio/")) {
+          finalAudioUrl = res.url;
+        }
+      }
+
+      const id = question ? (question as { id: string }).id : generateId();
+
+      const common = {
+        id,
+        difficulty,
+        marks,
+        negativeMarks: 0.25,
+        status,
+        assessmentId,
+      };
+
+      switch (assessmentType) {
+        case "aptitude":
+          onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as AptitudeQuestion);
+          break;
+        case "mnc":
+          onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as MNCQuestion);
+          break;
+        case "role":
+          onSave({
+            ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl,
+            ...(roleType === "conceptual" ? { category: roleCategory, subCategory: roleSubCategory } : {}),
+            ...(roleType === "scenario" ? { title: scenarioTitle, scenarioContext, ticketId, priority, reportedBy } : {}),
+          } as RoleQuestion);
+          break;
+        case "communication":
+          onSave({
+            ...common, taskType: commTaskType, instructions: commInstructions.trim(),
+            ...(finalAudioUrl ? { audioUrl: finalAudioUrl } : {}),
+            ...(commPassage ? { passage: commPassage } : {}),
+            ...(commPrompt ? { prompt: commPrompt } : {}),
+            ...(commTaskType === "speaking" ? { prepTimeSeconds: commPrepTime, recordTimeSeconds: commRecordTime } : {}),
+            ...(commTaskType === "writing" ? { minWords: commMinWords, maxWords: commMaxWords } : {}),
+            ...(commSubQuestions.length > 0 ? { questions: commSubQuestions } : {}),
+          } as CommQuestion);
+          break;
+      }
+    } catch (err: any) {
+      alert(`Failed to save question: ${err.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -421,7 +460,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={imageUrl} alt="Question Asset" className="max-h-full max-w-full object-contain" />
                         <button
-                          onClick={() => setImageUrl(null)}
+                          type="button"
+                          onClick={handleClearFile}
                           className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95 transition-all shadow-md animate-in fade-in zoom-in duration-200"
                         >
                           <Trash2 size={14} />
@@ -429,19 +469,10 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                       </div>
                     ) : (
                       <label className="flex flex-col items-center justify-center border border-dashed border-slate-300 dark:border-white/10 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-white/[0.01] hover:border-slate-400 dark:hover:border-white/20 cursor-pointer transition-all">
-                        {isUploading ? (
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
-                            <span className="text-[11px] font-bold text-slate-400">Uploading to R2...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="text-[20px] mb-1">🖼️</span>
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Upload Image</span>
-                            <span className="text-[9px] font-medium text-slate-400 mt-0.5">PNG, JPG or WebP</span>
-                          </>
-                        )}
-                        <input type="file" accept="image/*" disabled={isUploading} onChange={(e) => handleFileUpload(e, "image")} className="hidden" />
+                        <UploadCloud className="h-6 w-6 text-brand-green mb-1.5" />
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Choose image file</span>
+                        <span className="text-[9px] font-medium text-slate-400 mt-0.5">Supports PNG, JPG or WebP</span>
+                        <input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, "image")} className="hidden" />
                       </label>
                     )}
                   </div>
@@ -490,7 +521,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                         <div className="relative group rounded-xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/[0.02] flex items-center gap-4 animate-in fade-in duration-200">
                           <audio src={audioUrl} controls className="flex-1 h-8" />
                           <button
-                            onClick={() => setAudioUrl(null)}
+                            type="button"
+                            onClick={handleClearFile}
                             className="p-2 rounded-full hover:bg-red-500/10 hover:text-red-500 text-slate-400 hover:scale-105 active:scale-95 transition-all"
                           >
                             <Trash2 size={16} />
@@ -498,19 +530,10 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                         </div>
                       ) : (
                         <label className="flex flex-col items-center justify-center border border-dashed border-slate-300 dark:border-white/10 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-white/[0.01] hover:border-slate-400 dark:hover:border-white/20 cursor-pointer transition-all">
-                          {isUploading ? (
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
-                              <span className="text-[11px] font-bold text-slate-400">Uploading to R2...</span>
-                            </div>
-                          ) : (
-                            <>
-                              <span className="text-[20px] mb-1">🎵</span>
-                              <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Upload Audio File</span>
-                              <span className="text-[9px] font-medium text-slate-400 mt-0.5">MP3 or WAV</span>
-                            </>
-                          )}
-                          <input type="file" accept="audio/*" disabled={isUploading} onChange={(e) => handleFileUpload(e, "audio")} className="hidden" />
+                          <Music className="h-6 w-6 text-brand-green mb-1.5" />
+                          <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Choose audio file</span>
+                          <span className="text-[9px] font-medium text-slate-400 mt-0.5">Supports MP3 or WAV</span>
+                          <input type="file" accept="audio/*" onChange={(e) => handleFileSelect(e, "audio")} className="hidden" />
                         </label>
                       )}
                     </div>
@@ -564,8 +587,13 @@ export default function QuestionEditor({ question, assessmentType, categories = 
              Cancel
            </button>
            <div className="flex items-center gap-3">
-             <button onClick={handleSave} className="px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white transition-all">
-               {question ? "Update Question" : "Create Question"}
+             <button
+               onClick={handleSave}
+               disabled={isSaving}
+               className={`px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white transition-all flex items-center gap-2 ${isSaving ? "opacity-60 cursor-not-allowed" : "hover:scale-105 active:scale-95"}`}
+             >
+               {isSaving && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+               {isSaving ? "Uploading & Saving..." : question ? "Update Question" : "Create Question"}
              </button>
            </div>
         </div>

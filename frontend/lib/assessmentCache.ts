@@ -30,12 +30,12 @@
 
 // ── Constants ─────────────────────────────────────────────────
 const CACHE_TTL_MS   = 4 * 60 * 60 * 1000; // 4 hours
-const IDB_DB_NAME    = 'AssessmentCacheDB';
+const IDB_DB_NAME    = 'OriginBIAssessmentCache';
 const IDB_DB_VERSION = 1;
 const IDB_STORE      = 'sessions';
-const LS_PREFIX      = 'assessment_cache_';
+const LS_PREFIX      = 'obi_assess_cache_';
 // Secondary index: assessmentCode → token (so we can find cache before token is known)
-const LS_INDEX_PREFIX = 'assessment_idx_';
+const LS_INDEX_PREFIX = 'obi_assess_idx_';
 
 // ── Types ─────────────────────────────────────────────────────
 

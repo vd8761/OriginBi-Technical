@@ -62,7 +62,7 @@ const labelForIndex = (index: number) => String.fromCharCode(65 + index);
 
 const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     onComplete,
-    assessmentCode = "TECH_APT_001",
+    assessmentCode = "APTITUDE_DEFAULT",
     userId,
     mode = 'main',
 }) => {
@@ -96,7 +96,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     } = useAssessmentCache({
         token:           attemptToken,
         module:          'aptitude',
-        assessmentCode,
+        assessmentCode:  `${assessmentCode}_${mode}`,
         questions,
         expiresAt:       undefined,
         answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),

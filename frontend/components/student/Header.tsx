@@ -98,6 +98,7 @@ const Header: React.FC<HeaderProps> = ({
     onNavigate,
 }) => {
     const { user, logout, updateProfile } = useSession();
+    const router = useRouter();
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -403,6 +404,7 @@ const Header: React.FC<HeaderProps> = ({
                                             onClick={() => {
                                                 logout();
                                                 if (onLogout) onLogout();
+                                                router.push("/");
                                             }}
                                             className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 rounded-[10px] hover:bg-red-50 dark:hover:bg-red-900/[0.08] transition-all font-medium mt-1 cursor-pointer"
                                         >

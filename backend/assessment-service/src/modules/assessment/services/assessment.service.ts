@@ -121,7 +121,24 @@ export class AssessmentService {
 
     try {
       const dbModule = module === 'communication' ? 'grammar' : module;
+      const tableMap = this.getTableMap();
+      const config = tableMap[module];
+      if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
+
       let assessment: any;
+
+      const hasQuestions = async (assessmentIdVal: number): Promise<boolean> => {
+        try {
+          const rows = await queryRunner.query(
+            `SELECT COUNT(*) as count FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active'`,
+            [assessmentIdVal],
+          );
+          return Number(rows[0]?.count || 0) > 0;
+        } catch (err: any) {
+          this.logger.error(`Error checking questions count for assessment ${assessmentIdVal}: ${err.message}`);
+          return false;
+        }
+      };
 
       if (assessmentId) {
         const rows = await queryRunner.query(
@@ -135,20 +152,43 @@ export class AssessmentService {
           [assessmentCode, dbModule],
         );
         assessment = rows[0];
+        if (assessment) {
+          const ok = await hasQuestions(assessment.assessment_id);
+          if (!ok) {
+            this.logger.warn(`Assessment ${assessmentCode} (ID: ${assessment.assessment_id}) has 0 questions. Falling back.`);
+            assessment = null;
+          }
+        }
         if (!assessment) {
-          this.logger.warn(`Code ${assessmentCode} not found, using active ${module} assessment`);
-          const fallback = await queryRunner.query(
-            `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`,
+          this.logger.warn(`Code ${assessmentCode} not found or has no active questions, using fallback active ${module} assessment with questions`);
+          const fallbacks = await queryRunner.query(
+            `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC`,
             [dbModule],
           );
-          assessment = fallback[0];
+          for (const fb of fallbacks) {
+            if (await hasQuestions(fb.assessment_id)) {
+              assessment = fb;
+              break;
+            }
+          }
+          if (!assessment && fallbacks.length > 0) {
+            assessment = fallbacks[0];
+          }
         }
       } else {
-        const rows = await queryRunner.query(
-          `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`,
+        const fallbacks = await queryRunner.query(
+          `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC`,
           [dbModule],
         );
-        assessment = rows[0];
+        for (const fb of fallbacks) {
+          if (await hasQuestions(fb.assessment_id)) {
+            assessment = fb;
+            break;
+          }
+        }
+        if (!assessment && fallbacks.length > 0) {
+          assessment = fallbacks[0];
+        }
       }
 
       if (!assessment) throw new NotFoundException(`${module} assessment not found`);
@@ -162,9 +202,6 @@ export class AssessmentService {
       const attemptToken = `${module.substring(0, 3).toUpperCase()}-${crypto.randomUUID()}`;
       const shuffleSeed = crypto.randomBytes(8).toString('hex');
 
-      const tableMap = this.getTableMap();
-      const config = tableMap[module];
-      if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
 
       let attemptResult: any[];
       if (module === 'coding') {
