@@ -48,6 +48,7 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 
 // Inner component that uses search params
 import { useSession } from "@/lib/contexts/SessionContext";
+import { useRouter } from "next/navigation";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 
@@ -56,6 +57,7 @@ function HomeContent() {
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     // Check for view parameter
@@ -75,6 +77,12 @@ function HomeContent() {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (isLoggedIn && !isLoading) {
+      router.replace("/dashboard");
+    }
+  }, [isLoggedIn, isLoading, router]);
 
   if (isLoading) {
     return (
@@ -97,9 +105,9 @@ function HomeContent() {
       </AnimatePresence>
       
       {!isLoggedIn ? (
-        <Login onLoginSuccess={() => {}} />
+        <Login onLoginSuccess={() => router.replace("/dashboard")} />
       ) : (
-        <AssessmentPortal userName={user?.name} initialView={initialView} />
+        <AssessmentPortal userName={user?.name} />
       )}
     </>
   );

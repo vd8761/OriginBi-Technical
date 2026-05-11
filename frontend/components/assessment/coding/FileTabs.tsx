@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import SetiFileIcon from "./SetiFileIcon";
 
 export interface FileTab {
     path: string;
@@ -60,6 +61,17 @@ const FileTabs: React.FC<FileTabsProps> = ({ tabs, active, onActivate, onClose, 
                         role="tab"
                         aria-selected={isActive}
                         onClick={() => onActivate(t.path)}
+                        onAuxClick={(e) => {
+                            // Middle-click (button === 1) closes the tab.
+                            if (e.button === 1 && onClose) {
+                                e.preventDefault();
+                                onClose(t.path);
+                            }
+                        }}
+                        onMouseDown={(e) => {
+                            // Suppress the default middle-click autoscroll cursor.
+                            if (e.button === 1) e.preventDefault();
+                        }}
                         className="group relative flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-[12px] transition-colors"
                         style={{
                             background: tabBg,
@@ -130,36 +142,13 @@ const FileTabs: React.FC<FileTabsProps> = ({ tabs, active, onActivate, onClose, 
     );
 };
 
-const EXT_COLORS: Record<string, string> = {
-    py: "#4AC6EA",
-    js: "#FFB703",
-    mjs: "#FFB703",
-    ts: "#3178C6",
-    tsx: "#3178C6",
-    jsx: "#FFB703",
-    java: "#ED2F34",
-    cpp: "#5337BC",
-    c: "#A8B9CC",
-    h: "#A8B9CC",
-    md: "#9CA8B0",
-    json: "#FFB703",
-    yaml: "#9CA8B0",
-    yml: "#9CA8B0",
-};
-
-const FileGlyph: React.FC<{ path: string; active: boolean }> = ({ path, active }) => {
-    const ext = (path.split(".").pop() || "").toLowerCase();
-    const color = EXT_COLORS[ext] || "#1ED36A";
+const FileGlyph: React.FC<{ path: string; active: boolean }> = ({ path }) => {
+    const dot = path.lastIndexOf(".");
+    const ext = dot >= 0 ? path.slice(dot + 1).toLowerCase() : "";
+    const filename = baseName(path);
     return (
-        <span
-            className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[3px] font-mono text-[8px] font-bold"
-            style={{
-                background: active ? `${color}30` : `${color}1F`,
-                color,
-                letterSpacing: 0,
-            }}
-        >
-            {ext.slice(0, 2).toUpperCase() || "·"}
+        <span className="inline-flex flex-shrink-0 items-center justify-center">
+            <SetiFileIcon ext={ext} filename={filename} size={14} />
         </span>
     );
 };

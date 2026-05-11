@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 
@@ -422,7 +422,8 @@ export class AssessmentService {
       const attemptQuestions = await queryRunner.query(
         `SELECT aq.*, ${correctOptCol}, q.marks, q.negative_marks,
                 q.${config.catCol} as category, ${difficultyCol},
-                ass.negative_mark_enabled, ass.negative_mark_value, ${taskTypeCol}
+                ass.negative_mark_enabled, ass.negative_mark_value, ${taskTypeCol},
+                ass.categories as assessment_categories
          FROM ${config.junction} aq
          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
          JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
@@ -435,6 +436,18 @@ export class AssessmentService {
       let correctCount  = 0;
       const totalCount  = attemptQuestions.length;
 
+      let assessmentCategories: any[] = [];
+      if (attemptQuestions.length > 0 && attemptQuestions[0].assessment_categories) {
+        const rawCats = attemptQuestions[0].assessment_categories;
+        if (Array.isArray(rawCats)) {
+          assessmentCategories = rawCats;
+        } else if (typeof rawCats === 'string') {
+          try {
+            assessmentCategories = JSON.parse(rawCats);
+          } catch {}
+        }
+      }
+
       const sectionMap: Record<string, {
         name: string; score: number; maxScore: number; answeredCount: number; totalCount: number;
       }> = {};
@@ -446,8 +459,19 @@ export class AssessmentService {
           : undefined;
         const category = aq.category || 'General';
 
+        let categoryName = category;
+        if (Array.isArray(assessmentCategories)) {
+          const matched = assessmentCategories.find((c: any) => {
+            if (typeof c === 'string') return c === category;
+            return c.id === category || c.name === category;
+          });
+          if (matched) {
+            categoryName = typeof matched === 'string' ? matched : (matched.name || matched.id);
+          }
+        }
+
         if (!sectionMap[category]) {
-          sectionMap[category] = { name: category, score: 0, maxScore: 0, answeredCount: 0, totalCount: 0 };
+          sectionMap[category] = { name: categoryName, score: 0, maxScore: 0, answeredCount: 0, totalCount: 0 };
         }
 
         const questionMarks    = Number(aq.marks || 1);
