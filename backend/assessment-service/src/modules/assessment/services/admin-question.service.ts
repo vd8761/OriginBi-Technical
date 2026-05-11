@@ -518,7 +518,8 @@ export class AdminQuestionService {
         `SELECT assessment_id, assessment_code, assessment_name, module_type,
                 total_time_minutes, total_questions, status, created_at,
                 question_limit, categories, difficulty_marks, difficulty_negative_marks,
-                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options
+                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options,
+                amount, trial_attempts_limit, main_attempts_limit
          FROM tech_assessments ${where} ORDER BY assessment_id DESC`,
         params,
       );
@@ -539,7 +540,10 @@ export class AdminQuestionService {
       tabSwitchLimit,
       antiCopyEnabled,
       shuffleQuestions,
-      shuffleOptions
+      shuffleOptions,
+      amount,
+      trialAttemptsLimit,
+      mainAttemptsLimit
     } = data;
     
     try {
@@ -555,8 +559,11 @@ export class AdminQuestionService {
              anti_copy_enabled = COALESCE($8, anti_copy_enabled),
              shuffle_questions = COALESCE($9, shuffle_questions),
              shuffle_options = COALESCE($10, shuffle_options),
+             amount = COALESCE($11, amount),
+             trial_attempts_limit = COALESCE($12, trial_attempts_limit),
+             main_attempts_limit = COALESCE($13, main_attempts_limit),
              updated_at = NOW()
-         WHERE assessment_id = $11`,
+         WHERE assessment_id = $14`,
         [
           assessmentName !== undefined ? assessmentName : null,
           totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
@@ -568,6 +575,9 @@ export class AdminQuestionService {
           antiCopyEnabled !== undefined ? Boolean(antiCopyEnabled) : null,
           shuffleQuestions !== undefined ? Boolean(shuffleQuestions) : null,
           shuffleOptions !== undefined ? Boolean(shuffleOptions) : null,
+          amount !== undefined ? Number(amount) : null,
+          trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : null,
+          mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : null,
           id
         ]
       );

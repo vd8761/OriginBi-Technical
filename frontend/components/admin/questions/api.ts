@@ -63,6 +63,9 @@ export interface ApiAssessment {
     anti_copy_enabled?: boolean;
     shuffle_questions?: boolean;
     shuffle_options?: boolean;
+    amount?: number;
+    trial_attempts_limit?: number;
+    main_attempts_limit?: number;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

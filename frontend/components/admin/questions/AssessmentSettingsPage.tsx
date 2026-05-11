@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
 import { AssessmentType, ASSESSMENT_TYPE_LABELS } from "./types";
 import { AptitudeIcon, CommunicationIcon, MNCIcon, RoleIcon, ArrowRightWithoutLineIcon } from "@/components/icons";
@@ -16,7 +16,7 @@ const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
   role: <RoleIcon className="w-5 h-5" />,
 };
 
-type SettingsTab = "general" | "categories" | "grading";
+type SettingsTab = "general" | "rules_limits" | "categories" | "grading";
 
 export default function AssessmentSettingsPage() {
   const router = useRouter();
@@ -36,6 +36,9 @@ export default function AssessmentSettingsPage() {
   const [antiCopyEnabled, setAntiCopyEnabled] = useState(false);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
+  const [amount, setAmount] = useState<number | "">(0);
+  const [trialAttemptsLimit, setTrialAttemptsLimit] = useState<number | "">(5);
+  const [mainAttemptsLimit, setMainAttemptsLimit] = useState<number | "">(2);
   const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState("");
   const [easyMarks, setEasyMarks] = useState<number | "">(1);
@@ -95,6 +98,9 @@ export default function AssessmentSettingsPage() {
     setAntiCopyEnabled(Boolean(a.anti_copy_enabled));
     setShuffleQuestions(Boolean(a.shuffle_questions));
     setShuffleOptions(Boolean(a.shuffle_options));
+    setAmount(a.amount !== undefined && a.amount !== null ? Number(a.amount) : 0);
+    setTrialAttemptsLimit(a.trial_attempts_limit !== undefined && a.trial_attempts_limit !== null ? Number(a.trial_attempts_limit) : 5);
+    setMainAttemptsLimit(a.main_attempts_limit !== undefined && a.main_attempts_limit !== null ? Number(a.main_attempts_limit) : 2);
     setCategoriesList(parseCats(a.categories));
     const m = parseMap(a.difficulty_marks, { easy: 1, medium: 2, hard: 5 });
     const n = parseMap(a.difficulty_negative_marks, { easy: 0, medium: 0.25, hard: 0.25 });
@@ -137,6 +143,9 @@ export default function AssessmentSettingsPage() {
         antiCopyEnabled,
         shuffleQuestions,
         shuffleOptions,
+        amount: amount === "" ? 0 : Number(amount),
+        trialAttemptsLimit: trialAttemptsLimit === "" ? 5 : Number(trialAttemptsLimit),
+        mainAttemptsLimit: mainAttemptsLimit === "" ? 2 : Number(mainAttemptsLimit),
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -229,10 +238,10 @@ export default function AssessmentSettingsPage() {
           <div className="w-full">
             <div className="bg-white/60 dark:bg-[#1f2823]/80 backdrop-blur-xl rounded-2xl shadow-sm ring-1 ring-gray-900/5 dark:ring-white/5 overflow-hidden border border-white dark:border-white/[0.05]">
               {/* Tab navigation inside card */}
-              <div className="flex border-b border-gray-100 dark:border-white/5 px-6 sm:px-10 pt-6 gap-6">
-                {([["general", "Rules & Limits", SlidersHorizontal], ["categories", "Dynamic Categories", LayoutGrid], ["grading", "Scoring Matrix", Award]] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
+              <div className="flex border-b border-gray-100 dark:border-white/5 px-6 sm:px-10 pt-6 gap-6 overflow-x-auto">
+                {([["general", "General", SlidersHorizontal], ["rules_limits", "Rules & Limits", Shield], ["categories", "Dynamic Categories", LayoutGrid], ["grading", "Scoring Matrix", Award]] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
                   <button key={key} onClick={() => setActiveTab(key)}
-                    className={`pb-4 px-1 text-sm font-semibold flex items-center gap-2 border-b-2 transition ${activeTab === key ? "border-brand-green text-brand-green" : "border-transparent text-black dark:text-white hover:text-brand-green"}`}>
+                    className={`pb-4 px-1 text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition ${activeTab === key ? "border-brand-green text-brand-green" : "border-transparent text-black dark:text-white hover:text-brand-green"}`}>
                     <Icon className="w-4 h-4" />{label}
                   </button>
                 ))}
@@ -246,6 +255,24 @@ export default function AssessmentSettingsPage() {
                       <div className="sm:max-w-md"><label className={labelCls}>Assessment Display Name</label><p className={descCls}>The name shown to administrators and in assessment headers.</p></div>
                       <div className="sm:max-w-[400px] w-full"><input type="text" value={name} onChange={e => { setName(e.target.value); markDirty(); }} className={inputCls} /></div>
                     </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 border-b border-gray-50 dark:border-white/[0.02]">
+                      <div className="sm:max-w-md"><label className={labelCls}>Assessment Amount</label><p className={descCls}>The fee or value associated with this assessment. Set to 0 if free.</p></div>
+                      <div className="sm:max-w-[400px] w-full"><input type="number" min={0} step="0.01" value={amount} onChange={e => { const val = e.target.value; setAmount(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 border-b border-gray-50 dark:border-white/[0.02]">
+                      <div className="sm:max-w-md"><label className={labelCls}>Trial Attempts Limit</label><p className={descCls}>Total number of trial attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
+                      <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={trialAttemptsLimit} onChange={e => { const val = e.target.value; setTrialAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                      <div className="sm:max-w-md"><label className={labelCls}>Main Attempts Limit</label><p className={descCls}>Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
+                      <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rules & Limits Tab */}
+                {activeTab === "rules_limits" && (
+                  <div className="space-y-10">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 border-b border-gray-50 dark:border-white/[0.02]">
                       <div className="sm:max-w-md"><label className={labelCls}>Test Timer (Minutes)</label><p className={descCls}>Total duration candidates have to complete this assessment.</p></div>
                       <div className="sm:max-w-[400px] w-full"><input type="number" min={1} value={duration} onChange={e => { const val = e.target.value; setDuration(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>

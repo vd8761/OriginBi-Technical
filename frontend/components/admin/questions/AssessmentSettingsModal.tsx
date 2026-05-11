@@ -13,7 +13,7 @@ interface AssessmentSettingsModalProps {
     onUpdateSuccess: (updated: ApiAssessment) => void;
 }
 
-type TabType = "general" | "categories" | "grading";
+type TabType = "general" | "rules_limits" | "categories" | "grading";
 
 export default function AssessmentSettingsModal({
     isOpen,
@@ -33,6 +33,9 @@ export default function AssessmentSettingsModal({
     const [antiCopyEnabled, setAntiCopyEnabled] = useState(false);
     const [shuffleQuestions, setShuffleQuestions] = useState(true);
     const [shuffleOptions, setShuffleOptions] = useState(true);
+    const [amount, setAmount] = useState(0);
+    const [trialAttemptsLimit, setTrialAttemptsLimit] = useState(5);
+    const [mainAttemptsLimit, setMainAttemptsLimit] = useState(2);
 
     // Category states
     const [categoriesList, setCategoriesList] = useState<string[]>([]);
@@ -57,6 +60,9 @@ export default function AssessmentSettingsModal({
         setAntiCopyEnabled(Boolean(assessment.anti_copy_enabled));
         setShuffleQuestions(Boolean(assessment.shuffle_questions));
         setShuffleOptions(Boolean(assessment.shuffle_options));
+        setAmount(assessment.amount !== undefined && assessment.amount !== null ? Number(assessment.amount) : 0);
+        setTrialAttemptsLimit(assessment.trial_attempts_limit !== undefined && assessment.trial_attempts_limit !== null ? Number(assessment.trial_attempts_limit) : 5);
+        setMainAttemptsLimit(assessment.main_attempts_limit !== undefined && assessment.main_attempts_limit !== null ? Number(assessment.main_attempts_limit) : 2);
 
         // Categories helper
         let cats: string[] = [];
@@ -146,7 +152,10 @@ export default function AssessmentSettingsModal({
                 tab_switch_limit: tabSwitchLimit,
                 anti_copy_enabled: antiCopyEnabled,
                 shuffle_questions: shuffleQuestions,
-                shuffle_options: shuffleOptions
+                shuffle_options: shuffleOptions,
+                amount: amount,
+                trialAttemptsLimit: trialAttemptsLimit,
+                mainAttemptsLimit: mainAttemptsLimit
             };
 
             const updated = await updateAssessment(assessment.assessment_id, payload as any);
@@ -200,23 +209,35 @@ export default function AssessmentSettingsModal({
                 </div>
 
                 {/* Navigation Tabs */}
-                <div className="flex border-b border-slate-800 px-6 py-2 gap-4 bg-slate-950/40">
+                <div className="flex border-b border-slate-800 px-6 py-2 gap-4 bg-slate-950/40 overflow-x-auto">
                     <button
                         type="button"
                         onClick={() => setActiveTab("general")}
-                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 transition ${
+                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                             activeTab === "general" 
                                 ? "border-emerald-400 text-emerald-400" 
                                 : "border-transparent text-slate-400 hover:text-slate-200"
                         }`}
                     >
                         <SlidersHorizontal className="w-4 h-4" />
+                        General
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("rules_limits")}
+                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                            activeTab === "rules_limits" 
+                                ? "border-emerald-400 text-emerald-400" 
+                                : "border-transparent text-slate-400 hover:text-slate-200"
+                        }`}
+                    >
+                        <Shield className="w-4 h-4" />
                         Rules & Limits
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab("categories")}
-                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 transition ${
+                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                             activeTab === "categories" 
                                 ? "border-emerald-400 text-emerald-400" 
                                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -228,7 +249,7 @@ export default function AssessmentSettingsModal({
                     <button
                         type="button"
                         onClick={() => setActiveTab("grading")}
-                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 transition ${
+                        className={`py-2 px-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                             activeTab === "grading" 
                                 ? "border-emerald-400 text-emerald-400" 
                                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -270,6 +291,61 @@ export default function AssessmentSettingsModal({
                                     />
                                 </div>
 
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase block">
+                                        Assessment Amount
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        required
+                                        value={amount}
+                                        onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
+                                        className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase block">
+                                            Trial Attempts Limit
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            required
+                                            value={trialAttemptsLimit}
+                                            onChange={(e) => setTrialAttemptsLimit(Math.max(0, Number(e.target.value)))}
+                                            className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase block">
+                                            Main Attempts Limit
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            required
+                                            value={mainAttemptsLimit}
+                                            onChange={(e) => setMainAttemptsLimit(Math.max(0, Number(e.target.value)))}
+                                            className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
+                                        />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {activeTab === "rules_limits" && (
+                            <motion.div
+                                key="rules_limits"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="space-y-5"
+                            >
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase flex items-center gap-1.5">
