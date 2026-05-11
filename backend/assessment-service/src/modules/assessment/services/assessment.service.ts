@@ -20,6 +20,60 @@ export class AssessmentService {
 
   constructor(private dataSource: DataSource) {}
 
+  async getAttemptsStats(userIdParam?: any) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
+      if (!resolvedUserId) return {};
+
+      const tableMap = this.getTableMap();
+      const stats: Record<string, { trial: number; main: number }> = {};
+
+      for (const [module, config] of Object.entries(tableMap)) {
+        stats[module] = { trial: 0, main: 0 };
+        
+        try {
+          if (!config.hasMode) {
+            const rows = await queryRunner.query(
+              `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1`,
+              [resolvedUserId]
+            );
+            const count = Number(rows[0]?.count || 0);
+            stats[module] = { trial: count, main: count };
+          } else {
+            const trialRows = await queryRunner.query(
+              `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
+               FROM ${config.attempts} a
+               JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+               JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+               WHERE a.user_id = $1 AND q.mode = 'trial'`,
+              [resolvedUserId]
+            );
+            const mainRows = await queryRunner.query(
+              `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
+               FROM ${config.attempts} a
+               JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+               JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+               WHERE a.user_id = $1 AND q.mode = 'main'`,
+              [resolvedUserId]
+            );
+            stats[module] = {
+              trial: Number(trialRows[0]?.count || 0),
+              main: Number(mainRows[0]?.count || 0)
+            };
+          }
+        } catch (err: any) {
+          this.logger.error(`Error querying attempts count for ${module}: ${err.message}`);
+        }
+      }
+
+      return stats;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   private hashSeed(seed: string) {
     const hash = crypto.createHash('sha256').update(seed).digest();
     return hash.readUInt32LE(0);

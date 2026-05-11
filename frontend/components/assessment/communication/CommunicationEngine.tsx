@@ -130,6 +130,38 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     const [showRestoredBanner, setShowRestoredBanner] = useState(false);
     const cacheRestoredRef = useRef(false);
 
+    const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
+    const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchEngineStats = async () => {
+            try {
+                const [statsRes, assessmentsRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                ]);
+                const statsJson = await statsRes.json();
+                if (statsJson?.data) {
+                    const cnt = statsJson.data['grammar']?.[mode] ?? 0;
+                    setAttemptsCount(cnt > 0 ? cnt : 1);
+                }
+                const assessmentsJson = await assessmentsRes.json();
+                if (assessmentsJson?.data) {
+                    const found = assessmentsJson.data.find(
+                        (a: any) => a.module_type === 'grammar' || a.assessment_code === 'grammar'
+                    );
+                    if (found) {
+                        const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
+                        setAttemptsLimit(Number(lim));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load engine attempts stats:", err);
+            }
+        };
+        fetchEngineStats();
+    }, [mode]);
+
     // ── Cache hook (grammar module is the backend name for communication) ──
     const cacheAnswers = useMemo(() => {
         const out: Record<string, any> = {};
@@ -553,8 +585,21 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                     </div>
                     <div className="mx-4 hidden h-8 w-px bg-slate-300 dark:bg-white/10 sm:block" />
                     <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Communication Assessment</p>
-                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">Multi-skill test workspace</h1>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Communication Assessment</p>
+                            {mode === 'trial' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    Trial Test
+                                </span>
+                            )}
+                        </div>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
+                            <span>Test workspace</span>
+                            <span className="text-slate-300 dark:text-white/10 font-normal">&middot;</span>
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
+                            </span>
+                        </h1>
                     </div>
                 </div>
 

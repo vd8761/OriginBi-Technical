@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 interface AptitudePreTestProps {
     onStart: (mode: 'trial' | 'main') => void;
@@ -31,6 +31,13 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
     gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
     mode = 'main'
 }) => {
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
             <div
@@ -54,12 +61,12 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                             </svg>
                         </div>
                         <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                                     Aptitude Assessment
                                 </h2>
                                 {mode === 'trial' && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 whitespace-nowrap">
                                         Trial Assessment
                                     </span>
                                 )}
@@ -82,7 +89,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
 
                 <div className="overflow-y-auto p-6 sm:p-8">
                     <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
-                        <div className="space-y-8">
+                        <div className="space-y-8 order-2 lg:order-1">
                             <div>
                                 <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Core modules</h3>
                                 <div className="grid gap-3 sm:grid-cols-2">
@@ -107,7 +114,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                             </div>
                         </div>
 
-                        <aside className="h-fit rounded-2xl border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
+                        <aside className="h-fit rounded-2xl border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-brand-green mb-4">Session Stats</h3>
                             <div className="space-y-4">
                                 {metrics.map((metric) => (

@@ -1,13 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Image from "next/image";
 import type { CodingLanguage } from "@/lib/exams";
 
 interface CodingPreTestProps {
     language: CodingLanguage;
-    onStart: () => void;
+    onStart: (mode: 'trial' | 'main') => void;
     onClose: () => void;
+    mode?: 'trial' | 'main';
 }
 
 const metrics = [
@@ -33,7 +34,14 @@ const checklist = [
     "If the timer runs out, the assessment auto-submits with the answers you have.",
 ];
 
-const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClose }) => {
+const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClose, mode = 'main' }) => {
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
+
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6 sm:px-6">
             <div
@@ -66,16 +74,23 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                 className="h-8 w-8 object-contain"
                             />
                         </div>
-                        <div>
+                        <div className="flex flex-col">
                             <p className="text-sm font-bold" style={{ color: language.accent }}>
                                 Ready to begin
                             </p>
-                            <h2
-                                id="coding-pretest-title"
-                                className="text-xl font-bold leading-tight text-[#17201b] dark:text-white sm:text-2xl"
-                            >
-                                Coding Assessment &middot; {language.name}
-                            </h2>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h2
+                                    id="coding-pretest-title"
+                                    className="text-xl font-bold leading-tight text-[#17201b] dark:text-white sm:text-2xl"
+                                >
+                                    Coding Assessment &middot; {language.name}
+                                </h2>
+                                {mode === 'trial' && (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 whitespace-nowrap">
+                                        Trial Assessment
+                                    </span>
+                                )}
+                            </div>
                             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b]/60 dark:text-white/60 sm:text-sm">
                                 Five problems covering core programming, data structures, algorithms, complexity, and dynamic programming — all evaluated in {language.name}.
                             </p>
@@ -99,7 +114,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
 
                 <div className="overflow-y-auto p-4 sm:p-5">
                     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
-                        <div>
+                        <div className="order-2 lg:order-1">
                             <h3 className="text-base font-bold text-[#17201b] dark:text-white">
                                 What this test covers
                             </h3>
@@ -137,14 +152,14 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                         </div>
 
                         <aside
-                            className="rounded-lg border p-4 dark:bg-white/5"
+                            className="rounded-lg border p-4 dark:bg-white/5 order-1 lg:order-2"
                             style={{
                                 borderColor: `${language.accent}33`,
                                 background: `${language.accent}0a`,
                             }}
                         >
                             <h3 className="text-sm font-bold text-[#17201b] dark:text-white">
-                                Session snapshot
+                                Session Stats
                             </h3>
                             <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
                                 {metrics.map((metric) => (
@@ -186,7 +201,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     </button>
                     <button
                         type="button"
-                        onClick={onStart}
+                        onClick={() => onStart(mode)}
                         className="inline-flex min-h-10 items-center justify-center rounded-lg px-6 text-sm font-bold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                         style={{
                             background: language.accent,

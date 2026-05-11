@@ -14,6 +14,7 @@ function CodingAssessmentInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const lang = (searchParams.get("lang") || "").toLowerCase();
+    const mode = (searchParams.get("mode") || "main").toLowerCase();
     const [hydrated, setHydrated] = useState(false);
     const { isPaid } = usePaidAssessments();
     const { markAssessmentComplete } = useAssessmentTracker();
@@ -28,10 +29,10 @@ function CodingAssessmentInner() {
             router.replace("/explore/coding");
             return;
         }
-        if (!isPaid(codingPaymentKey(lang))) {
+        if (mode !== "trial" && !isPaid(codingPaymentKey(lang))) {
             router.replace("/explore/coding");
         }
-    }, [hydrated, lang, isPaid, router]);
+    }, [hydrated, lang, mode, isPaid, router]);
 
     const handleComplete = (score: number) => {
         const result = {
@@ -70,7 +71,7 @@ function CodingAssessmentInner() {
         router.push('/student/dashboard?completed=coding');
     };
 
-    if (!hydrated || !lang || !VALID_LANGS.includes(lang) || !isPaid(codingPaymentKey(lang))) {
+    if (!hydrated || !lang || !VALID_LANGS.includes(lang) || (mode !== "trial" && !isPaid(codingPaymentKey(lang)))) {
         return (
             <div className="coding-exam-root coding-theme-dark flex min-h-screen items-center justify-center bg-[#19211C] text-white/60">
                 <div className="flex items-center gap-3 text-[13px]">
@@ -81,7 +82,7 @@ function CodingAssessmentInner() {
         );
     }
 
-    return <CodingAssessment lang={lang} onComplete={handleComplete} />;
+    return <CodingAssessment lang={lang} onComplete={handleComplete} mode={mode as 'trial' | 'main'} />;
 }
 
 export default function CodingAssessmentPage() {

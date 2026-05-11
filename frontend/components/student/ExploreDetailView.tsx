@@ -513,10 +513,11 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             {pendingCodingLang && (
                 <CodingPreTest
                     language={pendingCodingLang}
-                    onStart={() => {
+                    mode={assessmentMode}
+                    onStart={(mode) => {
                         const langId = pendingCodingLang.id;
                         setPendingCodingLang(null);
-                        router.push(`/assessment/coding?lang=${langId}`);
+                        router.push(`/assessment/coding?lang=${langId}&mode=${mode}`);
                     }}
                     onClose={() => setPendingCodingLang(null)}
                 />

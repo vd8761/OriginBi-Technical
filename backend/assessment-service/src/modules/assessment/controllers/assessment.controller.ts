@@ -1,9 +1,15 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { AssessmentService } from '../services/assessment.service';
 
 @Controller('assessment')
 export class AssessmentController {
   constructor(private readonly assessmentService: AssessmentService) {}
+
+  @Get('attempts-stats')
+  async getAttemptsStats(@Query('userId') userId?: string) {
+    const data = await this.assessmentService.getAttemptsStats(userId);
+    return { data };
+  }
 
   @Post(':module/attempts')
   async startAttempt(@Param('module') module: string, @Body() body: any) {

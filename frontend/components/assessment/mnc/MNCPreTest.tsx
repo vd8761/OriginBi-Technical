@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 interface MNCPreTestProps {
     onStart: (mode: 'trial' | 'main') => void;
@@ -35,6 +35,13 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
     gradient = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
     mode = 'main'
 }) => {
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
             <div
@@ -58,12 +65,12 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
                             </svg>
                         </div>
                         <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                                     MNC Readiness
                                 </h2>
                                 {mode === 'trial' && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 whitespace-nowrap">
                                         Trial Assessment
                                     </span>
                                 )}
@@ -86,7 +93,7 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
 
                 <div className="overflow-y-auto p-6 sm:p-8">
                     <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
-                        <div className="space-y-8">
+                        <div className="space-y-8 order-2 lg:order-1">
                             <div>
                                 <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Core domains</h3>
                                 <div className="grid gap-4 sm:grid-cols-2">
@@ -112,8 +119,8 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
                             </div>
                         </div>
 
-                        <aside className="h-fit rounded-2xl border border-[#6366f1]/10 bg-[#6366f1]/[0.03] p-6 dark:border-white/10 dark:bg-white/5">
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-[#6366f1] mb-4">Overview</h3>
+                        <aside className="h-fit rounded-2xl border border-[#6366f1]/10 bg-[#6366f1]/[0.03] p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-[#6366f1] mb-4">Session Stats</h3>
                             <div className="space-y-4">
                                 {metrics.map((metric) => (
                                     <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-[#6366f1]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
