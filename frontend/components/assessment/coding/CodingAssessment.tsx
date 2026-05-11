@@ -326,10 +326,10 @@ const Header: React.FC<HeaderProps> = ({
                     </span>
                 )}
             </div>
-            <div className="mt-0.5 text-[10px] text-white/35 flex items-center gap-1">
+            <div className="mt-0.5 text-[10px] text-white flex items-center gap-1">
                 <span>Q{currentQ + 1} / {totalQ} · {question.section} · {languageLabel}</span>
-                <span className="text-white/20">&middot;</span>
-                <span className="font-semibold text-white/60">
+                <span className="text-white">&middot;</span>
+                <span className="font-semibold text-white">
                     Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
                 </span>
             </div>

@@ -364,8 +364,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                         </div>
                         <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
                             <span>Technical MCQ Hub</span>
-                            <span className="text-slate-300 dark:text-white/10 font-normal">&middot;</span>
-                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <span className="text-slate-900 dark:text-white font-normal">&middot;</span>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white">
                                 Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
                             </span>
                         </h1>
