@@ -8,11 +8,14 @@ import { CodeExecutionService } from './services/code-execution.service';
 import { EvaluationService } from './services/evaluation.service';
 import * as Entities from '../../entities';
 
+import { R2Module } from '../r2/r2.module';
+
 const entities = Object.values(Entities).filter(e => typeof e === 'function');
 
 @Module({
   imports: [
     TypeOrmModule.forFeature(entities),
+    R2Module,
   ],
   controllers: [
     AdminQuestionController,

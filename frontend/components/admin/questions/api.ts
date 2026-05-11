@@ -197,3 +197,23 @@ export async function updateAssessment(
     });
     return result.data;
 }
+
+export async function uploadQuestionAsset(
+    module: string,
+    file: File
+): Promise<{ url: string; key: string; fileName: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const url = `${ADMIN_BASE}/upload?module=${getBackendModule(module)}`;
+    const res = await fetch(url, {
+        method: "POST",
+        body: formData,
+    });
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(body.message || `File Upload Error ${res.status}`);
+    }
+    return body;
+}
