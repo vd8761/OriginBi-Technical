@@ -32,14 +32,20 @@ const AudioTaskComponent: React.FC<AudioTaskProps> = ({ task, value = {}, onChan
                 </div>
 
                 <div className="mt-4 rounded-lg border border-brand-green/10 bg-white p-3 dark:border-white/10 dark:bg-[#0f1712]">
-                    <audio
-                        controls
-                        className="h-10 w-full outline-none"
-                        controlsList="nodownload"
-                        src={task.audioUrl}
-                    >
-                        Your browser does not support the audio element.
-                    </audio>
+                    {task.audioUrl ? (
+                        <audio
+                            controls
+                            className="h-10 w-full outline-none"
+                            controlsList="nodownload"
+                            src={task.audioUrl}
+                        >
+                            Your browser does not support the audio element.
+                        </audio>
+                    ) : (
+                        <div className="h-10 w-full flex items-center justify-center rounded border border-dashed border-brand-green/30 bg-brand-green/5 text-sm text-brand-green/60">
+                            No audio file available
+                        </div>
+                    )}
                 </div>
             </section>
 

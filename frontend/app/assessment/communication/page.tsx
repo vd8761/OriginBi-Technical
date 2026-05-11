@@ -58,7 +58,7 @@ function CommunicationAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        router.push('/student/dashboard?completed=communication');
+        router.push('/dashboard');
     };
 
     return (

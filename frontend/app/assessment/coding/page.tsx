@@ -67,7 +67,7 @@ function CodingAssessmentInner() {
             timeTakenSeconds: 2700,
         });
 
-        router.push('/student/dashboard?completed=coding');
+        router.push('/dashboard');
     };
 
     if (!hydrated || !lang || !VALID_LANGS.includes(lang) || !isPaid(codingPaymentKey(lang))) {

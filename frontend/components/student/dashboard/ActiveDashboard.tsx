@@ -7,7 +7,7 @@ import { EXAMS, EXAM_DETAILS, CODING_LANGUAGES, type AssessmentId, type Extended
 import { usePaidAssessments, codingPaymentKey, type PaymentKey } from "@/lib/payments";
 import { useAssessmentResults, deriveCareerIdentity, type AssessmentResult, type SectionResult } from "@/lib/progress";
 import { useAssessmentTracker } from "@/lib/assessmentTracker";
-import DetailedResultModal from "./DetailedResultModal";
+import GoogleStyleAnalysisModal from "./GoogleStyleAnalysisModal";
 import AssessmentNotifications from "./AssessmentNotifications";
 import CertificatePreviewModal from "../certificate/CertificatePreviewModal";
 import type { Exam } from "../ExamCarousel";
@@ -675,7 +675,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
       )}
 
       {/* ===== MODALS ===== */}
-      <DetailedResultModal
+      <GoogleStyleAnalysisModal
         isOpen={!!selectedResult}
         onClose={() => setSelectedResult(null)}
         exam={selectedResult?.exam || null}

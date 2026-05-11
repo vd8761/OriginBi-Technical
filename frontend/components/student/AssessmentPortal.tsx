@@ -7,6 +7,7 @@ import { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
 import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
+import AdaptiveAptitudePreTest from "../assessment/aptitude/AdaptiveAptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
 import MNCPreTest from "../assessment/mnc/MNCPreTest";
@@ -118,7 +119,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           ...exam,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.total_questions || exam.questions),
+          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : dbExam.total_questions) || exam.questions,
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -457,7 +458,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       />
 
       {showAptitudeModal && (
-        <AptitudePreTest
+        <AdaptiveAptitudePreTest
           mode={assessmentMode}
           onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
           onClose={() => setShowAptitudeModal(false)}

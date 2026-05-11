@@ -58,7 +58,7 @@ function RoleAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        router.push('/student/dashboard?completed=role');
+        router.push('/dashboard');
     };
 
     return (
