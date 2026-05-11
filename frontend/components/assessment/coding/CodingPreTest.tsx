@@ -91,7 +91,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                     </span>
                                 )}
                             </div>
-                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b]/60 dark:text-white/60 sm:text-sm">
+                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b] dark:text-white sm:text-sm">
                                 Five problems covering core programming, data structures, algorithms, complexity, and dynamic programming — all evaluated in {language.name}.
                             </p>
                         </div>
@@ -99,7 +99,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b]/40 transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white/40"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white"
                         aria-label="Close"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -143,7 +143,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                             className="mt-2 h-1.5 w-1.5 shrink-0 rounded-sm"
                                             style={{ background: language.accent }}
                                         />
-                                        <p className="text-[13px] font-medium leading-5 text-[#17201b]/80 dark:text-white/80 sm:text-sm">
+                                        <p className="text-[13px] font-medium leading-5 text-[#17201b] dark:text-white sm:text-sm">
                                             {point}
                                         </p>
                                     </div>
@@ -167,7 +167,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                         key={metric.label}
                                         className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
                                     >
-                                        <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">
+                                        <span className="text-sm font-medium text-[#17201b] dark:text-white">
                                             {metric.label}
                                         </span>
                                         <strong className="text-sm font-bold text-[#17201b] dark:text-white">
@@ -176,7 +176,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                     </div>
                                 ))}
                                 <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
-                                    <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">
+                                    <span className="text-sm font-medium text-[#17201b] dark:text-white">
                                         Language
                                     </span>
                                     <strong

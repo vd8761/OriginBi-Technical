@@ -75,7 +75,7 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
                                     </span>
                                 )}
                             </div>
-                            <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-white/60">
+                            <p className="mt-2 text-sm leading-relaxed text-slate-900 dark:text-white">
                                 Evaluating linguistic proficiency, listening precision, and professional articulation.
                             </p>
                         </div>
@@ -100,7 +100,7 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
                                     {modules.map((m) => (
                                         <div key={m.title} className="rounded-xl border border-[#06b6d4]/10 bg-[#06b6d4]/5 p-4 dark:border-white/10 dark:bg-white/5">
                                             <p className="text-sm font-black uppercase tracking-wider text-[#06b6d4] mb-1">{m.title}</p>
-                                            <p className="text-xs font-bold text-slate-600 dark:text-white/50">{m.desc}</p>
+                                            <p className="text-xs font-bold text-slate-900 dark:text-white">{m.desc}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -112,7 +112,7 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
                                     {checklist.map((point) => (
                                         <div key={point} className="flex items-start gap-3">
                                             <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#06b6d4]" />
-                                            <p className="text-sm font-medium text-slate-600 dark:text-white/70">{point}</p>
+                                            <p className="text-sm font-medium text-slate-900 dark:text-white">{point}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -124,7 +124,7 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
                             <div className="space-y-4">
                                 {metrics.map((metric) => (
                                     <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-[#06b6d4]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
-                                        <span className="text-xs font-bold text-slate-500 dark:text-white/40">{metric.label}</span>
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
                                         <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
                                     </div>
                                 ))}
@@ -137,7 +137,7 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-8 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 dark:text-white/40 dark:hover:text-white transition-all"
+                        className="px-8 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-900 hover:opacity-80 dark:text-white dark:hover:opacity-80 transition-all"
                     >
                         Go back
                     </button>

@@ -71,7 +71,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                                     </span>
                                 )}
                             </div>
-                            <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-white/60">
+                            <p className="mt-2 text-sm leading-relaxed text-slate-900 dark:text-white">
                                 Benchmark problem-solving speed, numerical accuracy, and logical reasoning.
                             </p>
                         </div>
@@ -107,7 +107,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                                     {checklist.map((point) => (
                                         <div key={point} className="flex items-start gap-3">
                                             <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-green" />
-                                            <p className="text-sm font-medium text-slate-600 dark:text-white/70">{point}</p>
+                                            <p className="text-sm font-medium text-slate-900 dark:text-white">{point}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -119,7 +119,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                             <div className="space-y-4">
                                 {metrics.map((metric) => (
                                     <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-brand-green/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
-                                        <span className="text-xs font-bold text-slate-500 dark:text-white/40">{metric.label}</span>
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
                                         <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
                                     </div>
                                 ))}
@@ -132,7 +132,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-8 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 dark:text-white/40 dark:hover:text-white transition-all"
+                        className="px-8 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-900 hover:opacity-80 dark:text-white dark:hover:opacity-80 transition-all"
                     >
                         Go back
                     </button>
