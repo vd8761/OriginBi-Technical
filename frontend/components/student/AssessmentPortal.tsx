@@ -46,24 +46,96 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showMncModal, setShowMncModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
+
+  const handleNavigate = (view: AssessmentView) => {
+    router.push(`/${view}`);
+  };
+
+  useEffect(() => {
+    setCurrentView(initialView);
+  }, [initialView]);
+
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
   const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
   const [completionPopup, setCompletionPopup] = useState<{
     completed: AssessmentId;
     next: AssessmentId | null;
   } | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    const fetchAll = async () => {
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+        const response = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        const json = await response.json();
+        if (json && json.data && active) {
+          setAssessmentsList(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to load assessments dynamically:", err);
+      }
+    };
+    fetchAll();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const dynamicExams = useMemo(() => {
+    return EXAMS.map((exam) => {
+      const dbModule = exam.id === "communication" ? "grammar" : exam.id;
+      const dbExam = assessmentsList.find(
+        (a) => a.module_type === dbModule || a.assessment_code === exam.id
+      );
+      if (dbExam) {
+        let tags = exam.tags;
+        if (dbExam.categories) {
+          let parsed: any[] = [];
+          if (Array.isArray(dbExam.categories)) {
+            parsed = dbExam.categories;
+          } else if (typeof dbExam.categories === "string") {
+            try {
+              parsed = JSON.parse(dbExam.categories);
+            } catch {
+              parsed = [];
+            }
+          }
+          if (parsed.length > 0) {
+            tags = parsed.map((c: any) => {
+              if (typeof c === "string") return c;
+              return c.name || c.id || "";
+            }).filter(Boolean);
+          }
+        }
+        return {
+          ...exam,
+          title: dbExam.assessment_name || exam.title,
+          duration: `${dbExam.total_time_minutes || 60} min`,
+          questions: dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.total_questions || exam.questions),
+          price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
+          trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
+          mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
+          tags: tags,
+        };
+      }
+      return exam;
+    });
+  }, [assessmentsList]);
+
   const filteredExams = useMemo(() => {
-    const baseExams = EXAMS.filter((exam) => exam.available);
+    const baseExams = dynamicExams.filter((exam) => exam.available);
     if (filter === "ready" || filter === "all") {
       return baseExams;
     }
     return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
-  }, [filter]);
+  }, [dynamicExams, filter]);
 
   const handleSelectExam = (exam: Exam) => {
     setSelectedExam(exam);
@@ -189,7 +261,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       <Header
         currentView={currentHeaderView}
-        onNavigate={(view) => setCurrentView(view)}
+        onNavigate={(view) => handleNavigate(view)}
         onLogout={() => console.log("Logging out...")}
       />
 
@@ -232,7 +304,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                     onClick={() => {
                       const next = completionPopup.next ? EXAMS.find((e) => e.id === completionPopup.next) : null;
                       setCompletionPopup(null);
-                      setCurrentView("assessment");
+                      handleNavigate("assessment");
                       if (next) {
                         handleSelectExam(next);
                       }
@@ -320,6 +392,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                   insight={exam.statusLabel}
                   accentColor={exam.accentColor}
                   gradient={exam.gradient}
+                  trialAttemptsLimit={(exam as any).trialAttemptsLimit}
+                  mainAttemptsLimit={(exam as any).mainAttemptsLimit}
                   onDetailsClick={() => handleSelectExam(exam)}
                   onTrialClick={() => handleCardTrialStart(exam)}
                   onMainClick={() => handleCardMainStart(exam)}
@@ -335,7 +409,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             setShowDetailModal={setShowDetailModal}
           />
         ) : currentView === "profile" ? (
-          <ProfileView onNavigate={(view) => setCurrentView(view as any)} />
+          <ProfileView onNavigate={(view) => handleNavigate(view as any)} />
         ) : (
           <section className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center rounded-3xl bg-brand-light-primary/80 dark:bg-brand-dark-secondary/80 backdrop-blur-xl border border-brand-light-tertiary/60 dark:border-white/10">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-light-secondary dark:bg-white/5 text-brand-text-light-secondary dark:text-brand-text-secondary">
@@ -346,7 +420,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               Your profile area is being prepared. You can continue exploring assessments and start any available test from the library.
             </p>
             <button
-              onClick={() => setCurrentView("explore")}
+              onClick={() => handleNavigate("explore")}
               className="mt-6 px-6 py-3 rounded-xl bg-brand-green text-white text-sm font-semibold hover:opacity-90 transition-all"
             >
               Explore Assessments

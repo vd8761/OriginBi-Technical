@@ -111,8 +111,8 @@ const LoginForm: React.FC<LoginFormProps> = ({
       }
 
       const loginData = await loginRes.json();
-      const accessToken = loginData.AuthenticationResult?.AccessToken || "";
-      const idToken = loginData.AuthenticationResult?.IdToken || "";
+      const accessToken = loginData.accessToken || loginData.AuthenticationResult?.AccessToken || "";
+      const idToken = loginData.idToken || loginData.AuthenticationResult?.IdToken || "";
 
       // 2. Retrieve Student Profile to get the correct display name
       let displayName = '';

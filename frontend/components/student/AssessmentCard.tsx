@@ -18,6 +18,8 @@ interface AssessmentCardProps {
     onDetailsClick: () => void;
     onTrialClick: () => void;
     onMainClick: () => void;
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
 }
 
 const AssessmentCard: React.FC<AssessmentCardProps> = ({
@@ -38,6 +40,8 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
     onDetailsClick,
     onTrialClick,
     onMainClick,
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
 }) => {
     return (
         <div 
@@ -85,7 +89,9 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[9px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Attempts</span>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-white">2 Main / 5 Trial</span>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-white">
+                            {mainAttemptsLimit} Main / {trialAttemptsLimit} Trial
+                        </span>
                     </div>
                 </div>
 

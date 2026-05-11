@@ -48,11 +48,13 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 
 // Inner component that uses search params
 import { useSession } from "@/lib/contexts/SessionContext";
+import { useRouter } from "next/navigation";
 
 function HomeContent() {
   const { isLoggedIn, user, isLoading } = useSession();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     // Check for completion parameter
@@ -63,6 +65,12 @@ function HomeContent() {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (isLoggedIn && !isLoading) {
+      router.replace("/dashboard");
+    }
+  }, [isLoggedIn, isLoading, router]);
 
   if (isLoading) {
     return (
@@ -85,9 +93,11 @@ function HomeContent() {
       </AnimatePresence>
       
       {!isLoggedIn ? (
-        <Login onLoginSuccess={() => {}} />
+        <Login onLoginSuccess={() => router.replace("/dashboard")} />
       ) : (
-        <AssessmentPortal userName={user?.name} />
+        <div className="min-h-screen flex items-center justify-center bg-[#f5fbf7] dark:bg-[#0f1712]">
+          <div className="w-10 h-10 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+        </div>
       )}
     </>
   );

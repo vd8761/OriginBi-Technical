@@ -89,6 +89,22 @@ export class TechAssessment {
     })
     status!: TechAssessmentStatus;
 
+    @Column({
+        name: "amount",
+        type: "decimal",
+        precision: 10,
+        scale: 2,
+        default: 0,
+        transformer: numericTransformer,
+    })
+    amount!: number;
+
+    @Column({ name: "trial_attempts_limit", type: "int", default: 5 })
+    trialAttemptsLimit!: number;
+
+    @Column({ name: "main_attempts_limit", type: "int", default: 2 })
+    mainAttemptsLimit!: number;
+
     @ManyToOne(() => UserEntity, { nullable: false })
     @JoinColumn({ name: "created_by" })
     createdBy!: UserEntity;
