@@ -8,6 +8,7 @@ interface QuestionTableProps {
   assessmentType: AssessmentType;
   onEdit: (q: AnyQuestion) => void;
   onDelete: (id: string) => void;
+  categories?: { id: string; name: string }[];
 }
 
 const QuestionTable: React.FC<QuestionTableProps> = ({
@@ -15,7 +16,8 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
   loading,
   assessmentType,
   onEdit,
-  onDelete
+  onDelete,
+  categories
 }) => {
   if (loading) {
     return (
@@ -44,7 +46,9 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
             {questions.map((q) => {
               const qId = (q as any).id;
               const text = (q as any).text || (q as any).instructions || "No content provided";
-              const category = (q as any).category || (q as any).topic || (q as any).taskType || (q as any).questionType || "General";
+              const categoryKey = (q as any).category || (q as any).topic || (q as any).taskType || (q as any).questionType || "General";
+              const matchedCat = categories?.find(c => c.id === categoryKey);
+              const category = matchedCat ? matchedCat.name : categoryKey;
               const marks = (q as any).marks ?? 1;
               const difficulty = (q as any).difficulty || "Medium";
               const optionsCount = (q as any).options?.length || 0;

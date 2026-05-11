@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
 import { AssessmentType, ASSESSMENT_TYPE_LABELS } from "./types";
 import { AptitudeIcon, CommunicationIcon, MNCIcon, RoleIcon, ArrowRightWithoutLineIcon } from "@/components/icons";
@@ -37,10 +37,37 @@ export default function AssessmentSettingsPage() {
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
   const [amount, setAmount] = useState<number | "">(0);
+  interface Category {
+    id: string;
+    name: string;
+  }
+
   const [trialAttemptsLimit, setTrialAttemptsLimit] = useState<number | "">(5);
   const [mainAttemptsLimit, setMainAttemptsLimit] = useState<number | "">(2);
-  const [categoriesList, setCategoriesList] = useState<string[]>([]);
-  const [newCategory, setNewCategory] = useState("");
+  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
+
+  const handleStartEdit = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setEditingCategoryName(cat.name);
+  };
+
+  const handleSaveEdit = (id: string) => {
+    const trimmed = editingCategoryName.trim();
+    if (!trimmed) return;
+    setCategoriesList(categoriesList.map(c => c.id === id ? { ...c, name: trimmed } : c));
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+    markDirty();
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+  };
   const [easyMarks, setEasyMarks] = useState<number | "">(1);
   const [easyNeg, setEasyNeg] = useState<number | "">(0);
   const [mediumMarks, setMediumMarks] = useState<number | "">(2);
@@ -84,10 +111,24 @@ export default function AssessmentSettingsPage() {
     try { return { ...fb, ...JSON.parse(val) }; } catch { return fb; }
   };
 
-  const parseCats = (val: any): string[] => {
+  const parseCats = (val: any): Category[] => {
     if (!val) return [];
-    if (Array.isArray(val)) return val;
-    try { return JSON.parse(val); } catch { return []; }
+    let parsed: any[] = [];
+    if (Array.isArray(val)) {
+      parsed = val;
+    } else {
+      try {
+        parsed = JSON.parse(val);
+      } catch {
+        parsed = [];
+      }
+    }
+    return parsed.map((c: any) => {
+      if (typeof c === "string") {
+        return { id: c, name: c };
+      }
+      return { id: c.id || c.name || "", name: c.name || c.id || "" };
+    });
   };
 
   const populateForm = (a: ApiAssessment) => {
@@ -157,10 +198,17 @@ export default function AssessmentSettingsPage() {
   };
 
   const handleAddCategory = () => {
-    const t = newCategory.trim();
-    if (!t || categoriesList.some(c => c.toLowerCase() === t.toLowerCase())) return;
-    setCategoriesList([...categoriesList, t]);
-    setNewCategory("");
+    const name = newCategoryName.trim();
+    const id = newCategoryId.trim() || name.toLowerCase().replace(/[^a-z0-9\-_]/g, "_").replace(/_+/g, "_");
+    
+    if (!name || !id) return;
+    if (categoriesList.some(c => c.id.toLowerCase() === id.toLowerCase() || c.name.toLowerCase() === name.toLowerCase())) {
+      alert("A category with this ID or Name already exists.");
+      return;
+    }
+    setCategoriesList([...categoriesList, { id, name }]);
+    setNewCategoryName("");
+    setNewCategoryId("");
     markDirty();
   };
 
@@ -314,33 +362,141 @@ export default function AssessmentSettingsPage() {
                   <div className="space-y-10">
                     <div className="pb-8 border-b border-gray-50 dark:border-white/[0.02]">
                       <label className={labelCls}>Add Custom Category / Topic</label>
-                      <p className={descCls}>Categories defined here will populate question editor dropdowns and filter bars for this module.</p>
-                      <div className="flex gap-3 mt-4 max-w-lg">
-                        <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAddCategory())}
-                          className={inputCls + " flex-1"} placeholder="e.g. Data Interpretation" />
-                        <button type="button" onClick={handleAddCategory}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-brand-green text-white rounded-lg hover:bg-brand-green/90 transition shadow-sm">
-                          <Plus className="w-4 h-4" />Add
-                        </button>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-2xl">
+                        <div>
+                          <label className="block text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-1.5">Category Name</label>
+                          <input 
+                            type="text" 
+                            value={newCategoryName} 
+                            onChange={e => {
+                              const val = e.target.value;
+                              setNewCategoryName(val);
+                              const slug = val
+                                .trim()
+                                .toLowerCase()
+                                .replace(/[^a-z0-9\-_]/g, "_")
+                                .replace(/_+/g, "_");
+                              setNewCategoryId(slug);
+                            }}
+                            onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAddCategory())}
+                            className={inputCls} 
+                            placeholder="e.g. Data Interpretation" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-1.5">Category ID (For Backend)</label>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              value={newCategoryId} 
+                              onChange={e => setNewCategoryId(e.target.value.replace(/[^a-zA-Z0-9\-_]/g, ""))}
+                              onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAddCategory())}
+                              className={inputCls + " flex-1"} 
+                              placeholder="e.g. data_interpretation" 
+                            />
+                            <button 
+                              type="button" 
+                              onClick={handleAddCategory}
+                              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-brand-green text-white rounded-lg hover:bg-brand-green/90 transition shadow-sm active:scale-95 shrink-0"
+                            >
+                              <Plus className="w-4 h-4" />Add
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div>
                       <label className={labelCls}>Active Categories ({categoriesList.length})</label>
-                      <p className={descCls}>Click the × to remove a category from this module's configuration.</p>
                       {categoriesList.length === 0 ? (
                         <div className="mt-4 p-8 text-center bg-gray-50 dark:bg-white/[0.02] border border-dashed border-gray-200 dark:border-white/10 rounded-2xl text-black dark:text-white font-medium text-sm">No categories configured yet.</div>
                       ) : (
-                        <div className="flex flex-wrap gap-2.5 mt-4">
-                          {categoriesList.map(cat => (
-                            <span key={cat} className="inline-flex items-center gap-x-1.5 rounded-lg bg-white dark:bg-white/10 px-3.5 py-2 text-sm font-semibold text-black dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 transition-all hover:bg-gray-50 dark:hover:bg-white/20">
-                              {cat}
-                              <button type="button" onClick={() => { setCategoriesList(categoriesList.filter(c => c !== cat)); markDirty(); }}
-                                className="group relative -mr-1 h-4 w-4 rounded-sm hover:bg-slate-200 dark:hover:bg-white/20 cursor-pointer">
-                                <X className="h-3.5 w-3.5 stroke-black dark:stroke-white group-hover:stroke-red-500" />
-                              </button>
-                            </span>
-                          ))}
+                        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.01] shadow-sm max-w-2xl custom-scrollbar">
+                          <table className="min-w-[500px] w-full divide-y divide-slate-100 dark:divide-white/10">
+                            <thead className="bg-slate-50 dark:bg-white/5">
+                              <tr>
+                                <th scope="col" className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">Category Name</th>
+                                <th scope="col" className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">Category ID</th>
+                                <th scope="col" className="px-6 py-3 text-center text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white w-20">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05] bg-transparent">
+                              {categoriesList.map(cat => {
+                                const isEditing = cat.id === editingCategoryId;
+                                return (
+                                  <tr key={cat.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.01] transition-colors group">
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
+                                      {isEditing ? (
+                                        <input
+                                          type="text"
+                                          value={editingCategoryName}
+                                          onChange={e => setEditingCategoryName(e.target.value)}
+                                          onKeyDown={e => e.key === "Enter" && handleSaveEdit(cat.id)}
+                                          className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-semibold max-w-xs focus:ring-2 focus:ring-brand-green/50 focus:outline-none text-slate-900 dark:text-white transition-all shadow-inner"
+                                          placeholder="Category Name"
+                                        />
+                                      ) : (
+                                        cat.name
+                                      )}
+                                    </td>
+                                    <td className="px-6 py-3.5 whitespace-nowrap">
+                                      <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-xs font-mono font-bold text-slate-900 dark:text-white leading-normal border border-slate-200/50 dark:border-white/5 opacity-80">
+                                        {cat.id}
+                                      </span>
+                                    </td>
+                                    <td className="px-6 py-3.5 whitespace-nowrap text-center text-sm">
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        {isEditing ? (
+                                          <>
+                                            <button 
+                                              type="button" 
+                                              onClick={() => handleSaveEdit(cat.id)}
+                                              title="Save name"
+                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                                            >
+                                              <Check className="h-4 w-4 stroke-[2.5]" />
+                                            </button>
+                                            <button 
+                                              type="button" 
+                                              onClick={handleCancelEdit}
+                                              title="Cancel editing"
+                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-orange-500 dark:text-orange-400 hover:bg-orange-500/10 transition-colors cursor-pointer"
+                                            >
+                                              <X className="h-4 w-4 stroke-[2.5]" />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <button 
+                                              type="button" 
+                                              onClick={() => handleStartEdit(cat)}
+                                              title="Edit category name"
+                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-blue-500 dark:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                                            >
+                                              <Edit2 className="h-4 w-4" />
+                                            </button>
+                                            <button 
+                                              type="button" 
+                                              onClick={() => { 
+                                                if (window.confirm(`Are you sure you want to delete "${cat.name}"?`)) {
+                                                  setCategoriesList(categoriesList.filter(c => c.id !== cat.id)); 
+                                                  markDirty(); 
+                                                }
+                                              }}
+                                              title="Delete category"
+                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-red-500 dark:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       )}
                     </div>

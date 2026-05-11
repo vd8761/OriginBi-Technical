@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     X, Save, Loader2, Info, Plus, Shield, 
-    Settings, LayoutGrid, Award, SlidersHorizontal 
+    Settings, LayoutGrid, Award, SlidersHorizontal,
+    Trash2, Edit2, Check
 } from "lucide-react";
 import { ApiAssessment, updateAssessment } from "./api";
 
@@ -37,9 +38,17 @@ export default function AssessmentSettingsModal({
     const [trialAttemptsLimit, setTrialAttemptsLimit] = useState(5);
     const [mainAttemptsLimit, setMainAttemptsLimit] = useState(2);
 
+    interface Category {
+        id: string;
+        name: string;
+    }
+
     // Category states
-    const [categoriesList, setCategoriesList] = useState<string[]>([]);
-    const [newCategory, setNewCategory] = useState("");
+    const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+    const [newCategoryName, setNewCategoryName] = useState("");
+    const [newCategoryId, setNewCategoryId] = useState("");
+    const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+    const [editingCategoryName, setEditingCategoryName] = useState("");
 
     // Scoring states
     const [easyMarks, setEasyMarks] = useState(1);
@@ -65,18 +74,24 @@ export default function AssessmentSettingsModal({
         setMainAttemptsLimit(assessment.main_attempts_limit !== undefined && assessment.main_attempts_limit !== null ? Number(assessment.main_attempts_limit) : 2);
 
         // Categories helper
-        let cats: string[] = [];
+        let rawCats: any[] = [];
         if (assessment.categories) {
             if (Array.isArray(assessment.categories)) {
-                cats = assessment.categories;
+                rawCats = assessment.categories;
             } else if (typeof assessment.categories === "string") {
                 try {
-                    cats = JSON.parse(assessment.categories);
+                    rawCats = JSON.parse(assessment.categories);
                 } catch {
-                    cats = [];
+                    rawCats = [];
                 }
             }
         }
+        const cats: Category[] = rawCats.map((c: any) => {
+            if (typeof c === "string") {
+                return { id: c, name: c };
+            }
+            return { id: c.id || c.name || "", name: c.name || c.id || "" };
+        });
         setCategoriesList(cats);
 
         // Scoring matrices
@@ -108,19 +123,42 @@ export default function AssessmentSettingsModal({
 
     // Categories Tag Handlers
     const handleAddCategory = () => {
-        const trimmed = newCategory.trim();
-        if (!trimmed) return;
-        if (categoriesList.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
-            setError("Category already exists.");
+        const name = newCategoryName.trim();
+        const id = newCategoryId.trim() || name.toLowerCase().replace(/[^a-z0-9\-_]/g, "_").replace(/_+/g, "_");
+        if (!name || !id) return;
+        if (categoriesList.some(c => c.id.toLowerCase() === id.toLowerCase() || c.name.toLowerCase() === name.toLowerCase())) {
+            setError("Category with this ID or Name already exists.");
             return;
         }
-        setCategoriesList([...categoriesList, trimmed]);
-        setNewCategory("");
+        setCategoriesList([...categoriesList, { id, name }]);
+        setNewCategoryName("");
+        setNewCategoryId("");
         setError(null);
     };
 
-    const handleRemoveCategory = (catToRemove: string) => {
-        setCategoriesList(categoriesList.filter(c => c !== catToRemove));
+    const handleRemoveCategory = (catToRemove: Category) => {
+        if (window.confirm(`Are you sure you want to delete "${catToRemove.name}"?`)) {
+            setCategoriesList(categoriesList.filter(c => c.id !== catToRemove.id));
+        }
+    };
+
+    const handleStartEdit = (cat: Category) => {
+        setEditingCategoryId(cat.id);
+        setEditingCategoryName(cat.name);
+    };
+
+    const handleSaveEdit = (id: string) => {
+        const trimmed = editingCategoryName.trim();
+        if (!trimmed) return;
+        setCategoriesList(categoriesList.map(c => c.id === id ? { ...c, name: trimmed } : c));
+        setEditingCategoryId(null);
+        setEditingCategoryName("");
+        setError(null);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingCategoryId(null);
+        setEditingCategoryName("");
     };
 
     // Form Submission
@@ -470,57 +508,136 @@ export default function AssessmentSettingsModal({
                                 exit={{ opacity: 0, y: -10 }}
                                 className="space-y-5"
                             >
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase block">
-                                        Add Custom Category/Topic
-                                    </label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={newCategory}
-                                            onChange={(e) => setNewCategory(e.target.value)}
-                                            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddCategory())}
-                                            className="flex-1 bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
-                                            placeholder="Type a custom topic (e.g., Logical Fallacy)"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleAddCategory}
-                                            className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-semibold text-xs px-4 rounded-lg flex items-center gap-1.5 transition"
-                                        >
-                                            <Plus className="w-4 h-4 stroke-[3]" />
-                                            Add
-                                        </button>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-extrabold text-white tracking-wider uppercase block">
+                                                Category Name
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={newCategoryName}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setNewCategoryName(val);
+                                                    const slug = val
+                                                        .trim()
+                                                        .toLowerCase()
+                                                        .replace(/[^a-z0-9\-_]/g, "_")
+                                                        .replace(/_+/g, "_");
+                                                    setNewCategoryId(slug);
+                                                }}
+                                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddCategory())}
+                                                className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
+                                                placeholder="e.g. Data Interpretation"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-extrabold text-white tracking-wider uppercase block">
+                                                Category ID (for backend)
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newCategoryId}
+                                                    onChange={(e) => setNewCategoryId(e.target.value.replace(/[^a-zA-Z0-9\-_]/g, ""))}
+                                                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddCategory())}
+                                                    className="flex-1 bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
+                                                    placeholder="e.g. data_interpretation"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddCategory}
+                                                    className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-semibold text-xs px-4 rounded-lg flex items-center gap-1.5 transition whitespace-nowrap"
+                                                >
+                                                    <Plus className="w-4 h-4 stroke-[3]" />
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2.5">
-                                    <label className="text-xs font-semibold text-slate-400 tracking-wider uppercase block">
+                                    <label className="text-xs font-extrabold text-white tracking-wider uppercase block">
                                         Active Categories ({categoriesList.length})
                                     </label>
 
                                     {categoriesList.length === 0 ? (
-                                        <div className="p-8 text-center bg-slate-950/20 border border-dashed border-slate-800 rounded-xl text-slate-500 text-sm">
+                                        <div className="p-8 text-center bg-slate-950/20 border border-dashed border-slate-800 rounded-xl text-slate-200 text-sm">
                                             No categories set. Add categories above to populate selection editors.
                                         </div>
                                     ) : (
-                                        <div className="flex flex-wrap gap-2.5 p-4 bg-slate-950/40 border border-slate-800 rounded-xl max-h-80 overflow-y-auto">
-                                            {categoriesList.map((cat) => (
-                                                <motion.div
-                                                    layout
-                                                    key={cat}
-                                                    className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700 pl-3 pr-1.5 py-1 rounded-full flex items-center gap-2 text-xs text-slate-200 shadow-md group transition"
-                                                >
-                                                    <span className="font-medium">{cat}</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveCategory(cat)}
-                                                        className="p-1 rounded-full text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                                        <div className="border border-slate-800 bg-slate-950/20 rounded-xl overflow-hidden divide-y divide-slate-800/60 max-h-80 overflow-y-auto">
+                                            {categoriesList.map((cat) => {
+                                                const isEditing = cat.id === editingCategoryId;
+                                                return (
+                                                    <motion.div
+                                                        layout
+                                                        key={cat.id}
+                                                        className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-slate-800/20 transition-colors"
                                                     >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </motion.div>
-                                            ))}
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="text"
+                                                                value={editingCategoryName}
+                                                                onChange={(e) => setEditingCategoryName(e.target.value)}
+                                                                onKeyDown={(e) => e.key === "Enter" && handleSaveEdit(cat.id)}
+                                                                className="bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-1 px-2.5 text-sm text-white outline-none transition"
+                                                                placeholder="Category Name"
+                                                            />
+                                                        ) : (
+                                                            <span className="font-semibold text-sm text-white">{cat.name}</span>
+                                                        )}
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[11px] font-mono font-bold text-white bg-slate-800 px-2.5 py-0.5 border border-slate-700 rounded shadow-inner">
+                                                                {cat.id}
+                                                            </span>
+                                                            <div className="flex items-center gap-1">
+                                                                {isEditing ? (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleSaveEdit(cat.id)}
+                                                                            title="Save name"
+                                                                            className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition"
+                                                                        >
+                                                                            <Check className="w-4 h-4 stroke-[2.5]" />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={handleCancelEdit}
+                                                                            title="Cancel editing"
+                                                                            className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-500/10 transition"
+                                                                        >
+                                                                            <X className="w-4 h-4 stroke-[2.5]" />
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleStartEdit(cat)}
+                                                                            title="Edit category name"
+                                                                            className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition"
+                                                                        >
+                                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveCategory(cat)}
+                                                                            title="Delete category"
+                                                                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>

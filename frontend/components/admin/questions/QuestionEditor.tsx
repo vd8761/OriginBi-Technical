@@ -15,7 +15,7 @@ import CustomSelect from "@/components/ui/CustomSelect";
 interface QuestionEditorProps {
   question: AnyQuestion | null;
   assessmentType: AssessmentType;
-  categories?: string[];
+  categories?: { id: string; name: string }[];
   onSave: (q: AnyQuestion) => void;
   onCancel: () => void;
 }
@@ -70,8 +70,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   useEffect(() => {
     if (!question) {
       if (categories && categories.length > 0) {
-        if (assessmentType === "aptitude") setAptCategory(categories[0]);
-        else if (assessmentType === "mnc") setMncTopic(categories[0]);
+        if (assessmentType === "aptitude") setAptCategory(categories[0].id);
+        else if (assessmentType === "mnc") setMncTopic(categories[0].id);
       }
       return;
     }
@@ -291,7 +291,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                       onChange={setAptCategory}
                       options={
                         categories && categories.length > 0
-                          ? categories.map(c => ({ label: c, value: c }))
+                          ? categories.map(c => ({ label: c.name, value: c.id }))
                           : APTITUDE_CATEGORIES.map(c => ({ label: APTITUDE_CATEGORY_LABELS[c], value: c }))
                       }
                     />
@@ -305,7 +305,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                       onChange={setMncTopic}
                       options={
                         categories && categories.length > 0
-                          ? categories.map(t => ({ label: t, value: t }))
+                          ? categories.map(t => ({ label: t.name, value: t.id }))
                           : MNC_TOPICS.map(t => ({ label: t, value: t }))
                       }
                     />

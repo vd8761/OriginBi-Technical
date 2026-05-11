@@ -95,6 +95,25 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         (a) => a.module_type === dbModule || a.assessment_code === exam.id
       );
       if (dbExam) {
+        let tags = exam.tags;
+        if (dbExam.categories) {
+          let parsed: any[] = [];
+          if (Array.isArray(dbExam.categories)) {
+            parsed = dbExam.categories;
+          } else if (typeof dbExam.categories === "string") {
+            try {
+              parsed = JSON.parse(dbExam.categories);
+            } catch {
+              parsed = [];
+            }
+          }
+          if (parsed.length > 0) {
+            tags = parsed.map((c: any) => {
+              if (typeof c === "string") return c;
+              return c.name || c.id || "";
+            }).filter(Boolean);
+          }
+        }
         return {
           ...exam,
           title: dbExam.assessment_name || exam.title,
@@ -103,6 +122,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
+          tags: tags,
         };
       }
       return exam;
