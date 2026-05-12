@@ -52,10 +52,19 @@ The `.env.example` uses the compose-exposed Postgres port `55432` and `HTTP_ADDR
 | `DATABASE_URL` | required | Postgres DSN |
 | `HTTP_ADDR` | `:8080` in code, `:8088` in local `.env.example` | listen address |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `HEARTBEAT_GRACE_SECONDS` | `60` | heartbeat grace config for future gap detection |
+| `HEARTBEAT_GRACE_SECONDS` | `60` | heartbeat grace for connectivity gap records |
 | `RUN_MIGRATIONS` | `true` | auto-run embedded migrations on boot |
-| `ENSURE_PARTITIONS_ON_BOOT` | `true` | ensure current telemetry partitions on boot |
+| `ENSURE_PARTITIONS_ON_BOOT` | `true` | ensure current/upcoming telemetry partitions on boot |
 | `JUDGE0_URL` | `http://localhost:2358` | Judge0 base URL |
+| `JUDGE0_MAX_CONCURRENCY` | `12` | per-engine concurrent code-run cap |
+| `JUDGE0_HTTP_TIMEOUT_SECONDS` | `95` | Judge0 HTTP timeout |
+| `JUDGE0_MAX_IDLE_CONNS` | `100` | Judge0 HTTP client idle pool |
+| `JUDGE0_MAX_IDLE_CONNS_PER_HOST` | `32` | Judge0 per-host idle pool |
+| `DB_POOL_MAX_CONNS` | `20` | pgx pool max connections |
+| `DB_POOL_MIN_CONNS` | `2` | pgx pool min connections |
+| `DB_POOL_MAX_CONN_LIFETIME_SECONDS` | `1800` | pgx max connection lifetime |
+| `DB_POOL_MAX_CONN_IDLE_SECONDS` | `300` | pgx idle connection lifetime |
+| `DB_POOL_HEALTHCHECK_SECONDS` | `30` | pgx pool health-check cadence |
 | `BOOTSTRAP_ADMIN_TOKEN` | none | enables local admin bootstrap when set |
 | `ALLOWED_ORIGINS` | localhost origins | comma-separated browser origins allowed by CORS and unsafe-method origin checks |
 | `APP_ENV` | none | set to `production` to make cookies Secure by default |
@@ -91,7 +100,7 @@ All routes below require the HttpOnly `ob_session` cookie.
 | `GET` | `/v1/attempts/{attempt_id}/snapshot` | load frozen attempt snapshot |
 | `PUT` | `/v1/attempts/{attempt_id}/answers/{exam_question_id}` | autosave answer payload |
 | `POST` | `/v1/attempts/{attempt_id}/answers/{exam_question_id}/runs` | run code through Judge0 and persist results |
-| `POST` | `/v1/attempts/{attempt_id}/submit` | persist final answers and submit attempt |
+| `POST` | `/v1/attempts/{attempt_id}/submit` | persist final answers, auto-grade stored answers/runs, and finalize attempt |
 | `POST` | `/v1/attempts/{attempt_id}/heartbeat` | server-authoritative timer heartbeat |
 | `POST` | `/v1/attempts/{attempt_id}/events` | telemetry event ingest |
 | `GET` | `/v1/admin/plugins` | list plugin platform state |
@@ -160,6 +169,7 @@ Content-Type: application/json
 ```
 
 Autosave upserts `attempt_question_state` and `answers.payload`.
+Each save also writes an `answer_saved` event into partitioned telemetry in the same transaction.
 
 ## Code Run Contract
 
@@ -180,6 +190,7 @@ Content-Type: application/json
 ```
 
 The engine persists answer payload, code submission files, code run rows, Judge0 outputs, and testcase results before returning feedback to the frontend.
+Code-run start/finish/failure events are written to partitioned telemetry. Per-engine code execution is protected by `JUDGE0_MAX_CONCURRENCY` so load-balanced replicas fail fast instead of exhausting Judge0 or the Go process.
 
 ## Migrations
 
@@ -196,12 +207,12 @@ Embedded migrations live in `internal/migrate/sql`.
 | `007_billing.sql` | pricing and purchases |
 | `008_seed_plugins.sql` | system organization and initial plugin catalog |
 | `009_identity_coding_runtime.sql` | users, registrations, sessions, coding prices, assignment refs, seeded Coding Assessment |
+| `010_runtime_traceability_and_load_indexes.sql` | active-attempt uniqueness and runtime/load indexes |
 
 ## Current Limits
 
 - Real payment provider/webhook integration is not implemented.
 - Organization/admin authoring workflows are not implemented.
-- Frontend heartbeat and telemetry event wiring are not implemented yet.
-- Coding scoring, manual review, LLM evaluation, and result publication are not implemented yet.
+- Manual review, LLM evaluation, and result publication are not implemented yet.
 - The coding UI still uses frontend static question data for rich display, while the backend snapshot supplies authoritative ids, ordering, timing, and saved payloads.
 - Browser end-to-end verification requires the engine to be running on `localhost:8088` and Judge0 on `localhost:2358`.

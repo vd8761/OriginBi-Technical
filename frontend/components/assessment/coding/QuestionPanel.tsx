@@ -167,15 +167,16 @@ interface MCQProps {
     selected: number | undefined;
     onSelect: (idx: number) => void;
     revealed: boolean;
-    correct: number;
+    correct?: number;
 }
 
 const MCQOptions: React.FC<MCQProps> = ({ options, selected, onSelect, revealed, correct }) => (
     <div className="mt-5 flex flex-col gap-2.5">
         {options.map((opt, i) => {
             const isSelected = selected === i;
-            const isCorrect = revealed && i === correct;
-            const isWrong = revealed && isSelected && i !== correct;
+            const canReveal = revealed && correct !== undefined;
+            const isCorrect = canReveal && i === correct;
+            const isWrong = canReveal && isSelected && i !== correct;
             let borderColor = isSelected ? "#1ED36A" : "var(--c-border)";
             let bgColor = isSelected ? "rgba(30,211,106,0.1)" : "var(--c-surface-raised)";
             if (isCorrect) {
@@ -302,7 +303,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({ question, mcqAnswer, onMc
 
             {question.media && <VideoPlaceholder caption={question.media.caption} />}
 
-            {question.type === "mcq" && question.options && question.correct !== undefined && (
+            {question.type === "mcq" && question.options && (
                 <>
                     <MCQOptions
                         options={question.options}
@@ -311,7 +312,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({ question, mcqAnswer, onMc
                         revealed={revealMcq}
                         correct={question.correct}
                     />
-                    {mcqAnswer !== undefined && !revealMcq && (
+                    {question.correct !== undefined && mcqAnswer !== undefined && !revealMcq && (
                         <button
                             type="button"
                             onClick={() => setRevealMcq(true)}

@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/originbi/exam-engine/internal/auth"
 	"github.com/originbi/exam-engine/internal/config"
 	"github.com/originbi/exam-engine/internal/db"
 	"github.com/originbi/exam-engine/internal/migrate"
@@ -63,7 +64,13 @@ func run() error {
 		go partitionMaintainer(rootCtx, pool, logger)
 	}
 
-	srv := server.New(pool, logger)
+	verifier, err := auth.NewCognitoVerifier(rootCtx, cfg.CognitoRegion, cfg.CognitoUserPoolID, cfg.CognitoClientID)
+	if err != nil {
+		return err
+	}
+	logger.Info("cognito verifier initialized", "user_pool_id", cfg.CognitoUserPoolID)
+
+	srv := server.New(pool, logger, verifier, cfg.DefaultOrgID)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPAddr,

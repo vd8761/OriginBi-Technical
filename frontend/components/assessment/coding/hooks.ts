@@ -72,13 +72,20 @@ export function useTimer(initial: number, options: { persist?: boolean } = {}) {
 }
 
 const TAB_SWITCH_KEY = "ob_tab_switches";
+const TAB_SWITCH_GRACE_KEY = "ob_tab_switch_grace_start";
 
 export interface TabSwitchEvent {
     at: number;
     duration: number;
 }
 
-export function useTabSwitchMonitor(active: boolean) {
+/**
+ * Monitors tab/visibility changes once the candidate has had `graceMs`
+ * to settle in. The grace deadline is persisted to localStorage so a
+ * page reload can't reset the timer — once consumed, it's consumed for
+ * the rest of the attempt.
+ */
+export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
     const [count, setCount] = useState(0);
     const [events, setEvents] = useState<TabSwitchEvent[]>([]);
     const [hidden, setHidden] = useState(false);
@@ -109,7 +116,26 @@ export function useTabSwitchMonitor(active: boolean) {
     useEffect(() => {
         if (!active) return;
 
+        // One-time grace period. Persisted so a reload doesn't reset it —
+        // we set the start timestamp on first activation and never bump it.
+        let graceStart: number;
+        try {
+            const raw = window.localStorage.getItem(TAB_SWITCH_GRACE_KEY);
+            const parsed = raw ? parseInt(raw, 10) : NaN;
+            if (Number.isFinite(parsed)) {
+                graceStart = parsed;
+            } else {
+                graceStart = Date.now();
+                window.localStorage.setItem(TAB_SWITCH_GRACE_KEY, String(graceStart));
+            }
+        } catch {
+            graceStart = Date.now();
+        }
+        const graceUntil = graceStart + graceMs;
+        const inGrace = () => Date.now() < graceUntil;
+
         const recordSwitch = (reason: string) => {
+            if (inGrace()) return; // ignored — settling-in window
             const at = Date.now();
             hiddenAt.current = at;
             setHidden(true);
@@ -157,13 +183,14 @@ export function useTabSwitchMonitor(active: boolean) {
             window.removeEventListener("blur", onBlur);
             window.removeEventListener("focus", onFocus);
         };
-    }, [active]);
+    }, [active, graceMs]);
 
     const clear = useCallback(() => {
         setCount(0);
         setEvents([]);
         try {
             window.localStorage.removeItem(TAB_SWITCH_KEY);
+            window.localStorage.removeItem(TAB_SWITCH_GRACE_KEY);
         } catch {
             // ignore
         }

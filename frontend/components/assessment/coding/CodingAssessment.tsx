@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import QuestionPanel from "./QuestionPanel";
 import CodeEditor, { LANG_META, readPrefs, writePrefs } from "./CodeEditor";
 import SubmitModal, { type QStatus } from "./SubmitModal";
+import SubmittingModal, { type SubmitPhase } from "./SubmittingModal";
 import CompletionScreen from "./CompletionScreen";
 import DevControls from "./DevControls";
 import GuidelinesModal from "./GuidelinesModal";
@@ -25,21 +26,100 @@ import {
 import {
     runAttemptCode,
     saveAttemptAnswer,
+    sendAttemptEvents,
+    sendAttemptHeartbeat,
     submitAttempt,
     type AnswerPayload,
+    type AttemptEventInput,
     type AttemptSnapshot,
     type CodeRunRequest,
     type CodeRunResponse,
+    type SnapshotQuestion,
 } from "@/lib/api";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 
 const STATUS_KEY = "ob_statuses";
 const CURRENT_Q_KEY = "ob_current_q";
+const PENDING_SUBMIT_KEY = "ob_pending_submission";
+const MAX_SUBMIT_ATTEMPTS = 8;
+const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
+type AssessmentMode = "trial" | "main";
+type LegacyAssessmentConfig = {
+    module_type?: string;
+    assessment_code?: string;
+    trial_attempts_limit?: number | string | null;
+    main_attempts_limit?: number | string | null;
+};
 
 interface CodingAssessmentProps {
     lang: string;
     snapshot?: AttemptSnapshot | null;
+    mode?: AssessmentMode;
 }
+
+type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
+    responseType?: string;
+    type?: string;
+    difficulty?: string;
+    title?: string;
+    section?: string;
+    prompt?: string;
+    options?: Array<string | { label?: string; text?: string; value?: string }>;
+    testCases?: { input?: string; stdin?: string; expected?: string }[];
+};
+
+const difficultyLabel = (value: unknown): Question["difficulty"] => {
+    const normalized = String(value ?? "").toLowerCase();
+    if (normalized === "easy") return "Easy";
+    if (normalized === "hard") return "Hard";
+    return "Medium";
+};
+
+const mapSnapshotQuestion = (question: SnapshotQuestion): Question => {
+    const body = (question.body && typeof question.body === "object"
+        ? question.body
+        : {}) as SnapshotBody;
+    const rawType = String(body.type ?? "").toLowerCase();
+    const responseType = String(body.responseType ?? "").toLowerCase();
+    const hasImage = !!body.image;
+    const hasMedia = !!body.media;
+    const type: Question["type"] =
+        responseType === "mcq" || rawType === "mcq"
+            ? "mcq"
+            : hasImage
+                ? "image"
+                : hasMedia || rawType === "media"
+                    ? "media"
+                    : "code-pretext";
+    const options = Array.isArray(body.options)
+        ? body.options.map((option) =>
+            typeof option === "string" ? option : option.label ?? option.text ?? option.value ?? "",
+        ).filter(Boolean)
+        : undefined;
+
+    return {
+        id: question.ordinal,
+        type,
+        difficulty: difficultyLabel(body.difficulty),
+        marks: question.score,
+        section: body.section ?? "Coding",
+        title: body.title ?? `Question ${question.ordinal}`,
+        prompt: body.prompt ?? "",
+        pretext: body.pretext,
+        image: body.image,
+        media: body.media,
+        options,
+        starterCode: body.starterCode,
+        starterFiles: body.starterFiles,
+        entryFile: body.entryFile,
+        testCases: body.testCases?.map((tc) => ({
+            input: tc.input ?? tc.stdin ?? "",
+            stdin: tc.stdin,
+            expected: tc.expected ?? "",
+        })),
+        limits: body.limits,
+    };
+};
 
 const formatTime = (secs: number) => {
     const safe = Math.max(0, secs);
@@ -486,9 +566,15 @@ const ProctorToast: React.FC<ProctorToastProps> = ({ visible, title, desc }) => 
     </div>
 );
 
-const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) => {
+const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mode = "main" }) => {
     const router = useRouter();
     const languageLabel = LANG_META[lang]?.label ?? lang;
+    const questions = useMemo(
+        () => snapshot?.questions?.length
+            ? snapshot.questions.map(mapSnapshotQuestion)
+            : QUESTIONS,
+        [snapshot],
+    );
     const backendAttemptId = snapshot?.attempt.id;
     const examQuestionByLocalId = useMemo(() => {
         const map: Record<number, string> = {};
@@ -505,6 +591,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
     const [showSubmit, setShowSubmit] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState("");
+    const [submitPhase, setSubmitPhase] = useState<SubmitPhase | null>(null);
+    const [submitAttemptNo, setSubmitAttemptNo] = useState(1);
+    const [submitNextRetryIn, setSubmitNextRetryIn] = useState(0);
+    // Mutable refs so async submit loop sees latest state without re-binding.
+    const submitTriggerRef = useRef<(() => void) | null>(null);
     const [saved, setSaved] = useState(true);
     const [splitPct, setSplitPct] = useState(42);
     const [fontSize, setFontSize] = useState(14);
@@ -514,12 +605,17 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
 
     useEffect(() => {
         const fetchEngineStats = async () => {
+            if (!LEGACY_TECH_API_URL) {
+                setAttemptsCount(1);
+                setAttemptsLimit(null);
+                return;
+            }
             try {
-                const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
-                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/attempts-stats`),
+                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`)
                 ]);
+                if (!statsRes.ok || !assessmentsRes.ok) return;
                 const statsJson = await statsRes.json();
                 if (statsJson?.data) {
                     const cnt = statsJson.data['coding']?.[mode] ?? 0;
@@ -527,16 +623,17 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 }
                 const assessmentsJson = await assessmentsRes.json();
                 if (assessmentsJson?.data) {
-                    const found = assessmentsJson.data.find(
-                        (a: any) => a.module_type === 'coding' || a.assessment_code === 'coding'
+                    const configs = assessmentsJson.data as LegacyAssessmentConfig[];
+                    const found = configs.find(
+                        (a) => a.module_type === 'coding' || a.assessment_code === 'coding'
                     );
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
                     }
                 }
-            } catch (err) {
-                console.error("Failed to load engine attempts stats:", err);
+            } catch {
+                // The Nest assessment admin API is optional for this coding runtime.
             }
         };
         fetchEngineStats();
@@ -589,6 +686,49 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
     });
     const lastReportedSwitch = useRef(0);
     const toastHideTimer = useRef<number | null>(null);
+    const eventQueueRef = useRef<AttemptEventInput[]>([]);
+
+    const flushTraceEvents = useCallback(
+        async (keepalive = false) => {
+            if (!backendAttemptId || eventQueueRef.current.length === 0) return;
+            const batch = eventQueueRef.current.splice(0, 200);
+            try {
+                await sendAttemptEvents(backendAttemptId, batch, { keepalive });
+            } catch {
+                eventQueueRef.current = [...batch, ...eventQueueRef.current].slice(0, 200);
+            }
+        },
+        [backendAttemptId],
+    );
+
+    const traceEvent = useCallback(
+        (
+            kind: string,
+            severity = 0,
+            payload: Record<string, unknown> = {},
+            localQuestionId?: number,
+        ) => {
+            if (!backendAttemptId) return;
+            const event: AttemptEventInput = {
+                occurred_at: new Date().toISOString(),
+                kind,
+                severity,
+                payload: {
+                    currentQuestion: currentQ + 1,
+                    ...payload,
+                },
+            };
+            if (localQuestionId != null) {
+                const examQuestionId = examQuestionByLocalId[localQuestionId];
+                if (examQuestionId) event.exam_question_id = examQuestionId;
+            }
+            eventQueueRef.current.push(event);
+            if (eventQueueRef.current.length >= 25) {
+                void flushTraceEvents();
+            }
+        },
+        [backendAttemptId, currentQ, examQuestionByLocalId, flushTraceEvents],
+    );
 
     const showViolationToast = useCallback((title: string, desc: string) => {
         setLastViolation({ title, desc });
@@ -605,8 +745,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         (type: ProctoringCounter, message: { title: string; desc: string }) => {
             setCounters((prev) => ({ ...prev, [type]: prev[type] + 1 }));
             showViolationToast(message.title, message.desc);
+            traceEvent(`proctor.${type}`, 2, {
+                title: message.title,
+                description: message.desc,
+            });
         },
-        [showViolationToast],
+        [showViolationToast, traceEvent],
     );
 
     useProctoring({
@@ -614,6 +758,27 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         settings: proctoring.settings,
         onViolation: handleProctorViolation,
     });
+
+    useEffect(() => {
+        if (!backendAttemptId) return;
+        const id = window.setInterval(() => {
+            void flushTraceEvents();
+        }, 5000);
+        return () => window.clearInterval(id);
+    }, [backendAttemptId, flushTraceEvents]);
+
+    useEffect(() => {
+        if (!backendAttemptId) return;
+        const flushOnExit = () => {
+            void flushTraceEvents(true);
+        };
+        window.addEventListener("pagehide", flushOnExit);
+        document.addEventListener("visibilitychange", flushOnExit);
+        return () => {
+            window.removeEventListener("pagehide", flushOnExit);
+            document.removeEventListener("visibilitychange", flushOnExit);
+        };
+    }, [backendAttemptId, flushTraceEvents]);
 
     // Load persisted state on mount (client only — avoid hydration mismatch)
     useEffect(() => {
@@ -715,6 +880,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         if (tabMonitor.count > lastReportedSwitch.current) {
             const newSwitches = tabMonitor.count - lastReportedSwitch.current;
             lastReportedSwitch.current = tabMonitor.count;
+            traceEvent("proctor.tab_switch", 2, {
+                newSwitches,
+                totalSwitches: tabMonitor.count,
+                hidden: tabMonitor.hidden,
+            });
             if (proctoring.settings.tabSwitchToast) {
                 // eslint-disable-next-line react-hooks/set-state-in-effect
                 showViolationToast(
@@ -724,7 +894,13 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             }
             void newSwitches;
         }
-    }, [tabMonitor.count, proctoring.settings.tabSwitchToast, showViolationToast]);
+    }, [
+        proctoring.settings.tabSwitchToast,
+        showViolationToast,
+        tabMonitor.count,
+        tabMonitor.hidden,
+        traceEvent,
+    ]);
 
     const triggerSave = useCallback(() => {
         setSaved(false);
@@ -755,10 +931,17 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         document.addEventListener("mouseup", onUp);
     }, []);
 
-    const q = QUESTIONS[currentQ];
+    const q = questions[currentQ];
     const qStatus: QStatus = statuses[q?.id] ?? "unattempted";
     const isSolved = qStatus === "solved";
     const isFlagged = qStatus === "flagged";
+
+    useEffect(() => {
+        if (questions.length > 0 && currentQ >= questions.length) {
+            const id = window.setTimeout(() => setCurrentQ(questions.length - 1), 0);
+            return () => window.clearTimeout(id);
+        }
+    }, [currentQ, questions.length]);
 
     const buildPayloadForQuestion = useCallback(
         (qId: number): AnswerPayload => ({
@@ -781,6 +964,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             const state = stateOverride ?? statuses[qId] ?? "unattempted";
             const payload = payloadOverride ?? buildPayloadForQuestion(qId);
             await saveAttemptAnswer(backendAttemptId, examQuestionId, { state, payload });
+            traceEvent("answer.autosaved", 0, {
+                state,
+                hasFiles: Array.isArray(payload.files),
+                fileCount: payload.files?.length ?? 0,
+                payloadBytes: JSON.stringify(payload).length,
+            }, qId);
             setSaved(true);
         },
         [
@@ -788,6 +977,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             buildPayloadForQuestion,
             examQuestionByLocalId,
             statuses,
+            traceEvent,
             triggerSave,
         ],
     );
@@ -815,12 +1005,14 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
     const handleMarkSolved = () => {
         const next: QStatus = qStatus === "solved" ? "unattempted" : "solved";
         setQuestionStatus(q.id, next);
+        traceEvent("question.status_changed", 0, { state: next, action: "mark_solved" }, q.id);
         void persistQuestion(q.id, next).catch(() => setSaved(false));
     };
 
     const handleFlag = () => {
         const next: QStatus = qStatus === "flagged" ? "unattempted" : "flagged";
         setQuestionStatus(q.id, next);
+        traceEvent("question.status_changed", 0, { state: next, action: "flag" }, q.id);
         void persistQuestion(q.id, next).catch(() => setSaved(false));
     };
 
@@ -836,6 +1028,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             ...s,
             [qId]: nextState,
         }));
+        traceEvent("question.mcq_selected", 0, { selected: idx, state: nextState }, qId);
         void persistQuestion(qId, nextState, nextPayload).catch(() => setSaved(false));
     };
 
@@ -851,9 +1044,13 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 ...s,
                 [qId]: s[qId] === "solved" || s[qId] === "flagged" ? s[qId] : "attempted",
             }));
+            traceEvent("workspace.changed", 0, {
+                fileCount: payload.files?.length ?? 0,
+                entryFile: payload.entryFile,
+            }, qId);
             triggerSave();
         },
-        [lang, mcqAnswers, triggerSave],
+        [lang, mcqAnswers, traceEvent, triggerSave],
     );
 
     const runCodeOnServer = useCallback(
@@ -866,6 +1063,14 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 examQuestionId,
                 input,
             );
+            traceEvent("code.run_completed", response.type === "success" ? 0 : 1, {
+                mode: input.mode,
+                language: input.language,
+                runId: response.runId,
+                type: response.type,
+                summary: response.summary,
+                testResults: response.testResults?.length ?? 0,
+            }, qId);
             const payload: AnswerPayload = {
                 language: input.language,
                 files: input.files,
@@ -885,7 +1090,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 summary: response.summary,
             };
         },
-        [backendAttemptId, examQuestionByLocalId, mcqAnswers],
+        [backendAttemptId, examQuestionByLocalId, mcqAnswers, traceEvent],
     );
 
     const clearStorage = useCallback(() => {
@@ -894,40 +1099,184 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             window.localStorage.removeItem(CURRENT_Q_KEY);
             window.localStorage.removeItem(STATUS_KEY);
             window.localStorage.removeItem("ob_tab_switches");
+            window.localStorage.removeItem("ob_tab_switch_grace_start");
+            window.localStorage.removeItem(PENDING_SUBMIT_KEY);
         } catch {
             /* ignore */
         }
     }, []);
 
+    // Submit is intentionally a resilient, non-cancellable flow:
+    //   1. Snapshot the answer set + attempt id and stash it in localStorage
+    //      so a page reload / browser crash can resume.
+    //   2. Show a non-closable "Submitting…" modal.
+    //   3. Try up to MAX_ATTEMPTS with exponential backoff between failures.
+    //   4. On terminal failure, surface a manual Retry button; the timer
+    //      stays paused and answers stay buffered until the user retries.
+    //   5. Only on a 200 do we mark `submitted` and clear storage.
+
+    const performSubmitWithRetry = useCallback(
+        async (
+            attemptId: string,
+            answers: Array<{
+                examQuestionId: string;
+                state: string;
+                payload: ReturnType<typeof buildPayloadForQuestion>;
+            }>,
+        ) => {
+            setSubmitPhase("submitting");
+            setSubmitAttemptNo(1);
+
+            for (let i = 1; i <= MAX_SUBMIT_ATTEMPTS; i++) {
+                setSubmitAttemptNo(i);
+                setSubmitPhase("submitting");
+                try {
+                    await submitAttempt(attemptId, answers);
+                    setSubmitPhase("succeeded");
+                    traceEvent("attempt.submit_succeeded", 0, {
+                        answerCount: answers.length,
+                        attemptNumber: i,
+                    });
+                    void flushTraceEvents();
+                    try {
+                        window.localStorage.removeItem(PENDING_SUBMIT_KEY);
+                    } catch { /* ignore */ }
+                    // Brief delay so the user sees the success state.
+                    await new Promise((r) => setTimeout(r, 700));
+                    return true;
+                } catch (err) {
+                    const message =
+                        err instanceof Error ? err.message : "Submit failed.";
+                    traceEvent("attempt.submit_attempt_failed", 2, {
+                        error: message,
+                        attemptNumber: i,
+                    });
+                    void flushTraceEvents();
+
+                    // If the server explicitly returned 4xx (other than 401 which
+                    // the api layer auto-refreshes), it won't get better — bail.
+                    const status = (err as any)?.status as number | undefined;
+                    const isRetriable =
+                        status === undefined || status >= 500 || status === 401 || status === 408;
+
+                    if (!isRetriable || i === MAX_SUBMIT_ATTEMPTS) {
+                        setSubmitError(message);
+                        setSubmitPhase("failed_offline");
+                        return false;
+                    }
+                    // Exponential backoff with cap.
+                    const delaySeconds = Math.min(30, 2 ** i);
+                    setSubmitPhase("retrying");
+                    for (let s = delaySeconds; s > 0; s--) {
+                        setSubmitNextRetryIn(s);
+                        await new Promise((r) => setTimeout(r, 1000));
+                    }
+                }
+            }
+            return false;
+        },
+        [flushTraceEvents, traceEvent],
+    );
+
     const handleConfirmSubmit = useCallback(async () => {
         setShowSubmit(false);
         setSubmitError("");
-        try {
-            if (backendAttemptId) {
-                const answers = QUESTIONS.map((question) => ({
-                    examQuestionId: examQuestionByLocalId[question.id],
-                    state: statuses[question.id] ?? "unattempted",
-                    payload: buildPayloadForQuestion(question.id),
-                })).filter((answer) => !!answer.examQuestionId);
-                await submitAttempt(backendAttemptId, answers);
-            }
+
+        // Pause the timer immediately so it doesn't keep ticking while we submit.
+        timer.setRunning(false);
+
+        if (!backendAttemptId) {
+            // No backend — local-only path (offline demo). Just mark done.
             setSubmitted(true);
-            timer.setRunning(false);
             timer.clear();
             clearStorage();
-        } catch (err) {
-            setSubmitError(err instanceof Error ? err.message : "Submit failed.");
-            setSubmitted(false);
-            timer.setRunning(true);
+            return;
         }
+
+        traceEvent("attempt.submit_clicked", 0, {
+            answeredQuestions: Object.keys(answerPayloads).length,
+            statuses,
+            timeRemaining: timer.time,
+        });
+        await flushTraceEvents();
+
+        const answers = questions
+            .map((question) => ({
+                examQuestionId: examQuestionByLocalId[question.id],
+                state: statuses[question.id] ?? "unattempted",
+                payload: buildPayloadForQuestion(question.id),
+            }))
+            .filter((answer) => !!answer.examQuestionId);
+
+        // Persist the pending submission so a reload / crash can resume.
+        try {
+            window.localStorage.setItem(
+                PENDING_SUBMIT_KEY,
+                JSON.stringify({
+                    attemptId: backendAttemptId,
+                    answers,
+                    createdAt: Date.now(),
+                }),
+            );
+        } catch { /* ignore quota */ }
+
+        // Bind a manual-retry callback so the modal's button can re-enter the loop.
+        const runOnce = async () => {
+            const ok = await performSubmitWithRetry(backendAttemptId, answers);
+            if (ok) {
+                setSubmitted(true);
+                setSubmitPhase(null);
+                timer.clear();
+                clearStorage();
+            }
+        };
+        submitTriggerRef.current = runOnce;
+        await runOnce();
     }, [
+        answerPayloads,
         backendAttemptId,
         buildPayloadForQuestion,
         clearStorage,
         examQuestionByLocalId,
+        flushTraceEvents,
+        performSubmitWithRetry,
+        questions,
         statuses,
         timer,
+        traceEvent,
     ]);
+
+    // Auto-resume an interrupted submission on mount (e.g. user reloaded
+    // while the modal was up). Picks up the same buffer that was persisted.
+    useEffect(() => {
+        if (!backendAttemptId || submitted || submitPhase) return;
+        let raw: string | null = null;
+        try {
+            raw = window.localStorage.getItem(PENDING_SUBMIT_KEY);
+        } catch { /* ignore */ }
+        if (!raw) return;
+        try {
+            const pending = JSON.parse(raw) as {
+                attemptId: string;
+                answers: Array<{ examQuestionId: string; state: string; payload: any }>;
+            };
+            if (pending.attemptId !== backendAttemptId) return;
+            timer.setRunning(false);
+            const resume = async () => {
+                const ok = await performSubmitWithRetry(pending.attemptId, pending.answers);
+                if (ok) {
+                    setSubmitted(true);
+                    setSubmitPhase(null);
+                    timer.clear();
+                    clearStorage();
+                }
+            };
+            submitTriggerRef.current = resume;
+            void resume();
+        } catch { /* ignore */ }
+        // We intentionally only run this once when backendAttemptId resolves.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [backendAttemptId]);
 
     useEffect(() => {
         if (timer.time <= 0 && !submitted) {
@@ -938,6 +1287,62 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             return () => window.clearTimeout(id);
         }
     }, [handleConfirmSubmit, submitted, timer]);
+
+    const heartbeatStateRef = useRef<Record<string, unknown>>({});
+
+    useEffect(() => {
+        heartbeatStateRef.current = {
+            currentQuestion: currentQ + 1,
+            statuses,
+            counters,
+            tabSwitches: tabMonitor.count,
+            tabHidden: tabMonitor.hidden,
+            timeRemaining: timer.time,
+            saved,
+            language: lang,
+        };
+    }, [
+        counters,
+        currentQ,
+        lang,
+        saved,
+        statuses,
+        tabMonitor.count,
+        tabMonitor.hidden,
+        timer.time,
+    ]);
+
+    const resetTimer = timer.reset;
+
+    useEffect(() => {
+        if (!backendAttemptId || !hydrated || submitted) return;
+        const sendHeartbeat = async () => {
+            try {
+                const response = await sendAttemptHeartbeat(
+                    backendAttemptId,
+                    heartbeatStateRef.current,
+                );
+                const serverSeconds = Math.max(
+                    0,
+                    Math.floor(response.server_time_remaining_ms / 1000),
+                );
+                const currentTime = Number(heartbeatStateRef.current.timeRemaining ?? serverSeconds);
+                if (Math.abs(serverSeconds - currentTime) > 3) {
+                    resetTimer(serverSeconds);
+                }
+                if (response.status === "timed_out") {
+                    resetTimer(0);
+                }
+            } catch {
+                traceEvent("heartbeat.failed", 1, {
+                    timeRemaining: heartbeatStateRef.current.timeRemaining,
+                });
+            }
+        };
+        void sendHeartbeat();
+        const id = window.setInterval(sendHeartbeat, 15000);
+        return () => window.clearInterval(id);
+    }, [backendAttemptId, hydrated, resetTimer, submitted, traceEvent]);
 
     const handleBackToExplore = () => {
         router.push("/explore/coding");
@@ -951,7 +1356,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
 
     const devProps = useMemo(
         () => ({
-            questions: QUESTIONS,
+            questions,
             currentQ,
             statuses,
             timeRemaining: timer.time,
@@ -966,7 +1371,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             onSetStatus: setQuestionStatus,
             onMarkAllSolved: () => {
                 const next: Record<number, QStatus> = {};
-                QUESTIONS.forEach((qq) => {
+                questions.forEach((qq) => {
                     next[qq.id] = "solved";
                 });
                 setStatuses(next);
@@ -1012,6 +1417,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         }),
         [
             currentQ,
+            questions,
             statuses,
             timer,
             tabSwitchCount,
@@ -1055,7 +1461,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         return (
             <CompletionScreen
                 statuses={statuses}
-                total={QUESTIONS.length}
+                total={questions.length}
                 tabSwitches={tabSwitchCount}
                 languageLabel={languageLabel}
                 onBackToExplore={handleBackToExplore}
@@ -1075,17 +1481,27 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             <Header
                 question={q}
                 currentQ={currentQ}
-                totalQ={QUESTIONS.length}
+                totalQ={questions.length}
                 timer={timer}
                 saved={saved}
                 onSubmit={() => setShowSubmit(true)}
                 onPrev={() => {
                     void persistQuestion(q.id).catch(() => setSaved(false));
+                    traceEvent("question.navigate", 0, {
+                        from: q.id,
+                        to: Math.max(1, q.id - 1),
+                        direction: "previous",
+                    }, q.id);
                     setCurrentQ((i) => Math.max(0, i - 1));
                 }}
                 onNext={() => {
                     void persistQuestion(q.id).catch(() => setSaved(false));
-                    setCurrentQ((i) => Math.min(QUESTIONS.length - 1, i + 1));
+                    traceEvent("question.navigate", 0, {
+                        from: q.id,
+                        to: Math.min(questions.length, q.id + 1),
+                        direction: "next",
+                    }, q.id);
+                    setCurrentQ((i) => Math.min(questions.length - 1, i + 1));
                 }}
                 onMarkSolved={handleMarkSolved}
                 onFlag={handleFlag}
@@ -1105,11 +1521,16 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 className="flex flex-1 min-h-0 overflow-hidden"
             >
                 <QuestionSidebar
-                    questions={QUESTIONS}
+                    questions={questions}
                     current={currentQ}
                     statuses={statuses}
                     onSelect={(index) => {
                         void persistQuestion(q.id).catch(() => setSaved(false));
+                        traceEvent("question.navigate", 0, {
+                            from: q.id,
+                            to: questions[index]?.id,
+                            direction: "sidebar",
+                        }, q.id);
                         setCurrentQ(index);
                     }}
                     theme={theme}
@@ -1161,13 +1582,29 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 </div>
             )}
 
-            {showSubmit && (
+            {showSubmit && submitPhase === null && (
                 <SubmitModal
                     statuses={statuses}
-                    total={QUESTIONS.length}
+                    total={questions.length}
                     tabSwitches={tabSwitchCount}
                     onConfirm={handleConfirmSubmit}
                     onCancel={() => setShowSubmit(false)}
+                />
+            )}
+
+            {submitPhase !== null && (
+                <SubmittingModal
+                    phase={submitPhase}
+                    attempt={submitAttemptNo}
+                    maxAttempts={MAX_SUBMIT_ATTEMPTS}
+                    nextRetryInSeconds={submitNextRetryIn}
+                    errorMessage={submitError}
+                    onManualRetry={() => {
+                        if (submitTriggerRef.current) {
+                            setSubmitError("");
+                            void submitTriggerRef.current();
+                        }
+                    }}
                 />
             )}
 

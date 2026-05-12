@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# …but always commit the *example* templates so other devs know which keys
+# to set.
+!.env.example
+!.env.*.example
+!.env.local.example
 
 # vercel
 .vercel
@@ -44,7 +49,10 @@ next-env.d.ts
 .gocache/
 backend/exam-engine/.gocache/
 
-.claude/
 # build output
 dist/
 **/dist/
+
+.logs/
+.claude/
+.vscode/

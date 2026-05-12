@@ -3,10 +3,13 @@
 -- 009 - Identity, sessions, coding assignment refs, pricing, and seed exam.
 -- =====================================================================
 
-CREATE TABLE users (
+-- `users` is owned by the parent application (shared login via Cognito).
+-- The engine only needs to FK against users(id), so we create it lazily and
+-- never drop it. If the parent app's schema already exists, this is a no-op.
+CREATE TABLE IF NOT EXISTS users (
     id              BIGSERIAL PRIMARY KEY,
     email           TEXT NOT NULL UNIQUE,
-    password        TEXT NOT NULL,
+    password        TEXT NOT NULL DEFAULT '',
     status          TEXT NOT NULL DEFAULT 'active',
     is_admin        BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at   TIMESTAMPTZ,
@@ -15,7 +18,9 @@ CREATE TABLE users (
     deleted_at      TIMESTAMPTZ
 );
 
-CREATE TABLE registrations (
+-- `registrations` and `user_sessions` may also be owned by the parent app
+-- (shared login). Create lazily so we don't collide with its schema.
+CREATE TABLE IF NOT EXISTS registrations (
     user_id             BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     full_name           TEXT NOT NULL,
     gender              TEXT NOT NULL,
@@ -35,7 +40,7 @@ CREATE TABLE registrations (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id              UUID PRIMARY KEY,
     user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash      TEXT NOT NULL UNIQUE,
@@ -45,8 +50,8 @@ CREATE TABLE user_sessions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_at      TIMESTAMPTZ
 );
-CREATE INDEX user_sessions_user_idx ON user_sessions(user_id);
-CREATE INDEX user_sessions_active_idx ON user_sessions(expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS user_sessions_user_idx ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS user_sessions_active_idx ON user_sessions(expires_at) WHERE revoked_at IS NULL;
 
 ALTER TABLE exam_assignments
     ADD COLUMN IF NOT EXISTS assignment_ref TEXT,
@@ -244,4 +249,4 @@ ALTER TABLE exam_assignments
     UNIQUE (exam_version_id, candidate_user_id, assigned_org_id);
 DROP TABLE IF EXISTS user_sessions;
 DROP TABLE IF EXISTS registrations;
-DROP TABLE IF EXISTS users;
+-- Intentionally NOT dropping `users` — it's owned by the parent application.

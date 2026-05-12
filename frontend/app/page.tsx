@@ -7,6 +7,8 @@ import AssessmentPortal from "@/components/student/AssessmentPortal";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSession, logoutUser } from "@/lib/api";
 
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
+
 // Completion Toast Component
 const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose: () => void }) => {
   const assessmentNames: Record<string, string> = {
@@ -61,7 +63,7 @@ function HomeContent() {
     getSession()
       .then((session) => {
         if (session) {
-          setUserName(session.registration.fullName || session.user.email);
+          setUserName(session.registration?.fullName || session.user.email);
           setIsLoggedIn(true);
         }
       })
@@ -128,7 +130,7 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal userName={userName} onLogout={handleLogout} />
+        <AssessmentPortal userName={userName} onLogout={handleLogout} initialView={initialView} />
       )}
     </>
   );

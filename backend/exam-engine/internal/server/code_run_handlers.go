@@ -28,6 +28,7 @@ type codeFileDTO struct {
 	Path     string `json:"path"`
 	Content  string `json:"content"`
 	ReadOnly bool   `json:"readOnly,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 type codeRunRequest struct {
@@ -92,11 +93,91 @@ type judge0Result struct {
 	Token         string
 }
 
+type judge0Language struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type judge0LanguageHealth struct {
+	Language  string `json:"language"`
+	Judge0ID  int    `json:"judge0Id"`
+	Available bool   `json:"available"`
+}
+
 const (
 	maxCodeFiles            = 24
 	maxCodeFilePathBytes    = 255
 	maxCandidateSourceBytes = 256 << 10
 )
+
+func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
+	principal, err := auth.Require(r.Context())
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if !s.isAdmin(r.Context(), principal.UserID) {
+		writeError(w, http.StatusForbidden, "admin access required")
+		return
+	}
+
+	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, judge0BaseURL()+"/languages", nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "health request failed")
+		return
+	}
+	res, err := s.judgeHTTPClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unreachable",
+			"error":  err.Error(),
+		})
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unhealthy",
+			"error":  fmt.Sprintf("Judge0 returned status %d", res.StatusCode),
+		})
+		return
+	}
+
+	var languages []judge0Language
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&languages); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unhealthy",
+			"error":  "language response decode failed",
+		})
+		return
+	}
+	available := map[int]bool{}
+	for _, lang := range languages {
+		available[lang.ID] = true
+	}
+	required := []judge0LanguageHealth{
+		{Language: "python", Judge0ID: 71, Available: available[71]},
+		{Language: "java", Judge0ID: 62, Available: available[62]},
+		{Language: "cpp", Judge0ID: 54, Available: available[54]},
+		{Language: "javascript", Judge0ID: 63, Available: available[63]},
+		{Language: "c", Judge0ID: 50, Available: available[50]},
+		{Language: "multi-file", Judge0ID: 89, Available: available[89]},
+	}
+	status := "ready"
+	for _, item := range required {
+		if !item.Available {
+			status = "degraded"
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    status,
+		"judge0Url": judge0BaseURL(),
+		"required":  required,
+	})
+}
 
 func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	principal, err := auth.Require(r.Context())
@@ -121,14 +202,14 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	req.Mode = strings.ToLower(strings.TrimSpace(req.Mode))
 	req.Language = strings.ToLower(strings.TrimSpace(req.Language))
 	req.EntryFile = strings.TrimSpace(req.EntryFile)
-	if err := validateCodeRunRequest(&req); err != nil {
+	if err := validateCodeRunRequest(&req, false); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	ctx, cancel := contextWithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	tests, err := s.loadRunTests(ctx, attemptID, principal.UserID, examQuestionID, req.Mode)
+	tests, err := s.loadRunTests(ctx, attemptID, principal.UserID, examQuestionID, req.Mode, req.Language)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "active attempt/question not found")
@@ -139,6 +220,19 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Mode == "tests" && len(tests) == 0 {
 		writeError(w, http.StatusBadRequest, "no test cases defined")
+		return
+	}
+
+	select {
+	case s.codeRunSem <- struct{}{}:
+		defer func() { <-s.codeRunSem }()
+	default:
+		_ = s.recordAttemptEvent(r.Context(), attemptID, "code_run_rejected", 2, &examQuestionID, map[string]any{
+			"reason":   "engine_busy",
+			"mode":     req.Mode,
+			"language": req.Language,
+		})
+		writeError(w, http.StatusTooManyRequests, "code runner is busy; retry shortly")
 		return
 	}
 
@@ -170,22 +264,27 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string) ([]dbTestCase, error) {
+func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string, language string) ([]dbTestCase, error) {
 	var exists int
 	err := s.pool.QueryRow(ctx, `
 		SELECT 1
 		FROM attempts a
+		JOIN exam_assignments assign ON assign.id = a.assignment_id
 		JOIN exam_questions eq
 		     ON eq.exam_version_id = a.exam_version_id
 		    AND eq.id = $2
 		WHERE a.id = $1
 		  AND a.candidate_user_id = $3
 		  AND a.status IN ('started','in_progress','paused')
-	`, attemptID, examQuestionID, userID).Scan(&exists)
+		  AND (
+		      assign.assignment_ref IS NULL
+		      OR assign.assignment_ref = 'coding:' || $4
+		  )
+	`, attemptID, examQuestionID, userID, language).Scan(&exists)
 	if err != nil {
 		return nil, err
 	}
-	if mode != "tests" {
+	if mode != "tests" && mode != "final" {
 		return nil, nil
 	}
 	rows, err := s.pool.Query(ctx, `
@@ -193,9 +292,9 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 		FROM exam_questions eq
 		JOIN question_test_cases tc ON tc.question_version_id = eq.question_version_id
 		WHERE eq.id = $1
-		  AND tc.is_hidden = false
+		  AND ($2 = 'final' OR tc.is_hidden = false)
 		ORDER BY tc.ordinal
-	`, examQuestionID)
+	`, examQuestionID, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -255,9 +354,9 @@ func (s *Server) persistRunStart(
 	}
 	for _, f := range req.Files {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO code_submission_files (submission_id, path, content, is_read_only)
-			VALUES ($1, $2, $3, $4)
-		`, submissionID, f.Path, f.Content, f.ReadOnly); err != nil {
+			INSERT INTO code_submission_files (submission_id, path, content, is_read_only, language)
+			VALUES ($1, $2, $3, $4, $5)
+		`, submissionID, f.Path, f.Content, f.ReadOnly, nullEmpty(f.Language)); err != nil {
 			return uuid.Nil, err
 		}
 	}
@@ -270,6 +369,16 @@ func (s *Server) persistRunStart(
 		)
 		VALUES ($1, $2, $3, $4, $5, 'Queued', $6, now())
 	`, runID, attemptID, answerID, submissionID, req.Mode, nullableCustomStdin(req)); err != nil {
+		return uuid.Nil, err
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_started", 0, &examQuestionID, map[string]any{
+		"runId":      runID.String(),
+		"mode":       req.Mode,
+		"language":   req.Language,
+		"entryFile":  req.EntryFile,
+		"fileCount":  len(req.Files),
+		"totalBytes": totalBytes,
+	}); err != nil {
 		return uuid.Nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -286,7 +395,7 @@ func (s *Server) executeJudge0(
 	tests []dbTestCase,
 ) (codeRunResponse, error) {
 	if req.Mode == "custom" {
-		r, err := postJudge0(ctx, payload, req.CustomStdin)
+		r, err := s.postJudge0(ctx, payload, req.CustomStdin)
 		if err != nil {
 			return codeRunResponse{}, err
 		}
@@ -302,7 +411,7 @@ func (s *Server) executeJudge0(
 	passCount := 0
 	var firstFail *judge0Result
 	for _, tc := range tests {
-		r, err := postJudge0(ctx, payload, tc.Stdin)
+		r, err := s.postJudge0(ctx, payload, tc.Stdin)
 		if err != nil {
 			return codeRunResponse{}, err
 		}
@@ -375,6 +484,11 @@ func (s *Server) persistRunFinish(
 	}
 	defer tx.Rollback(ctx)
 
+	var attemptID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT attempt_id FROM code_runs WHERE id = $1`, runID).Scan(&attemptID); err != nil {
+		return err
+	}
+
 	statusID := 3
 	statusDesc := "Accepted"
 	token := ""
@@ -423,7 +537,7 @@ func (s *Server) persistRunFinish(
 		return err
 	}
 
-	if mode == "tests" {
+	if mode == "tests" || mode == "final" {
 		for i, tc := range tests {
 			if i >= len(resp.TestResults) {
 				break
@@ -450,23 +564,58 @@ func (s *Server) persistRunFinish(
 			}
 		}
 	}
+	severity := int16(0)
+	if resp.Type == "partial" {
+		severity = 1
+	} else if resp.Type != "success" {
+		severity = 2
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_finished", severity, nil, map[string]any{
+		"runId":       runID.String(),
+		"mode":        mode,
+		"type":        resp.Type,
+		"summary":     resp.Summary,
+		"statusId":    statusID,
+		"status":      statusDesc,
+		"testResults": len(resp.TestResults),
+	}); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 func (s *Server) finishRunWithError(ctx context.Context, runID uuid.UUID, msg string) error {
 	ctx, cancel := contextWithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	_, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var attemptID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT attempt_id FROM code_runs WHERE id = $1`, runID).Scan(&attemptID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
 		UPDATE code_runs
 		SET judge0_status_desc = 'Engine error',
 		    stderr = $2,
 		    finished_at = now()
 		WHERE id = $1
 	`, runID, msg)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_failed", 2, nil, map[string]any{
+		"runId": runID.String(),
+		"error": msg,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-func postJudge0(ctx context.Context, payload map[string]any, stdin string) (judge0Result, error) {
+func (s *Server) postJudge0(ctx context.Context, payload map[string]any, stdin string) (judge0Result, error) {
 	body := cloneMap(payload)
 	body["stdin"] = encodeBase64(stdin)
 	raw, err := json.Marshal(body)
@@ -478,7 +627,7 @@ func postJudge0(ctx context.Context, payload map[string]any, stdin string) (judg
 		return judge0Result{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.judgeHTTPClient.Do(req)
 	if err != nil {
 		return judge0Result{}, err
 	}
@@ -819,8 +968,11 @@ func validCodingLanguage(v string) bool {
 	}
 }
 
-func validateCodeRunRequest(req *codeRunRequest) error {
-	if req.Mode != "custom" && req.Mode != "tests" {
+func validateCodeRunRequest(req *codeRunRequest, allowFinal bool) error {
+	if req.Mode != "custom" && req.Mode != "tests" && !(allowFinal && req.Mode == "final") {
+		if allowFinal {
+			return errors.New("mode must be custom, tests, or final")
+		}
 		return errors.New("mode must be custom or tests")
 	}
 	if !validCodingLanguage(req.Language) {

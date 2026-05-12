@@ -171,18 +171,20 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             try {
                 await demoPurchase(paymentTarget.key);
                 await refreshAssignments();
+                setShowLanguageModal(false);
                 setPendingCodingLang(paymentTarget.language);
                 setAssignmentError("");
             } catch (err) {
-                setAssignmentError(
+                const message =
                     err instanceof ApiError
                         ? err.message
-                        : "Payment recorded locally, but backend scheduling failed.",
-                );
-                return;
+                        : "Payment recorded locally, but backend scheduling failed.";
+                setAssignmentError(message);
+                throw new Error(message);
             }
         } else {
             markPaid(paymentTarget.key);
+            startNonCodingAssessment();
         }
         setPaymentTarget(null);
     };
@@ -596,7 +598,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     accent={accent}
                     onCancel={() => setPaymentTarget(null)}
                     onSuccess={() => {
-                        void handlePaymentSuccess();
+                        return handlePaymentSuccess();
                     }}
                 />
             )}

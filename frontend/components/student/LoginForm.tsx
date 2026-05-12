@@ -85,12 +85,12 @@ const LoginForm: React.FC<LoginFormProps> = ({
     setGeneralError('');
     try {
       const session = await loginUser(values.email, values.password);
-      onLoginSuccess(session.registration.fullName || session.user.email);
+      onLoginSuccess(session.registration?.fullName || session.user.email);
     } catch (err) {
       setGeneralError(
         err instanceof ApiError
           ? err.message
-          : 'Unable to login. Check that the exam engine is running.',
+          : 'Unable to login. Please try again.',
       );
     } finally {
       setIsSubmitting(false);

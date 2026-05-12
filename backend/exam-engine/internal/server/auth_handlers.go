@@ -34,6 +34,22 @@ type authResponse struct {
 	ExpiresAt    time.Time       `json:"expiresAt,omitempty"`
 }
 
+type sessionContextKey struct{}
+
+type sessionContextValue struct {
+	user    userDTO
+	expires time.Time
+}
+
+func withSessionContext(ctx context.Context, user userDTO, expires time.Time) context.Context {
+	return context.WithValue(ctx, sessionContextKey{}, sessionContextValue{user: user, expires: expires})
+}
+
+func sessionFromContext(ctx context.Context) (sessionContextValue, bool) {
+	v, ok := ctx.Value(sessionContextKey{}).(sessionContextValue)
+	return v, ok
+}
+
 type userDTO struct {
 	ID      int64  `json:"id"`
 	Email   string `json:"email"`
@@ -237,26 +253,32 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
-	user, expires, ok := s.userFromSession(r.Context(), r)
+	session, ok := sessionFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthenticated")
-		return
+		user, expires, found := s.userFromSession(r.Context(), r)
+		if !found {
+			writeError(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		session = sessionContextValue{user: user, expires: expires}
 	}
-	reg, _ := s.registrationForUser(r.Context(), user.ID)
-	writeJSON(w, http.StatusOK, authResponse{User: user, Registration: reg, ExpiresAt: expires})
+	reg, _ := s.registrationForUser(r.Context(), session.user.ID)
+	writeJSON(w, http.StatusOK, authResponse{User: session.user, Registration: reg, ExpiresAt: session.expires})
 }
 
 func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, _, ok := s.userFromSession(r.Context(), r)
+		user, expires, ok := s.userFromBearer(r.Context(), r)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), auth.Principal{
+		ctx := withSessionContext(r.Context(), user, expires)
+		ctx = auth.WithPrincipal(ctx, auth.Principal{
 			UserID: user.ID,
-			OrgID:  "00000000-0000-0000-0000-000000000001",
-		})))
+			OrgID:  s.defaultOrgID,
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -449,6 +471,57 @@ func (s *Server) registrationForUser(ctx context.Context, userID int64) (registr
 	return reg, nil
 }
 
+// userFromBearer verifies a Cognito access token from the Authorization
+// header, then resolves the local `users` row by cognito_sub. We trust the
+// JWT signature/expiry for authentication; the DB lookup gives us the BIGINT
+// id used as FK throughout the schema.
+func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, time.Time, bool) {
+	if s.cognito == nil {
+		return userDTO{}, time.Time{}, false
+	}
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return userDTO{}, time.Time{}, false
+	}
+	parts := strings.SplitN(header, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return userDTO{}, time.Time{}, false
+	}
+
+	verifyCtx, cancel := contextWithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	claims, err := s.cognito.Verify(verifyCtx, parts[1])
+	if err != nil {
+		return userDTO{}, time.Time{}, false
+	}
+
+	dbCtx, dbCancel := contextWithTimeout(ctx, 3*time.Second)
+	defer dbCancel()
+	var user userDTO
+	var role *string
+	err = s.pool.QueryRow(dbCtx, `
+		SELECT id, COALESCE(email, ''), role
+		FROM users
+		WHERE cognito_sub = $1
+		  AND is_active = TRUE
+		  AND is_blocked = FALSE
+	`, claims.Sub).Scan(&user.ID, &user.Email, &role)
+	if err != nil {
+		return userDTO{}, time.Time{}, false
+	}
+	user.Status = "active"
+	if role != nil {
+		switch *role {
+		case "ADMIN", "SUPER_ADMIN", "STAFF":
+			user.IsAdmin = true
+		}
+	}
+	return user, claims.Expiry, true
+}
+
+// userFromSession is retained for legacy cookie-based callers (none in the
+// current router after the Cognito migration). Kept compiling against the
+// real `users` schema so it doesn't crash if accidentally invoked.
 func (s *Server) userFromSession(ctx context.Context, r *http.Request) (userDTO, time.Time, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
@@ -458,18 +531,26 @@ func (s *Server) userFromSession(ctx context.Context, r *http.Request) (userDTO,
 	defer cancel()
 	var user userDTO
 	var expires time.Time
+	var role *string
 	err = s.pool.QueryRow(ctx, `
-		SELECT u.id, u.email, u.status, u.is_admin, us.expires_at
+		SELECT u.id, COALESCE(u.email, ''), u.role, us.expires_at
 		FROM user_sessions us
 		JOIN users u ON u.id = us.user_id
 		WHERE us.token_hash = $1
 		  AND us.revoked_at IS NULL
 		  AND us.expires_at > now()
-		  AND u.deleted_at IS NULL
-		  AND u.status = 'active'
-	`, hashToken(cookie.Value)).Scan(&user.ID, &user.Email, &user.Status, &user.IsAdmin, &expires)
+		  AND u.is_active = TRUE
+		  AND u.is_blocked = FALSE
+	`, hashToken(cookie.Value)).Scan(&user.ID, &user.Email, &role, &expires)
 	if err != nil {
 		return userDTO{}, time.Time{}, false
+	}
+	user.Status = "active"
+	if role != nil {
+		switch *role {
+		case "ADMIN", "SUPER_ADMIN", "STAFF":
+			user.IsAdmin = true
+		}
 	}
 	return user, expires, true
 }

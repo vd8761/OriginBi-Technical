@@ -10,6 +10,9 @@ The older Exam Portal Plan still defines the product intent: a multi-tenant asse
 
 - Backend schema source of truth: [database-plan.md](../../backend/exam-engine/docs/database-plan.md)
 - Go exam-engine status: [implementation-status-and-next-steps.md](../../backend/exam-engine/docs/implementation-status-and-next-steps.md)
+- Plugin architecture index: [README.md](../../backend/exam-engine/docs/plugin-architecture/README.md)
+- Plugin model: [plugin-model.md](../../backend/exam-engine/docs/plugin-architecture/plugin-model.md)
+- Frontend plugin admin plan: [plugin-admin-portal-plan.md](plugin-admin-portal-plan.md)
 - Judge0 service status: [service-status-and-next-steps.md](../../backend/judge0/docs/service-status-and-next-steps.md)
 
 ## Completed
@@ -173,6 +176,8 @@ Important runtime persistence:
 - Mark solved and flag actions are saved to the backend.
 - Final submit sends the latest answer payloads and only shows completion after `POST /v1/attempts/{attempt_id}/submit` succeeds.
 - Run and Run Tests call the Go engine. The browser no longer calls Judge0 directly during the backend-backed coding flow.
+- The active coding UI sends heartbeats every 15 seconds to `POST /v1/attempts/{attempt_id}/heartbeat`.
+- The active coding UI batches trace events to `POST /v1/attempts/{attempt_id}/events` for proctoring violations, tab switches, navigation, status changes, MCQ selections, workspace changes, autosaves, code-run completion, submit success/failure, and heartbeat failures.
 
 The UI still uses the static frontend question definitions in `frontend/components/assessment/coding/data.ts` for rich display details such as starter code, prompts, sections, and local editor behavior. The backend snapshot currently supplies authoritative attempt/question ids, ordering, time remaining, and saved payloads. Fully rendering the authoring payload directly from the backend snapshot is still a next step.
 
@@ -247,8 +252,6 @@ Frontend gaps:
 - Backend-backed Aptitude, Communication, MNC, and Role assessments.
 - Admin/Organization exam builder.
 - Organization assignment workflows.
-- Heartbeat calls from the coding UI to `POST /v1/attempts/{attempt_id}/heartbeat`.
-- Telemetry event calls from proctoring UI to `POST /v1/attempts/{attempt_id}/events`.
 - Full backend-snapshot rendering for the coding assessment body and starter code.
 - Real payment provider checkout and webhook handling.
 - Persisted server results display in candidate dashboard.
@@ -261,7 +264,7 @@ Frontend gaps:
 - Whether Next.js should keep talking directly to the Go engine in v1, or whether NestJS should become the browser-facing gateway for all business APIs.
 - How much coding feedback candidates should see during active attempts versus after publication.
 - Whether custom stdin should be globally available or controlled by plugin/exam config.
-- How frontend proctoring counters map to official telemetry events.
+- Final naming/versioning policy for official frontend telemetry event kinds.
 - Whether non-coding prototype flows should be kept local while coding moves to backend, or all assessment tracks should be migrated together.
 - How admin plugin config should be shaped for language allowlists, proctoring switches, evaluator switches, and organization overrides.
 
@@ -269,8 +272,8 @@ Frontend gaps:
 
 - `frontend/docs/` was created during the documentation pass.
 - Before the documentation pass, frontend had no dirty tracked changes.
-- The current implementation pass now modifies frontend runtime files for auth, route protection, purchase, assignments, coding attempt persistence, server code runs, and admin plugins.
-- A production-hardening pass removed frontend lint errors; `npm run lint --if-present` currently exits successfully with warnings only.
+- The current implementation pass now modifies frontend runtime files for auth, route protection, purchase, assignments, coding attempt persistence, server code runs, heartbeat, telemetry event batching, and admin plugins.
+- Focused lint currently passes for the coding assessment files touched by the runtime work; full `npm run lint --if-present` still reports unrelated existing lint debt elsewhere.
 - `npm run build` currently succeeds. Remote `next/font/google` usage was removed so production builds no longer need network access to Google Fonts.
 - Route protection uses the Next.js `proxy.ts` convention instead of deprecated `middleware.ts`.
 - `backend/exam-engine/` is currently untracked in git.

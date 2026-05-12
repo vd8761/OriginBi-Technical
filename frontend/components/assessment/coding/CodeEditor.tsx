@@ -557,7 +557,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                         entryFile,
                         customStdin: mode === "custom" ? customInput : undefined,
                     })
-                    : await runWithJudge0({
+                    : process.env.NODE_ENV !== "production"
+                        ? await runWithJudge0({
                         lang,
                         files,
                         entryFile,
@@ -566,7 +567,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                         customStdin: mode === "custom" ? customInput : undefined,
                         testCases: mode === "tests" ? question.testCases : undefined,
                         signal: controller.signal,
-                    });
+                    })
+                        : {
+                            type: "error" as const,
+                            stdout: "",
+                            stderr: "Server code execution is required in production.",
+                            testResults: null,
+                            time: "0ms",
+                            memory: "0 MB",
+                            summary: "Code runner unavailable.",
+                        };
                 if (!res) return;
                 setResult(res);
             } catch (e) {
@@ -575,7 +585,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                 setResult({
                     type: "error",
                     stdout: "",
-                    stderr: `Failed to reach Judge0: ${message}`,
+                    stderr: `Code run failed: ${message}`,
                     testResults: null,
                     time: "0ms",
                     memory: "0 MB",

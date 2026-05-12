@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AssessmentService } from './assessment.service';
 
@@ -9,6 +9,7 @@ export class AdaptiveFallbackService {
 
   constructor(
     private dataSource: DataSource,
+    @Inject(forwardRef(() => AssessmentService))
     private assessmentService: AssessmentService
   ) {}
 

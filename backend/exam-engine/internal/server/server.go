@@ -16,18 +16,38 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/originbi/exam-engine/internal/auth"
 	"github.com/originbi/exam-engine/internal/db"
 )
 
 type Server struct {
-	pool    *db.Pool
-	logger  *slog.Logger
-	router  chi.Router
-	limiter *rateLimiter
+	pool            *db.Pool
+	logger          *slog.Logger
+	router          chi.Router
+	limiter         *rateLimiter
+	codeRunSem      chan struct{}
+	judgeHTTPClient *http.Client
+	cognito         *auth.CognitoVerifier
+	defaultOrgID    string
 }
 
-func New(pool *db.Pool, logger *slog.Logger) *Server {
-	s := &Server{pool: pool, logger: logger, limiter: newRateLimiter()}
+func New(pool *db.Pool, logger *slog.Logger, cognito *auth.CognitoVerifier, defaultOrgID string) *Server {
+	s := &Server{
+		pool:         pool,
+		logger:       logger,
+		cognito:      cognito,
+		defaultOrgID: defaultOrgID,
+		limiter:      newRateLimiter(),
+		codeRunSem:   make(chan struct{}, envInt("JUDGE0_MAX_CONCURRENCY", 12)),
+		judgeHTTPClient: &http.Client{
+			Timeout: envDurationSeconds("JUDGE0_HTTP_TIMEOUT_SECONDS", 95*time.Second),
+			Transport: &http.Transport{
+				MaxIdleConns:        envInt("JUDGE0_MAX_IDLE_CONNS", 100),
+				MaxIdleConnsPerHost: envInt("JUDGE0_MAX_IDLE_CONNS_PER_HOST", 32),
+				IdleConnTimeout:     envDurationSeconds("JUDGE0_IDLE_CONN_TIMEOUT_SECONDS", 90*time.Second),
+			},
+		},
+	}
 	s.router = s.routes()
 	return s
 }
@@ -53,12 +73,12 @@ func (s *Server) routes() chi.Router {
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
-		r.Post("/auth/logout", s.logout)
-		r.Get("/auth/session", s.session)
 		r.Post("/admin/bootstrap", s.bootstrapAdmin)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.sessionMiddleware)
+			r.Post("/auth/logout", s.logout)
+			r.Get("/auth/session", s.session)
 			r.Get("/me/registration", s.getRegistration)
 			r.Put("/me/registration", s.updateRegistration)
 			r.Get("/me/assignments", s.listAssignments)
@@ -72,6 +92,7 @@ func (s *Server) routes() chi.Router {
 			r.Post("/attempts/{attempt_id}/events", s.ingestEvents)
 			r.Get("/admin/plugins", s.listPlugins)
 			r.Put("/admin/plugins/{plugin_id}", s.updatePlugin)
+			r.Get("/admin/judge0/health", s.judge0Health)
 		})
 	})
 
@@ -101,8 +122,8 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With, Authorization, X-User-Id, X-Org-Id")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -232,6 +253,30 @@ func envBool(name string, fallback bool) bool {
 		return fallback
 	}
 	return v
+}
+
+func envInt(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+func envDurationSeconds(name string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return time.Duration(v) * time.Second
 }
 
 func secureCookies() bool {

@@ -1,48 +1,90 @@
 "use client";
 
 const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
+const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_API_BASE?.replace(/\/$/, "");
 
+// Go exam-engine (attempts, code runs, plugins, etc.)
 export const API_BASE =
   configuredApiBase ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8088");
 
+// NestJS assessment-service (Cognito auth, etc.)
+export const AUTH_API_BASE =
+  configuredAuthBase ??
+  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5000/api");
+
+// ── Cognito token storage (browser only) ──────────────────────────────────
+const ACCESS_TOKEN_KEY = "obi.accessToken";
+const ID_TOKEN_KEY = "obi.idToken";
+const REFRESH_TOKEN_KEY = "obi.refreshToken";
+
+export function getAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+function setTokens(t: {
+  accessToken: string;
+  idToken: string;
+  refreshToken?: string;
+}) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, t.accessToken);
+  window.localStorage.setItem(ID_TOKEN_KEY, t.idToken);
+  if (t.refreshToken) window.localStorage.setItem(REFRESH_TOKEN_KEY, t.refreshToken);
+  // Mirror the access token into a cookie so the Next.js proxy (SSR-side)
+  // can validate the session before serving protected routes. Not httpOnly
+  // because we set it from JS — the cookie value IS the token and the
+  // proxy treats it as such.
+  document.cookie = `${ACCESS_TOKEN_KEY}=${t.accessToken}; path=/; samesite=lax; max-age=${t.refreshToken ? 60 * 60 * 24 * 7 : 60 * 60}`;
+}
+function clearTokens() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  window.localStorage.removeItem(ID_TOKEN_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; samesite=lax; max-age=0`;
+}
+
 export interface ApiUser {
-  id: number;
+  id: string;
   email: string;
-  status: string;
-  isAdmin: boolean;
+  role: string | null;
+  cognitoSub: string | null;
+  emailVerified: boolean;
+  isActive: boolean;
 }
 
 export interface ApiRegistration {
-  fullName: string;
-  gender: string;
+  id: string;
+  fullName: string | null;
+  gender: string | null;
   countryCode: string;
-  phone: string;
-  role: string;
-  dateOfBirth?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  educationLevel?: string;
-  institutionName?: string;
-  graduationYear?: number;
-  workStatus?: string;
-  metadata?: unknown;
+  mobileNumber: string;
+  status: string;
+  isTechAssessment: boolean;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  idToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  tokenType?: string;
 }
 
 export interface AuthResponse {
   user: ApiUser;
-  registration: ApiRegistration;
-  expiresAt?: string;
+  registration: ApiRegistration | null;
+  tokens?: AuthTokens;
 }
 
 export interface RegisterRequest {
   email: string;
   password: string;
-  name: string;
+  fullName: string;
   gender: string;
   countryCode: string;
-  phone: string;
-  role: string;
+  mobileNumber: string;
+  role?: string;
 }
 
 export interface Assignment {
@@ -105,6 +147,7 @@ export interface CodeFilePayload {
   path: string;
   content: string;
   readOnly?: boolean;
+  language?: string;
 }
 
 export interface AnswerPayload {
@@ -150,6 +193,22 @@ export interface CodeRunResponse {
   runId: string;
 }
 
+export interface AttemptEventInput {
+  occurred_at: string;
+  kind: string;
+  severity?: number;
+  exam_question_id?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface HeartbeatResponse {
+  received_at: string;
+  rtt_ms: number;
+  server_time_remaining_ms: number;
+  deadline_at?: string;
+  status: string;
+}
+
 export interface Plugin {
   id: string;
   kind: string;
@@ -172,47 +231,175 @@ export class ApiError extends Error {
   }
 }
 
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
+interface FetchOpts extends RequestInit {
+  baseOverride?: string;
+  auth?: boolean;
+  _retried?: boolean;
+}
+
+// Single in-flight refresh promise so concurrent 401s share one refresh call
+// instead of stampeding Cognito.
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Decode JWT exp and return true if it's already expired (or near expiry). */
+function isAccessTokenExpired(skewSeconds = 30): boolean {
+  if (typeof window === "undefined") return false;
+  const tok = getAccessToken();
+  if (!tok) return false;
+  try {
+    const payload = JSON.parse(atob(tok.split(".")[1]));
+    if (typeof payload.exp !== "number") return false;
+    const now = Math.floor(Date.now() / 1000);
+    return now >= payload.exp - skewSeconds;
+  } catch {
+    return false;
+  }
+}
+
+/** Use the refresh token to mint a new access/id token. Single-flight. */
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  const refreshToken = typeof window !== "undefined"
+    ? window.localStorage.getItem(REFRESH_TOKEN_KEY)
+    : null;
+  if (!refreshToken) return false;
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${AUTH_API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (!data?.accessToken || !data?.idToken) return false;
+      setTokens({
+        accessToken: data.accessToken,
+        idToken: data.idToken,
+        // Cognito's refresh flow doesn't issue a new refresh token; keep old.
+        refreshToken,
+      });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      // Allow next refresh attempt later
+      setTimeout(() => { refreshInFlight = null; }, 0);
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
+  const { baseOverride, auth = true, _retried, ...rest } = init;
+  // Proactively refresh if we know the token's expired — avoids a guaranteed
+  // 401 round-trip when the page loads after sleeping past the 1h TTL.
+  if (auth && !_retried && isAccessTokenExpired()) {
+    await refreshAccessToken();
+  }
+  const headers = new Headers(rest.headers);
+  if (rest.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
+  if (auth) {
+    const token = getAccessToken();
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+  const base = baseOverride ?? API_BASE;
+  const res = await fetch(`${base}${path}`, {
+    ...rest,
     headers,
-    credentials: "include",
+    credentials: base === API_BASE ? "include" : "omit",
   });
+
+  // Reactive refresh: if the server still says 401 despite us having a token,
+  // try once to refresh and replay. After that, give up and surface 401.
+  if (res.status === 401 && auth && !_retried && getAccessToken()) {
+    const ok = await refreshAccessToken();
+    if (ok) {
+      return apiFetch<T>(path, { ...init, _retried: true });
+    }
+    // Refresh failed (token revoked / expired refresh) — drop credentials so
+    // the proxy bounces the user to login on the next navigation.
+    clearTokens();
+  }
+
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = text ? safeJson(text) : null;
   if (!res.ok) {
-    throw new ApiError(res.status, data?.error ?? res.statusText);
+    const msg =
+      (data && (data.message || data.error)) ??
+      (Array.isArray(data?.message) ? data.message.join(", ") : null) ??
+      res.statusText;
+    throw new ApiError(res.status, msg);
   }
   return data as T;
 }
 
+function safeJson(text: string): any {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+// ── Auth (NestJS assessment-service, Cognito-backed) ──────────────────────
+
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/v1/auth/register", {
+  const res = await apiFetch<AuthResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify(input),
+    baseOverride: AUTH_API_BASE,
+    auth: false,
   });
+  if (res.tokens) setTokens(res.tokens);
+  return res;
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/v1/auth/login", {
+  const res = await apiFetch<AuthResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+    baseOverride: AUTH_API_BASE,
+    auth: false,
   });
+  if (res.tokens) setTokens(res.tokens);
+  return res;
 }
 
 export async function logoutUser(): Promise<void> {
-  await apiFetch<{ status: string }>("/v1/auth/logout", { method: "POST" });
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    try {
+      await apiFetch<{ message: string }>("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ accessToken }),
+        baseOverride: AUTH_API_BASE,
+        auth: false,
+      });
+    } catch {
+      // best-effort; we still clear local tokens below
+    }
+  }
+  clearTokens();
 }
 
 export async function getSession(): Promise<AuthResponse | null> {
+  if (!getAccessToken()) return null;
   try {
-    return await apiFetch<AuthResponse>("/v1/auth/session");
+    const res = await apiFetch<Omit<AuthResponse, "tokens">>("/auth/session", {
+      baseOverride: AUTH_API_BASE,
+    });
+    return { ...res, tokens: undefined };
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return null;
+    if (err instanceof ApiError && err.status === 401) {
+      clearTokens();
+      return null;
+    }
     throw err;
   }
 }
@@ -257,11 +444,48 @@ export async function runAttemptCode(
   examQuestionId: string,
   input: CodeRunRequest,
 ): Promise<CodeRunResponse> {
+  const body: CodeRunRequest = {
+    ...input,
+    files: input.files.map((file) => ({
+      path: file.path,
+      content: file.content,
+      ...(file.readOnly ? { readOnly: file.readOnly } : {}),
+      ...(file.language ? { language: file.language } : {}),
+    })),
+  };
   return apiFetch<CodeRunResponse>(
     `/v1/attempts/${attemptId}/answers/${examQuestionId}/runs`,
     {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function sendAttemptHeartbeat(
+  attemptId: string,
+  clientState: Record<string, unknown>,
+): Promise<HeartbeatResponse> {
+  return apiFetch<HeartbeatResponse>(`/v1/attempts/${attemptId}/heartbeat`, {
+    method: "POST",
+    body: JSON.stringify({
+      sent_at: new Date().toISOString(),
+      client_state: clientState,
+    }),
+  });
+}
+
+export async function sendAttemptEvents(
+  attemptId: string,
+  events: AttemptEventInput[],
+  options: { keepalive?: boolean } = {},
+): Promise<{ accepted: number; rejected: number }> {
+  return apiFetch<{ accepted: number; rejected: number }>(
+    `/v1/attempts/${attemptId}/events`,
+    {
+      method: "POST",
+      body: JSON.stringify({ events }),
+      keepalive: options.keepalive,
     },
   );
 }
