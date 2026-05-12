@@ -48,3 +48,7 @@ backend/exam-engine/.gocache/
 # build output
 dist/
 **/dist/
+
+.logs/
+.claude/
+.vscode/
