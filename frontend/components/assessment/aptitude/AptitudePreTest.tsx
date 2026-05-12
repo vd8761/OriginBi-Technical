@@ -6,30 +6,24 @@ interface AptitudePreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    questions?: number | string;
+    duration?: string;
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
+    skills?: string[];
 }
-
-const metrics = [
-    { label: "Questions", value: "60" },
-    { label: "Duration", value: "60 min" },
-    { label: "Sections", value: "4" },
-    { label: "Attempts", value: "1 out of 2" },
-];
-
-const checklist = [
-    "Keep one uninterrupted 60 minute window ready.",
-    "Use a laptop or desktop for the most stable test layout.",
-    "Avoid refreshing the browser after the assessment begins.",
-    "Ensure all questions are answered before submission.",
-];
-
-const skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"];
 
 const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ 
     onStart, 
     onClose,
     accentColor = '#1ED36A',
     gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
-    mode = 'main'
+    mode = 'main',
+    questions = 60,
+    duration = "60 min",
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
+    skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"]
 }) => {
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -37,6 +31,20 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
             document.body.style.overflow = '';
         };
     }, []);
+
+    const metrics = [
+        { label: "Questions", value: String(questions) },
+        { label: "Duration", value: duration },
+        { label: "Sections", value: "4" },
+        { label: "Attempts Allowed", value: mode === 'trial' ? `${trialAttemptsLimit}` : `${mainAttemptsLimit}` },
+    ];
+
+    const checklist = [
+        `Keep one uninterrupted ${duration} window ready.`,
+        "Use a laptop or desktop for the most stable test layout.",
+        "Avoid refreshing the browser after the assessment begins.",
+        "Ensure all questions are answered before submission.",
+    ];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">

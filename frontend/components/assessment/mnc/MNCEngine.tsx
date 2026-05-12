@@ -87,8 +87,31 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     useEffect(() => {
         const fetchEngineStats = async () => {
             try {
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
                     fetch(`${API_BASE}/api/assessment/admin/assessments`)
                 ]);
                 const statsJson = await statsRes.json();
@@ -194,10 +217,33 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             try {
                 setIsLoading(true);
                 setLoadError(null);
+
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
                 const response = await fetch(`${API_BASE}/api/assessment/mnc/attempts`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                    body: JSON.stringify({ assessmentCode, userId: activeEmail || userId, mode }),
                 });
 
                 if (!response.ok) {

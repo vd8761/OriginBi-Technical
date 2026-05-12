@@ -40,10 +40,10 @@ func (TechAssessment) TableName() string {
 
 // StartAttemptRequest represents the payload to start an assessment
 type StartAttemptRequest struct {
-	AssessmentID   *int64  `json:"assessmentId"`
-	AssessmentCode string  `json:"assessmentCode"`
-	UserID         *int64  `json:"userId"`
-	Mode           string  `json:"mode"` // "trial" or "main"
+	AssessmentID   *int64      `json:"assessmentId"`
+	AssessmentCode string      `json:"assessmentCode"`
+	UserID         interface{} `json:"userId"`
+	Mode           string      `json:"mode"` // "trial" or "main"
 }
 
 // OptionResponse represents question options returned to frontend

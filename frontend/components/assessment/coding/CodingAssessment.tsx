@@ -503,9 +503,32 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, onComplete, m
     useEffect(() => {
         const fetchEngineStats = async () => {
             try {
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
                     fetch(`${API_BASE}/api/assessment/admin/assessments`)
                 ]);
                 const statsJson = await statsRes.json();

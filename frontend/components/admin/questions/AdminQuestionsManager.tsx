@@ -31,8 +31,9 @@ import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  AlertCircle, ArrowLeft, Filter,
+  AlertCircle, ArrowLeft, Filter, LogOut, ChevronDown,
 } from "lucide-react";
+import { signOut } from "aws-amplify/auth";
 import CustomSelect from "@/components/ui/CustomSelect";
 import {
   AptitudeIcon,
@@ -174,6 +175,41 @@ export default function AdminQuestionsManager() {
   const [loading, setLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
   const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
+  const [adminUser, setAdminUser] = useState<{ name: string; email: string } | null>(null);
+  const [isProfileOpen, setProfileOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setAdminUser({
+            name: parsed.name || parsed.fullName || "Admin User",
+            email: parsed.email || "admin@originbi.com"
+          });
+        } catch (e) {
+          setAdminUser({ name: "Admin User", email: "admin@originbi.com" });
+        }
+      } else {
+        setAdminUser({ name: "Admin User", email: "admin@originbi.com" });
+      }
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.error("Amplify signOut error:", err);
+    }
+    localStorage.removeItem("originbi_id_token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("originbi:admin-session");
+    sessionStorage.removeItem("idToken");
+    sessionStorage.removeItem("accessToken");
+    router.push("/admin/login");
+  };
 
   useEffect(() => {
     const loadAllAssessments = async () => {
@@ -465,7 +501,63 @@ export default function AdminQuestionsManager() {
               <Logo className="h-5" />
               <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-4">
+              <ThemeToggle />
+              
+              {/* User Profile Section */}
+              <div className="relative">
+                <button
+                  onClick={() => setProfileOpen((prev) => !prev)}
+                  className="flex items-center gap-2 focus:outline-none text-left cursor-pointer"
+                >
+                  {!adminUser ? (
+                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0"></div>
+                  ) : (
+                    <img
+                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser.name)}&background=150089&color=fff`}
+                      alt="User Avatar"
+                      className="w-8 h-8 rounded-full border border-gray-200 dark:border-transparent"
+                    />
+                  )}
+                  <div className="hidden xl:block">
+                    {!adminUser ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></span>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-xs leading-tight text-slate-800 dark:text-white">
+                          {adminUser.name}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-brand-text-secondary leading-tight">
+                          {adminUser.email}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {isProfileOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-[#111814] rounded-xl shadow-2xl z-50 border border-slate-200 dark:border-white/10 overflow-hidden animate-slide-down">
+                      <div className="p-1.5">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4 mr-2" />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </header>
 
@@ -607,6 +699,60 @@ export default function AdminQuestionsManager() {
               <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
             </div>
             <ThemeToggle />
+
+            {/* User Profile Section */}
+            <div className="relative">
+              <button
+                onClick={() => setProfileOpen((prev) => !prev)}
+                className="flex items-center gap-2 focus:outline-none text-left cursor-pointer"
+              >
+                {!adminUser ? (
+                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0"></div>
+                ) : (
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser.name)}&background=150089&color=fff`}
+                    alt="User Avatar"
+                    className="w-8 h-8 rounded-full border border-gray-200 dark:border-transparent"
+                  />
+                )}
+                <div className="hidden xl:block">
+                  {!adminUser ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></span>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-xs leading-tight text-slate-800 dark:text-white">
+                        {adminUser.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-brand-text-secondary leading-tight">
+                        {adminUser.email}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {isProfileOpen && (
+                <>
+                  <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-[#111814] rounded-xl shadow-2xl z-50 border border-slate-200 dark:border-white/10 overflow-hidden animate-slide-down">
+                    <div className="p-1.5">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>

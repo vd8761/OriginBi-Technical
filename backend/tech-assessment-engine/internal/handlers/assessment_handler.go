@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"tech-assessment-engine/internal/models"
 	"tech-assessment-engine/internal/service"
 
@@ -28,16 +27,12 @@ func (h *AssessmentHandler) HealthCheck(c *gin.Context) {
 
 func (h *AssessmentHandler) GetAttemptsStats(c *gin.Context) {
 	userIdStr := c.Query("userId")
-	var userIdPtr *int64
-
+	var userId interface{}
 	if userIdStr != "" {
-		userId, err := strconv.ParseInt(userIdStr, 10, 64)
-		if err == nil {
-			userIdPtr = &userId
-		}
+		userId = userIdStr
 	}
 
-	stats, err := h.service.GetAttemptsStats(userIdPtr)
+	stats, err := h.service.GetAttemptsStats(userId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

@@ -7,6 +7,10 @@ import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldAlert, CheckCircle } from "lucide-react";
+import { signIn, fetchAuthSession, signOut } from "aws-amplify/auth";
+import { configureAmplify } from "@/lib/aws-amplify-config";
+
+configureAmplify();
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -31,20 +35,92 @@ export default function AdminLoginPage() {
     setError(null);
     setIsSubmitting(true);
 
-    // Simulate network delay for a highly realistic and premium feel
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      // 0. Ensure no old session is hanging around
+      try {
+        await signOut();
+      } catch (err) {}
 
-    const expectedEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "ariyappan@touchmarkdes.com";
-    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "Admin@123";
+      // 1. Sign in with Cognito
+      const signInResult = await signIn({
+        username: email,
+        password: password,
+      });
 
-    if (email === expectedEmail && password === expectedPassword) {
+      if (!signInResult.isSignedIn) {
+        setError("Your account login needs an additional step. Please contact the administrator.");
+        return;
+      }
+
+      // 2. Get tokens & groups
+      const session = await fetchAuthSession();
+      const tokens = session.tokens;
+
+      if (!tokens || !tokens.idToken) {
+        setError("Login session could not be created. Please try again.");
+        return;
+      }
+
+      const idTokenJwt = tokens.idToken.toString();
+
+      const idGroups = (tokens.idToken.payload['cognito:groups'] as string[]) || [];
+      const accessGroups = (tokens.accessToken?.payload['cognito:groups'] as string[]) || [];
+      const groups = [...new Set([...idGroups, ...accessGroups])];
+
+      // 3. Verify Admin Access
+      if (!groups.includes('ADMIN')) {
+        await signOut();
+        setError("You are not allowed to access this portal with these credentials.");
+        return;
+      }
+
+      // 4. Verify with backend
+      const apiBase = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "http://localhost:4001";
+      const res = await fetch(`${apiBase}/admin/me`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${idTokenJwt}` },
+      });
+
+      if (!res.ok) {
+        let backendMessage = "Unable to verify your access.";
+        try {
+          const data = await res.json();
+          if (data && typeof data.message === "string") backendMessage = data.message;
+        } catch (err) {}
+        await signOut();
+        setError(backendMessage);
+        return;
+      }
+
+      const data = await res.json();
+      const backendUser = data.user || {};
+      const metadata = backendUser.metadata || {};
+
+      // 5. Store standard OriginBI session tokens
+      localStorage.setItem("originbi_id_token", idTokenJwt);
+      sessionStorage.setItem("idToken", idTokenJwt);
+      sessionStorage.setItem("accessToken", idTokenJwt);
+      
+      localStorage.setItem("user", JSON.stringify({
+        id: backendUser.id || 0,
+        name: metadata.fullName || backendUser.email?.split('@')[0] || "Admin",
+        email: backendUser.email || email,
+        role: backendUser.role || "ADMIN",
+      }));
+
+      // Keep legacy token to immediately redirect inside originbi-technical
       localStorage.setItem("originbi:admin-session", "true");
+
       setSuccess(true);
       setTimeout(() => {
         router.push("/admin/questions");
       }, 800);
-    } else {
-      setError("Invalid administrative credentials. Please verify your entries.");
+
+    } catch (err: any) {
+      console.error("Cognito signIn or backend error:", err);
+      const msg = err?.message || "Invalid administrative credentials. Please verify your entries.";
+      setError(msg);
+    } finally {
       setIsSubmitting(false);
     }
   };

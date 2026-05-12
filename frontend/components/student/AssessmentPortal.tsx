@@ -511,15 +511,23 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }}
       />
 
-      {showAptitudeModal && (
-        <AdaptiveAptitudePreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
-          onClose={() => setShowAptitudeModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'aptitude')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'aptitude')?.gradient}
-        />
-      )}
+      {showAptitudeModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'aptitude');
+        return (
+          <AptitudePreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
+            onClose={() => setShowAptitudeModal(false)}
+            accentColor={exam?.accentColor}
+            gradient={exam?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            skills={exam?.tags}
+          />
+        );
+      })()}
 
       {showCommunicationModal && (
         <CommunicationPreTest

@@ -116,7 +116,10 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl bg-gradient-to-br ${gradient} text-white`}>
+              <div 
+                className={`p-2 rounded-xl text-white ${!gradient.includes("linear-gradient") ? `bg-gradient-to-br ${gradient}` : ""}`}
+                style={gradient.includes("linear-gradient") ? { background: gradient } : {}}
+              >
                 <BookOpen className="h-6 w-6" />
               </div>
               <div>
@@ -248,7 +251,8 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
             </button>
             <button
               onClick={handleStart}
-              className={`flex-1 px-4 py-3 rounded-xl bg-gradient-to-r ${gradient} text-white font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2`}
+              className={`flex-1 px-4 py-3 rounded-xl text-white font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 ${!gradient.includes("linear-gradient") ? `bg-gradient-to-r ${gradient}` : ""}`}
+              style={gradient.includes("linear-gradient") ? { background: gradient } : {}}
             >
               Start Assessment
               <ArrowRight className="h-4 w-4" />

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"tech-assessment-engine/internal/models"
@@ -77,10 +78,37 @@ func shuffleWithSeed[T any](items []T, seed string) []T {
 	return array
 }
 
-// resolveUserId selects target or default user_id from DB
-func (s *AssessmentService) resolveUserId(tx *gorm.DB, userId *int64) (int64, error) {
+// resolveUserId selects target or default user_id from DB. Supports numeric user ID and email string.
+func (s *AssessmentService) resolveUserId(tx *gorm.DB, userId interface{}) (int64, error) {
 	if userId != nil {
-		return *userId, nil
+		switch v := userId.(type) {
+		case int64:
+			return v, nil
+		case int:
+			return int64(v), nil
+		case float64:
+			return int64(v), nil
+		case *int64:
+			if v != nil {
+				return *v, nil
+			}
+		case string:
+			trimmed := strings.TrimSpace(v)
+			if trimmed != "" {
+				// Try parsing as integer
+				if parsed, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+					return parsed, nil
+				}
+				// Otherwise, treat as email if it contains '@'
+				if strings.Contains(trimmed, "@") {
+					var id int64
+					err := tx.Raw("SELECT id FROM users WHERE email = ?", trimmed).Scan(&id).Error
+					if err == nil && id > 0 {
+						return id, nil
+					}
+				}
+			}
+		}
 	}
 	var id int64
 	err := tx.Raw("SELECT id FROM users ORDER BY id LIMIT 1").Scan(&id).Error
@@ -91,7 +119,7 @@ func (s *AssessmentService) resolveUserId(tx *gorm.DB, userId *int64) (int64, er
 }
 
 // GetAttemptsStats retrieves attempt counts per module type for a user
-func (s *AssessmentService) GetAttemptsStats(userId *int64) (map[string]map[string]int64, error) {
+func (s *AssessmentService) GetAttemptsStats(userId interface{}) (map[string]map[string]int64, error) {
 	db := repository.GetDB()
 	resolvedUserId, err := s.resolveUserId(db, userId)
 	if err != nil {

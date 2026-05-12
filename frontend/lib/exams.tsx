@@ -29,6 +29,8 @@ export const CODING_LANGUAGES: CodingLanguage[] = [
 
 export interface ExtendedExam extends Exam {
   track: AssessmentTrack;
+  trialAttemptsLimit?: number;
+  mainAttemptsLimit?: number;
 }
 
 export interface PricingTier {
