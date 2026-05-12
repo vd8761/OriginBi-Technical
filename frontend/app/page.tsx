@@ -50,13 +50,25 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 import { useSession } from "@/lib/contexts/SessionContext";
 import { useRouter } from "next/navigation";
 
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
+
 function HomeContent() {
   const { isLoggedIn, user, isLoading } = useSession();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
+  const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
+    // Check for view parameter
+    const viewParam = searchParams.get("view");
+    const validViews: AssessmentView[] = ["dashboard", "assessment", "profile", "details", "explore"];
+    if (viewParam && validViews.includes(viewParam as AssessmentView)) {
+      setInitialView(viewParam as AssessmentView);
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    
     // Check for completion parameter
     const completed = searchParams.get("completed");
     if (completed) {
@@ -95,9 +107,7 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={() => router.replace("/explore")} />
       ) : (
-        <div className="min-h-screen flex items-center justify-center bg-[#f5fbf7] dark:bg-[#0f1712]">
-          <div className="w-10 h-10 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
-        </div>
+        <AssessmentPortal userName={user?.name} />
       )}
     </>
   );

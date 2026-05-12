@@ -1,27 +1,52 @@
 "use client";
 
-import React, { Suspense } from "react";
-import AssessmentPortal from "@/components/student/AssessmentPortal";
+import React from "react";
+import { useRouter } from "next/navigation";
+import ExploreView from "@/components/student/ExploreView";
+import Header from "@/components/student/Header";
+import { EXAMS, EXAM_DETAILS } from "@/lib/exams";
 
-function ExplorePageContent() {
-  return <AssessmentPortal userName="Student" initialView="explore" />;
-}
+export default function ExplorePage() {
+  const router = useRouter();
 
-export default function StudentExplorePage() {
+  const handleNavigateToDetails = (exam: any) => {
+    router.push(`/explore/${exam.id}`);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("originbi:access-token");
+    localStorage.removeItem("originbi:id-token");
+    localStorage.removeItem("originbi:user-profile");
+    router.push("/");
+  };
+
+  const handleNavigate = (view: string) => {
+    if (view === "explore") {
+      // Already on explore
+      return;
+    }
+    // Route to home page with view parameter for other pages
+    if (view === "dashboard" || view === "assessment" || view === "profile") {
+      router.push(`/?view=${view}`);
+    } else {
+      router.push("/");
+    }
+  };
+
   return (
-    <main className="min-h-screen">
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center bg-[#f5fbf7] dark:bg-[#0f1712]">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Loading explore...</p>
-            </div>
-          </div>
-        }
-      >
-        <ExplorePageContent />
-      </Suspense>
-    </main>
+    <div className="min-h-screen bg-[#FAFAFA] dark:bg-brand-dark-primary">
+      <Header
+        currentView="explore"
+        onNavigate={handleNavigate}
+        onLogout={handleLogout}
+      />
+      <main className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
+        <ExploreView
+          assessments={EXAMS as any}
+          examDetails={EXAM_DETAILS as any}
+          onNavigateToDetails={handleNavigateToDetails}
+        />
+      </main>
+    </div>
   );
 }

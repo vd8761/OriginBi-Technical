@@ -36,4 +36,31 @@ export class AssessmentController {
     return data;
   }
 
+  @Post(':module/attempts/block-based')
+  async startBlockBasedAttempt(@Param('module') module: string, @Body() body: any) {
+    const data = await this.assessmentService.startBlockBasedAttempt(module, body);
+    return data;
+  }
+
+  @Post(':module/attempts/:token/blocks/:blockNumber/next')
+  async getNextBlock(
+    @Param('token') token: string,
+    @Param('blockNumber') blockNumber: string,
+    @Body() performance: { accuracy: number; timeTaken: number; answers: Record<string, string> }
+  ) {
+    const blockNumberNum = parseInt(blockNumber);
+    const data = await this.assessmentService.getNextBlock(token, blockNumberNum, performance);
+    return data;
+  }
+
+  @Post(':module/attempts/:token/submit-block-based')
+  async submitBlockBasedAttempt(
+    @Param('module') module: string,
+    @Param('token') token: string,
+    @Body() body: { answers: Record<string, string> }
+  ) {
+    const data = await this.assessmentService.submitBlockBasedAttempt(module, token, body);
+    return data;
+  }
+
 }

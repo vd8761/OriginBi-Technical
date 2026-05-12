@@ -76,6 +76,12 @@ export interface CacheSession {
   currentIndex: number;
   /** Submission status – guard against serving stale data */
   status: 'in_progress' | 'submitted';
+  /** Adaptive assessment properties */
+  currentBlock?: any;
+  currentBlockNumber?: number;
+  blockConfig?: any;
+  attemptToken?: string;
+  completedBlocks?: number[];
 }
 
 // ── localStorage helpers ───────────────────────────────────────
