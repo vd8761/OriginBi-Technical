@@ -9,6 +9,7 @@ export interface ProctoringSettings {
     detectMouseLeave: boolean;
     detectFullscreenExit: boolean;
     blockCopyPaste: boolean;
+    blockBrowserShortcuts: boolean;
 }
 
 export const DEFAULT_PROCTORING: ProctoringSettings = {
@@ -18,13 +19,15 @@ export const DEFAULT_PROCTORING: ProctoringSettings = {
     detectMouseLeave: false,
     detectFullscreenExit: false,
     blockCopyPaste: true,
+    blockBrowserShortcuts: true,
 };
 
 export type ProctoringCounter =
     | "rightClick"
     | "mouseLeave"
     | "fullscreenExit"
-    | "copyPaste";
+    | "copyPaste"
+    | "browserShortcut";
 
 export type ProctoringCounters = Record<ProctoringCounter, number>;
 
@@ -33,6 +36,7 @@ export const EMPTY_COUNTERS: ProctoringCounters = {
     mouseLeave: 0,
     fullscreenExit: 0,
     copyPaste: 0,
+    browserShortcut: 0,
 };
 
 const SETTINGS_KEY = "ob_proctoring_settings";
@@ -132,6 +136,77 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
         document.addEventListener("fullscreenchange", handler);
         return () => document.removeEventListener("fullscreenchange", handler);
     }, [active, settings.detectFullscreenExit, onViolation]);
+
+    // Block browser shortcuts that would either steal focus to a native
+    // dialog (Ctrl+S "Save Page" / Ctrl+P "Print" → falsely registers as a
+    // tab switch when the dialog steals focus) or open devtools / view-source
+    // (Ctrl+Shift+I / Ctrl+U / F12) which defeat the proctoring entirely.
+    //
+    // We deliberately do NOT block Ctrl+C inside the code editor — that's
+    // handled by the copy/paste rule below which exempts `.code-textarea`.
+    useEffect(() => {
+        if (!active || !settings.blockBrowserShortcuts) return;
+        const handler = (e: KeyboardEvent) => {
+            const k = e.key.toLowerCase();
+            const mod = e.ctrlKey || e.metaKey;
+
+            // Single-key blocks
+            if (e.key === "F12") {
+                e.preventDefault();
+                e.stopPropagation();
+                onViolation("browserShortcut", {
+                    title: "Devtools blocked",
+                    desc: "Opening developer tools is disabled during the assessment.",
+                });
+                return;
+            }
+
+            if (!mod) return;
+
+            // Ctrl/Cmd + Shift + I / J / C — devtools / inspector
+            if (e.shiftKey && (k === "i" || k === "j" || k === "c")) {
+                e.preventDefault();
+                e.stopPropagation();
+                onViolation("browserShortcut", {
+                    title: "Inspector blocked",
+                    desc: "Developer tools shortcuts are disabled during the assessment.",
+                });
+                return;
+            }
+
+            // Ctrl/Cmd-only browser dialogs and view-source
+            const blocked: Record<string, { title: string; desc: string }> = {
+                s: { title: "Save page blocked", desc: "Press the assessment's Submit button to finish — not Ctrl+S." },
+                p: { title: "Print blocked", desc: "Printing the assessment is disabled." },
+                o: { title: "Open file blocked", desc: "Opening local files is disabled during the assessment." },
+                u: { title: "View source blocked", desc: "Viewing page source is disabled during the assessment." },
+                // Find dialogs steal focus, which the tab-switch monitor
+                // would otherwise count as cheating.
+                f: { title: "Browser find blocked", desc: "Use the editor's built-in find (inside the code area) instead." },
+                g: { title: "Browser find blocked", desc: "Use the editor's built-in find (inside the code area) instead." },
+                // Page reload — accidental Ctrl+R / Ctrl+F5 would destroy the session.
+                r: { title: "Reload blocked", desc: "Reloading the page is disabled mid-assessment." },
+            };
+            if (blocked[k]) {
+                e.preventDefault();
+                e.stopPropagation();
+                onViolation("browserShortcut", blocked[k]);
+                return;
+            }
+        };
+        // beforeunload guards against Ctrl+W / window close attempts as a
+        // last-resort prompt so the candidate doesn't lose their work.
+        const beforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = "";
+        };
+        document.addEventListener("keydown", handler, true);
+        window.addEventListener("beforeunload", beforeUnload);
+        return () => {
+            document.removeEventListener("keydown", handler, true);
+            window.removeEventListener("beforeunload", beforeUnload);
+        };
+    }, [active, settings.blockBrowserShortcuts, onViolation]);
 
     // Copy / paste / cut block — except in the code editor textarea
     useEffect(() => {

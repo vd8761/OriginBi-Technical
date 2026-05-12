@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/originbi/exam-engine/internal/auth"
 	"github.com/originbi/exam-engine/internal/db"
 )
 
@@ -26,14 +27,18 @@ type Server struct {
 	limiter         *rateLimiter
 	codeRunSem      chan struct{}
 	judgeHTTPClient *http.Client
+	cognito         *auth.CognitoVerifier
+	defaultOrgID    string
 }
 
-func New(pool *db.Pool, logger *slog.Logger) *Server {
+func New(pool *db.Pool, logger *slog.Logger, cognito *auth.CognitoVerifier, defaultOrgID string) *Server {
 	s := &Server{
-		pool:       pool,
-		logger:     logger,
-		limiter:    newRateLimiter(),
-		codeRunSem: make(chan struct{}, envInt("JUDGE0_MAX_CONCURRENCY", 12)),
+		pool:         pool,
+		logger:       logger,
+		cognito:      cognito,
+		defaultOrgID: defaultOrgID,
+		limiter:      newRateLimiter(),
+		codeRunSem:   make(chan struct{}, envInt("JUDGE0_MAX_CONCURRENCY", 12)),
 		judgeHTTPClient: &http.Client{
 			Timeout: envDurationSeconds("JUDGE0_HTTP_TIMEOUT_SECONDS", 95*time.Second),
 			Transport: &http.Transport{
@@ -117,8 +122,8 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With, Authorization, X-User-Id, X-Org-Id")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

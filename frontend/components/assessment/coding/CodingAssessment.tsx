@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import QuestionPanel from "./QuestionPanel";
 import CodeEditor, { LANG_META, readPrefs, writePrefs } from "./CodeEditor";
 import SubmitModal, { type QStatus } from "./SubmitModal";
+import SubmittingModal, { type SubmitPhase } from "./SubmittingModal";
 import CompletionScreen from "./CompletionScreen";
 import DevControls from "./DevControls";
 import GuidelinesModal from "./GuidelinesModal";
@@ -39,6 +40,8 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 
 const STATUS_KEY = "ob_statuses";
 const CURRENT_Q_KEY = "ob_current_q";
+const PENDING_SUBMIT_KEY = "ob_pending_submission";
+const MAX_SUBMIT_ATTEMPTS = 8;
 const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
 type AssessmentMode = "trial" | "main";
 type LegacyAssessmentConfig = {
@@ -588,6 +591,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     const [showSubmit, setShowSubmit] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState("");
+    const [submitPhase, setSubmitPhase] = useState<SubmitPhase | null>(null);
+    const [submitAttemptNo, setSubmitAttemptNo] = useState(1);
+    const [submitNextRetryIn, setSubmitNextRetryIn] = useState(0);
+    // Mutable refs so async submit loop sees latest state without re-binding.
+    const submitTriggerRef = useRef<(() => void) | null>(null);
     const [saved, setSaved] = useState(true);
     const [splitPct, setSplitPct] = useState(42);
     const [fontSize, setFontSize] = useState(14);
@@ -1091,58 +1099,184 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             window.localStorage.removeItem(CURRENT_Q_KEY);
             window.localStorage.removeItem(STATUS_KEY);
             window.localStorage.removeItem("ob_tab_switches");
+            window.localStorage.removeItem("ob_tab_switch_grace_start");
+            window.localStorage.removeItem(PENDING_SUBMIT_KEY);
         } catch {
             /* ignore */
         }
     }, []);
 
+    // Submit is intentionally a resilient, non-cancellable flow:
+    //   1. Snapshot the answer set + attempt id and stash it in localStorage
+    //      so a page reload / browser crash can resume.
+    //   2. Show a non-closable "Submitting…" modal.
+    //   3. Try up to MAX_ATTEMPTS with exponential backoff between failures.
+    //   4. On terminal failure, surface a manual Retry button; the timer
+    //      stays paused and answers stay buffered until the user retries.
+    //   5. Only on a 200 do we mark `submitted` and clear storage.
+
+    const performSubmitWithRetry = useCallback(
+        async (
+            attemptId: string,
+            answers: Array<{
+                examQuestionId: string;
+                state: string;
+                payload: ReturnType<typeof buildPayloadForQuestion>;
+            }>,
+        ) => {
+            setSubmitPhase("submitting");
+            setSubmitAttemptNo(1);
+
+            for (let i = 1; i <= MAX_SUBMIT_ATTEMPTS; i++) {
+                setSubmitAttemptNo(i);
+                setSubmitPhase("submitting");
+                try {
+                    await submitAttempt(attemptId, answers);
+                    setSubmitPhase("succeeded");
+                    traceEvent("attempt.submit_succeeded", 0, {
+                        answerCount: answers.length,
+                        attemptNumber: i,
+                    });
+                    void flushTraceEvents();
+                    try {
+                        window.localStorage.removeItem(PENDING_SUBMIT_KEY);
+                    } catch { /* ignore */ }
+                    // Brief delay so the user sees the success state.
+                    await new Promise((r) => setTimeout(r, 700));
+                    return true;
+                } catch (err) {
+                    const message =
+                        err instanceof Error ? err.message : "Submit failed.";
+                    traceEvent("attempt.submit_attempt_failed", 2, {
+                        error: message,
+                        attemptNumber: i,
+                    });
+                    void flushTraceEvents();
+
+                    // If the server explicitly returned 4xx (other than 401 which
+                    // the api layer auto-refreshes), it won't get better — bail.
+                    const status = (err as any)?.status as number | undefined;
+                    const isRetriable =
+                        status === undefined || status >= 500 || status === 401 || status === 408;
+
+                    if (!isRetriable || i === MAX_SUBMIT_ATTEMPTS) {
+                        setSubmitError(message);
+                        setSubmitPhase("failed_offline");
+                        return false;
+                    }
+                    // Exponential backoff with cap.
+                    const delaySeconds = Math.min(30, 2 ** i);
+                    setSubmitPhase("retrying");
+                    for (let s = delaySeconds; s > 0; s--) {
+                        setSubmitNextRetryIn(s);
+                        await new Promise((r) => setTimeout(r, 1000));
+                    }
+                }
+            }
+            return false;
+        },
+        [flushTraceEvents, traceEvent],
+    );
+
     const handleConfirmSubmit = useCallback(async () => {
         setShowSubmit(false);
         setSubmitError("");
-        try {
-            if (backendAttemptId) {
-                traceEvent("attempt.submit_clicked", 0, {
-                    answeredQuestions: Object.keys(answerPayloads).length,
-                    statuses,
-                    timeRemaining: timer.time,
-                });
-                await flushTraceEvents();
-                const answers = questions.map((question) => ({
-                    examQuestionId: examQuestionByLocalId[question.id],
-                    state: statuses[question.id] ?? "unattempted",
-                    payload: buildPayloadForQuestion(question.id),
-                })).filter((answer) => !!answer.examQuestionId);
-                await submitAttempt(backendAttemptId, answers);
-                traceEvent("attempt.submit_succeeded", 0, {
-                    answerCount: answers.length,
-                });
-                await flushTraceEvents();
-            }
+
+        // Pause the timer immediately so it doesn't keep ticking while we submit.
+        timer.setRunning(false);
+
+        if (!backendAttemptId) {
+            // No backend — local-only path (offline demo). Just mark done.
             setSubmitted(true);
-            timer.setRunning(false);
             timer.clear();
             clearStorage();
-        } catch (err) {
-            setSubmitError(err instanceof Error ? err.message : "Submit failed.");
-            traceEvent("attempt.submit_failed", 2, {
-                error: err instanceof Error ? err.message : "Submit failed.",
-            });
-            void flushTraceEvents();
-            setSubmitted(false);
-            timer.setRunning(true);
+            return;
         }
+
+        traceEvent("attempt.submit_clicked", 0, {
+            answeredQuestions: Object.keys(answerPayloads).length,
+            statuses,
+            timeRemaining: timer.time,
+        });
+        await flushTraceEvents();
+
+        const answers = questions
+            .map((question) => ({
+                examQuestionId: examQuestionByLocalId[question.id],
+                state: statuses[question.id] ?? "unattempted",
+                payload: buildPayloadForQuestion(question.id),
+            }))
+            .filter((answer) => !!answer.examQuestionId);
+
+        // Persist the pending submission so a reload / crash can resume.
+        try {
+            window.localStorage.setItem(
+                PENDING_SUBMIT_KEY,
+                JSON.stringify({
+                    attemptId: backendAttemptId,
+                    answers,
+                    createdAt: Date.now(),
+                }),
+            );
+        } catch { /* ignore quota */ }
+
+        // Bind a manual-retry callback so the modal's button can re-enter the loop.
+        const runOnce = async () => {
+            const ok = await performSubmitWithRetry(backendAttemptId, answers);
+            if (ok) {
+                setSubmitted(true);
+                setSubmitPhase(null);
+                timer.clear();
+                clearStorage();
+            }
+        };
+        submitTriggerRef.current = runOnce;
+        await runOnce();
     }, [
+        answerPayloads,
         backendAttemptId,
         buildPayloadForQuestion,
         clearStorage,
         examQuestionByLocalId,
         flushTraceEvents,
-        answerPayloads,
+        performSubmitWithRetry,
         questions,
         statuses,
         timer,
         traceEvent,
     ]);
+
+    // Auto-resume an interrupted submission on mount (e.g. user reloaded
+    // while the modal was up). Picks up the same buffer that was persisted.
+    useEffect(() => {
+        if (!backendAttemptId || submitted || submitPhase) return;
+        let raw: string | null = null;
+        try {
+            raw = window.localStorage.getItem(PENDING_SUBMIT_KEY);
+        } catch { /* ignore */ }
+        if (!raw) return;
+        try {
+            const pending = JSON.parse(raw) as {
+                attemptId: string;
+                answers: Array<{ examQuestionId: string; state: string; payload: any }>;
+            };
+            if (pending.attemptId !== backendAttemptId) return;
+            timer.setRunning(false);
+            const resume = async () => {
+                const ok = await performSubmitWithRetry(pending.attemptId, pending.answers);
+                if (ok) {
+                    setSubmitted(true);
+                    setSubmitPhase(null);
+                    timer.clear();
+                    clearStorage();
+                }
+            };
+            submitTriggerRef.current = resume;
+            void resume();
+        } catch { /* ignore */ }
+        // We intentionally only run this once when backendAttemptId resolves.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [backendAttemptId]);
 
     useEffect(() => {
         if (timer.time <= 0 && !submitted) {
@@ -1448,13 +1582,29 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 </div>
             )}
 
-            {showSubmit && (
+            {showSubmit && submitPhase === null && (
                 <SubmitModal
                     statuses={statuses}
                     total={questions.length}
                     tabSwitches={tabSwitchCount}
                     onConfirm={handleConfirmSubmit}
                     onCancel={() => setShowSubmit(false)}
+                />
+            )}
+
+            {submitPhase !== null && (
+                <SubmittingModal
+                    phase={submitPhase}
+                    attempt={submitAttemptNo}
+                    maxAttempts={MAX_SUBMIT_ATTEMPTS}
+                    nextRetryInSeconds={submitNextRetryIn}
+                    errorMessage={submitError}
+                    onManualRetry={() => {
+                        if (submitTriggerRef.current) {
+                            setSubmitError("");
+                            void submitTriggerRef.current();
+                        }
+                    }}
                 />
             )}
 

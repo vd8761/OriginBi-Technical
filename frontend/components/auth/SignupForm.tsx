@@ -240,18 +240,18 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
       const session = await registerUser({
         email: formData.email,
         password: formData.password,
-        name: formData.name,
+        fullName: formData.name,
         gender: formData.gender,
         countryCode: formData.countryCode,
-        phone: formData.phone,
+        mobileNumber: formData.phone,
         role: formData.role,
       });
-      onSignupSuccess?.(session.registration.fullName || session.user.email);
+      onSignupSuccess?.(session.registration?.fullName || session.user.email);
     } catch (err) {
       setGeneralError(
         err instanceof ApiError
           ? err.message
-          : "Unable to create account. Check that the exam engine is running.",
+          : "Unable to create account. Please try again.",
       );
     } finally {
       setIsSubmitting(false);

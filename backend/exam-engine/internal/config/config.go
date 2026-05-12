@@ -21,10 +21,17 @@ type Config struct {
 	HeartbeatGrace         time.Duration
 	RunMigrations          bool
 	EnsurePartitionsOnBoot bool
+
+	CognitoRegion     string
+	CognitoUserPoolID string
+	CognitoClientID   string
+	DefaultOrgID      string
 }
 
 func Load() (*Config, error) {
-	// .env is optional — silently ignore if missing.
+	// .env.local is optional — silently ignore if missing. Fall back to .env
+	// for backward compatibility, then to whatever the process already has.
+	_ = godotenv.Load(".env.local")
 	_ = godotenv.Load()
 
 	dbURL := os.Getenv("DATABASE_URL")
@@ -39,6 +46,13 @@ func Load() (*Config, error) {
 		HeartbeatGrace:         getDuration("HEARTBEAT_GRACE_SECONDS", 60*time.Second),
 		RunMigrations:          getBool("RUN_MIGRATIONS", true),
 		EnsurePartitionsOnBoot: getBool("ENSURE_PARTITIONS_ON_BOOT", true),
+		CognitoRegion:          os.Getenv("COGNITO_REGION"),
+		CognitoUserPoolID:      os.Getenv("COGNITO_USER_POOL_ID"),
+		CognitoClientID:        os.Getenv("COGNITO_CLIENT_ID"),
+		DefaultOrgID:           getenv("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001"),
+	}
+	if cfg.CognitoRegion == "" || cfg.CognitoUserPoolID == "" || cfg.CognitoClientID == "" {
+		return nil, errors.New("COGNITO_REGION, COGNITO_USER_POOL_ID, and COGNITO_CLIENT_ID are required")
 	}
 	return cfg, nil
 }

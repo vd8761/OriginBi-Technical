@@ -63,7 +63,7 @@ function HomeContent() {
     getSession()
       .then((session) => {
         if (session) {
-          setUserName(session.registration.fullName || session.user.email);
+          setUserName(session.registration?.fullName || session.user.email);
           setIsLoggedIn(true);
         }
       })
