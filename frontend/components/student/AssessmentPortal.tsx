@@ -152,6 +152,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
   }, [dynamicExams, filter, isPaid]);
 
+  const hasPurchasedAny = useMemo(() => {
+    return dynamicExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey));
+  }, [dynamicExams, isPaid]);
+
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);
   };
@@ -388,32 +392,80 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredExams.map((exam) => (
-                <AssessmentCard
-                  key={exam.id}
-                  title={exam.title}
-                  description={exam.description}
-                  statusLabel={exam.statusLabel}
-                  statusTone={exam.available ? "success" : "warning"}
-                  totalQuestions={exam.questions}
-                  duration={exam.duration}
-                  price={`₹${exam.price}`}
-                  tags={exam.tags}
-                  icon={exam.icon}
-                  available={exam.available}
-                  level={exam.difficulty}
-                  insight={exam.statusLabel}
-                  accentColor={exam.accentColor}
-                  gradient={exam.gradient}
-                  trialAttemptsLimit={(exam as any).trialAttemptsLimit}
-                  mainAttemptsLimit={(exam as any).mainAttemptsLimit}
-                  onDetailsClick={() => handleSelectExam(exam)}
-                  onTrialClick={() => handleCardTrialStart(exam)}
-                  onMainClick={() => handleCardMainStart(exam)}
-                />
-              ))}
-            </div>
+            {!hasPurchasedAny ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 sm:p-16 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111a15] max-w-2xl mx-auto my-12 relative overflow-hidden">
+                <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[#1ED36A] mb-8">
+                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+
+                <h3 className="text-2xl font-bold text-black dark:text-white tracking-tight leading-tight mb-3">
+                  Access Your Assessments
+                </h3>
+                
+                <p className="text-[14px] leading-relaxed text-black dark:text-white max-w-md mb-8">
+                  You haven't unlocked any assessments on your account. Go to the <span className="font-bold text-[#1ED36A]">Explore</span> page to browse and select evaluations.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("explore")}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#1ED36A] hover:bg-[#1bb85c] text-white font-bold uppercase tracking-wider text-[11px] px-8 py-3.5 transition-all duration-200 active:scale-95 cursor-pointer"
+                >
+                  <span>Explore Assessments</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              </div>
+            ) : filteredExams.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 sm:p-12 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111a15] max-w-md mx-auto my-12">
+                <div className="flex items-center justify-center w-14 h-14 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-black dark:text-white mx-auto flex items-center justify-center mb-5">
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-bold text-black dark:text-white mb-2">No Matching Assessments</h4>
+                <p className="text-[13px] text-black dark:text-white leading-relaxed mb-6">
+                  None of your unlocked assessments match the selected track. Try choosing another filter above or clear the filter.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredExams.map((exam) => (
+                  <AssessmentCard
+                    key={exam.id}
+                    title={exam.title}
+                    description={exam.description}
+                    statusLabel={exam.statusLabel}
+                    statusTone={exam.available ? "success" : "warning"}
+                    totalQuestions={exam.questions}
+                    duration={exam.duration}
+                    price={`₹${exam.price}`}
+                    tags={exam.tags}
+                    icon={exam.icon}
+                    available={exam.available}
+                    level={exam.difficulty}
+                    insight={exam.statusLabel}
+                    accentColor={exam.accentColor}
+                    gradient={exam.gradient}
+                    trialAttemptsLimit={(exam as any).trialAttemptsLimit}
+                    mainAttemptsLimit={(exam as any).mainAttemptsLimit}
+                    onDetailsClick={() => handleSelectExam(exam)}
+                    onTrialClick={() => handleCardTrialStart(exam)}
+                    onMainClick={() => handleCardMainStart(exam)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : currentView === "dashboard" ? (
           <DashboardContent

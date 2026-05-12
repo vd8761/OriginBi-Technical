@@ -67,6 +67,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
             const order = await orderRes.json();
 
+            // Check if Razorpay is explicitly disabled in client environment
+            const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
+
+            if (isRazorpayDisabled) {
+                // Directly call backend to verify and record mock sandbox payment
+                const verifyRes = await fetch(`${TECH_API_URL}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId: assessmentId || 1,
+                        assessmentCode: assessmentCode || "general",
+                        razorpay_order_id: order.orderId,
+                        razorpay_payment_id: `pay_sandbox_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_mock",
+                        amount,
+                    }),
+                });
+
+                if (!verifyRes.ok) {
+                    throw new Error("Sandbox payment recording failed on backend.");
+                }
+
+                const result = await verifyRes.json();
+                setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                setPaidAt(new Date());
+                setStage("success");
+                return;
+            }
+
             // 2. Load Razorpay script dynamically
             const script = document.createElement("script");
             script.src = "https://checkout.razorpay.com/v1/checkout.js";
