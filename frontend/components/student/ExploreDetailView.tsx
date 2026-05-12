@@ -99,6 +99,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [showMncModal, setShowMncModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [assessmentMode, setAssessmentMode] = useState<"trial" | "main">("main");
     const [pendingCodingLang, setPendingCodingLang] = useState<CodingLanguage | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<
         | { kind: "exam"; key: PaymentKey; title: string; subtitle: string }
@@ -130,6 +131,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         }
 
         if (examPaid) {
+            setAssessmentMode("main");
             startNonCodingAssessment();
             return;
         }
@@ -189,7 +191,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handleTrial = () => {
         if (!isReady) return;
-        alert("Trial assessment coming soon.");
+        if (isCoding) {
+            router.push(`/assessment/coding?mode=trial`);
+            return;
+        }
+        setAssessmentMode("trial");
+        startNonCodingAssessment();
     };
 
     const isCodingPaid = useCallback(
@@ -217,16 +224,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
                 />
                 <div className="absolute inset-0 opacity-[0.10] dark:opacity-[0.06] assessment-grid" />
-            </div>
-
-            <Header
+            </div>             <Header
                 currentView="explore"
                 onNavigate={(view) => {
-                    if (view === "explore") {
-                        router.push("/");
-                    } else {
-                        router.push(`/?view=${view}`);
-                    }
+                    router.push(`/${view}`);
                 }}
                 onLogout={() => {
                     void logoutUser().finally(() => router.push("/"));
@@ -237,7 +238,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 {/* Back to explore */}
                 <button
                     type="button"
-                    onClick={() => router.push("/")}
+                    onClick={() => router.push("/explore")}
                     className="inline-flex items-center gap-2 self-start rounded-full bg-white/70 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-gray-300 transition-all hover:border-[#1ED36A]/40 hover:text-slate-900 dark:hover:text-white"
                 >
                     <ArrowLeftIcon className="w-3.5 h-3.5" />
@@ -538,25 +539,29 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             {/* Pre-test gates */}
             {showAptitudeModal && (
                 <AptitudePreTest
-                    onStart={() => router.push("/assessment/aptitude")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
                     onClose={() => setShowAptitudeModal(false)}
                 />
             )}
             {showCommunicationModal && (
                 <CommunicationPreTest
-                    onStart={() => router.push("/assessment/communication")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
                     onClose={() => setShowCommunicationModal(false)}
                 />
             )}
             {showRoleModal && (
                 <RolePreTest
-                    onStart={() => router.push("/assessment/role")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
                     onClose={() => setShowRoleModal(false)}
                 />
             )}
             {showMncModal && (
                 <MNCPreTest
-                    onStart={() => router.push("/assessment/mnc")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
                     onClose={() => setShowMncModal(false)}
                 />
             )}
@@ -575,10 +580,11 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             {pendingCodingLang && (
                 <CodingPreTest
                     language={pendingCodingLang}
-                    onStart={() => {
+                    mode={assessmentMode}
+                    onStart={(mode) => {
                         const langId = pendingCodingLang.id;
                         setPendingCodingLang(null);
-                        router.push(`/assessment/coding?lang=${langId}`);
+                        router.push(`/assessment/coding?lang=${langId}&mode=${mode}`);
                     }}
                     onClose={() => setPendingCodingLang(null)}
                 />

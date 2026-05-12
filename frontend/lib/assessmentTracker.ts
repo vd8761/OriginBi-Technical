@@ -133,7 +133,7 @@ export function useAssessmentTracker() {
       read: false,
       action: {
         label: "View Results",
-        href: "/student/dashboard",
+        href: "/dashboard",
       },
     };
 

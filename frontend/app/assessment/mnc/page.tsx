@@ -56,7 +56,7 @@ function MNCAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        router.push('/student/dashboard?completed=mnc');
+        router.push('/dashboard?completed=mnc');
     };
 
     return (

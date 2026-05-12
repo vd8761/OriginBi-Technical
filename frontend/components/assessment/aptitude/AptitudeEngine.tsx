@@ -62,7 +62,7 @@ const labelForIndex = (index: number) => String.fromCharCode(65 + index);
 
 const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     onComplete,
-    assessmentCode = "TECH_APT_001",
+    assessmentCode = "APTITUDE_DEFAULT",
     userId,
     mode = 'main',
 }) => {
@@ -85,6 +85,38 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     // Ref to prevent double-fetching when cache restoration already set questions
     const cacheRestoredRef = useRef(false);
 
+    const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
+    const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchEngineStats = async () => {
+            try {
+                const [statsRes, assessmentsRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                ]);
+                const statsJson = await statsRes.json();
+                if (statsJson?.data) {
+                    const cnt = statsJson.data['aptitude']?.[mode] ?? 0;
+                    setAttemptsCount(cnt > 0 ? cnt : 1);
+                }
+                const assessmentsJson = await assessmentsRes.json();
+                if (assessmentsJson?.data) {
+                    const found = assessmentsJson.data.find(
+                        (a: any) => a.module_type === 'aptitude' || a.assessment_code === 'aptitude'
+                    );
+                    if (found) {
+                        const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
+                        setAttemptsLimit(Number(lim));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load engine attempts stats:", err);
+            }
+        };
+        fetchEngineStats();
+    }, [mode]);
+
     // ── Cache hook ──────────────────────────────────────────────
     const {
         cachedSession,
@@ -96,7 +128,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     } = useAssessmentCache({
         token:           attemptToken,
         module:          'aptitude',
-        assessmentCode,
+        assessmentCode:  `${assessmentCode}_${mode}`,
         questions,
         expiresAt:       undefined,
         answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),
@@ -379,9 +411,20 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     </div>
                     <div className="mx-4 hidden h-8 w-px bg-slate-300 dark:bg-white/10 sm:block" />
                     <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Aptitude Assessment</p>
-                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
-                            Test workspace
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Aptitude Assessment</p>
+                            {mode === 'trial' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    Trial Test
+                                </span>
+                            )}
+                        </div>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
+                            <span>Test workspace</span>
+                            <span className="text-slate-900 dark:text-white font-normal">&middot;</span>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                                Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
+                            </span>
                         </h1>
                     </div>
                 </div>

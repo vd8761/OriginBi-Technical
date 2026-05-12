@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   turbopack: {
-    root: path.resolve(),
+    root: path.resolve(__dirname),
   },
   experimental: {
     preloadEntriesOnStart: false,
