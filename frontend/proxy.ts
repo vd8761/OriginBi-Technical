@@ -8,12 +8,17 @@ const ENGINE_INTERNAL_URL =
   configuredEngineURL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8088");
 
 export async function proxy(req: NextRequest) {
+  if (req.nextUrl.pathname === "/admin/login") {
+    return NextResponse.next();
+  }
+
   const cookie = req.headers.get("cookie") ?? "";
   const sessionURL = ENGINE_INTERNAL_URL
     ? `${ENGINE_INTERNAL_URL}/v1/auth/session`
     : new URL("/v1/auth/session", req.url).toString();
   const session = await fetch(sessionURL, {
-    headers: { cookie },
+    headers: cookie ? { Cookie: cookie } : {},
+    credentials: "include",
     cache: "no-store",
   }).catch(() => null);
 
@@ -29,5 +34,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/explore/:path*", "/assessment/:path*", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/student/:path*", "/explore/:path*", "/assessment/:path*", "/admin/:path*"],
 };

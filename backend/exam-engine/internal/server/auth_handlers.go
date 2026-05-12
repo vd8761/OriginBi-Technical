@@ -34,6 +34,22 @@ type authResponse struct {
 	ExpiresAt    time.Time       `json:"expiresAt,omitempty"`
 }
 
+type sessionContextKey struct{}
+
+type sessionContextValue struct {
+	user    userDTO
+	expires time.Time
+}
+
+func withSessionContext(ctx context.Context, user userDTO, expires time.Time) context.Context {
+	return context.WithValue(ctx, sessionContextKey{}, sessionContextValue{user: user, expires: expires})
+}
+
+func sessionFromContext(ctx context.Context) (sessionContextValue, bool) {
+	v, ok := ctx.Value(sessionContextKey{}).(sessionContextValue)
+	return v, ok
+}
+
 type userDTO struct {
 	ID      int64  `json:"id"`
 	Email   string `json:"email"`
@@ -237,26 +253,32 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
-	user, expires, ok := s.userFromSession(r.Context(), r)
+	session, ok := sessionFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthenticated")
-		return
+		user, expires, found := s.userFromSession(r.Context(), r)
+		if !found {
+			writeError(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		session = sessionContextValue{user: user, expires: expires}
 	}
-	reg, _ := s.registrationForUser(r.Context(), user.ID)
-	writeJSON(w, http.StatusOK, authResponse{User: user, Registration: reg, ExpiresAt: expires})
+	reg, _ := s.registrationForUser(r.Context(), session.user.ID)
+	writeJSON(w, http.StatusOK, authResponse{User: session.user, Registration: reg, ExpiresAt: session.expires})
 }
 
 func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, _, ok := s.userFromSession(r.Context(), r)
+		user, expires, ok := s.userFromSession(r.Context(), r)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), auth.Principal{
+		ctx := withSessionContext(r.Context(), user, expires)
+		ctx = auth.WithPrincipal(ctx, auth.Principal{
 			UserID: user.ID,
 			OrgID:  "00000000-0000-0000-0000-000000000001",
-		})))
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

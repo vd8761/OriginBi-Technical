@@ -10,6 +10,9 @@ The older Exam Portal Plan still defines the product intent: a multi-tenant asse
 
 - Backend schema source of truth: [database-plan.md](../../backend/exam-engine/docs/database-plan.md)
 - Go exam-engine status: [implementation-status-and-next-steps.md](../../backend/exam-engine/docs/implementation-status-and-next-steps.md)
+- Plugin architecture index: [README.md](../../backend/exam-engine/docs/plugin-architecture/README.md)
+- Plugin model: [plugin-model.md](../../backend/exam-engine/docs/plugin-architecture/plugin-model.md)
+- Frontend plugin admin plan: [plugin-admin-portal-plan.md](plugin-admin-portal-plan.md)
 - Judge0 service status: [service-status-and-next-steps.md](../../backend/judge0/docs/service-status-and-next-steps.md)
 
 ## Completed

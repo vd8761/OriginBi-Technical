@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,6 +86,25 @@ func TestSessionCookieDeploymentControls(t *testing.T) {
 	}
 }
 
+func TestAuthSessionRoutesRequireCookie(t *testing.T) {
+	srv := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/v1/auth/session"},
+		{method: http.MethodPost, path: "/v1/auth/logout"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s: expected 401, got %d", tc.method, tc.path, rec.Code)
+		}
+	}
+}
+
 func TestNormalizeRegistrationInput(t *testing.T) {
 	req := registerRequest{
 		Email:       " USER@example.COM ",
@@ -130,33 +151,42 @@ func TestValidateCodeRunRequest(t *testing.T) {
 			{Path: "solution.py", Content: "print('ok')"},
 		},
 	}
-	if err := validateCodeRunRequest(&req); err != nil {
+	if err := validateCodeRunRequest(&req, false); err != nil {
 		t.Fatalf("expected valid code run, got %v", err)
 	}
 	if req.EntryFile != "solution.py" {
 		t.Fatalf("expected entry file to default, got %q", req.EntryFile)
 	}
 
+	req.Mode = "final"
+	if err := validateCodeRunRequest(&req, false); err == nil {
+		t.Fatal("expected candidate final mode to fail")
+	}
+	if err := validateCodeRunRequest(&req, true); err != nil {
+		t.Fatalf("expected internal final mode to pass, got %v", err)
+	}
+	req.Mode = "custom"
+
 	req.Files = append(req.Files, codeFileDTO{Path: "solution.py", Content: "print('dupe')"})
-	if err := validateCodeRunRequest(&req); err == nil {
+	if err := validateCodeRunRequest(&req, false); err == nil {
 		t.Fatal("expected duplicate paths to fail")
 	}
 
 	req.Files = []codeFileDTO{{Path: "../secret.py", Content: "print('bad')"}}
 	req.EntryFile = "../secret.py"
-	if err := validateCodeRunRequest(&req); err == nil {
+	if err := validateCodeRunRequest(&req, false); err == nil {
 		t.Fatal("expected path traversal to fail")
 	}
 
 	req.Files = []codeFileDTO{{Path: "solution.py", Content: strings.Repeat("x", maxCandidateSourceBytes+1)}}
 	req.EntryFile = "solution.py"
-	if err := validateCodeRunRequest(&req); err == nil {
+	if err := validateCodeRunRequest(&req, false); err == nil {
 		t.Fatal("expected large source to fail")
 	}
 
 	req.Files = []codeFileDTO{{Path: "solution.py", Content: "print('ok')"}}
 	req.EntryFile = "missing.py"
-	if err := validateCodeRunRequest(&req); err == nil {
+	if err := validateCodeRunRequest(&req, false); err == nil {
 		t.Fatal("expected missing entry file to fail")
 	}
 }

@@ -105,6 +105,7 @@ export interface CodeFilePayload {
   path: string;
   content: string;
   readOnly?: boolean;
+  language?: string;
 }
 
 export interface AnswerPayload {
@@ -273,11 +274,20 @@ export async function runAttemptCode(
   examQuestionId: string,
   input: CodeRunRequest,
 ): Promise<CodeRunResponse> {
+  const body: CodeRunRequest = {
+    ...input,
+    files: input.files.map((file) => ({
+      path: file.path,
+      content: file.content,
+      ...(file.readOnly ? { readOnly: file.readOnly } : {}),
+      ...(file.language ? { language: file.language } : {}),
+    })),
+  };
   return apiFetch<CodeRunResponse>(
     `/v1/attempts/${attemptId}/answers/${examQuestionId}/runs`,
     {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify(body),
     },
   );
 }

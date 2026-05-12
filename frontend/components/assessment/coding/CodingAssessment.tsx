@@ -33,6 +33,7 @@ import {
     type AttemptSnapshot,
     type CodeRunRequest,
     type CodeRunResponse,
+    type SnapshotQuestion,
 } from "@/lib/api";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 
@@ -43,6 +44,70 @@ interface CodingAssessmentProps {
     lang: string;
     snapshot?: AttemptSnapshot | null;
 }
+
+type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
+    responseType?: string;
+    type?: string;
+    difficulty?: string;
+    title?: string;
+    section?: string;
+    prompt?: string;
+    options?: Array<string | { label?: string; text?: string; value?: string }>;
+    testCases?: { input?: string; stdin?: string; expected?: string }[];
+};
+
+const difficultyLabel = (value: unknown): Question["difficulty"] => {
+    const normalized = String(value ?? "").toLowerCase();
+    if (normalized === "easy") return "Easy";
+    if (normalized === "hard") return "Hard";
+    return "Medium";
+};
+
+const mapSnapshotQuestion = (question: SnapshotQuestion): Question => {
+    const body = (question.body && typeof question.body === "object"
+        ? question.body
+        : {}) as SnapshotBody;
+    const rawType = String(body.type ?? "").toLowerCase();
+    const responseType = String(body.responseType ?? "").toLowerCase();
+    const hasImage = !!body.image;
+    const hasMedia = !!body.media;
+    const type: Question["type"] =
+        responseType === "mcq" || rawType === "mcq"
+            ? "mcq"
+            : hasImage
+                ? "image"
+                : hasMedia || rawType === "media"
+                    ? "media"
+                    : "code-pretext";
+    const options = Array.isArray(body.options)
+        ? body.options.map((option) =>
+            typeof option === "string" ? option : option.label ?? option.text ?? option.value ?? "",
+        ).filter(Boolean)
+        : undefined;
+
+    return {
+        id: question.ordinal,
+        type,
+        difficulty: difficultyLabel(body.difficulty),
+        marks: question.score,
+        section: body.section ?? "Coding",
+        title: body.title ?? `Question ${question.ordinal}`,
+        prompt: body.prompt ?? "",
+        pretext: body.pretext,
+        image: body.image,
+        media: body.media,
+        options,
+        starterCode: body.starterCode,
+        starterFiles: body.starterFiles,
+        entryFile: body.entryFile,
+        testCases: body.testCases?.map((tc) => ({
+            input: tc.input ?? tc.stdin ?? "",
+            stdin: tc.stdin,
+            expected: tc.expected ?? "",
+        })),
+        limits: body.limits,
+    };
+};
 
 const formatTime = (secs: number) => {
     const safe = Math.max(0, secs);
@@ -477,6 +542,12 @@ const ProctorToast: React.FC<ProctorToastProps> = ({ visible, title, desc }) => 
 const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) => {
     const router = useRouter();
     const languageLabel = LANG_META[lang]?.label ?? lang;
+    const questions = useMemo(
+        () => snapshot?.questions?.length
+            ? snapshot.questions.map(mapSnapshotQuestion)
+            : QUESTIONS,
+        [snapshot],
+    );
     const backendAttemptId = snapshot?.attempt.id;
     const examQuestionByLocalId = useMemo(() => {
         const map: Record<number, string> = {};
@@ -789,10 +860,17 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         document.addEventListener("mouseup", onUp);
     }, []);
 
-    const q = QUESTIONS[currentQ];
+    const q = questions[currentQ];
     const qStatus: QStatus = statuses[q?.id] ?? "unattempted";
     const isSolved = qStatus === "solved";
     const isFlagged = qStatus === "flagged";
+
+    useEffect(() => {
+        if (questions.length > 0 && currentQ >= questions.length) {
+            const id = window.setTimeout(() => setCurrentQ(questions.length - 1), 0);
+            return () => window.clearTimeout(id);
+        }
+    }, [currentQ, questions.length]);
 
     const buildPayloadForQuestion = useCallback(
         (qId: number): AnswerPayload => ({
@@ -966,7 +1044,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                     timeRemaining: timer.time,
                 });
                 await flushTraceEvents();
-                const answers = QUESTIONS.map((question) => ({
+                const answers = questions.map((question) => ({
                     examQuestionId: examQuestionByLocalId[question.id],
                     state: statuses[question.id] ?? "unattempted",
                     payload: buildPayloadForQuestion(question.id),
@@ -997,6 +1075,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         examQuestionByLocalId,
         flushTraceEvents,
         answerPayloads,
+        questions,
         statuses,
         timer,
         traceEvent,
@@ -1080,7 +1159,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
 
     const devProps = useMemo(
         () => ({
-            questions: QUESTIONS,
+            questions,
             currentQ,
             statuses,
             timeRemaining: timer.time,
@@ -1095,7 +1174,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             onSetStatus: setQuestionStatus,
             onMarkAllSolved: () => {
                 const next: Record<number, QStatus> = {};
-                QUESTIONS.forEach((qq) => {
+                questions.forEach((qq) => {
                     next[qq.id] = "solved";
                 });
                 setStatuses(next);
@@ -1141,6 +1220,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         }),
         [
             currentQ,
+            questions,
             statuses,
             timer,
             tabSwitchCount,
@@ -1184,7 +1264,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
         return (
             <CompletionScreen
                 statuses={statuses}
-                total={QUESTIONS.length}
+                total={questions.length}
                 tabSwitches={tabSwitchCount}
                 languageLabel={languageLabel}
                 onBackToExplore={handleBackToExplore}
@@ -1204,7 +1284,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             <Header
                 question={q}
                 currentQ={currentQ}
-                totalQ={QUESTIONS.length}
+                totalQ={questions.length}
                 timer={timer}
                 saved={saved}
                 onSubmit={() => setShowSubmit(true)}
@@ -1221,10 +1301,10 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                     void persistQuestion(q.id).catch(() => setSaved(false));
                     traceEvent("question.navigate", 0, {
                         from: q.id,
-                        to: Math.min(QUESTIONS.length, q.id + 1),
+                        to: Math.min(questions.length, q.id + 1),
                         direction: "next",
                     }, q.id);
-                    setCurrentQ((i) => Math.min(QUESTIONS.length - 1, i + 1));
+                    setCurrentQ((i) => Math.min(questions.length - 1, i + 1));
                 }}
                 onMarkSolved={handleMarkSolved}
                 onFlag={handleFlag}
@@ -1241,14 +1321,14 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 className="flex flex-1 min-h-0 overflow-hidden"
             >
                 <QuestionSidebar
-                    questions={QUESTIONS}
+                    questions={questions}
                     current={currentQ}
                     statuses={statuses}
                     onSelect={(index) => {
                         void persistQuestion(q.id).catch(() => setSaved(false));
                         traceEvent("question.navigate", 0, {
                             from: q.id,
-                            to: QUESTIONS[index]?.id,
+                            to: questions[index]?.id,
                             direction: "sidebar",
                         }, q.id);
                         setCurrentQ(index);
@@ -1305,7 +1385,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
             {showSubmit && (
                 <SubmitModal
                     statuses={statuses}
-                    total={QUESTIONS.length}
+                    total={questions.length}
                     tabSwitches={tabSwitchCount}
                     onConfirm={handleConfirmSubmit}
                     onCancel={() => setShowSubmit(false)}

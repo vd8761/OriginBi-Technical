@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface PaymentModalProps {
     title: string;
@@ -8,7 +8,7 @@ interface PaymentModalProps {
     amount: number;
     accent?: string;
     onCancel: () => void;
-    onSuccess: () => void;
+    onSuccess: () => void | Promise<void>;
 }
 
 type Stage = "review" | "processing" | "success";
@@ -31,13 +31,31 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const [refId] = useState(generateRef);
     const [paidAt, setPaidAt] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
+    const [error, setError] = useState("");
+    const mountedRef = useRef(true);
+    const successHandledRef = useRef(false);
 
-    const handlePay = () => {
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
+
+    const handlePay = async () => {
+        if (stage !== "review" || successHandledRef.current) return;
         setStage("processing");
-        window.setTimeout(() => {
-            setPaidAt(new Date());
-            setStage("success");
-        }, 1200);
+        setError("");
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        setPaidAt(new Date());
+        try {
+            await onSuccess();
+            successHandledRef.current = true;
+            if (mountedRef.current) setStage("success");
+        } catch (err) {
+            if (!mountedRef.current) return;
+            setError(err instanceof Error ? err.message : "Unable to schedule this assessment.");
+            setStage("review");
+        }
     };
 
     const handleCopyRef = () => {
@@ -115,6 +133,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     After payment, the assessment unlocks for you.
                                 </p>
                             </div>
+
+                            {error && (
+                                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] font-semibold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                                    {error}
+                                </div>
+                            )}
 
                             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                                 <button
@@ -208,12 +232,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             </div>
 
                             <p className="text-[12px] text-slate-500 dark:text-gray-400 leading-relaxed">
-                                Save this reference number for your records. You can start the assessment from this page any time &mdash; we won&apos;t auto-launch it for you.
+                                Save this reference number for your records. The assessment has been scheduled and is ready now.
                             </p>
 
                             <button
                                 type="button"
-                                onClick={onSuccess}
+                                onClick={onCancel}
                                 className="self-stretch rounded-full px-6 py-2.5 text-[12px] font-bold uppercase tracking-wider text-white shadow-md transition-all hover:opacity-95 active:scale-95"
                                 style={{ background: accent, boxShadow: `0 8px 18px ${accent}40` }}
                             >

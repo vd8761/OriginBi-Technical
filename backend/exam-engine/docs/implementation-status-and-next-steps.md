@@ -9,7 +9,13 @@ The larger product remains the Exam Portal Plan: a multi-tenant platform where c
 ## Related Documents
 
 - Schema source of truth: [database-plan.md](database-plan.md)
+- Plugin architecture index: [plugin-architecture/README.md](plugin-architecture/README.md)
+- Plugin model: [plugin-architecture/plugin-model.md](plugin-architecture/plugin-model.md)
+- Backend plugin contract: [plugin-architecture/backend-contract.md](plugin-architecture/backend-contract.md)
+- Coding plugin target: [plugin-architecture/coding-assessment-plugin.md](plugin-architecture/coding-assessment-plugin.md)
+- Plugin rollout plan: [plugin-architecture/rollout-plan.md](plugin-architecture/rollout-plan.md)
 - Frontend status: [exam-portal-status-and-next-steps.md](../../../frontend/docs/exam-portal-status-and-next-steps.md)
+- Frontend plugin admin plan: [plugin-admin-portal-plan.md](../../../frontend/docs/plugin-admin-portal-plan.md)
 - Judge0 status: [service-status-and-next-steps.md](../../judge0/docs/service-status-and-next-steps.md)
 
 ## Completed

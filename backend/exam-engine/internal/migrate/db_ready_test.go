@@ -41,8 +41,8 @@ func TestDatabaseReady(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version < 10 {
-		t.Fatalf("expected migration version >= 10, got %d", version)
+	if version < 11 {
+		t.Fatalf("expected migration version >= 11, got %d", version)
 	}
 
 	requiredTables := []string{
@@ -114,6 +114,38 @@ func TestDatabaseReady(t *testing.T) {
 	}
 	if codingQuestions != 5 {
 		t.Fatalf("expected 5 seeded coding questions, got %d", codingQuestions)
+	}
+
+	var hiddenCodingTests int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM question_test_cases
+		WHERE is_hidden
+		  AND question_version_id IN (
+		      SELECT question_version_id
+		      FROM exam_questions
+		      WHERE exam_version_id = '00000000-0000-0000-0000-000000000601'
+		  )
+	`).Scan(&hiddenCodingTests); err != nil {
+		t.Fatalf("check hidden coding tests: %v", err)
+	}
+	if hiddenCodingTests < 4 {
+		t.Fatalf("expected hidden coding tests, got %d", hiddenCodingTests)
+	}
+
+	var languageColumnExists bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_name = 'code_submission_files'
+			  AND column_name = 'language'
+		)
+	`).Scan(&languageColumnExists); err != nil {
+		t.Fatalf("check code_submission_files.language: %v", err)
+	}
+	if !languageColumnExists {
+		t.Fatal("expected code_submission_files.language column")
 	}
 
 	var plugins int

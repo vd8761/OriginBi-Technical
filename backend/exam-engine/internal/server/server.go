@@ -68,12 +68,12 @@ func (s *Server) routes() chi.Router {
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
-		r.Post("/auth/logout", s.logout)
-		r.Get("/auth/session", s.session)
 		r.Post("/admin/bootstrap", s.bootstrapAdmin)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.sessionMiddleware)
+			r.Post("/auth/logout", s.logout)
+			r.Get("/auth/session", s.session)
 			r.Get("/me/registration", s.getRegistration)
 			r.Put("/me/registration", s.updateRegistration)
 			r.Get("/me/assignments", s.listAssignments)
@@ -87,6 +87,7 @@ func (s *Server) routes() chi.Router {
 			r.Post("/attempts/{attempt_id}/events", s.ingestEvents)
 			r.Get("/admin/plugins", s.listPlugins)
 			r.Put("/admin/plugins/{plugin_id}", s.updatePlugin)
+			r.Get("/admin/judge0/health", s.judge0Health)
 		})
 	})
 

@@ -1,0 +1,3 @@
+{"time":"2026-05-11T13:50:04.3741872+05:30","level":"INFO","msg":"starting exam-engine","config":"Config{addr=:8088, log=info, migrations=true, heartbeat_grace=1m0s}"}
+{"time":"2026-05-11T13:50:04.3747205+05:30","level":"INFO","msg":"running migrations"}
+{"time":"2026-05-11T13:50:04.4848197+05:30","level":"INFO","msg":"http listening","addr":":8088"}

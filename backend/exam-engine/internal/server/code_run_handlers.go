@@ -28,6 +28,7 @@ type codeFileDTO struct {
 	Path     string `json:"path"`
 	Content  string `json:"content"`
 	ReadOnly bool   `json:"readOnly,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 type codeRunRequest struct {
@@ -92,11 +93,91 @@ type judge0Result struct {
 	Token         string
 }
 
+type judge0Language struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type judge0LanguageHealth struct {
+	Language  string `json:"language"`
+	Judge0ID  int    `json:"judge0Id"`
+	Available bool   `json:"available"`
+}
+
 const (
 	maxCodeFiles            = 24
 	maxCodeFilePathBytes    = 255
 	maxCandidateSourceBytes = 256 << 10
 )
+
+func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
+	principal, err := auth.Require(r.Context())
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if !s.isAdmin(r.Context(), principal.UserID) {
+		writeError(w, http.StatusForbidden, "admin access required")
+		return
+	}
+
+	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, judge0BaseURL()+"/languages", nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "health request failed")
+		return
+	}
+	res, err := s.judgeHTTPClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unreachable",
+			"error":  err.Error(),
+		})
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unhealthy",
+			"error":  fmt.Sprintf("Judge0 returned status %d", res.StatusCode),
+		})
+		return
+	}
+
+	var languages []judge0Language
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&languages); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unhealthy",
+			"error":  "language response decode failed",
+		})
+		return
+	}
+	available := map[int]bool{}
+	for _, lang := range languages {
+		available[lang.ID] = true
+	}
+	required := []judge0LanguageHealth{
+		{Language: "python", Judge0ID: 71, Available: available[71]},
+		{Language: "java", Judge0ID: 62, Available: available[62]},
+		{Language: "cpp", Judge0ID: 54, Available: available[54]},
+		{Language: "javascript", Judge0ID: 63, Available: available[63]},
+		{Language: "c", Judge0ID: 50, Available: available[50]},
+		{Language: "multi-file", Judge0ID: 89, Available: available[89]},
+	}
+	status := "ready"
+	for _, item := range required {
+		if !item.Available {
+			status = "degraded"
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    status,
+		"judge0Url": judge0BaseURL(),
+		"required":  required,
+	})
+}
 
 func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	principal, err := auth.Require(r.Context())
@@ -121,7 +202,7 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	req.Mode = strings.ToLower(strings.TrimSpace(req.Mode))
 	req.Language = strings.ToLower(strings.TrimSpace(req.Language))
 	req.EntryFile = strings.TrimSpace(req.EntryFile)
-	if err := validateCodeRunRequest(&req); err != nil {
+	if err := validateCodeRunRequest(&req, false); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -203,7 +284,7 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 	if err != nil {
 		return nil, err
 	}
-	if mode != "tests" {
+	if mode != "tests" && mode != "final" {
 		return nil, nil
 	}
 	rows, err := s.pool.Query(ctx, `
@@ -211,9 +292,9 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 		FROM exam_questions eq
 		JOIN question_test_cases tc ON tc.question_version_id = eq.question_version_id
 		WHERE eq.id = $1
-		  AND tc.is_hidden = false
+		  AND ($2 = 'final' OR tc.is_hidden = false)
 		ORDER BY tc.ordinal
-	`, examQuestionID)
+	`, examQuestionID, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -273,9 +354,9 @@ func (s *Server) persistRunStart(
 	}
 	for _, f := range req.Files {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO code_submission_files (submission_id, path, content, is_read_only)
-			VALUES ($1, $2, $3, $4)
-		`, submissionID, f.Path, f.Content, f.ReadOnly); err != nil {
+			INSERT INTO code_submission_files (submission_id, path, content, is_read_only, language)
+			VALUES ($1, $2, $3, $4, $5)
+		`, submissionID, f.Path, f.Content, f.ReadOnly, nullEmpty(f.Language)); err != nil {
 			return uuid.Nil, err
 		}
 	}
@@ -456,7 +537,7 @@ func (s *Server) persistRunFinish(
 		return err
 	}
 
-	if mode == "tests" {
+	if mode == "tests" || mode == "final" {
 		for i, tc := range tests {
 			if i >= len(resp.TestResults) {
 				break
@@ -887,8 +968,11 @@ func validCodingLanguage(v string) bool {
 	}
 }
 
-func validateCodeRunRequest(req *codeRunRequest) error {
-	if req.Mode != "custom" && req.Mode != "tests" {
+func validateCodeRunRequest(req *codeRunRequest, allowFinal bool) error {
+	if req.Mode != "custom" && req.Mode != "tests" && !(allowFinal && req.Mode == "final") {
+		if allowFinal {
+			return errors.New("mode must be custom, tests, or final")
+		}
 		return errors.New("mode must be custom or tests")
 	}
 	if !validCodingLanguage(req.Language) {
