@@ -36,12 +36,13 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
 
 interface AssessmentPortalProps {
   userName?: string;
+  onLogout?: () => void;
   initialView?: AssessmentView;
 }
 
 type AssessmentMode = "trial" | "main";
 
-const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", initialView = "dashboard" }) => {
+const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", onLogout, initialView = "dashboard" }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -62,6 +63,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
+  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
   const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
   const [completionPopup, setCompletionPopup] = useState<{
@@ -272,8 +274,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       <Header
         currentView={currentHeaderView}
-        onNavigate={(view) => handleNavigate(view)}
-        onLogout={() => console.log("Logging out...")}
+        onNavigate={(view) => {
+          if (["dashboard", "assessment", "profile", "details", "explore"].includes(view)) {
+            setCurrentView(view as AssessmentView);
+          }
+        }}
+        onLogout={() => onLogout?.()}
       />
 
       {/* Next Step Notification Alert */}
@@ -348,8 +354,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={dynamicExams as any}
-            examDetails={EXAM_DETAILS as any}
+            assessments={EXAMS}
+            examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
             }}

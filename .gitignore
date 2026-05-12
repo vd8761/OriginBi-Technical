@@ -41,9 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /tmp
+.gocache/
+backend/exam-engine/.gocache/
 
 .claude/
-
 # build output
 dist/
 **/dist/

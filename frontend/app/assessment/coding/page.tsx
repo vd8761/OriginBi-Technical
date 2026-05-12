@@ -1,102 +1,86 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CodingAssessment from "@/components/assessment/coding/CodingAssessment";
 import { LANG_META } from "@/components/assessment/coding/CodeEditor";
-import { codingPaymentKey, usePaidAssessments } from "@/lib/payments";
-import { useAssessmentTracker } from "../../../lib/assessmentTracker";
-import { Suspense } from "react";
+import { ApiError, startAttempt, type AttemptSnapshot } from "@/lib/api";
 
 const VALID_LANGS = Object.keys(LANG_META);
+
+function LoadingView() {
+    return (
+        <div className="coding-exam-root coding-theme-dark flex min-h-screen items-center justify-center bg-[#19211C] text-white/60">
+            <div className="flex items-center gap-3 text-[13px]">
+                <div className="h-4 w-4 rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
+                Loading assessment...
+            </div>
+        </div>
+    );
+}
 
 function CodingAssessmentInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const lang = (searchParams.get("lang") || "").toLowerCase();
-    const mode = (searchParams.get("mode") || "main").toLowerCase();
-    const [hydrated, setHydrated] = useState(false);
-    const { isPaid } = usePaidAssessments();
-    const { markAssessmentComplete } = useAssessmentTracker();
+    const [snapshot, setSnapshot] = useState<AttemptSnapshot | null>(null);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        setHydrated(true);
-    }, []);
-
-    useEffect(() => {
-        if (!hydrated) return;
         if (!lang || !VALID_LANGS.includes(lang)) {
             router.replace("/explore/coding");
             return;
         }
-        if (mode !== "trial" && !isPaid(codingPaymentKey(lang))) {
-            router.replace("/explore/coding");
-        }
-    }, [hydrated, lang, mode, isPaid, router]);
-
-    const handleComplete = (score: number) => {
-        const result = {
-            assessmentId: "coding" as const,
-            completedAt: new Date().toISOString(),
-            overallScore: score,
-            accuracy: score,
-            timeTaken: "45 min",
-            sections: [{ name: "Coding", score, weight: "100%" }],
-            insights: [
-                { type: "strength" as const, text: "Strong problem-solving and algorithmic thinking." },
-                { type: "improvement" as const, text: "Optimize code for better time/space complexity." },
-                { type: "time" as const, text: "Good time management during implementation." },
-            ],
+        let cancelled = false;
+        startAttempt({ assignmentRef: `coding:${lang}` })
+            .then((data) => {
+                if (!cancelled) setSnapshot(data);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                if (err instanceof ApiError && [401, 403, 404, 409].includes(err.status)) {
+                    router.replace("/explore/coding");
+                    return;
+                }
+                setError(
+                    err instanceof ApiError
+                        ? err.message
+                        : "Unable to start the coding assessment.",
+                );
+            });
+        return () => {
+            cancelled = true;
         };
+    }, [lang, router]);
 
-        const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
-        existingResults.coding = result;
-        localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
-        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
+    if (!lang || !VALID_LANGS.includes(lang) || (!snapshot && !error)) {
+        return <LoadingView />;
+    }
 
-        const paidAssessments = JSON.parse(localStorage.getItem("originbi:paid-assessments") || "[]");
-        if (!paidAssessments.includes("coding")) {
-            paidAssessments.push("coding");
-            localStorage.setItem("originbi:paid-assessments", JSON.stringify(paidAssessments));
-            window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
-        }
-
-        markAssessmentComplete("coding", {
-            totalScore: score,
-            correctCount: Math.round(score / 10),
-            wrongCount: 10 - Math.round(score / 10),
-            timeTakenSeconds: 2700,
-        });
-
-        router.push('/dashboard?completed=coding');
-    };
-
-    if (!hydrated || !lang || !VALID_LANGS.includes(lang) || (mode !== "trial" && !isPaid(codingPaymentKey(lang)))) {
+    if (error) {
         return (
-            <div className="coding-exam-root coding-theme-dark flex min-h-screen items-center justify-center bg-[#19211C] text-white/60">
-                <div className="flex items-center gap-3 text-[13px]">
-                    <div className="h-4 w-4 rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
-                    Loading assessment…
+            <div className="coding-exam-root coding-theme-dark flex min-h-screen items-center justify-center bg-[#19211C] text-white/70">
+                <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+                    <p className="text-sm font-bold text-white">Assessment unavailable</p>
+                    <p className="mt-2 text-[13px]">{error}</p>
+                    <button
+                        type="button"
+                        onClick={() => router.replace("/explore/coding")}
+                        className="mt-5 rounded-full bg-[#1ED36A] px-5 py-2 text-xs font-bold text-white"
+                    >
+                        Back to Coding
+                    </button>
                 </div>
             </div>
         );
     }
 
-    return <CodingAssessment lang={lang} onComplete={handleComplete} mode={mode as 'trial' | 'main'} />;
+    return <CodingAssessment lang={lang} snapshot={snapshot} />;
 }
 
 export default function CodingAssessmentPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="coding-exam-root coding-theme-dark flex min-h-screen items-center justify-center bg-[#19211C] text-white/60">
-                    <div className="flex items-center gap-3 text-[13px]">
-                        <div className="h-4 w-4 rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
-                        Loading assessment…
-                    </div>
-                </div>
-            }
-        >
+        <Suspense fallback={<LoadingView />}>
             <CodingAssessmentInner />
         </Suspense>
     );

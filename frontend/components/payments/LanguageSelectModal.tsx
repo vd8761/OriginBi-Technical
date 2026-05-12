@@ -60,7 +60,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
     const ctaLabel = !selected
         ? "Select a language"
         : selected.completed
-            ? `Retake in ${selected.lang.name}`
+            ? `${selected.lang.name} completed`
             : selected.paid
                 ? `Start in ${selected.lang.name}`
                 : `Pay ₹${price} for ${selected.lang.name}`;
@@ -68,7 +68,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
     const footerNote = !selected
         ? "Pick a language to continue."
         : selected.completed
-            ? `${selected.lang.name} already completed. You can retake it any time.`
+            ? `${selected.lang.name} is completed. Retakes will be added through a later policy.`
             : selected.paid
                 ? `${selected.lang.name} is unlocked. Start any time.`
                 : `You'll pay ₹${price} to unlock ${selected.lang.name}.`;
@@ -113,7 +113,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                     aria-label="Coding language"
                     className="grid gap-2.5 overflow-y-auto px-7 py-6 sm:grid-cols-2 sm:px-8"
                 >
-                    {orderedLanguages.map(({ lang, paid, completed, status }) => {
+                    {orderedLanguages.map(({ lang, status }) => {
                         const isSelected = selectedId === lang.id;
                         return (
                             <button
@@ -185,7 +185,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                                         {isSelected
                                             ? "Selected"
                                             : status === "completed"
-                                                ? "Tap to retake"
+                                                ? "Completed"
                                                 : status === "ready"
                                                     ? "Tap to start"
                                                     : "Tap to select"}

@@ -108,7 +108,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             <div className="flex flex-col gap-2 text-[12.5px] text-slate-500 dark:text-gray-400">
                                 <p className="flex items-center gap-2">
                                     <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
-                                    Click "Pay Now" to simulate a successful payment.
+                                    Click &quot;Pay Now&quot; to simulate a successful payment.
                                 </p>
                                 <p className="flex items-center gap-2">
                                     <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />

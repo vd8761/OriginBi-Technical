@@ -42,18 +42,21 @@ export function useProctoringSettings() {
     const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => {
-        try {
-            const raw = window.localStorage.getItem(SETTINGS_KEY);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === "object") {
-                    setSettings({ ...DEFAULT_PROCTORING, ...parsed });
+        const id = window.setTimeout(() => {
+            try {
+                const raw = window.localStorage.getItem(SETTINGS_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === "object") {
+                        setSettings({ ...DEFAULT_PROCTORING, ...parsed });
+                    }
                 }
+            } catch {
+                /* ignore */
             }
-        } catch {
-            /* ignore */
-        }
-        setHydrated(true);
+            setHydrated(true);
+        }, 0);
+        return () => window.clearTimeout(id);
     }, []);
 
     useEffect(() => {

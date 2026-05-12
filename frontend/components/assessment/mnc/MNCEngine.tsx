@@ -231,7 +231,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
-        let state: QuestionState = isMarked ? "marked" : (isAnswered ? "answered" : "unanswered");
+        const state: QuestionState = isMarked ? "marked" : (isAnswered ? "answered" : "unanswered");
 
         return {
             id: question.id,
