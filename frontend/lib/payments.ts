@@ -38,6 +38,8 @@ const useKeyedSet = (storageKey: string, eventName: string) => {
     useEffect(() => {
         const id = window.setTimeout(() => setLocal(readSet(storageKey)), 0);
         const sync = () => setLocal(readSet(storageKey));
+        // Sync on mount to ensure we have latest data
+        sync();
         window.addEventListener("storage", sync);
         window.addEventListener(eventName, sync);
         return () => {

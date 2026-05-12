@@ -145,6 +145,8 @@ const roleQuestions = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function seedAptitude(client: any, adminUserId: number) {
+    await client.query("TRUNCATE tech_aptitude_questions, tech_aptitude_options CASCADE");
+
     const assessmentResult = await client.query(
         `INSERT INTO tech_assessments (assessment_code, assessment_name, module_type, total_time_minutes, total_questions, shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value, status, created_by, created_at, updated_at)
          VALUES ($1, $2, 'aptitude', $3, $4, $5, $6, $7, $8, 'active', $9, NOW(), NOW())
@@ -154,11 +156,13 @@ async function seedAptitude(client: any, adminUserId: number) {
     );
     const assessmentId = assessmentResult.rows[0].assessment_id;
 
+    let idx = 0;
     for (const question of aptitudeQuestions) {
+        const mode = idx % 4 === 0 ? "trial" : "main"; // 25% trial, 75% main
         const questionResult = await client.query(
-            `INSERT INTO tech_aptitude_questions (assessment_id, subcategory, difficulty, question_text, correct_option_id, marks, negative_marks, explanation, status, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, 'active', NOW(), NOW()) RETURNING aptitude_question_id`,
-            [assessmentId, question.subcategory, question.difficulty, question.question_text, question.marks, question.negative_marks, question.explanation]
+            `INSERT INTO tech_aptitude_questions (assessment_id, subcategory, difficulty, question_text, correct_option_id, marks, negative_marks, explanation, status, mode, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, 'active', $8, NOW(), NOW()) RETURNING aptitude_question_id`,
+            [assessmentId, question.subcategory, question.difficulty, question.question_text, question.marks, question.negative_marks, question.explanation, mode]
         );
         const questionId = questionResult.rows[0].aptitude_question_id;
         let correctOptionId: number | null = null;
@@ -174,6 +178,7 @@ async function seedAptitude(client: any, adminUserId: number) {
         if (correctOptionId) {
             await client.query(`UPDATE tech_aptitude_questions SET correct_option_id = $1, updated_at = NOW() WHERE aptitude_question_id = $2`, [correctOptionId, questionId]);
         }
+        idx++;
     }
     console.log(`Seeded ${aptitudeQuestions.length} aptitude questions`);
 }
@@ -200,6 +205,8 @@ async function seedCoding(client: any, adminUserId: number) {
 }
 
 async function seedCommunication(client: any, adminUserId: number) {
+    await client.query("TRUNCATE tech_grammar_questions, tech_grammar_options CASCADE");
+
     const assessmentResult = await client.query(
         `INSERT INTO tech_assessments (assessment_code, assessment_name, module_type, total_time_minutes, total_questions, shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value, status, created_by, created_at, updated_at)
          VALUES ($1, $2, 'grammar', $3, $4, $5, $6, $7, $8, 'active', $9, NOW(), NOW())
@@ -209,18 +216,23 @@ async function seedCommunication(client: any, adminUserId: number) {
     );
     const assessmentId = assessmentResult.rows[0].assessment_id;
 
+    let idx = 0;
     for (const question of communicationQuestions) {
+        const mode = idx % 3 === 0 ? "trial" : "main"; // 33% trial, 66% main
         await client.query(
-            `INSERT INTO tech_grammar_questions (assessment_id, task_type, difficulty, question_text, reference_answer, rubric_json, marks, negative_marks, status, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'active', NOW(), NOW())
+            `INSERT INTO tech_grammar_questions (assessment_id, task_type, difficulty, question_text, reference_answer, rubric_json, marks, negative_marks, status, mode, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'active', $8, NOW(), NOW())
              ON CONFLICT DO NOTHING`,
-            [assessmentId, question.skill, question.difficulty, question.question_text, "AI evaluated response", JSON.stringify({ criteria: ["grammar", "vocabulary", "coherence"] }), question.marks]
+            [assessmentId, question.skill, question.difficulty, question.question_text, "AI evaluated response", JSON.stringify({ criteria: ["grammar", "vocabulary", "coherence"] }), question.marks, mode]
         );
+        idx++;
     }
     console.log(`Seeded ${communicationQuestions.length} communication questions`);
 }
 
 async function seedMNC(client: any, adminUserId: number) {
+    await client.query("TRUNCATE tech_mnc_questions, tech_mnc_options CASCADE");
+
     const assessmentResult = await client.query(
         `INSERT INTO tech_assessments (assessment_code, assessment_name, module_type, total_time_minutes, total_questions, shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value, status, created_by, created_at, updated_at)
          VALUES ($1, $2, 'mnc', $3, $4, $5, $6, $7, $8, 'active', $9, NOW(), NOW())
@@ -230,11 +242,13 @@ async function seedMNC(client: any, adminUserId: number) {
     );
     const assessmentId = assessmentResult.rows[0].assessment_id;
 
+    let idx = 0;
     for (const question of mncQuestions) {
+        const mode = idx % 4 === 0 ? "trial" : "main"; // 25% trial, 75% main
         const questionResult = await client.query(
-            `INSERT INTO tech_mnc_questions (assessment_id, topic_group, difficulty, question_text, correct_option_id, marks, negative_marks, status, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, 'active', NOW(), NOW()) RETURNING mnc_question_id`,
-            [assessmentId, question.category, question.difficulty, question.question_text, question.marks, question.negative_marks]
+            `INSERT INTO tech_mnc_questions (assessment_id, topic_group, difficulty, question_text, correct_option_id, marks, negative_marks, status, mode, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, NULL, $5, $6, 'active', $7, NOW(), NOW()) RETURNING mnc_question_id`,
+            [assessmentId, question.category, question.difficulty, question.question_text, question.marks, question.negative_marks, mode]
         );
         const questionId = questionResult.rows[0].mnc_question_id;
         let correctOptionId: number | null = null;
@@ -250,6 +264,7 @@ async function seedMNC(client: any, adminUserId: number) {
         if (correctOptionId) {
             await client.query(`UPDATE tech_mnc_questions SET correct_option_id = $1, updated_at = NOW() WHERE mnc_question_id = $2`, [correctOptionId, questionId]);
         }
+        idx++;
     }
     console.log(`Seeded ${mncQuestions.length} MNC questions`);
 }

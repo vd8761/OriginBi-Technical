@@ -517,8 +517,9 @@ export class AdminQuestionService {
       return await this.dataSource.query(
         `SELECT assessment_id, assessment_code, assessment_name, module_type,
                 total_time_minutes, total_questions, status, created_at,
-                question_limit, categories, difficulty_marks, difficulty_negative_marks,
-                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options
+                categories, difficulty_marks, difficulty_negative_marks,
+                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options,
+                amount, trial_attempts_limit, main_attempts_limit
          FROM tech_assessments ${where} ORDER BY assessment_id DESC`,
         params,
       );
@@ -539,7 +540,10 @@ export class AdminQuestionService {
       tabSwitchLimit,
       antiCopyEnabled,
       shuffleQuestions,
-      shuffleOptions
+      shuffleOptions,
+      amount,
+      trialAttemptsLimit,
+      mainAttemptsLimit
     } = data;
     
     try {
@@ -547,20 +551,21 @@ export class AdminQuestionService {
         `UPDATE tech_assessments
          SET assessment_name = COALESCE($1, assessment_name),
              total_time_minutes = COALESCE($2, total_time_minutes),
-             question_limit = COALESCE($3, question_limit),
-             categories = COALESCE($4, categories),
-             difficulty_marks = COALESCE($5, difficulty_marks),
-             difficulty_negative_marks = COALESCE($6, difficulty_negative_marks),
-             tab_switch_limit = COALESCE($7, tab_switch_limit),
-             anti_copy_enabled = COALESCE($8, anti_copy_enabled),
-             shuffle_questions = COALESCE($9, shuffle_questions),
-             shuffle_options = COALESCE($10, shuffle_options),
+             categories = COALESCE($3, categories),
+             difficulty_marks = COALESCE($4, difficulty_marks),
+             difficulty_negative_marks = COALESCE($5, difficulty_negative_marks),
+             tab_switch_limit = COALESCE($6, tab_switch_limit),
+             anti_copy_enabled = COALESCE($7, anti_copy_enabled),
+             shuffle_questions = COALESCE($8, shuffle_questions),
+             shuffle_options = COALESCE($9, shuffle_options),
+             amount = COALESCE($10, amount),
+             trial_attempts_limit = COALESCE($11, trial_attempts_limit),
+             main_attempts_limit = COALESCE($12, main_attempts_limit),
              updated_at = NOW()
-         WHERE assessment_id = $11`,
+         WHERE assessment_id = $13`,
         [
           assessmentName !== undefined ? assessmentName : null,
           totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
-          questionLimit !== undefined ? Number(questionLimit) : null,
           categories !== undefined ? (typeof categories === 'string' ? categories : JSON.stringify(categories)) : null,
           difficultyMarks !== undefined ? (typeof difficultyMarks === 'string' ? difficultyMarks : JSON.stringify(difficultyMarks)) : null,
           difficultyNegativeMarks !== undefined ? (typeof difficultyNegativeMarks === 'string' ? difficultyNegativeMarks : JSON.stringify(difficultyNegativeMarks)) : null,
@@ -568,6 +573,9 @@ export class AdminQuestionService {
           antiCopyEnabled !== undefined ? Boolean(antiCopyEnabled) : null,
           shuffleQuestions !== undefined ? Boolean(shuffleQuestions) : null,
           shuffleOptions !== undefined ? Boolean(shuffleOptions) : null,
+          amount !== undefined ? Number(amount) : null,
+          trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : null,
+          mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : null,
           id
         ]
       );

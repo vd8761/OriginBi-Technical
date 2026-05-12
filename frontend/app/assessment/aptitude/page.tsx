@@ -79,7 +79,7 @@ function AptitudeAssessmentContent() {
         });
 
         // Redirect to dashboard
-        router.push('/student/dashboard?completed=aptitude');
+        router.push('/dashboard?completed=aptitude');
     };
 
     return (

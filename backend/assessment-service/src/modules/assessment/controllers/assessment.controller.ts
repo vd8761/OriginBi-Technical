@@ -1,9 +1,15 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { AssessmentService } from '../services/assessment.service';
 
 @Controller('assessment')
 export class AssessmentController {
   constructor(private readonly assessmentService: AssessmentService) {}
+
+  @Get('attempts-stats')
+  async getAttemptsStats(@Query('userId') userId?: string) {
+    const data = await this.assessmentService.getAttemptsStats(userId);
+    return { data };
+  }
 
   @Post(':module/attempts')
   async startAttempt(@Param('module') module: string, @Body() body: any) {
@@ -27,6 +33,33 @@ export class AssessmentController {
     @Body() body: { answers: Record<string, string> }
   ) {
     const data = await this.assessmentService.submitAttempt(module, token, body.answers);
+    return data;
+  }
+
+  @Post(':module/attempts/block-based')
+  async startBlockBasedAttempt(@Param('module') module: string, @Body() body: any) {
+    const data = await this.assessmentService.startBlockBasedAttempt(module, body);
+    return data;
+  }
+
+  @Post(':module/attempts/:token/blocks/:blockNumber/next')
+  async getNextBlock(
+    @Param('token') token: string,
+    @Param('blockNumber') blockNumber: string,
+    @Body() performance: { accuracy: number; timeTaken: number; answers: Record<string, string> }
+  ) {
+    const blockNumberNum = parseInt(blockNumber);
+    const data = await this.assessmentService.getNextBlock(token, blockNumberNum, performance);
+    return data;
+  }
+
+  @Post(':module/attempts/:token/submit-block-based')
+  async submitBlockBasedAttempt(
+    @Param('module') module: string,
+    @Param('token') token: string,
+    @Body() body: { answers: Record<string, string> }
+  ) {
+    const data = await this.assessmentService.submitBlockBasedAttempt(module, token, body);
     return data;
   }
 

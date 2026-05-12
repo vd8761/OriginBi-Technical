@@ -1,9 +1,33 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import 'multer';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminQuestionService, ModuleType } from '../services/admin-question.service';
+import { R2Service } from '../../r2/r2.service';
 
 @Controller('assessment/admin')
 export class AdminQuestionController {
-  constructor(private readonly adminQuestionService: AdminQuestionService) {}
+  constructor(
+    private readonly adminQuestionService: AdminQuestionService,
+    private readonly r2Service: R2Service,
+  ) {}
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('module') module: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    const result = await this.r2Service.uploadFile(
+      file.buffer,
+      module || 'general',
+      file.originalname,
+      file.mimetype,
+    );
+    return { success: true, ...result };
+  }
 
   @Get('assessments')
   async listAssessments(@Query('module') module?: string) {

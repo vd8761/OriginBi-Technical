@@ -173,6 +173,24 @@ export default function AdminQuestionsManager() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
+  const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
+
+  useEffect(() => {
+    const loadAllAssessments = async () => {
+      try {
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
+        const results: ApiAssessment[] = [];
+        for (const m of modules) {
+          const list = await fetchAssessments(m);
+          if (list.length > 0) results.push(list[0]);
+        }
+        setAssessmentsList(results);
+      } catch (err) {
+        console.error("Failed to load all assessment details for admin dashboard cards:", err);
+      }
+    };
+    loadAllAssessments();
+  }, []);
 
   // ─── Load questions: API for DB modules, localStorage for others ─────────────
   const loadQuestionsForModule = useCallback(async (module: AssessmentType, m: QuestionMode) => {
@@ -275,7 +293,7 @@ export default function AdminQuestionsManager() {
     if (!selectedModule) return [];
     
     if (activeAssessment && activeAssessment.categories) {
-      let cats: string[] = [];
+      let cats: any[] = [];
       if (Array.isArray(activeAssessment.categories)) {
         cats = activeAssessment.categories;
       } else if (typeof activeAssessment.categories === "string") {
@@ -286,7 +304,14 @@ export default function AdminQuestionsManager() {
         }
       }
       if (cats.length > 0) {
-        return cats.map(c => ({ key: c, label: c }));
+        return cats.map((c: any) => {
+          if (typeof c === "string") {
+            return { key: c, label: c };
+          }
+          const id = c.id || c.name || "";
+          const name = c.name || c.id || "";
+          return { key: id, label: name };
+        });
       }
     }
     
@@ -496,15 +521,31 @@ export default function AdminQuestionsManager() {
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">
-                      {((at === "aptitude" || at === "mnc" || at === "communication" || at === "role") && activeAssessment && at === selectedModule && activeAssessment.categories) ? (
-                        (Array.isArray(activeAssessment.categories) ? activeAssessment.categories : JSON.parse(activeAssessment.categories as string)).slice(0, 4).map((tag: string, tIdx: number) => (
+                      {(() => {
+                        const dbExam = assessmentsList.find(a => {
+                          const dbModule = at === "communication" ? "grammar" : at;
+                          return a.module_type === dbModule || a.assessment_code === at;
+                        });
+                        if (dbExam && dbExam.categories) {
+                          let parsed: any[] = [];
+                          if (Array.isArray(dbExam.categories)) {
+                            parsed = dbExam.categories;
+                          } else if (typeof dbExam.categories === "string") {
+                            try { parsed = JSON.parse(dbExam.categories); } catch { parsed = []; }
+                          }
+                          if (parsed.length > 0) {
+                            return parsed.slice(0, 4).map((cat: any, tIdx: number) => {
+                              const name = typeof cat === "string" ? cat : (cat.name || cat.id || "");
+                              return (
+                                <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{name}</span>
+                              );
+                            });
+                          }
+                        }
+                        return MODULE_TAGS[at].map((tag, tIdx) => (
                           <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
-                        ))
-                      ) : (
-                        MODULE_TAGS[at].map((tag, tIdx) => (
-                          <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
-                        ))
-                      )}
+                        ));
+                      })()}
                     </div>
 
                     <div className="h-px w-full bg-slate-100 dark:bg-white/5 mb-6" />
@@ -707,6 +748,7 @@ export default function AdminQuestionsManager() {
                   assessmentType={selectedModule!} 
                   onEdit={(q) => setEditingQuestion(q)} 
                   onDelete={(id) => setDeleteConfirm(id)} 
+                  categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
                 />
               )}
             </div>
@@ -719,7 +761,7 @@ export default function AdminQuestionsManager() {
           <QuestionEditor 
             question={editingQuestion === "new" ? null : editingQuestion} 
             assessmentType={selectedModule} 
-            categories={filterCats.map(c => c.key)}
+            categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
             onSave={handleSaveQuestion} 
             onCancel={() => setEditingQuestion(null)} 
           />

@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
 
 const MNC_TOTAL_TIME = 30 * 60;
 
@@ -77,6 +78,94 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    const cacheRestoredRef = useRef(false);
+
+    const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
+    const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchEngineStats = async () => {
+            try {
+                const [statsRes, assessmentsRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                ]);
+                const statsJson = await statsRes.json();
+                if (statsJson?.data) {
+                    const cnt = statsJson.data['mnc']?.[mode] ?? 0;
+                    setAttemptsCount(cnt > 0 ? cnt : 1);
+                }
+                const assessmentsJson = await assessmentsRes.json();
+                if (assessmentsJson?.data) {
+                    const found = assessmentsJson.data.find(
+                        (a: any) => a.module_type === 'mnc' || a.assessment_code === 'mnc'
+                    );
+                    if (found) {
+                        const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
+                        setAttemptsLimit(Number(lim));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load engine attempts stats:", err);
+            }
+        };
+        fetchEngineStats();
+    }, [mode]);
+
+    // ── Cache hook ──────────────────────────────────────────────
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'mnc',
+        assessmentCode:  `${assessmentCode}_${mode}`,
+        questions,
+        expiresAt:       undefined,
+        answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // ── Restore session from cache on mount ──────────────────────
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setQuestions(normalizeQuestions(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: Record<string, string> = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
+                    restored[qId] = val.optionId as string;
+                } else if (typeof val === 'string') {
+                    restored[qId] = val;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
 
     const normalizeQuestions = (items: any[]): MncQuestion[] => items.map((q: any) => ({
         id: String(q.id ?? q.questionId ?? q.question_id),
@@ -94,6 +183,13 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     }));
 
     useEffect(() => {
+        if (!isCacheRestored) return;
+
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
         const fetchAttempt = async () => {
             try {
                 setIsLoading(true);
@@ -124,7 +220,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
 
     const currentQuestion = questions[currentIndex];
     const totalQuestions = questions.length;
@@ -155,6 +251,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
+        cacheSaveAnswer(currentQuestion.id, {});
     };
 
     const handleMarkReview = () => {
@@ -166,6 +263,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             newMarked.add(currentQuestion.id);
         }
         setMarkedForReview(newMarked);
+        cacheSaveNavigation(currentIndex, [...newMarked], timeLeft);
     };
 
     const completeAssessment = useCallback(async () => {
@@ -183,13 +281,14 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             }
 
             const result = await response.json();
+            await clearSession();
             onComplete(result);
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
             setIsSubmitting(false);
         }
-    }, [answers, attemptToken, isSubmitting, onComplete]);
+    }, [answers, attemptToken, clearSession, isSubmitting, onComplete]);
 
     useEffect(() => {
         if (isLoading || !attemptToken) return;
@@ -204,6 +303,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const handleOptionSelect = (optionId: string) => {
         if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
+        cacheSaveAnswer(currentQuestion.id, { optionId });
     };
 
     if (isLoading) {
@@ -231,6 +331,22 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
 
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
                     <div className="hidden sm:block">
@@ -238,9 +354,20 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                     </div>
                     <div className="mx-4 hidden h-8 w-px bg-slate-300 dark:bg-white/10 sm:block" />
                     <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">MNC Career Assessment</p>
-                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
-                            Technical MCQ Hub
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">MNC Career Assessment</p>
+                            {mode === 'trial' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    Trial Test
+                                </span>
+                            )}
+                        </div>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
+                            <span>Technical MCQ Hub</span>
+                            <span className="text-slate-900 dark:text-white font-normal">&middot;</span>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                                Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
+                            </span>
                         </h1>
                     </div>
                 </div>
@@ -364,7 +491,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                             <button
                                 type="button"
-                                onClick={() => setCurrentIndex(prev => prev - 1)}
+                                onClick={() => { const i = currentIndex - 1; setCurrentIndex(i); cacheSaveNavigation(i, [...markedForReview], timeLeft); }}
                                 disabled={currentIndex === 0}
                                 className="min-h-10 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
                             >
@@ -381,7 +508,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                             ) : (
                                 <button 
                                     type="button"
-                                    onClick={() => setCurrentIndex(prev => prev + 1)} 
+                                    onClick={() => { const i = currentIndex + 1; setCurrentIndex(i); cacheSaveNavigation(i, [...markedForReview], timeLeft); }} 
                                     className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                                 >
                                     Save and next

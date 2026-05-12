@@ -7,8 +7,9 @@ import { EXAMS, EXAM_DETAILS, CODING_LANGUAGES, type AssessmentId, type Extended
 import { usePaidAssessments, codingPaymentKey, type PaymentKey } from "@/lib/payments";
 import { useAssessmentResults, deriveCareerIdentity, type AssessmentResult, type SectionResult } from "@/lib/progress";
 import { useAssessmentTracker } from "@/lib/assessmentTracker";
-import DetailedResultModal from "./DetailedResultModal";
+import GoogleStyleAnalysisModal from "./GoogleStyleAnalysisModal";
 import AssessmentNotifications from "./AssessmentNotifications";
+import CertificatePreviewModal from "../certificate/CertificatePreviewModal";
 import type { Exam } from "../ExamCarousel";
 
 // ── Icons ──
@@ -64,6 +65,13 @@ const ShareIcon = ({ c }: { c?: string }) => (
 const DownloadIcon = ({ c }: { c?: string }) => (
   <svg className={c} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+  </svg>
+);
+
+const EyeIcon = ({ c }: { c?: string }) => (
+  <svg className={c} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
   </svg>
 );
 
@@ -197,6 +205,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
     clearAllNotifications,
   } = useAssessmentTracker();
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
+  const [selectedCertificate, setSelectedCertificate] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
   const purchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
   const unpurchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
@@ -313,6 +322,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
 
       {/* ===== RESULTS: Clean list layout (NOT card grid) ===== */}
       <motion.section
+        id="results"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
@@ -649,10 +659,11 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                             <ShareIcon c="w-4 h-4" />
                           </button>
                           <button
-                            className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-slate-300 flex items-center justify-center hover:bg-gray-200 dark:bg-white/10 transition-colors"
-                            title="Download Certificate"
+                            onClick={() => setSelectedCertificate({ exam, result })}
+                            className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
+                            title="View Certificate"
                           >
-                            <DownloadIcon c="w-4 h-4" />
+                            <EyeIcon c="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -664,13 +675,20 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
         </motion.section>
       )}
 
-      {/* ===== MODAL ===== */}
-      <DetailedResultModal
+      {/* ===== MODALS ===== */}
+      <GoogleStyleAnalysisModal
         isOpen={!!selectedResult}
         onClose={() => setSelectedResult(null)}
         exam={selectedResult?.exam || null}
         result={selectedResult?.result || null}
         detail={selectedResult ? EXAM_DETAILS[selectedResult.exam.id as AssessmentId] : null}
+      />
+      <CertificatePreviewModal
+        isOpen={!!selectedCertificate}
+        onClose={() => setSelectedCertificate(null)}
+        exam={selectedCertificate?.exam || null}
+        result={selectedCertificate?.result || null}
+        userName={userName}
       />
     </div>
   );
