@@ -85,9 +85,7 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
         { label: "Questions", value: String(questions) },
         { label: "Duration", value: duration },
         { label: "Sections", value: "4" },
-        { label: "Attempts Allowed", value: `${limit}` },
-        { label: "Attempts Taken", value: `${attemptsCount}` },
-        { label: "Current Attempt", value: `${currentAttempt} of ${limit}` },
+        { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];
 
     const checklist = [
@@ -176,24 +174,12 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                         <aside className="h-fit rounded-2xl border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-brand-green mb-4">Session Stats</h3>
                             <div className="space-y-4">
-                                {metrics.map((metric) => {
-                                    const isCurrentAttempt = metric.label === "Current Attempt";
-                                    return (
-                                        <div 
-                                            key={metric.label} 
-                                            className={`flex items-center justify-between gap-4 border-b border-brand-green/10 pb-3 last:border-0 last:pb-0 dark:border-white/10 ${
-                                                isCurrentAttempt ? "bg-brand-green/10 dark:bg-emerald-500/10 p-2.5 rounded-xl -mx-2.5 px-3 border-0 mt-1" : ""
-                                            }`}
-                                        >
-                                            <span className={`text-xs font-bold ${isCurrentAttempt ? "text-brand-green dark:text-emerald-400" : "text-slate-900 dark:text-white"}`}>
-                                                {metric.label}
-                                            </span>
-                                            <strong className={`font-extrabold ${isCurrentAttempt ? "text-brand-green dark:text-emerald-400 text-base" : "text-sm text-slate-900 dark:text-white"}`}>
-                                                {metric.value}
-                                            </strong>
-                                        </div>
-                                    );
-                                })}
+                                {metrics.map((metric) => (
+                                    <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-brand-green/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
+                                        <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
+                                    </div>
+                                ))}
                             </div>
                         </aside>
                     </div>

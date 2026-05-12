@@ -92,9 +92,7 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
         { label: "Questions", value: "40" },
         { label: "Duration", value: "50 min" },
         { label: "Format", value: "Multiple Choice" },
-        { label: "Attempts Allowed", value: `${limit}` },
-        { label: "Attempts Taken", value: `${attemptsCount}` },
-        { label: "Current Attempt", value: `${currentAttempt} of ${limit}` },
+        { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];
 
     return (
@@ -177,24 +175,12 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
                         <aside className="h-fit rounded-2xl border border-[#6366f1]/10 bg-[#6366f1]/[0.03] p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-[#6366f1] mb-4">Session Stats</h3>
                             <div className="space-y-4">
-                                {metrics.map((metric) => {
-                                    const isCurrentAttempt = metric.label === "Current Attempt";
-                                    return (
-                                        <div 
-                                            key={metric.label} 
-                                            className={`flex items-center justify-between gap-4 border-b border-[#6366f1]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10 ${
-                                                isCurrentAttempt ? "bg-[#6366f1]/10 dark:bg-[#6366f1]/10 p-2.5 rounded-xl -mx-2.5 px-3 border-0 mt-1" : ""
-                                            }`}
-                                        >
-                                            <span className={`text-xs font-bold ${isCurrentAttempt ? "text-[#6366f1] dark:text-indigo-400" : "text-slate-900 dark:text-white"}`}>
-                                                {metric.label}
-                                            </span>
-                                            <strong className={`font-extrabold ${isCurrentAttempt ? "text-[#6366f1] dark:text-indigo-400 text-base" : "text-sm text-slate-900 dark:text-white"}`}>
-                                                {metric.value}
-                                            </strong>
-                                        </div>
-                                    );
-                                })}
+                                {metrics.map((metric) => (
+                                    <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-[#6366f1]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
+                                        <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
+                                    </div>
+                                ))}
                             </div>
                         </aside>
                     </div>

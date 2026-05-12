@@ -97,9 +97,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({
         { label: "Questions", value: "5" },
         { label: "Duration", value: "90 min" },
         { label: "Sections", value: "5" },
-        { label: "Attempts Allowed", value: `${limit}` },
-        { label: "Attempts Taken", value: `${attemptsCount}` },
-        { label: "Current Attempt", value: `${currentAttempt} of ${limit}` },
+        { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];
 
     return (
@@ -222,33 +220,19 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({
                                 Session Stats
                             </h3>
                             <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
-                                {metrics.map((metric) => {
-                                    const isCurrentAttempt = metric.label === "Current Attempt";
-                                    return (
-                                        <div
-                                            key={metric.label}
-                                            className={`flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0 ${
-                                                isCurrentAttempt ? "p-2.5 rounded-lg -mx-2.5 px-3 border-0 mt-1" : ""
-                                            }`}
-                                            style={isCurrentAttempt ? {
-                                                background: `${language.accent}1a`,
-                                            } : undefined}
-                                        >
-                                            <span 
-                                                className={`text-sm font-medium ${isCurrentAttempt ? "" : "text-[#17201b] dark:text-white"}`}
-                                                style={isCurrentAttempt ? { color: language.accent } : undefined}
-                                            >
-                                                {metric.label}
-                                            </span>
-                                            <strong 
-                                                className={`text-sm font-bold ${isCurrentAttempt ? "text-base font-extrabold" : "text-[#17201b] dark:text-white"}`}
-                                                style={isCurrentAttempt ? { color: language.accent } : undefined}
-                                            >
-                                                {metric.value}
-                                            </strong>
-                                        </div>
-                                    );
-                                })}
+                                {metrics.map((metric) => (
+                                    <div
+                                        key={metric.label}
+                                        className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
+                                    >
+                                        <span className="text-sm font-medium text-[#17201b] dark:text-white">
+                                            {metric.label}
+                                        </span>
+                                        <strong className="text-sm font-bold text-[#17201b] dark:text-white">
+                                            {metric.value}
+                                        </strong>
+                                    </div>
+                                ))}
                                 <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
                                     <span className="text-sm font-medium text-[#17201b] dark:text-white">
                                         Language
