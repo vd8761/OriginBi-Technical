@@ -70,6 +70,7 @@ export default function ExploreDetailClient({ id }: { id: string }) {
             }
             return {
                 ...exam,
+                assessmentId: dbExam.assessment_id,
                 title: dbExam.assessment_name || exam.title,
                 duration: `${dbExam.total_time_minutes || 60} min`,
                 questions: dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.total_questions || exam.questions),

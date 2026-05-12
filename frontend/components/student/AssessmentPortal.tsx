@@ -20,6 +20,7 @@ import {
   type ExtendedExam,
   type PricingTier,
 } from "@/lib/exams";
+import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
 
@@ -49,6 +50,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [showDetailModal, setShowDetailModal] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isPaid } = usePaidAssessments();
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
 
@@ -117,6 +119,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
         return {
           ...exam,
+          assessmentId: dbExam.assessment_id,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
           questions: (dbExam.question_limit > 0 ? dbExam.question_limit : dbExam.total_questions) || exam.questions,
@@ -142,12 +145,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }, [searchParams, initialView]);
 
   const filteredExams = useMemo(() => {
-    const baseExams = dynamicExams.filter((exam) => exam.available);
+    const baseExams = dynamicExams.filter((exam) => exam.available && isPaid(exam.id as PaymentKey));
     if (filter === "ready" || filter === "all") {
       return baseExams;
     }
     return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
-  }, [dynamicExams, filter]);
+  }, [dynamicExams, filter, isPaid]);
 
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);

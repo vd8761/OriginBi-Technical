@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { AdaptiveBlockService } from './adaptive-block.service';
@@ -21,6 +21,7 @@ export class AssessmentService {
 
   constructor(
     private dataSource: DataSource,
+    @Inject(forwardRef(() => AdaptiveBlockService))
     private adaptiveBlockService: AdaptiveBlockService
   ) {}
 

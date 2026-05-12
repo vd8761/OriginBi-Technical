@@ -66,9 +66,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
                 className="relative bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/40 dark:border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.25)] rounded-3xl p-8 sm:p-10 text-center flex flex-col items-center transition-all duration-300"
               >
-                {/* Subtle ambient green glow in background */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-brand-green/10 rounded-full blur-3xl pointer-events-none" />
-
                 {/* Checkmark Animation Container (No ripple effect, simple green circle) */}
                 <div className="relative flex items-center justify-center w-24 h-24 bg-brand-green/10 dark:bg-brand-green/20 rounded-full mb-8 text-brand-green">
                   <svg
@@ -88,11 +85,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 </div>
 
                 {/* Message Details */}
-                <h2 className="font-sans font-bold text-slate-800 dark:text-brand-text-primary text-3xl tracking-tight mb-4">
+                <h2 className="font-sans font-bold text-black dark:text-white text-3xl tracking-tight mb-4">
                   Account Created!
                 </h2>
                 
-                <p className="font-sans text-slate-500 dark:text-brand-text-secondary text-sm md:text-base leading-relaxed mb-10 px-2">
+                <p className="font-sans text-black dark:text-white text-sm md:text-base leading-relaxed mb-10 px-2">
                   Your technical assessment profile has been successfully set up. Click below to login and start your assessment journey.
                 </p>
 
@@ -100,7 +97,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={() => setActiveTab("login")}
-                  className="w-full h-14 bg-brand-green hover:bg-brand-green/90 text-white font-bold rounded-full shadow-lg shadow-brand-green/20 hover:shadow-brand-green/30 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 text-base uppercase tracking-wider"
+                  className="w-full h-14 bg-brand-green hover:bg-brand-green/90 text-white font-bold rounded-full shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 text-base uppercase tracking-wider"
                 >
                   Proceed to Login
                   <svg
@@ -230,17 +227,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           </AnimatePresence>
 
           {/* Footer */}
-          <footer className="mt-8 flex flex-col-reverse sm:flex-row items-center justify-between text-[clamp(11px,0.8vw,13px)] font-medium text-brand-text-light-secondary dark:text-brand-text-secondary gap-3">
+          <footer className="mt-8 flex flex-col-reverse sm:flex-row items-center justify-between text-[clamp(11px,0.8vw,13px)] font-medium text-black dark:text-white gap-3">
             <div className="flex items-center gap-4">
-              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2">
+              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2 text-black dark:text-white">
                 Privacy Policy
               </a>
-              <span className="border-r border-brand-light-tertiary dark:border-white/20 h-3 hidden sm:block" />
-              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2">
+              <span className="border-r border-black dark:border-white h-3 hidden sm:block" />
+              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2 text-black dark:text-white">
                 Terms & Conditions
               </a>
             </div>
-            <span>&copy; OriginBI {new Date().getFullYear()}</span>
+            <span className="text-black dark:text-white">&copy; OriginBI {new Date().getFullYear()}</span>
           </footer>
         </div>
       </div>
