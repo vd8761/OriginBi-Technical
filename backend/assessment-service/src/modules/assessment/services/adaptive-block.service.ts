@@ -74,6 +74,7 @@ export class AdaptiveBlockService {
       }
 
       const blockConfig = assessment[0].block_config as BlockConfig;
+      const adaptiveConfig = assessment[0].adaptive_config as AdaptiveConfig;
       if (!blockConfig.enabled) {
         return; // Not an adaptive assessment
       }
@@ -96,7 +97,7 @@ export class AdaptiveBlockService {
             assessmentId,
             i,
             JSON.stringify(difficultyDistribution),
-            blockConfig.adaptiveConfig?.enabled || false
+            adaptiveConfig?.enabled || false
           ]
         );
       }
@@ -304,7 +305,7 @@ export class AdaptiveBlockService {
       [attemptToken]
     );
 
-    return result.map(block => ({
+    return result.map((block: any) => ({
       blockNumber: block.block_number,
       status: block.status,
       difficulty: block.difficulty_achieved,
