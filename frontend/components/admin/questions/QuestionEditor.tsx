@@ -9,7 +9,8 @@ import {
   DifficultyLevel, QuestionStatus,
 } from "./types";
 import { generateId } from "./storage";
-import { X, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { uploadQuestionAsset } from "./api";
+import { X, Plus, Trash2, CheckCircle2, Image, Music, UploadCloud } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 
 interface QuestionEditorProps {
@@ -31,6 +32,15 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   ]);
   const [correctId, setCorrectId] = useState("opt_0");
 
+  // Cloudflare R2 Upload States
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  
+  // Local File States (for deferred uploads on form save)
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [hasNewFile, setHasNewFile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // DB-backed fields
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
@@ -92,12 +102,14 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         const aq = question as AptitudeQuestion;
         setText(aq.text); setOptions(aq.options); setCorrectId(aq.correctOptionId);
         setAptCategory(aq.category);
+        setImageUrl(aq.imageUrl || null);
         break;
       }
       case "mnc": {
         const mq = question as MNCQuestion;
         setText(mq.text); setOptions(mq.options); setCorrectId(mq.correctOptionId);
         setMncTopic(mq.topic);
+        setImageUrl(mq.imageUrl || null);
         break;
       }
       case "role": {
@@ -108,6 +120,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         setScenarioTitle(rq.title || ""); setScenarioContext(rq.scenarioContext || "");
         setTicketId(rq.ticketId || ""); setPriority(rq.priority || "Medium");
         setReportedBy(rq.reportedBy || "");
+        setImageUrl(rq.imageUrl || null);
         break;
       }
       case "communication": {
@@ -116,6 +129,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         setCommPassage(cq.passage || ""); setCommPrompt(cq.prompt || "");
         setCommPrepTime(cq.prepTimeSeconds || 30); setCommRecordTime(cq.recordTimeSeconds || 90);
         setCommMinWords(cq.minWords || 50); setCommMaxWords(cq.maxWords || 200);
+        setAudioUrl(cq.audioUrl || null);
         if (cq.questions) setCommSubQuestions(cq.questions.map(sq => ({
           id: sq.id, text: sq.text, options: sq.options, correctOptionId: sq.correctOptionId || sq.options[0]?.id || "",
         })));
@@ -164,6 +178,37 @@ export default function QuestionEditor({ question, assessmentType, categories = 
     const u = [...commSubQuestions]; u[sqIdx] = { ...u[sqIdx], correctOptionId: optId }; setCommSubQuestions(u);
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, fileType: "image" | "audio") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (previewUrl && previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const preview = URL.createObjectURL(file);
+    setLocalFile(file);
+    setPreviewUrl(preview);
+    setHasNewFile(true);
+
+    if (fileType === "image") {
+      setImageUrl(preview);
+    } else {
+      setAudioUrl(preview);
+    }
+  };
+
+  const handleClearFile = () => {
+    if (previewUrl && previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setLocalFile(null);
+    setPreviewUrl(null);
+    setImageUrl(null);
+    setAudioUrl(null);
+    setHasNewFile(false);
+  };
+
   const validate = (): boolean => {
     const errs: string[] = [];
     if (assessmentType === "communication") {
@@ -180,43 +225,66 @@ export default function QuestionEditor({ question, assessmentType, categories = 
     return errs.length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    const id = question ? (question as { id: string }).id : generateId();
+    
+    let finalImageUrl = imageUrl;
+    let finalAudioUrl = audioUrl;
 
-    const common = {
-      id,
-      difficulty,
-      marks,
-      negativeMarks: 0.25,
-      status,
-      assessmentId,
-    };
+    try {
+      setIsSaving(true);
 
-    switch (assessmentType) {
-      case "aptitude":
-        onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId } as AptitudeQuestion);
-        break;
-      case "mnc":
-        onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId } as MNCQuestion);
-        break;
-      case "role":
-        onSave({
-          ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId,
-          ...(roleType === "conceptual" ? { category: roleCategory, subCategory: roleSubCategory } : {}),
-          ...(roleType === "scenario" ? { title: scenarioTitle, scenarioContext, ticketId, priority, reportedBy } : {}),
-        } as RoleQuestion);
-        break;
-      case "communication":
-        onSave({
-          ...common, taskType: commTaskType, instructions: commInstructions.trim(),
-          ...(commPassage ? { passage: commPassage } : {}),
-          ...(commPrompt ? { prompt: commPrompt } : {}),
-          ...(commTaskType === "speaking" ? { prepTimeSeconds: commPrepTime, recordTimeSeconds: commRecordTime } : {}),
-          ...(commTaskType === "writing" ? { minWords: commMinWords, maxWords: commMaxWords } : {}),
-          ...(commSubQuestions.length > 0 ? { questions: commSubQuestions } : {}),
-        } as CommQuestion);
-        break;
+      // Upload file to R2 only on form submission
+      if (hasNewFile && localFile) {
+        const res = await uploadQuestionAsset(assessmentType, localFile);
+        if (localFile.type.startsWith("image/")) {
+          finalImageUrl = res.url;
+        } else if (localFile.type.startsWith("audio/")) {
+          finalAudioUrl = res.url;
+        }
+      }
+
+      const id = question ? (question as { id: string }).id : generateId();
+
+      const common = {
+        id,
+        difficulty,
+        marks,
+        negativeMarks: 0.25,
+        status,
+        assessmentId,
+      };
+
+      switch (assessmentType) {
+        case "aptitude":
+          onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as AptitudeQuestion);
+          break;
+        case "mnc":
+          onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as MNCQuestion);
+          break;
+        case "role":
+          onSave({
+            ...common, questionType: roleType, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl,
+            ...(roleType === "conceptual" ? { category: roleCategory, subCategory: roleSubCategory } : {}),
+            ...(roleType === "scenario" ? { title: scenarioTitle, scenarioContext, ticketId, priority, reportedBy } : {}),
+          } as RoleQuestion);
+          break;
+        case "communication":
+          onSave({
+            ...common, taskType: commTaskType, instructions: commInstructions.trim(),
+            ...(finalAudioUrl ? { audioUrl: finalAudioUrl } : {}),
+            ...(commPassage ? { passage: commPassage } : {}),
+            ...(commPrompt ? { prompt: commPrompt } : {}),
+            ...(commTaskType === "speaking" ? { prepTimeSeconds: commPrepTime, recordTimeSeconds: commRecordTime } : {}),
+            ...(commTaskType === "writing" ? { minWords: commMinWords, maxWords: commMaxWords } : {}),
+            ...(commSubQuestions.length > 0 ? { questions: commSubQuestions } : {}),
+          } as CommQuestion);
+          break;
+      }
+    } catch (err: any) {
+      alert(`Failed to save question: ${err.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -384,6 +452,31 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                 <div className="space-y-5">
                   <div><label className={labelCls}>Question Text</label><textarea value={text} onChange={e => setText(e.target.value)} className={`${inputCls} resize-none font-bold`} rows={2} placeholder="Question text..." /></div>
                   
+                  {/* Image Upload Area */}
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Question Image (Optional)</label>
+                    {imageUrl ? (
+                      <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 aspect-video max-h-40 bg-slate-50 dark:bg-white/[0.02] flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imageUrl} alt="Question Asset" className="max-h-full max-w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={handleClearFile}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95 transition-all shadow-md animate-in fade-in zoom-in duration-200"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center border border-dashed border-slate-300 dark:border-white/10 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-white/[0.01] hover:border-slate-400 dark:hover:border-white/20 cursor-pointer transition-all">
+                        <UploadCloud className="h-6 w-6 text-brand-green mb-1.5" />
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Choose image file</span>
+                        <span className="text-[9px] font-medium text-slate-400 mt-0.5">Supports PNG, JPG or WebP</span>
+                        <input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, "image")} className="hidden" />
+                      </label>
+                    )}
+                  </div>
+
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className={labelCls}>Options</label>
@@ -420,35 +513,62 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                   </div>
                 </div>
               ) : (
-                ["mcq", "reading", "audio"].includes(commTaskType) && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className={labelCls}>Tasks</p>
-                      <button onClick={addSubQuestion} className="px-2 py-1 rounded-md bg-brand-green/10 text-[9px] font-black uppercase text-brand-green hover:bg-brand-green hover:text-white transition-all">+ Add Task</button>
-                    </div>
-                    <div className="space-y-3">
-                      {commSubQuestions.map((sq, sqIdx) => (
-                        <div key={sq.id} className="rounded-xl bg-white dark:bg-[#111a15] border border-brand-green/10 p-3 shadow-sm">
-                          <div className="flex items-start gap-3 mb-3">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand-green text-[10px] font-black text-white">{sqIdx + 1}</span>
-                            <textarea value={sq.text} onChange={e => updateSubQText(sqIdx, e.target.value)} className="flex-1 bg-transparent text-[12px] font-bold focus:outline-none dark:text-white resize-none" rows={1} placeholder="Inquiry..." />
-                            <button onClick={() => removeSubQuestion(sqIdx)} className="text-red-400/30 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                          </div>
-                          <div className="grid gap-1.5 sm:grid-cols-2">
-                            {sq.options.map((opt, oIdx) => (
-                              <div key={opt.id} className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all ${sq.correctOptionId === opt.id ? "bg-brand-green/5 border-brand-green/40" : "bg-brand-green/5 dark:bg-white/5 border-transparent"}`}>
-                                <button onClick={() => setSubQCorrect(sqIdx, opt.id)} className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[9px] font-black ${sq.correctOptionId === opt.id ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"}`}>
-                                  {LABELS[oIdx]}
-                                </button>
-                                <input value={opt.text} onChange={e => updateSubQOption(sqIdx, oIdx, e.target.value)} className="flex-1 bg-transparent text-[11px] font-bold focus:outline-none dark:text-white" placeholder="..." />
-                              </div>
-                            ))}
-                          </div>
+                <div className="space-y-4">
+                  {commTaskType === "audio" && (
+                    <div className="space-y-1.5">
+                      <label className={labelCls}>Comprehension Audio File</label>
+                      {audioUrl ? (
+                        <div className="relative group rounded-xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/[0.02] flex items-center gap-4 animate-in fade-in duration-200">
+                          <audio src={audioUrl} controls className="flex-1 h-8" />
+                          <button
+                            type="button"
+                            onClick={handleClearFile}
+                            className="p-2 rounded-full hover:bg-red-500/10 hover:text-red-500 text-slate-400 hover:scale-105 active:scale-95 transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-                      ))}
+                      ) : (
+                        <label className="flex flex-col items-center justify-center border border-dashed border-slate-300 dark:border-white/10 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-white/[0.01] hover:border-slate-400 dark:hover:border-white/20 cursor-pointer transition-all">
+                          <Music className="h-6 w-6 text-brand-green mb-1.5" />
+                          <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Choose audio file</span>
+                          <span className="text-[9px] font-medium text-slate-400 mt-0.5">Supports MP3 or WAV</span>
+                          <input type="file" accept="audio/*" onChange={(e) => handleFileSelect(e, "audio")} className="hidden" />
+                        </label>
+                      )}
                     </div>
-                  </div>
-                )
+                  )}
+
+                  {["mcq", "reading", "audio"].includes(commTaskType) && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className={labelCls}>Tasks</p>
+                        <button onClick={addSubQuestion} className="px-2 py-1 rounded-md bg-brand-green/10 text-[9px] font-black uppercase text-brand-green hover:bg-brand-green hover:text-white transition-all">+ Add Task</button>
+                      </div>
+                      <div className="space-y-3">
+                        {commSubQuestions.map((sq, sqIdx) => (
+                          <div key={sq.id} className="rounded-xl bg-white dark:bg-[#111a15] border border-brand-green/10 p-3 shadow-sm">
+                            <div className="flex items-start gap-3 mb-3">
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand-green text-[10px] font-black text-white">{sqIdx + 1}</span>
+                              <textarea value={sq.text} onChange={e => updateSubQText(sqIdx, e.target.value)} className="flex-1 bg-transparent text-[12px] font-bold focus:outline-none dark:text-white resize-none" rows={1} placeholder="Inquiry..." />
+                              <button onClick={() => removeSubQuestion(sqIdx)} className="text-red-400/30 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                            </div>
+                            <div className="grid gap-1.5 sm:grid-cols-2">
+                              {sq.options.map((opt, oIdx) => (
+                                <div key={opt.id} className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all ${sq.correctOptionId === opt.id ? "bg-brand-green/5 border-brand-green/40" : "bg-brand-green/5 dark:bg-white/5 border-transparent"}`}>
+                                  <button onClick={() => setSubQCorrect(sqIdx, opt.id)} className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[9px] font-black ${sq.correctOptionId === opt.id ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"}`}>
+                                    {LABELS[oIdx]}
+                                  </button>
+                                  <input value={opt.text} onChange={e => updateSubQOption(sqIdx, oIdx, e.target.value)} className="flex-1 bg-transparent text-[11px] font-bold focus:outline-none dark:text-white" placeholder="..." />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -467,8 +587,13 @@ export default function QuestionEditor({ question, assessmentType, categories = 
              Cancel
            </button>
            <div className="flex items-center gap-3">
-             <button onClick={handleSave} className="px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white transition-all">
-               {question ? "Update Question" : "Create Question"}
+             <button
+               onClick={handleSave}
+               disabled={isSaving}
+               className={`px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white transition-all flex items-center gap-2 ${isSaving ? "opacity-60 cursor-not-allowed" : "hover:scale-105 active:scale-95"}`}
+             >
+               {isSaving && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+               {isSaving ? "Uploading & Saving..." : question ? "Update Question" : "Create Question"}
              </button>
            </div>
         </div>

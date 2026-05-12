@@ -34,6 +34,7 @@ const CURRENT_Q_KEY = "ob_current_q";
 interface CodingAssessmentProps {
     lang: string;
     onComplete?: (score: number) => void;
+    mode?: 'trial' | 'main';
 }
 
 const formatTime = (secs: number) => {
@@ -279,6 +280,9 @@ interface HeaderProps {
     theme: "dark" | "light";
     onToggleTheme: () => void;
     onShowGuidelines: () => void;
+    mode?: 'trial' | 'main';
+    attemptsCount?: number | null;
+    attemptsLimit?: number | null;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -298,6 +302,9 @@ const Header: React.FC<HeaderProps> = ({
     theme,
     onToggleTheme,
     onShowGuidelines,
+    mode = 'main',
+    attemptsCount,
+    attemptsLimit,
 }) => (
     <div className="coding-header relative z-50 flex h-14 flex-shrink-0 items-center gap-3 border-b px-4 backdrop-blur-xl">
         <Image
@@ -311,11 +318,20 @@ const Header: React.FC<HeaderProps> = ({
         />
         <div className="h-7 w-px flex-shrink-0 bg-white/10" />
         <div className="flex-shrink-0">
-            <div className="text-[13px] font-bold leading-none text-white">
-                Coding Assessment
+            <div className="text-[13px] font-bold leading-none text-white flex items-center gap-1.5 flex-wrap">
+                <span>Coding Assessment</span>
+                {mode === 'trial' && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                        Trial Test
+                    </span>
+                )}
             </div>
-            <div className="mt-0.5 text-[10px] text-white/35">
-                Q{currentQ + 1} / {totalQ} · {question.section} · {languageLabel}
+            <div className="mt-0.5 text-[10px] text-white flex items-center gap-1">
+                <span>Q{currentQ + 1} / {totalQ} · {question.section} · {languageLabel}</span>
+                <span className="text-white">&middot;</span>
+                <span className="font-semibold text-white">
+                    Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
+                </span>
             </div>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -466,7 +482,7 @@ const ProctorToast: React.FC<ProctorToastProps> = ({ visible, title, desc }) => 
     </div>
 );
 
-const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, onComplete }) => {
+const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, onComplete, mode = 'main' }) => {
     const router = useRouter();
     const { markCompleted } = useCompletedAssessments();
     const languageLabel = LANG_META[lang]?.label ?? lang;
@@ -480,6 +496,39 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, onComplete })
     const [saved, setSaved] = useState(true);
     const [splitPct, setSplitPct] = useState(42);
     const [fontSize, setFontSize] = useState(14);
+
+    const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
+    const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchEngineStats = async () => {
+            try {
+                const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+                const [statsRes, assessmentsRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                ]);
+                const statsJson = await statsRes.json();
+                if (statsJson?.data) {
+                    const cnt = statsJson.data['coding']?.[mode] ?? 0;
+                    setAttemptsCount(cnt > 0 ? cnt : 1);
+                }
+                const assessmentsJson = await assessmentsRes.json();
+                if (assessmentsJson?.data) {
+                    const found = assessmentsJson.data.find(
+                        (a: any) => a.module_type === 'coding' || a.assessment_code === 'coding'
+                    );
+                    if (found) {
+                        const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
+                        setAttemptsLimit(Number(lim));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load engine attempts stats:", err);
+            }
+        };
+        fetchEngineStats();
+    }, [mode]);
     // Editor feature toggles, loaded once from coding prefs.
     const [editorFindEnabled, setEditorFindEnabledState] = useState<boolean>(
         () => readPrefs().findEnabled ?? true,
@@ -851,6 +900,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, onComplete })
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 onShowGuidelines={handleShowGuidelines}
+                mode={mode}
+                attemptsCount={attemptsCount}
+                attemptsLimit={attemptsLimit}
             />
 
             <div

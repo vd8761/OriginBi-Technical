@@ -98,10 +98,26 @@ const Header: React.FC<HeaderProps> = ({
     onNavigate,
 }) => {
     const { user, logout, updateProfile } = useSession();
+    const router = useRouter();
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("All");
+    const [isResultsHash, setIsResultsHash] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const checkHash = () => {
+            setIsResultsHash(window.location.hash === "#results");
+        };
+        checkHash();
+        window.addEventListener("hashchange", checkHash);
+        window.addEventListener("popstate", checkHash);
+        return () => {
+            window.removeEventListener("hashchange", checkHash);
+            window.removeEventListener("popstate", checkHash);
+        };
+    }, []);
     
     const profileMenuRef = useRef<HTMLDivElement>(null);
     const notificationsMenuRef = useRef<HTMLDivElement>(null);
@@ -160,7 +176,8 @@ const Header: React.FC<HeaderProps> = ({
         setMobileMenuOpen(false);
     };
 
-    const isDashboardActive = currentView === 'dashboard';
+    const isDashboardActive = currentView === 'dashboard' && !isResultsHash;
+    const isMyScoreActive = currentView === 'dashboard' && isResultsHash;
     const isAssessmentActive = currentView === 'assessment';
     const isProfileSettingsActive = currentView === 'profile';
     const isExploreActive = currentView === 'explore';
@@ -189,11 +206,11 @@ const Header: React.FC<HeaderProps> = ({
                 onClick={() => handleNavClick("assessment")}
             />
             <NavItem
-                icon={<ReportTriangleIcon fillColor={(currentView === 'aptitude-results' || currentView === 'debrief') ? '#FFFFFF' : '#1ED36A'} />}
+                icon={<ReportTriangleIcon fillColor={isMyScoreActive ? '#FFFFFF' : '#1ED36A'} />}
                 label="My Score"
-                active={currentView === 'aptitude-results' || currentView === 'debrief'}
+                active={isMyScoreActive}
                 isMobile={isMobile}
-                onClick={() => handleNavClick("aptitude-results")}
+                onClick={() => handleNavClick("dashboard#results")}
             />
             <NavItem
                 icon={<ProfileIcon />}
@@ -403,6 +420,7 @@ const Header: React.FC<HeaderProps> = ({
                                             onClick={() => {
                                                 logout();
                                                 if (onLogout) onLogout();
+                                                router.push("/");
                                             }}
                                             className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 rounded-[10px] hover:bg-red-50 dark:hover:bg-red-900/[0.08] transition-all font-medium mt-1 cursor-pointer"
                                         >

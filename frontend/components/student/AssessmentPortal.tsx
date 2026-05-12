@@ -7,6 +7,7 @@ import { Exam } from "./ExamCarousel";
 import ExamDetailModal from "./ExamDetailModal";
 import ExploreView from "./ExploreView";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
+import AdaptiveAptitudePreTest from "../assessment/aptitude/AdaptiveAptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
 import MNCPreTest from "../assessment/mnc/MNCPreTest";
@@ -51,7 +52,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
 
-  const handleNavigate = (view: AssessmentView) => {
+  const handleNavigate = (view: string) => {
     router.push(`/${view}`);
   };
 
@@ -118,7 +119,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           ...exam,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.total_questions || exam.questions),
+          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : dbExam.total_questions) || exam.questions,
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -129,6 +130,17 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     });
   }, [assessmentsList]);
 
+  // Read view from URL and sync with currentView
+  useEffect(() => {
+    const viewFromUrl = searchParams.get("view") as AssessmentView | null;
+    const validViews: AssessmentView[] = ["dashboard", "assessment", "profile", "details", "explore"];
+    if (viewFromUrl && validViews.includes(viewFromUrl)) {
+      setCurrentView(viewFromUrl);
+    } else if (initialView && initialView !== currentView) {
+      setCurrentView(initialView);
+    }
+  }, [searchParams, initialView]);
+
   const filteredExams = useMemo(() => {
     const baseExams = dynamicExams.filter((exam) => exam.available);
     if (filter === "ready" || filter === "all") {
@@ -138,8 +150,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }, [dynamicExams, filter]);
 
   const handleSelectExam = (exam: Exam) => {
-    setSelectedExam(exam);
-    setShowDetailModal(true);
+    router.push(`/explore/${exam.id}`);
   };
 
   useEffect(() => {
@@ -337,7 +348,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={EXAMS as any}
+            assessments={dynamicExams as any}
             examDetails={EXAM_DETAILS as any}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
@@ -406,7 +417,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             userName={userName}
             handleSelectExam={handleSelectExam}
             handleStartExam={handleModalStart}
-            setShowDetailModal={setShowDetailModal}
           />
         ) : currentView === "profile" ? (
           <ProfileView onNavigate={(view) => handleNavigate(view as any)} />
@@ -447,7 +457,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       />
 
       {showAptitudeModal && (
-        <AptitudePreTest
+        <AdaptiveAptitudePreTest
           mode={assessmentMode}
           onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
           onClose={() => setShowAptitudeModal(false)}
