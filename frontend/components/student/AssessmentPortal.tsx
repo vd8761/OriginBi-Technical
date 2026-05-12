@@ -25,6 +25,7 @@ import ProfileView from "./ProfileView";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
+const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
@@ -74,15 +75,16 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   useEffect(() => {
     let active = true;
     const fetchAll = async () => {
+      if (!LEGACY_TECH_API_URL) return;
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
-        const response = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`);
+        if (!response.ok) return;
         const json = await response.json();
         if (json && json.data && active) {
           setAssessmentsList(json.data);
         }
-      } catch (err) {
-        console.error("Failed to load assessments dynamically:", err);
+      } catch {
+        // The Nest assessment admin API is optional for this frontend shell.
       }
     };
     fetchAll();

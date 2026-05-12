@@ -39,10 +39,19 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 
 const STATUS_KEY = "ob_statuses";
 const CURRENT_Q_KEY = "ob_current_q";
+const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
+type AssessmentMode = "trial" | "main";
+type LegacyAssessmentConfig = {
+    module_type?: string;
+    assessment_code?: string;
+    trial_attempts_limit?: number | string | null;
+    main_attempts_limit?: number | string | null;
+};
 
 interface CodingAssessmentProps {
     lang: string;
     snapshot?: AttemptSnapshot | null;
+    mode?: AssessmentMode;
 }
 
 type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
@@ -554,7 +563,7 @@ const ProctorToast: React.FC<ProctorToastProps> = ({ visible, title, desc }) => 
     </div>
 );
 
-const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) => {
+const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mode = "main" }) => {
     const router = useRouter();
     const languageLabel = LANG_META[lang]?.label ?? lang;
     const questions = useMemo(
@@ -588,12 +597,17 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
 
     useEffect(() => {
         const fetchEngineStats = async () => {
+            if (!LEGACY_TECH_API_URL) {
+                setAttemptsCount(1);
+                setAttemptsLimit(null);
+                return;
+            }
             try {
-                const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
-                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/attempts-stats`),
+                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`)
                 ]);
+                if (!statsRes.ok || !assessmentsRes.ok) return;
                 const statsJson = await statsRes.json();
                 if (statsJson?.data) {
                     const cnt = statsJson.data['coding']?.[mode] ?? 0;
@@ -601,16 +615,17 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot }) =
                 }
                 const assessmentsJson = await assessmentsRes.json();
                 if (assessmentsJson?.data) {
-                    const found = assessmentsJson.data.find(
-                        (a: any) => a.module_type === 'coding' || a.assessment_code === 'coding'
+                    const configs = assessmentsJson.data as LegacyAssessmentConfig[];
+                    const found = configs.find(
+                        (a) => a.module_type === 'coding' || a.assessment_code === 'coding'
                     );
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
                     }
                 }
-            } catch (err) {
-                console.error("Failed to load engine attempts stats:", err);
+            } catch {
+                // The Nest assessment admin API is optional for this coding runtime.
             }
         };
         fetchEngineStats();

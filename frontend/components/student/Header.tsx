@@ -23,6 +23,7 @@ import { capitalizeWords, getAvatarColor } from "../../lib/utils";
 
 type StudentHeaderView =
     | "dashboard"
+    | "dashboard#results"
     | "assessment"
     | "profile"
     | "details"

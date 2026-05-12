@@ -12,7 +12,6 @@ interface DashboardContentProps {
   userName: string;
   handleSelectExam: (exam: Exam) => void;
   handleStartExam: (exam: Exam) => void;
-  setShowDetailModal: (v: boolean) => void;
 }
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {

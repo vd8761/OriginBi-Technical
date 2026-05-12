@@ -7,6 +7,7 @@ import { LANG_META } from "@/components/assessment/coding/CodeEditor";
 import { ApiError, startAttempt, type AttemptSnapshot } from "@/lib/api";
 
 const VALID_LANGS = Object.keys(LANG_META);
+type AssessmentMode = "trial" | "main";
 
 function LoadingView() {
     return (
@@ -23,6 +24,8 @@ function CodingAssessmentInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const lang = (searchParams.get("lang") || "").toLowerCase();
+    const rawMode = searchParams.get("mode");
+    const mode: AssessmentMode = rawMode === "trial" ? "trial" : "main";
     const [snapshot, setSnapshot] = useState<AttemptSnapshot | null>(null);
     const [error, setError] = useState("");
 
@@ -75,7 +78,7 @@ function CodingAssessmentInner() {
         );
     }
 
-    return <CodingAssessment lang={lang} snapshot={snapshot} />;
+    return <CodingAssessment lang={lang} snapshot={snapshot} mode={mode} />;
 }
 
 export default function CodingAssessmentPage() {
