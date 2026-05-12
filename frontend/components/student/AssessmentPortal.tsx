@@ -181,7 +181,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           assessmentId: dbExam.assessment_id,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : dbExam.total_questions) || exam.questions,
+          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.main_questions_count > 0 ? dbExam.main_questions_count : dbExam.total_questions)) || exam.questions,
+          trialQuestionsCount: dbExam.trial_questions_count || 0,
+          mainQuestionsCount: dbExam.main_questions_count || 0,
+          questionLimit: dbExam.question_limit || 0,
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -605,7 +608,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       />
 
       {showAptitudeModal && (() => {
-        const exam = dynamicExams.find(e => e.id === 'aptitude');
+        const exam = dynamicExams.find(e => e.id === 'aptitude') as any;
+        const qCount = assessmentMode === 'trial' 
+          ? 5 
+          : (exam?.questionLimit > 0 ? exam.questionLimit : (exam?.mainQuestionsCount > 0 ? exam.mainQuestionsCount : exam?.questions));
         return (
           <AptitudePreTest
             mode={assessmentMode}
@@ -613,7 +619,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             onClose={() => setShowAptitudeModal(false)}
             accentColor={exam?.accentColor}
             gradient={exam?.gradient}
-            questions={exam?.questions}
+            questions={qCount}
             duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}

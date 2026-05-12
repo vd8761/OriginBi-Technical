@@ -290,9 +290,15 @@ func (s *AssessmentService) StartAttempt(module string, req models.StartAttemptR
 		}
 
 		finalQuestions := shuffled
-		questionLimit := assessment.QuestionLimit
-		if questionLimit > 0 && len(shuffled) > questionLimit {
-			finalQuestions = shuffled[:questionLimit]
+		if requestedMode == "trial" {
+			if len(shuffled) > 5 {
+				finalQuestions = shuffled[:5]
+			}
+		} else {
+			questionLimit := assessment.QuestionLimit
+			if questionLimit > 0 && len(shuffled) > questionLimit {
+				finalQuestions = shuffled[:questionLimit]
+			}
 		}
 
 		// Insert into junction table

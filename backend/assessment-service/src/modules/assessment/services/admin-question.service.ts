@@ -511,16 +511,32 @@ export class AdminQuestionService {
       const params: any[] = [];
       let where = '';
       if (moduleType) {
-        where = 'WHERE module_type = $1';
+        where = 'WHERE a.module_type = $1';
         params.push(moduleType);
       }
       return await this.dataSource.query(
-        `SELECT assessment_id, assessment_code, assessment_name, module_type,
-                total_time_minutes, total_questions, status, created_at,
-                categories, difficulty_marks, difficulty_negative_marks,
-                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options,
-                amount, trial_attempts_limit, main_attempts_limit
-         FROM tech_assessments ${where} ORDER BY assessment_id DESC`,
+        `SELECT a.assessment_id, a.assessment_code, a.assessment_name, a.module_type,
+                a.total_time_minutes, a.total_questions, a.question_limit, a.status, a.created_at,
+                a.categories, a.difficulty_marks, a.difficulty_negative_marks,
+                a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
+                a.amount, a.trial_attempts_limit, a.main_attempts_limit,
+                (CASE 
+                  WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM tech_coding_questions WHERE assessment_id = a.assessment_id AND status='active')
+                  ELSE 0
+                END) as trial_questions_count,
+                (CASE 
+                  WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM tech_coding_questions WHERE assessment_id = a.assessment_id AND status='active')
+                  ELSE 0
+                END) as main_questions_count
+         FROM tech_assessments a ${where} ORDER BY a.assessment_id DESC`,
         params,
       );
     } catch (error) {
