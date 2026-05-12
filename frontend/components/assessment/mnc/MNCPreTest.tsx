@@ -6,14 +6,10 @@ interface MNCPreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
+    attemptsCount?: number;
 }
-
-const metrics = [
-    { label: "Questions", value: "40" },
-    { label: "Duration", value: "50 min" },
-    { label: "Format", value: "Multiple Choice" },
-    { label: "Attempts", value: "1 out of 1" },
-];
 
 const checklist = [
     "Focus on system design and algorithmic logic.",
@@ -33,14 +29,73 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
     onClose,
     accentColor = '#6366f1',
     gradient = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-    mode = 'main'
+    mode = 'main',
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
+    attemptsCount: initialAttemptsCount
 }) => {
+    const [attemptsCount, setAttemptsCount] = React.useState<number>(initialAttemptsCount ?? 0);
+
+    React.useEffect(() => {
+        if (initialAttemptsCount !== undefined) {
+            setAttemptsCount(initialAttemptsCount);
+            return;
+        }
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = "";
+                const storedProfile = localStorage.getItem("originbi:user-profile");
+                if (storedProfile) {
+                    const parsed = JSON.parse(storedProfile);
+                    if (parsed && parsed.email) {
+                        activeEmail = parsed.email;
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const json = await response.json();
+                const data = json.data || json;
+                if (active && data) {
+                    const stats = data['mnc'] || { trial: 0, main: 0 };
+                    setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+                }
+            } catch (err) {
+                console.error("Failed to load attempt stats in pretest:", err);
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, [mode, initialAttemptsCount]);
+
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = '';
         };
     }, []);
+
+    const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+    const currentAttempt = attemptsCount + 1;
+
+    const metrics = [
+        { label: "Questions", value: "40" },
+        { label: "Duration", value: "50 min" },
+        { label: "Format", value: "Multiple Choice" },
+        { label: "Attempts Allowed", value: `${limit}` },
+        { label: "Attempts Taken", value: `${attemptsCount}` },
+        { label: "Current Attempt", value: `${currentAttempt} of ${limit}` },
+    ];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
@@ -122,12 +177,24 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
                         <aside className="h-fit rounded-2xl border border-[#6366f1]/10 bg-[#6366f1]/[0.03] p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-[#6366f1] mb-4">Session Stats</h3>
                             <div className="space-y-4">
-                                {metrics.map((metric) => (
-                                    <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-[#6366f1]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
-                                        <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
-                                        <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
-                                    </div>
-                                ))}
+                                {metrics.map((metric) => {
+                                    const isCurrentAttempt = metric.label === "Current Attempt";
+                                    return (
+                                        <div 
+                                            key={metric.label} 
+                                            className={`flex items-center justify-between gap-4 border-b border-[#6366f1]/10 pb-3 last:border-0 last:pb-0 dark:border-white/10 ${
+                                                isCurrentAttempt ? "bg-[#6366f1]/10 dark:bg-[#6366f1]/10 p-2.5 rounded-xl -mx-2.5 px-3 border-0 mt-1" : ""
+                                            }`}
+                                        >
+                                            <span className={`text-xs font-bold ${isCurrentAttempt ? "text-[#6366f1] dark:text-indigo-400" : "text-slate-900 dark:text-white"}`}>
+                                                {metric.label}
+                                            </span>
+                                            <strong className={`font-extrabold ${isCurrentAttempt ? "text-[#6366f1] dark:text-indigo-400 text-base" : "text-sm text-slate-900 dark:text-white"}`}>
+                                                {metric.value}
+                                            </strong>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </aside>
                     </div>

@@ -10,6 +10,7 @@ interface AptitudePreTestProps {
     duration?: string;
     trialAttemptsLimit?: number;
     mainAttemptsLimit?: number;
+    attemptsCount?: number;
     skills?: string[];
 }
 
@@ -23,8 +24,53 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
     duration = "60 min",
     trialAttemptsLimit = 5,
     mainAttemptsLimit = 2,
+    attemptsCount: initialAttemptsCount,
     skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"]
 }) => {
+    const [attemptsCount, setAttemptsCount] = React.useState<number>(initialAttemptsCount ?? 0);
+
+    React.useEffect(() => {
+        if (initialAttemptsCount !== undefined) {
+            setAttemptsCount(initialAttemptsCount);
+            return;
+        }
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = "";
+                const storedProfile = localStorage.getItem("originbi:user-profile");
+                if (storedProfile) {
+                    const parsed = JSON.parse(storedProfile);
+                    if (parsed && parsed.email) {
+                        activeEmail = parsed.email;
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const json = await response.json();
+                const data = json.data || json;
+                if (active && data) {
+                    const stats = data['aptitude'] || { trial: 0, main: 0 };
+                    setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+                }
+            } catch (err) {
+                console.error("Failed to load attempt stats in pretest:", err);
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, [mode, initialAttemptsCount]);
+
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => {
@@ -32,11 +78,16 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
         };
     }, []);
 
+    const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+    const currentAttempt = attemptsCount + 1;
+
     const metrics = [
         { label: "Questions", value: String(questions) },
         { label: "Duration", value: duration },
         { label: "Sections", value: "4" },
-        { label: "Attempts Allowed", value: mode === 'trial' ? `${trialAttemptsLimit}` : `${mainAttemptsLimit}` },
+        { label: "Attempts Allowed", value: `${limit}` },
+        { label: "Attempts Taken", value: `${attemptsCount}` },
+        { label: "Current Attempt", value: `${currentAttempt} of ${limit}` },
     ];
 
     const checklist = [
@@ -125,12 +176,24 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                         <aside className="h-fit rounded-2xl border border-brand-green/10 bg-brand-green/[0.03] p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-brand-green mb-4">Session Stats</h3>
                             <div className="space-y-4">
-                                {metrics.map((metric) => (
-                                    <div key={metric.label} className="flex items-center justify-between gap-4 border-b border-brand-green/10 pb-3 last:border-0 last:pb-0 dark:border-white/10">
-                                        <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
-                                        <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
-                                    </div>
-                                ))}
+                                {metrics.map((metric) => {
+                                    const isCurrentAttempt = metric.label === "Current Attempt";
+                                    return (
+                                        <div 
+                                            key={metric.label} 
+                                            className={`flex items-center justify-between gap-4 border-b border-brand-green/10 pb-3 last:border-0 last:pb-0 dark:border-white/10 ${
+                                                isCurrentAttempt ? "bg-brand-green/10 dark:bg-emerald-500/10 p-2.5 rounded-xl -mx-2.5 px-3 border-0 mt-1" : ""
+                                            }`}
+                                        >
+                                            <span className={`text-xs font-bold ${isCurrentAttempt ? "text-brand-green dark:text-emerald-400" : "text-slate-900 dark:text-white"}`}>
+                                                {metric.label}
+                                            </span>
+                                            <strong className={`font-extrabold ${isCurrentAttempt ? "text-brand-green dark:text-emerald-400 text-base" : "text-sm text-slate-900 dark:text-white"}`}>
+                                                {metric.value}
+                                            </strong>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </aside>
                     </div>

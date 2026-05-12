@@ -68,7 +68,11 @@ function CodingAssessmentInner() {
             timeTakenSeconds: 2700,
         });
 
-        router.push('/dashboard?completed=coding');
+        if (mode === 'trial') {
+            router.push('/assessment');
+        } else {
+            router.push('/dashboard?completed=coding');
+        }
     };
 
     if (!hydrated || !lang || !VALID_LANGS.includes(lang) || (mode !== "trial" && !isPaid(codingPaymentKey(lang)))) {

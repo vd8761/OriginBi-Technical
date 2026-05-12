@@ -79,7 +79,11 @@ function AptitudeAssessmentContent() {
         });
 
         // Redirect to dashboard
-        router.push('/dashboard?completed=aptitude');
+        if (mode === 'trial') {
+            router.push('/assessment');
+        } else {
+            router.push('/dashboard?completed=aptitude');
+        }
     };
 
     return (

@@ -830,8 +830,21 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                                     </div>
                                 </div>
                                 <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
-                                    <button onClick={() => setShowSubmitModal(false)} className="flex-1 rounded-xl border py-3.5 text-sm font-bold dark:text-white">Review Tasks</button>
-                                    <button onClick={confirmSubmit} className="flex-1 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white">Yes, Submit Test</button>
+                                    <button onClick={() => setShowSubmitModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border py-3.5 text-sm font-bold dark:text-white disabled:opacity-50 disabled:cursor-not-allowed">Review Tasks</button>
+                                    <button 
+                                        onClick={confirmSubmit} 
+                                        disabled={isSubmitting} 
+                                        className="flex-1 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white hover:bg-[#19be5e] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                <span>Submitting...</span>
+                                            </>
+                                        ) : (
+                                            "Yes, Submit Test"
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </motion.div>

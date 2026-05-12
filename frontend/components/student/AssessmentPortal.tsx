@@ -612,6 +612,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         const qCount = assessmentMode === 'trial' 
           ? 5 
           : (exam?.questionLimit > 0 ? exam.questionLimit : (exam?.mainQuestionsCount > 0 ? exam.mainQuestionsCount : exam?.questions));
+        const stats = attemptsStats['aptitude'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
         return (
           <AptitudePreTest
             mode={assessmentMode}
@@ -623,40 +625,65 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
             skills={exam?.tags}
           />
         );
       })()}
 
-      {showCommunicationModal && (
-        <CommunicationPreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
-          onClose={() => setShowCommunicationModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'communication')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'communication')?.gradient}
-        />
-      )}
+      {showCommunicationModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'communication') as any;
+        const stats = attemptsStats['grammar'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <CommunicationPreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
+            onClose={() => setShowCommunicationModal(false)}
+            accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
+            gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+          />
+        );
+      })()}
 
-      {showRoleModal && (
-        <RolePreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
-          onClose={() => setShowRoleModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'role')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'role')?.gradient}
-        />
-      )}
+      {showRoleModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'role') as any;
+        const stats = attemptsStats['role'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <RolePreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
+            onClose={() => setShowRoleModal(false)}
+            accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
+            gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+          />
+        );
+      })()}
 
-      {showMncModal && (
-        <MNCPreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
-          onClose={() => setShowMncModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'mnc')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'mnc')?.gradient}
-        />
-      )}
+      {showMncModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'mnc') as any;
+        const stats = attemptsStats['mnc'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <MNCPreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
+            onClose={() => setShowMncModal(false)}
+            accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
+            gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+          />
+        );
+      })()}
 
       {limitExceededPopup && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 py-6 sm:px-6">

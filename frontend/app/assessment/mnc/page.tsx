@@ -56,7 +56,11 @@ function MNCAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        router.push('/dashboard?completed=mnc');
+        if (mode === 'trial') {
+            router.push('/assessment');
+        } else {
+            router.push('/dashboard?completed=mnc');
+        }
     };
 
     return (

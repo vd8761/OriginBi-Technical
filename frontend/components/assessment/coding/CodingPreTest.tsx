@@ -9,14 +9,10 @@ interface CodingPreTestProps {
     onStart: (mode: 'trial' | 'main') => void;
     onClose: () => void;
     mode?: 'trial' | 'main';
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
+    attemptsCount?: number;
 }
-
-const metrics = [
-    { label: "Questions", value: "5" },
-    { label: "Duration", value: "90 min" },
-    { label: "Sections", value: "5" },
-    { label: "Attempts", value: "1 of 1" },
-];
 
 const covers = [
     "Number logic & arrays",
@@ -34,13 +30,77 @@ const checklist = [
     "If the timer runs out, the assessment auto-submits with the answers you have.",
 ];
 
-const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClose, mode = 'main' }) => {
+const CodingPreTest: React.FC<CodingPreTestProps> = ({ 
+    language, 
+    onStart, 
+    onClose, 
+    mode = 'main',
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
+    attemptsCount: initialAttemptsCount
+}) => {
+    const [attemptsCount, setAttemptsCount] = React.useState<number>(initialAttemptsCount ?? 0);
+
+    React.useEffect(() => {
+        if (initialAttemptsCount !== undefined) {
+            setAttemptsCount(initialAttemptsCount);
+            return;
+        }
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = "";
+                const storedProfile = localStorage.getItem("originbi:user-profile");
+                if (storedProfile) {
+                    const parsed = JSON.parse(storedProfile);
+                    if (parsed && parsed.email) {
+                        activeEmail = parsed.email;
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const json = await response.json();
+                const data = json.data || json;
+                if (active && data) {
+                    const stats = data['coding'] || { trial: 0, main: 0 };
+                    setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+                }
+            } catch (err) {
+                console.error("Failed to load attempt stats in pretest:", err);
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, [mode, initialAttemptsCount]);
+
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = '';
         };
     }, []);
+
+    const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+    const currentAttempt = attemptsCount + 1;
+
+    const metrics = [
+        { label: "Questions", value: "5" },
+        { label: "Duration", value: "90 min" },
+        { label: "Sections", value: "5" },
+        { label: "Attempts Allowed", value: `${limit}` },
+        { label: "Attempts Taken", value: `${attemptsCount}` },
+        { label: "Current Attempt", value: `${currentAttempt} of ${limit}` },
+    ];
 
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6 sm:px-6">
@@ -162,19 +222,33 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                 Session Stats
                             </h3>
                             <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
-                                {metrics.map((metric) => (
-                                    <div
-                                        key={metric.label}
-                                        className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
-                                    >
-                                        <span className="text-sm font-medium text-[#17201b] dark:text-white">
-                                            {metric.label}
-                                        </span>
-                                        <strong className="text-sm font-bold text-[#17201b] dark:text-white">
-                                            {metric.value}
-                                        </strong>
-                                    </div>
-                                ))}
+                                {metrics.map((metric) => {
+                                    const isCurrentAttempt = metric.label === "Current Attempt";
+                                    return (
+                                        <div
+                                            key={metric.label}
+                                            className={`flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0 ${
+                                                isCurrentAttempt ? "p-2.5 rounded-lg -mx-2.5 px-3 border-0 mt-1" : ""
+                                            }`}
+                                            style={isCurrentAttempt ? {
+                                                background: `${language.accent}1a`,
+                                            } : undefined}
+                                        >
+                                            <span 
+                                                className={`text-sm font-medium ${isCurrentAttempt ? "" : "text-[#17201b] dark:text-white"}`}
+                                                style={isCurrentAttempt ? { color: language.accent } : undefined}
+                                            >
+                                                {metric.label}
+                                            </span>
+                                            <strong 
+                                                className={`text-sm font-bold ${isCurrentAttempt ? "text-base font-extrabold" : "text-[#17201b] dark:text-white"}`}
+                                                style={isCurrentAttempt ? { color: language.accent } : undefined}
+                                            >
+                                                {metric.value}
+                                            </strong>
+                                        </div>
+                                    );
+                                })}
                                 <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
                                     <span className="text-sm font-medium text-[#17201b] dark:text-white">
                                         Language
