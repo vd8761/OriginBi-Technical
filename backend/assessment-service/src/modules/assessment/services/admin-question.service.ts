@@ -530,42 +530,42 @@ export class AdminQuestionService {
   }
 
   async updateAssessment(id: number, data: any) {
-    const { 
-      assessmentName, 
-      totalTimeMinutes, 
-      questionLimit, 
-      categories, 
-      difficultyMarks, 
-      difficultyNegativeMarks,
-      tabSwitchLimit,
-      antiCopyEnabled,
-      shuffleQuestions,
-      shuffleOptions,
-      amount,
-      trialAttemptsLimit,
-      mainAttemptsLimit
-    } = data;
+    const assessmentName = data.assessmentName !== undefined ? data.assessmentName : data.assessment_name;
+    const totalTimeMinutes = data.totalTimeMinutes !== undefined ? data.totalTimeMinutes : data.total_time_minutes;
+    const questionLimit = data.questionLimit !== undefined ? data.questionLimit : data.question_limit;
+    const categories = data.categories;
+    const difficultyMarks = data.difficultyMarks !== undefined ? data.difficultyMarks : data.difficulty_marks;
+    const difficultyNegativeMarks = data.difficultyNegativeMarks !== undefined ? data.difficultyNegativeMarks : data.difficulty_negative_marks;
+    const tabSwitchLimit = data.tabSwitchLimit !== undefined ? data.tabSwitchLimit : data.tab_switch_limit;
+    const antiCopyEnabled = data.antiCopyEnabled !== undefined ? data.antiCopyEnabled : data.anti_copy_enabled;
+    const shuffleQuestions = data.shuffleQuestions !== undefined ? data.shuffleQuestions : data.shuffle_questions;
+    const shuffleOptions = data.shuffleOptions !== undefined ? data.shuffleOptions : data.shuffle_options;
+    const amount = data.amount;
+    const trialAttemptsLimit = data.trialAttemptsLimit !== undefined ? data.trialAttemptsLimit : data.trial_attempts_limit;
+    const mainAttemptsLimit = data.mainAttemptsLimit !== undefined ? data.mainAttemptsLimit : data.main_attempts_limit;
     
     try {
       await this.dataSource.query(
         `UPDATE tech_assessments
          SET assessment_name = COALESCE($1, assessment_name),
              total_time_minutes = COALESCE($2, total_time_minutes),
-             categories = COALESCE($3, categories),
-             difficulty_marks = COALESCE($4, difficulty_marks),
-             difficulty_negative_marks = COALESCE($5, difficulty_negative_marks),
-             tab_switch_limit = COALESCE($6, tab_switch_limit),
-             anti_copy_enabled = COALESCE($7, anti_copy_enabled),
-             shuffle_questions = COALESCE($8, shuffle_questions),
-             shuffle_options = COALESCE($9, shuffle_options),
-             amount = COALESCE($10, amount),
-             trial_attempts_limit = COALESCE($11, trial_attempts_limit),
-             main_attempts_limit = COALESCE($12, main_attempts_limit),
+             question_limit = COALESCE($3, question_limit),
+             categories = COALESCE($4, categories),
+             difficulty_marks = COALESCE($5, difficulty_marks),
+             difficulty_negative_marks = COALESCE($6, difficulty_negative_marks),
+             tab_switch_limit = COALESCE($7, tab_switch_limit),
+             anti_copy_enabled = COALESCE($8, anti_copy_enabled),
+             shuffle_questions = COALESCE($9, shuffle_questions),
+             shuffle_options = COALESCE($10, shuffle_options),
+             amount = COALESCE($11, amount),
+             trial_attempts_limit = COALESCE($12, trial_attempts_limit),
+             main_attempts_limit = COALESCE($13, main_attempts_limit),
              updated_at = NOW()
-         WHERE assessment_id = $13`,
+         WHERE assessment_id = $14`,
         [
           assessmentName !== undefined ? assessmentName : null,
           totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
+          questionLimit !== undefined ? Number(questionLimit) : null,
           categories !== undefined ? (typeof categories === 'string' ? categories : JSON.stringify(categories)) : null,
           difficultyMarks !== undefined ? (typeof difficultyMarks === 'string' ? difficultyMarks : JSON.stringify(difficultyMarks)) : null,
           difficultyNegativeMarks !== undefined ? (typeof difficultyNegativeMarks === 'string' ? difficultyNegativeMarks : JSON.stringify(difficultyNegativeMarks)) : null,

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
@@ -66,12 +67,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     userId,
     mode = 'main',
 }) => {
+    const router = useRouter();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
     const [totalTime, setTotalTime] = useState(APTITUDE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [showBackWarningModal, setShowBackWarningModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -87,6 +90,41 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+
+    // ── Intercept browser/mouse back button (popstate) ──
+    useEffect(() => {
+        if (isLoading || isSubmitting || questions.length === 0) return;
+
+        // Push initial dummy state to enable trapping
+        window.history.pushState(null, "", window.location.href);
+
+        const handlePopState = () => {
+            // Push dummy state again so user remains on this page
+            window.history.pushState(null, "", window.location.href);
+            setShowBackWarningModal(true);
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [isLoading, isSubmitting, questions.length]);
+
+    // ── Intercept refresh/tab close/page exit (beforeunload) ──
+    useEffect(() => {
+        if (isLoading || isSubmitting || questions.length === 0) return;
+
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = "Your progress is saved and you can return anytime before the timer runs out.";
+            return e.returnValue;
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [isLoading, isSubmitting, questions.length]);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -851,6 +889,56 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                 >
                                     Yes, Submit Test
                                     <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Back Navigation Interception Warning Modal */}
+            {showBackWarningModal && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-[2px]" 
+                        onClick={() => setShowBackWarningModal(false)}
+                    />
+                    
+                    <motion.div 
+                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        className="relative w-full max-w-md transform overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl transition-all dark:border-white/[0.08] dark:bg-[#19211C]"
+                    >
+                        <div className="relative flex flex-col items-center text-center">
+                            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500 text-white">
+                                <AlertCircle size={28} />
+                            </div>
+                            
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Leave Assessment?</h2>
+                            <p className="mt-2.5 text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                                Your progress has been securely saved. You can return and continue your assessment exactly where you left off, as long as the timer does not run out.
+                            </p>
+
+                            <div className="mt-6 flex w-full flex-col gap-2.5 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowBackWarningModal(false);
+                                        // Use window.location to completely clear SPA state and history hooks cleanly
+                                        window.location.href = "/assessment";
+                                    }}
+                                    className="flex-1 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-700 border border-slate-200 dark:border-white/[0.08] dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all cursor-pointer text-center"
+                                >
+                                    Yes, Exit
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBackWarningModal(false)}
+                                    className="flex-1 px-5 py-3 rounded-xl bg-brand-green text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1bb85c] active:scale-95 transition-all cursor-pointer text-center"
+                                >
+                                    Resume Test
                                 </button>
                             </div>
                         </div>
