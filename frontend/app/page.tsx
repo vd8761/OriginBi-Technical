@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Login from "@/components/student/Login";
 import AssessmentPortal from "@/components/student/AssessmentPortal";
 import Header from "@/components/student/Header";
 import { motion, AnimatePresence } from "framer-motion";
-import { getSession, logoutUser } from "@/lib/api";
+import { getSession } from "@/lib/api";
+import { useSession } from "@/lib/contexts/SessionContext";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 
@@ -52,35 +53,26 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 
 // Inner component that uses search params
 function HomeContent() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string>("Student");
-  const [bootstrapping, setBootstrapping] = useState(true);
+  const { isLoggedIn, user, isLoading: bootstrapping } = useSession();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
   const router = useRouter();
+  const next = searchParams.get("next");
+  const nextPath = next?.startsWith("/") ? next : null;
+
+  const userName = user?.name || "Student";
 
   useEffect(() => {
-    getSession()
-      .then((session) => {
-        if (session) {
-          setUserName(session.registration?.fullName || session.user.email);
-          setIsLoggedIn(true);
-          
-          // If already logged in and at root, redirect to destination
-          const next = searchParams.get("next");
-          if (next) {
-            router.replace(next);
-          } else {
-            router.replace("/dashboard");
-          }
-        }
-      })
-      .catch(() => {
-        setIsLoggedIn(false);
-      })
-      .finally(() => setBootstrapping(false));
-  }, []);
+    if (isLoggedIn && !bootstrapping) {
+      // If already logged in and at root, redirect to destination
+      if (nextPath) {
+        router.replace(nextPath);
+      } else {
+        router.replace("/explore");
+      }
+    }
+  }, [isLoggedIn, bootstrapping, nextPath, router]);
 
   useEffect(() => {
     // Check for view parameter
@@ -103,20 +95,14 @@ function HomeContent() {
   }, [searchParams]);
 
   const handleLoginSuccess = (name?: string) => {
-    if (name) setUserName(name);
-    setIsLoggedIn(true);
-    const next = searchParams.get("next");
-    if (next?.startsWith("/")) {
-      router.replace(next);
-    } else {
-      router.replace("/dashboard");
-    }
+    // SessionContext handles the state via its login() method called in LoginForm
+    router.replace("/explore");
   };
 
-  const handleLogout = async () => {
-    await logoutUser().catch(() => undefined);
-    setIsLoggedIn(false);
-    setUserName("Student");
+  const { logout } = useSession();
+  const handleLogout = () => {
+    logout();
+    router.replace("/");
   };
 
   if (bootstrapping) {
@@ -126,8 +112,6 @@ function HomeContent() {
       </div>
     );
   }
-
-  const isRedirecting = isLoggedIn && searchParams.get("next");
 
   return (
     <>
@@ -142,46 +126,12 @@ function HomeContent() {
       
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
-      ) : isRedirecting ? (
-        <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
-          {/* App Background Grid */}
-          <div className="fixed inset-0 pointer-events-none">
-            <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
-            <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
-          </div>
-
-          <Header 
-            onLogout={handleLogout} 
-            currentView={searchParams.get("next")?.includes("explore") ? "explore" : "dashboard"} 
-          />
-
-          <main className="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 text-center">
-            <div className="flex flex-col items-center gap-6 p-10 rounded-3xl bg-white/40 dark:bg-black/20 backdrop-blur-xl border border-white/20 shadow-2xl animate-scale-in">
-              <div className="relative">
-                <div className="w-16 h-16 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-8 h-8 bg-brand-green/10 rounded-full animate-ping" />
-                </div>
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-brand-text-light-primary dark:text-brand-text-primary mb-2">
-                  Preparing your session
-                </h2>
-                <p className="text-sm font-medium text-brand-text-light-secondary dark:text-brand-text-secondary animate-pulse">
-                  Taking you to <span className="text-brand-green font-bold">{searchParams.get("next")?.split('/')[1] || 'your destination'}</span>...
-                </p>
-              </div>
-            </div>
-          </main>
-
-          <footer className="fixed bottom-0 left-0 right-0 py-8 text-center z-10">
-            <p className="text-sm text-brand-text-light-secondary/70 dark:text-brand-text-secondary">
-              &copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence
-            </p>
-          </footer>
-        </div>
       ) : (
-        <AssessmentPortal userName={userName} onLogout={handleLogout} initialView={initialView} />
+        <AssessmentPortal 
+          userName={userName} 
+          onLogout={handleLogout} 
+          initialView={initialView} 
+        />
       )}
     </>
   );
