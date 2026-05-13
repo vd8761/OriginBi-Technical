@@ -2,8 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssessmentModule } from './modules/assessment/assessment.module';
-import { CognitoModule } from './modules/auth/cognito.module';
-import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -21,8 +19,6 @@ import { AuthModule } from './modules/auth/auth.module';
       autoLoadEntities: true,
       synchronize: false,
     }),
-    CognitoModule,
-    AuthModule,
     AssessmentModule,
   ],
 })

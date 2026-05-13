@@ -41,6 +41,9 @@ export class TechMncQuestion {
     @Column({ name: "question_text", type: "text" })
     questionText!: string;
 
+    @Column({ name: "explanation", type: "text", nullable: true })
+    explanation!: string | null;
+
     @ManyToOne(() => TechMncOption, { nullable: true })
     @JoinColumn({ name: "correct_option_id" })
     correctOption?: TechMncOption | null;

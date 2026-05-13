@@ -36,15 +36,30 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     // Check localStorage on mount
-    const loadSession = () => {
+    const loadSession = async () => {
       try {
         const token = localStorage.getItem("originbi:access-token");
         const storedProfile = localStorage.getItem("originbi:user-profile");
 
-        if (token && storedProfile) {
-          const parsedProfile = JSON.parse(storedProfile);
-          setUser(parsedProfile);
-          setIsLoggedIn(true);
+        if (token) {
+          if (storedProfile) {
+            const parsedProfile = JSON.parse(storedProfile);
+            setUser(parsedProfile);
+            setIsLoggedIn(true);
+          } else {
+            // If token exists but profile doesn't, fetch it from API
+            const { getSession } = await import("@/lib/api");
+            const session = await getSession();
+            if (session) {
+              const profile = {
+                name: session.registration?.fullName || session.user.email,
+                email: session.user.email,
+              };
+              setUser(profile);
+              setIsLoggedIn(true);
+              localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+            }
+          }
         }
       } catch (error) {
         console.error("Failed to restore session from localStorage", error);

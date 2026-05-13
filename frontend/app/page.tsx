@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Login from "@/components/student/Login";
 import AssessmentPortal from "@/components/student/AssessmentPortal";
+import Header from "@/components/student/Header";
 import { motion, AnimatePresence } from "framer-motion";
-import { getSession, logoutUser } from "@/lib/api";
+import { getSession } from "@/lib/api";
+import { useSession } from "@/lib/contexts/SessionContext";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 
@@ -51,27 +53,26 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 
 // Inner component that uses search params
 function HomeContent() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string>("Student");
-  const [bootstrapping, setBootstrapping] = useState(true);
+  const { isLoggedIn, user, isLoading: bootstrapping } = useSession();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
   const router = useRouter();
+  const next = searchParams.get("next");
+  const nextPath = next?.startsWith("/") ? next : null;
+
+  const userName = user?.name || "Student";
 
   useEffect(() => {
-    getSession()
-      .then((session) => {
-        if (session) {
-          setUserName(session.registration?.fullName || session.user.email);
-          setIsLoggedIn(true);
-        }
-      })
-      .catch(() => {
-        setIsLoggedIn(false);
-      })
-      .finally(() => setBootstrapping(false));
-  }, []);
+    if (isLoggedIn && !bootstrapping) {
+      // If already logged in and at root, redirect to destination
+      if (nextPath) {
+        router.replace(nextPath);
+      } else {
+        router.replace("/explore");
+      }
+    }
+  }, [isLoggedIn, bootstrapping, nextPath, router]);
 
   useEffect(() => {
     // Check for view parameter
@@ -94,18 +95,14 @@ function HomeContent() {
   }, [searchParams]);
 
   const handleLoginSuccess = (name?: string) => {
-    if (name) setUserName(name);
-    setIsLoggedIn(true);
-    const next = searchParams.get("next");
-    if (next?.startsWith("/")) {
-      router.push(next);
-    }
+    // SessionContext handles the state via its login() method called in LoginForm
+    router.replace("/explore");
   };
 
-  const handleLogout = async () => {
-    await logoutUser().catch(() => undefined);
-    setIsLoggedIn(false);
-    setUserName("Student");
+  const { logout } = useSession();
+  const handleLogout = () => {
+    logout();
+    router.replace("/");
   };
 
   if (bootstrapping) {
@@ -130,7 +127,11 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal userName={userName} onLogout={handleLogout} initialView={initialView} />
+        <AssessmentPortal 
+          userName={userName} 
+          onLogout={handleLogout} 
+          initialView={initialView} 
+        />
       )}
     </>
   );

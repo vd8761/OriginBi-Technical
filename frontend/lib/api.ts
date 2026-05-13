@@ -1,21 +1,22 @@
 "use client";
 
 const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
-const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_API_BASE?.replace(/\/$/, "");
+const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "");
 
 // Go exam-engine (attempts, code runs, plugins, etc.)
-export const API_BASE =
-  configuredApiBase ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8088");
+export const API_BASE = configuredApiBase || "";
 
 // NestJS assessment-service (Cognito auth, etc.)
-export const AUTH_API_BASE =
-  configuredAuthBase ??
-  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5000/api");
+export const AUTH_API_BASE = configuredAuthBase || "";
 
-// ── Cognito token storage (browser only) ──────────────────────────────────
-const ACCESS_TOKEN_KEY = "obi.accessToken";
-const ID_TOKEN_KEY = "obi.idToken";
-const REFRESH_TOKEN_KEY = "obi.refreshToken";
+export const STUDENT_API_BASE =
+  process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
+
+// ── Cognito token storage (browser only) - Main App Style ──────────────────
+const ACCESS_TOKEN_KEY = "originbi:access-token";
+const ID_TOKEN_KEY = "originbi:id-token";
+const REFRESH_TOKEN_KEY = "originbi:refresh-token";
+const LEGACY_ACCESS_TOKEN_COOKIE = "obi.accessToken";
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -30,18 +31,22 @@ function setTokens(t: {
   window.localStorage.setItem(ACCESS_TOKEN_KEY, t.accessToken);
   window.localStorage.setItem(ID_TOKEN_KEY, t.idToken);
   if (t.refreshToken) window.localStorage.setItem(REFRESH_TOKEN_KEY, t.refreshToken);
-  // Mirror the access token into a cookie so the Next.js proxy (SSR-side)
-  // can validate the session before serving protected routes. Not httpOnly
-  // because we set it from JS — the cookie value IS the token and the
-  // proxy treats it as such.
-  document.cookie = `${ACCESS_TOKEN_KEY}=${t.accessToken}; path=/; samesite=lax; max-age=${t.refreshToken ? 60 * 60 * 24 * 7 : 60 * 60}`;
+  // Keep the legacy access-token cookie because the older working proxy
+  // validates server-side sessions from this exact cookie name.
+  const cookieBase = "path=/; samesite=lax;";
+  const maxAge = t.refreshToken ? 60 * 60 * 24 * 7 : 60 * 60;
+  document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=${t.accessToken}; ${cookieBase} max-age=${maxAge}`;
 }
 function clearTokens() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(ID_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; samesite=lax; max-age=0`;
+  
+  const cookieBase = "path=/; samesite=lax; max-age=0";
+  document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=; ${cookieBase}`;
+  document.cookie = `${ACCESS_TOKEN_KEY}=; ${cookieBase}`;
+  document.cookie = `${ID_TOKEN_KEY}=; ${cookieBase}`;
 }
 
 export interface ApiUser {
@@ -303,9 +308,19 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
   if (auth) {
-    const token = getAccessToken();
+    const token = typeof window !== "undefined" 
+      ? (window.localStorage.getItem(ID_TOKEN_KEY) || window.localStorage.getItem(ACCESS_TOKEN_KEY))
+      : null;
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`);
+    }
+    
+    // Add X-User-Context if user data exists
+    if (typeof window !== "undefined") {
+      const userData = window.localStorage.getItem("user");
+      if (userData) {
+        headers.set("X-User-Context", userData);
+      }
     }
   }
   const base = baseOverride ?? API_BASE;
@@ -350,25 +365,51 @@ function safeJson(text: string): any {
 // ── Auth (NestJS assessment-service, Cognito-backed) ──────────────────────
 
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  const res = await apiFetch<AuthResponse>("/auth/register", {
+  const res = await apiFetch<any>("/student/register/tech", {
     method: "POST",
-    body: JSON.stringify(input),
-    baseOverride: AUTH_API_BASE,
+    body: JSON.stringify({
+      full_name: input.fullName,
+      email: input.email,
+      mobile_number: input.mobileNumber,
+      country_code: input.countryCode,
+      password: input.password,
+      gender: input.gender,
+      is_tech_assessment: true,
+    }),
+    baseOverride: STUDENT_API_BASE,
     auth: false,
   });
-  if (res.tokens) setTokens(res.tokens);
-  return res;
+  
+  // Note: Main Student Service returns { success: true } and triggers emails.
+  // It doesn't return tokens; the user must log in after registration.
+  
+  return {
+    user: { email: input.email } as ApiUser,
+    registration: null,
+  };
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  const res = await apiFetch<AuthResponse>("/auth/login", {
+  const res = await apiFetch<any>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
     baseOverride: AUTH_API_BASE,
     auth: false,
   });
-  if (res.tokens) setTokens(res.tokens);
-  return res;
+
+  const tokens = res.accessToken ? {
+    accessToken: res.accessToken,
+    idToken: res.idToken,
+    refreshToken: res.refreshToken,
+  } : undefined;
+
+  if (tokens) setTokens(tokens);
+
+  return {
+    user: res.user || { email },
+    registration: res.registration || null,
+    tokens
+  };
 }
 
 export async function logoutUser(): Promise<void> {
