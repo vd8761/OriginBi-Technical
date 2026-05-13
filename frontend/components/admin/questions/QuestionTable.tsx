@@ -36,6 +36,7 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
             <tr className="text-left">
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Question Details</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-32">Category</th>
+              <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-32">Subcategory</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-24 text-center">Choices</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-28">Difficulty</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-24 text-center">Marks</th>
@@ -65,6 +66,11 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
                   <td className="p-4 text-sm text-brand-text-light-primary dark:text-white align-middle">
                     <span className="capitalize">
                       {category}
+                    </span>
+                  </td>
+                  <td className="p-4 text-sm text-brand-text-light-primary dark:text-white align-middle">
+                    <span className="capitalize text-slate-400 dark:text-white/40">
+                      {(q as any).subcategory || (q as any).subCategory || "-"}
                     </span>
                   </td>
                   <td className="p-4 text-center text-sm text-brand-text-light-primary dark:text-white align-middle font-bold">

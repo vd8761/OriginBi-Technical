@@ -157,7 +157,7 @@ export class AdaptiveBlockService {
         queryRunner,
         request.assessmentId,
         targetDifficulty,
-        blockConfig.questionsPerBlock,
+        request.mode === 'trial' ? 5 : blockConfig.questionsPerBlock,
         request.mode,
         request.previousPerformance
       );
