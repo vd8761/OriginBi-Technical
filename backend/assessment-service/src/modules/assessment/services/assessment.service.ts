@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { AdaptiveBlockService } from './adaptive-block.service';
@@ -21,6 +21,7 @@ export class AssessmentService {
 
   constructor(
     private dataSource: DataSource,
+    @Inject(forwardRef(() => AdaptiveBlockService))
     private adaptiveBlockService: AdaptiveBlockService
   ) {}
 
@@ -104,11 +105,22 @@ export class AssessmentService {
   }
 
   private async resolveUserId(queryRunner: any, userId: any): Promise<number | null> {
-    const parsed = userId !== undefined && userId !== null ? Number(userId) : NaN;
-    if (Number.isFinite(parsed)) return parsed;
+    if (userId !== undefined && userId !== null) {
+      const parsed = Number(userId);
+      if (Number.isFinite(parsed)) return parsed;
+
+      const emailStr = String(userId).trim();
+      if (emailStr.length > 0 && emailStr.includes('@')) {
+        const rows = await queryRunner.query('SELECT id FROM users WHERE email = $1', [emailStr]);
+        if (rows.length > 0) {
+          return rows[0].id;
+        }
+      }
+    }
     const rows = await queryRunner.query('SELECT id FROM users ORDER BY id LIMIT 1');
     return rows[0]?.id ?? null;
   }
+
 
   private getTableMap() {
     return {

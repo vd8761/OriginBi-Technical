@@ -17,7 +17,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const { theme, toggleTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
+  const [activeTab, setActiveTab] = useState<"login" | "signup" | "success">("login");
 
   return (
     <div className="relative w-full min-h-[100dvh] overflow-hidden bg-[#FAFAFA] dark:bg-brand-dark-primary transition-colors duration-300">
@@ -56,121 +56,172 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
         {/* Central Auth Card */}
         <div className="w-full max-w-[480px]">
-          {/* Title Section */}
-          <div className="text-center mb-8">
-            <h1 className="font-sans font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight leading-tight text-[clamp(24px,3vw,36px)]">
-              {activeTab === "login" ? (
-                <>
-                  Welcome <span className="text-brand-green">Back</span>
-                </>
-              ) : (
-                <>
-                  Start your <span className="text-brand-green">Journey</span>
-                </>
-              )}
-            </h1>
-            <p className="font-sans text-brand-text-light-secondary dark:text-brand-text-secondary font-normal tracking-normal leading-relaxed mt-2 text-[clamp(13px,1vw,15px)]">
-              {activeTab === "login"
-                ? "Login to access your technical assessments"
-                : "Create your account to begin your assessment"
-              }
-            </p>
-          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            {activeTab === "success" ? (
+              <motion.div
+                key="success-container"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -15 }}
+                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                className="relative bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/40 dark:border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.25)] rounded-3xl p-8 sm:p-10 text-center flex flex-col items-center transition-all duration-300"
+              >
+                {/* Checkmark Animation Container (No ripple effect, simple green circle) */}
+                <div className="relative flex items-center justify-center w-24 h-24 bg-brand-green/10 dark:bg-brand-green/20 rounded-full mb-8 text-brand-green">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-12 w-12"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
 
-          {/* Tab Switcher */}
-          <div className="relative w-full bg-brand-light-tertiary/60 dark:bg-brand-dark-tertiary rounded-full p-1 flex h-12 mb-8 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setActiveTab("login")}
-              className={`flex-1 text-sm font-semibold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer z-10 ${
-                activeTab === "login"
-                  ? "bg-brand-green text-white"
-                  : "text-slate-500 dark:text-brand-text-secondary hover:text-brand-green"
-              }`}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("signup")}
-              className={`flex-1 text-sm font-semibold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer z-10 ${
-                activeTab === "signup"
-                  ? "bg-brand-green text-white"
-                  : "text-slate-500 dark:text-brand-text-secondary hover:text-brand-green"
-              }`}
-            >
-              Sign Up
-            </button>
-          </div>
+                {/* Message Details */}
+                <h2 className="font-sans font-bold text-black dark:text-white text-3xl tracking-tight mb-4">
+                  Account Created!
+                </h2>
+                
+                <p className="font-sans text-black dark:text-white text-sm md:text-base leading-relaxed mb-10 px-2">
+                  Your technical assessment profile has been successfully set up. Click below to login and start your assessment journey.
+                </p>
 
-          {/* Form Card */}
-          <motion.div 
-            layout
-            initial={false}
-            transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-            className="relative bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/40 dark:border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.25)] rounded-3xl p-6 sm:p-8 transition-all duration-300"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {activeTab === "login" ? (
-                <motion.div
-                  key="login-form"
-                  initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.98, y: -10 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
+                {/* Redirection Call-to-Action */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("login")}
+                  className="w-full h-14 bg-brand-green hover:bg-brand-green/90 text-white font-bold rounded-full shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 text-base uppercase tracking-wider"
                 >
-                  <LoginForm onLoginSuccess={(name) => onLoginSuccess(name)} />
-                  <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
-                    <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
-                      Don&apos;t have an account?{" "}
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("signup")}
-                        className="text-brand-green font-semibold hover:underline transition-all cursor-pointer"
-                      >
-                        Sign Up
-                      </button>
-                    </p>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="signup-form"
-                  initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.98, y: -10 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  Go to Login
+                </button>
+              </motion.div>
+            ) : (
+              <div key="auth-tabs">
+                {/* Title Section */}
+                <div className="text-center mb-8">
+                  <h1 className="font-sans font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight leading-tight text-[clamp(24px,3vw,36px)]">
+                    {activeTab === "login" ? (
+                      <>
+                        Welcome <span className="text-brand-green">Back</span>
+                      </>
+                    ) : (
+                      <>
+                        Start your <span className="text-brand-green">Journey</span>
+                      </>
+                    )}
+                  </h1>
+                  <p className="font-sans text-brand-text-light-secondary dark:text-brand-text-secondary font-normal tracking-normal leading-relaxed mt-2 text-[clamp(13px,1vw,15px)]">
+                    {activeTab === "login"
+                      ? "Login to access your technical assessments"
+                      : "Create your account to begin your assessment"
+                    }
+                  </p>
+                </div>
+
+                {/* Tab Switcher */}
+                <div className="relative w-full bg-brand-light-tertiary/60 dark:bg-brand-dark-tertiary rounded-full p-1 flex h-12 mb-8 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("login")}
+                    className={`flex-1 text-sm font-semibold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer z-10 ${
+                      activeTab === "login"
+                        ? "bg-brand-green text-white"
+                        : "text-slate-500 dark:text-brand-text-secondary hover:text-brand-green"
+                    }`}
+                  >
+                    Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("signup")}
+                    className={`flex-1 text-sm font-semibold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer z-10 ${
+                      activeTab === "signup"
+                        ? "bg-brand-green text-white"
+                        : "text-slate-500 dark:text-brand-text-secondary hover:text-brand-green"
+                    }`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+
+                {/* Form Card */}
+                <motion.div 
+                  layout
+                  initial={false}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="relative bg-white/80 dark:bg-[#111814]/80 backdrop-blur-xl border border-white/40 dark:border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.25)] rounded-3xl p-6 sm:p-8 transition-all duration-300"
                 >
-                  <SignupForm onSignupSuccess={(name) => onLoginSuccess(name)} />
-                  <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
-                    <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
-                      Already have an account?{" "}
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("login")}
-                        className="text-brand-green font-bold hover:underline transition-all cursor-pointer"
+                  <AnimatePresence mode="wait" initial={false}>
+                    {activeTab === "login" ? (
+                      <motion.div
+                        key="login-form"
+                        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                        transition={{ duration: 0.25, ease: "easeOut" }}
                       >
-                        Login
-                      </button>
-                    </p>
-                  </div>
+                        <LoginForm onLoginSuccess={(name) => onLoginSuccess(name)} />
+                        <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
+                          <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
+                            Don&apos;t have an account?{" "}
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab("signup")}
+                              className="text-brand-green font-semibold hover:underline transition-all cursor-pointer"
+                            >
+                              Sign Up
+                            </button>
+                          </p>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="signup-form"
+                        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                        transition={{ duration: 0.25, ease: "easeOut" }}
+                      >
+                        <SignupForm onSignupSuccess={() => setActiveTab("success")} />
+                        <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
+                          <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
+                            Already have an account?{" "}
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab("login")}
+                              className="text-brand-green font-bold hover:underline transition-all cursor-pointer"
+                            >
+                              Login
+                            </button>
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           {/* Footer */}
-          <footer className="mt-8 flex flex-col-reverse sm:flex-row items-center justify-between text-[clamp(11px,0.8vw,13px)] font-medium text-brand-text-light-secondary dark:text-brand-text-secondary gap-3">
+          <footer className="mt-8 flex flex-col-reverse sm:flex-row items-center justify-between text-[clamp(11px,0.8vw,13px)] font-medium text-black dark:text-white gap-3">
             <div className="flex items-center gap-4">
-              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2">
+              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2 text-black dark:text-white">
                 Privacy Policy
               </a>
-              <span className="border-r border-brand-light-tertiary dark:border-white/20 h-3 hidden sm:block" />
-              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2">
+              <span className="border-r border-black dark:border-white h-3 hidden sm:block" />
+              <a href="#" className="hover:text-brand-green transition-colors underline underline-offset-2 text-black dark:text-white">
                 Terms & Conditions
               </a>
             </div>
-            <span>&copy; OriginBI {new Date().getFullYear()}</span>
+            <span className="text-black dark:text-white">&copy; OriginBI {new Date().getFullYear()}</span>
           </footer>
         </div>
       </div>

@@ -106,8 +106,31 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     useEffect(() => {
         const fetchEngineStats = async () => {
             try {
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
                     fetch(`${API_BASE}/api/assessment/admin/assessments`)
                 ]);
                 const statsJson = await statsRes.json();
@@ -234,10 +257,33 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             try {
                 setIsLoading(true);
                 setLoadError(null);
+
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
                 const response = await fetch(`${API_BASE}/api/assessment/role/attempts`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                    body: JSON.stringify({ assessmentCode, userId: activeEmail || userId, mode }),
                 });
 
                 if (!response.ok) {
@@ -713,17 +759,28 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setShowSubmitModal(false)}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5"
+                                    disabled={isSubmitting}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Review Answers
                                 </button>
                                 <button
                                     type="button"
                                     onClick={confirmSubmit}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e]"
+                                    disabled={isSubmitting}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Yes, Submit Test
-                                    <ArrowRight size={18} />
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Yes, Submit Test
+                                            <ArrowRight size={18} />
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

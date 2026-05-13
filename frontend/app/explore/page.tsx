@@ -25,12 +25,8 @@ export default function ExplorePage() {
       // Already on explore
       return;
     }
-    // Route to home page with view parameter for other pages
-    if (view === "dashboard" || view === "assessment" || view === "profile") {
-      router.push(`/?view=${view}`);
-    } else {
-      router.push("/");
-    }
+    // Route directly to standard page
+    router.push(`/${view}`);
   };
 
   return (

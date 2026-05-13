@@ -48,6 +48,7 @@ export interface AptitudeQuestion {
   negativeMarks?: number;
   status?: QuestionStatus;
   imageUrl?: string | null;
+  explanation?: string;
 }
 
 export const APTITUDE_CATEGORIES = ["QA", "LR", "DI", "AR", "VA"] as const;
@@ -74,6 +75,7 @@ export interface MNCQuestion {
   negativeMarks?: number;
   status?: QuestionStatus;
   imageUrl?: string | null;
+  explanation?: string;
 }
 
 export const MNC_TOPICS = [
@@ -108,6 +110,7 @@ export interface CommQuestion {
   marks?: number;
   negativeMarks?: number;
   status?: QuestionStatus;
+  explanation?: string;
 }
 
 export const COMM_TASK_LABELS: Record<CommTaskType, string> = {
@@ -143,6 +146,7 @@ export interface RoleQuestion {
   negativeMarks?: number;
   status?: QuestionStatus;
   imageUrl?: string | null;
+  explanation?: string;
 }
 
 export const ROLE_QUESTION_TYPE_LABELS: Record<RoleQuestionType, string> = {

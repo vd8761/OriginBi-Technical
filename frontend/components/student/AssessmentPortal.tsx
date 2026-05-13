@@ -21,6 +21,8 @@ import {
   type ExtendedExam,
   type PricingTier,
 } from "@/lib/exams";
+import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
+import { useSession } from "@/lib/contexts/SessionContext";
 import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
 import { listAssignments, type Assignment } from "@/lib/api";
@@ -53,8 +55,15 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [showDetailModal, setShowDetailModal] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isPaid } = usePaidAssessments();
+  const { user } = useSession();
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleNavigate = (view: string) => {
     router.push(`/${view}`);
@@ -74,6 +83,58 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     completed: AssessmentId;
     next: AssessmentId | null;
   } | null>(null);
+
+  const [attemptsStats, setAttemptsStats] = useState<Record<string, { trial: number; main: number }>>({});
+  const [limitExceededPopup, setLimitExceededPopup] = useState<{
+    examId: string;
+    examTitle: string;
+    mode: "trial" | "main";
+    limit: number;
+    count: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchStats = async () => {
+      try {
+        let activeEmail = user?.email || "";
+        if (!activeEmail) {
+          const storedProfile = localStorage.getItem("originbi:user-profile");
+          if (storedProfile) {
+            const parsed = JSON.parse(storedProfile);
+            if (parsed && parsed.email) {
+              activeEmail = parsed.email;
+            }
+          }
+        }
+        if (!activeEmail) {
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            if (parsed && parsed.email) {
+              activeEmail = parsed.email;
+            }
+          }
+        }
+
+        const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+        const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+        const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+        const json = await response.json();
+        const data = json.data || json;
+        if (json && data && active) {
+          setAttemptsStats(data);
+        }
+      } catch (err) {
+        console.error("Failed to load attempt statistics:", err);
+      }
+    };
+
+    fetchStats();
+    return () => {
+      active = false;
+    };
+  }, [currentView, user?.email]);
 
   useEffect(() => {
     let active = true;
@@ -143,9 +204,13 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
         return {
           ...exam,
+          assessmentId: dbExam.assessment_id,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : dbExam.total_questions) || exam.questions,
+          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.main_questions_count > 0 ? dbExam.main_questions_count : dbExam.total_questions)) || exam.questions,
+          trialQuestionsCount: dbExam.trial_questions_count || 0,
+          mainQuestionsCount: dbExam.main_questions_count || 0,
+          questionLimit: dbExam.question_limit || 0,
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -205,9 +270,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
         continue;
       }
-      // Non-coding: include only if there's a matching paid assignment.
-      // The engine seeds non-coding pricing as `<assessmentId>` itemRefs.
-      if (paidRefs.has(exam.id)) {
+      // Non-coding: include only if there's a matching paid assignment or legacy isPaid says so.
+      if (paidRefs.has(exam.id) || isPaid(exam.id as PaymentKey)) {
         result.push(exam);
       }
     }
@@ -215,7 +279,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     const baseExams = result;
     if (filter === "ready" || filter === "all") return baseExams;
     return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
-  }, [dynamicExams, filter, paidAssignments]);
+  }, [dynamicExams, filter, paidAssignments, isPaid]);
+
+  const hasPurchasedAny = useMemo(() => {
+    if (paidAssignments && paidAssignments.length > 0) return true;
+    return dynamicExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey));
+  }, [dynamicExams, isPaid, paidAssignments]);
 
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);
@@ -307,9 +376,33 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const openAssessmentFlow = (exam: Exam, mode: AssessmentMode) => {
+    console.log("=== openAssessmentFlow ===");
+    console.log("Exam ID:", exam.id, "Mode:", mode);
+    console.log("All attemptsStats:", attemptsStats);
     if (!exam.available) {
       setSelectedExam(exam);
       setShowDetailModal(true);
+      return;
+    }
+
+    const dbModule = exam.id === "communication" ? "grammar" : exam.id;
+    const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
+    const currentCount = mode === "trial" ? stats.trial : stats.main;
+    const limit = mode === "trial" ? ((exam as any).trialAttemptsLimit ?? 5) : ((exam as any).mainAttemptsLimit ?? 2);
+
+    console.log("dbModule resolved to:", dbModule);
+    console.log("Stats retrieved:", stats);
+    console.log("currentCount:", currentCount, "limit:", limit);
+    console.log("currentCount >= limit evaluates to:", currentCount >= limit);
+
+    if (currentCount >= limit) {
+      setLimitExceededPopup({
+        examId: exam.id,
+        examTitle: exam.title,
+        mode: mode,
+        limit: limit,
+        count: currentCount,
+      });
       return;
     }
 
@@ -336,6 +429,16 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
+
+  if (!isMounted) {
+    return (
+      <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
+        <div className="flex items-center justify-center min-h-[70vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-green" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
@@ -463,32 +566,80 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredExams.map((exam) => (
-                <AssessmentCard
-                  key={exam.id}
-                  title={exam.title}
-                  description={exam.description}
-                  statusLabel={exam.statusLabel}
-                  statusTone={exam.available ? "success" : "warning"}
-                  totalQuestions={exam.questions}
-                  duration={exam.duration}
-                  price={`₹${exam.price}`}
-                  tags={exam.tags}
-                  icon={exam.icon}
-                  available={exam.available}
-                  level={exam.difficulty}
-                  insight={exam.statusLabel}
-                  accentColor={exam.accentColor}
-                  gradient={exam.gradient}
-                  trialAttemptsLimit={(exam as any).trialAttemptsLimit}
-                  mainAttemptsLimit={(exam as any).mainAttemptsLimit}
-                  onDetailsClick={() => handleSelectExam(exam)}
-                  onTrialClick={() => handleCardTrialStart(exam)}
-                  onMainClick={() => handleCardMainStart(exam)}
-                />
-              ))}
-            </div>
+            {!hasPurchasedAny ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 sm:p-16 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111a15] max-w-2xl mx-auto my-12 relative overflow-hidden">
+                <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[#1ED36A] mb-8">
+                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+
+                <h3 className="text-2xl font-bold text-black dark:text-white tracking-tight leading-tight mb-3">
+                  Access Your Assessments
+                </h3>
+                
+                <p className="text-[14px] leading-relaxed text-black dark:text-white max-w-md mb-8">
+                  You haven't unlocked any assessments on your account. Go to the <span className="font-bold text-[#1ED36A]">Explore</span> page to browse and select evaluations.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("explore")}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#1ED36A] hover:bg-[#1bb85c] text-white font-bold uppercase tracking-wider text-[11px] px-8 py-3.5 transition-all duration-200 active:scale-95 cursor-pointer"
+                >
+                  <span>Explore Assessments</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              </div>
+            ) : filteredExams.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 sm:p-12 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111a15] max-w-md mx-auto my-12">
+                <div className="flex items-center justify-center w-14 h-14 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-black dark:text-white mx-auto flex items-center justify-center mb-5">
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-bold text-black dark:text-white mb-2">No Matching Assessments</h4>
+                <p className="text-[13px] text-black dark:text-white leading-relaxed mb-6">
+                  None of your unlocked assessments match the selected track. Try choosing another filter above or clear the filter.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredExams.map((exam) => (
+                  <AssessmentCard
+                    key={exam.id}
+                    title={exam.title}
+                    description={exam.description}
+                    statusLabel={exam.statusLabel}
+                    statusTone={exam.available ? "success" : "warning"}
+                    totalQuestions={exam.questions}
+                    duration={exam.duration}
+                    price={`₹${exam.price}`}
+                    tags={exam.tags}
+                    icon={exam.icon}
+                    available={exam.available}
+                    level={exam.difficulty}
+                    insight={exam.statusLabel}
+                    accentColor={exam.accentColor}
+                    gradient={exam.gradient}
+                    trialAttemptsLimit={(exam as any).trialAttemptsLimit}
+                    mainAttemptsLimit={(exam as any).mainAttemptsLimit}
+                    onDetailsClick={() => handleSelectExam(exam)}
+                    onTrialClick={() => handleCardTrialStart(exam)}
+                    onMainClick={() => handleCardMainStart(exam)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : currentView === "dashboard" ? (
           <DashboardContent
@@ -534,44 +685,189 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }}
       />
 
-      {showAptitudeModal && (
-        <AdaptiveAptitudePreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
-          onClose={() => setShowAptitudeModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'aptitude')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'aptitude')?.gradient}
-        />
-      )}
+      {showAptitudeModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'aptitude') as any;
+        const qCount = assessmentMode === 'trial' 
+          ? 5 
+          : (exam?.questionLimit > 0 ? exam.questionLimit : (exam?.mainQuestionsCount > 0 ? exam.mainQuestionsCount : exam?.questions));
+        const stats = attemptsStats['aptitude'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <AptitudePreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
+            onClose={() => setShowAptitudeModal(false)}
+            accentColor={exam?.accentColor}
+            gradient={exam?.gradient}
+            questions={qCount}
+            duration={exam?.duration}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+            skills={exam?.tags}
+          />
+        );
+      })()}
 
-      {showCommunicationModal && (
-        <CommunicationPreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
-          onClose={() => setShowCommunicationModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'communication')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'communication')?.gradient}
-        />
-      )}
+      {showCommunicationModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'communication') as any;
+        const stats = attemptsStats['grammar'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <CommunicationPreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
+            onClose={() => setShowCommunicationModal(false)}
+            accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
+            gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+          />
+        );
+      })()}
 
-      {showRoleModal && (
-        <RolePreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
-          onClose={() => setShowRoleModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'role')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'role')?.gradient}
-        />
-      )}
+      {showRoleModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'role') as any;
+        const stats = attemptsStats['role'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <RolePreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
+            onClose={() => setShowRoleModal(false)}
+            accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
+            gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+          />
+        );
+      })()}
 
-      {showMncModal && (
-        <MNCPreTest
-          mode={assessmentMode}
-          onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
-          onClose={() => setShowMncModal(false)}
-          accentColor={EXAMS.find(e => e.id === 'mnc')?.accentColor}
-          gradient={EXAMS.find(e => e.id === 'mnc')?.gradient}
-        />
+      {showMncModal && (() => {
+        const exam = dynamicExams.find(e => e.id === 'mnc') as any;
+        const stats = attemptsStats['mnc'] || { trial: 0, main: 0 };
+        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        return (
+          <MNCPreTest
+            mode={assessmentMode}
+            onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
+            onClose={() => setShowMncModal(false)}
+            accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
+            gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={currentCount}
+          />
+        );
+      })()}
+
+      {limitExceededPopup && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 py-6 sm:px-6">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-[2px] transition-opacity cursor-pointer"
+            onClick={() => setLimitExceededPopup(null)}
+          />
+
+          <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-xl dark:border-white/[0.08] dark:bg-[#19211C] animate-scale-in">
+            <div className="relative z-10 flex flex-col items-center text-center">
+              {/* Header Icon matching application style */}
+              <div 
+                className={`flex h-14 w-14 items-center justify-center rounded-xl mb-5 text-white ${
+                  limitExceededPopup.mode === 'trial' 
+                    ? 'bg-amber-500' 
+                    : 'bg-brand-green'
+                }`}
+              >
+                {limitExceededPopup.mode === 'trial' ? (
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                ) : (
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+
+              {/* Title & Description */}
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
+                {limitExceededPopup.mode === 'trial' ? 'Practice Stage Complete!' : 'Evaluation Completed!'}
+              </h3>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
+                {limitExceededPopup.examTitle}
+              </p>
+
+              {/* Main descriptive block */}
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-gray-300 mb-6 font-medium">
+                {limitExceededPopup.mode === 'trial' ? (
+                  <>
+                    You have completed all <strong className="text-amber-500 font-bold">{limitExceededPopup.limit} practice trials</strong> for this assessment. 
+                    Your practice phase is fully complete. Now, take the official test to unlock hiring company matchings!
+                  </>
+                ) : (
+                  <>
+                    You have finished all <strong className="text-brand-green font-bold">{limitExceededPopup.limit} official attempts</strong> for this module. 
+                    Your highest score has been securely saved. Keep practicing other modules to build an outstanding candidate profile!
+                  </>
+                )}
+              </p>
+
+              {/* Status Box */}
+              <div className="w-full rounded-xl border border-slate-200/60 bg-slate-50/50 p-4 mb-6 dark:border-white/[0.06] dark:bg-white/[0.01]">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-gray-400">
+                  <span>Attempts Allowed</span>
+                  <span>{limitExceededPopup.limit}</span>
+                </div>
+                <div className="h-[1px] w-full bg-slate-200/60 dark:bg-white/[0.06] my-3" />
+                <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-white">
+                  <span>Your Completed Attempts</span>
+                  <span className={limitExceededPopup.mode === 'trial' ? 'text-amber-600 dark:text-amber-400' : 'text-brand-green'}>
+                    {limitExceededPopup.count} / {limitExceededPopup.limit} (Exhausted)
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                <button
+                  type="button"
+                  onClick={() => setLimitExceededPopup(null)}
+                  className="sm:flex-1 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-700 border border-slate-200 dark:border-white/[0.08] dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+                {limitExceededPopup.mode === 'trial' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const exam = dynamicExams.find(e => e.id === limitExceededPopup.examId);
+                      setLimitExceededPopup(null);
+                      if (exam) {
+                        openAssessmentFlow(exam, 'main');
+                      }
+                    }}
+                    className="sm:flex-1 px-5 py-2.5 rounded-xl bg-brand-green text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1bb85c] active:scale-95 transition-all cursor-pointer"
+                  >
+                    Start Main Test
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLimitExceededPopup(null);
+                      handleNavigate('profile');
+                    }}
+                    className="sm:flex-1 px-5 py-2.5 rounded-xl bg-brand-green text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1bb85c] active:scale-95 transition-all cursor-pointer"
+                  >
+                    View My Profile
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

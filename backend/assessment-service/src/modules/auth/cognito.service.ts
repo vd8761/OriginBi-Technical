@@ -353,7 +353,7 @@ export class CognitoService {
         );
         username = createRes.User?.Username || email;
         sub =
-          createRes.User?.Attributes?.find((a) => a.Name === 'sub')?.Value ??
+          createRes.User?.Attributes?.find((a: any) => a.Name === 'sub')?.Value ??
           null;
       } catch (err: any) {
         if (err?.name === 'UsernameExistsException') {
@@ -401,7 +401,7 @@ export class CognitoService {
           ),
         );
         sub =
-          getRes.UserAttributes?.find((a) => a.Name === 'sub')?.Value ?? null;
+          getRes.UserAttributes?.find((a: any) => a.Name === 'sub')?.Value ?? null;
       }
 
       if (!sub) {

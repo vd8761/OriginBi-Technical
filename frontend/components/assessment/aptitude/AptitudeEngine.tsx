@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
@@ -66,12 +67,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     userId,
     mode = 'main',
 }) => {
+    const router = useRouter();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
     const [totalTime, setTotalTime] = useState(APTITUDE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [showBackWarningModal, setShowBackWarningModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -81,6 +84,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const submittingRef = useRef(false); // Ref-based guard to prevent double submit across renders
     const [showRestoredBanner, setShowRestoredBanner] = useState(false);
     // Ref to prevent double-fetching when cache restoration already set questions
     const cacheRestoredRef = useRef(false);
@@ -88,11 +92,69 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
 
+    // ── Intercept browser/mouse back button (popstate) ──
+    useEffect(() => {
+        if (isLoading || isSubmitting || questions.length === 0) return;
+
+        // Push initial dummy state to enable trapping
+        window.history.pushState(null, "", window.location.href);
+
+        const handlePopState = () => {
+            // Push dummy state again so user remains on this page
+            window.history.pushState(null, "", window.location.href);
+            setShowBackWarningModal(true);
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [isLoading, isSubmitting, questions.length]);
+
+    // ── Intercept refresh/tab close/page exit (beforeunload) ──
+    useEffect(() => {
+        if (isLoading || isSubmitting || questions.length === 0) return;
+
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = "Your progress is saved and you can return anytime before the timer runs out.";
+            return e.returnValue;
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [isLoading, isSubmitting, questions.length]);
+
     useEffect(() => {
         const fetchEngineStats = async () => {
             try {
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats`),
+                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
                     fetch(`${API_BASE}/api/assessment/admin/assessments`)
                 ]);
                 const statsJson = await statsRes.json();
@@ -125,6 +187,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         saveAnswer: cacheSaveAnswer,
         saveNavigation: cacheSaveNavigation,
         clearSession,
+        invalidateCache,
     } = useAssessmentCache({
         token:           attemptToken,
         module:          'aptitude',
@@ -137,39 +200,73 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         timeLeftSeconds: timeLeft,
     });
 
-    // Restore session from cache when it is loaded
+    // Restore session from cache when it is loaded – but validate the token first
     useEffect(() => {
         if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
         cacheRestoredRef.current = true;
-        if (cachedSession.questions?.length) {
-            setQuestions(normalizeQuestions(cachedSession.questions as any[]));
-        }
-        if (cachedSession.answers) {
-            const restored: Record<string, string> = {};
-            for (const [qId, val] of Object.entries(cachedSession.answers)) {
-                if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-                    restored[qId] = val.optionId as string;
-                } else if (typeof val === 'string') {
-                    restored[qId] = val;
+
+        const validateAndRestore = async () => {
+            // If the cache has a token, validate it against the server
+            if (cachedSession.token) {
+                try {
+                    const res = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${cachedSession.token}/questions`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        // If the attempt status is submitted/closed, the cache is stale
+                        if (data.status && data.status !== 'in_progress') {
+                            console.warn('Cached attempt is already submitted/closed, clearing cache and starting fresh');
+                            cacheRestoredRef.current = false;
+                            await invalidateCache();
+                            // invalidateCache resets isRestoredFromCache to false,
+                            // which will trigger the fetchAttempt effect to create a new attempt
+                            return;
+                        }
+                    } else {
+                        // Token not found or other server error – cache is stale
+                        console.warn('Cached attempt token invalid, clearing cache and starting fresh');
+                        cacheRestoredRef.current = false;
+                        await invalidateCache();
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Failed to validate cached attempt, proceeding with cache:', err);
+                    // Network error – proceed with cache as a fallback
                 }
             }
-            setAnswers(restored);
-        }
-        if (cachedSession.markedForReview?.length) {
-            setMarkedForReview(new Set(cachedSession.markedForReview));
-        }
-        if (cachedSession.currentIndex !== undefined) {
-            setCurrentIndex(cachedSession.currentIndex);
-        }
-        if (cachedSession.timeLeftSeconds) {
-            setTimeLeft(cachedSession.timeLeftSeconds);
-        }
-        if (cachedSession.token) {
-            setAttemptToken(cachedSession.token);
-        }
-        setShowRestoredBanner(true);
-        setTimeout(() => setShowRestoredBanner(false), 5000);
-    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
+
+            // Token is valid, restore the full session from cache
+            if (cachedSession.questions?.length) {
+                setQuestions(normalizeQuestions(cachedSession.questions as any[]));
+            }
+            if (cachedSession.answers) {
+                const restored: Record<string, string> = {};
+                for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                    if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
+                        restored[qId] = val.optionId as string;
+                    } else if (typeof val === 'string') {
+                        restored[qId] = val;
+                    }
+                }
+                setAnswers(restored);
+            }
+            if (cachedSession.markedForReview?.length) {
+                setMarkedForReview(new Set(cachedSession.markedForReview));
+            }
+            if (cachedSession.currentIndex !== undefined) {
+                setCurrentIndex(cachedSession.currentIndex);
+            }
+            if (cachedSession.timeLeftSeconds) {
+                setTimeLeft(cachedSession.timeLeftSeconds);
+            }
+            if (cachedSession.token) {
+                setAttemptToken(cachedSession.token);
+            }
+            setShowRestoredBanner(true);
+            setTimeout(() => setShowRestoredBanner(false), 5000);
+        };
+
+        validateAndRestore();
+    }, [isCacheRestored, isRestoredFromCache, cachedSession, clearSession, invalidateCache]);
 
     const normalizeQuestions = (items: any[]): Question[] => items.map((q: any) => ({
         id: String(q.id ?? q.questionId ?? q.question_id),
@@ -211,10 +308,33 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             try {
                 setIsLoading(true);
                 setLoadError(null);
+
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
                 const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ assessmentCode, userId, mode }),
+                    body: JSON.stringify({ assessmentCode, userId: activeEmail || userId, mode }),
                 });
 
                 if (!response.ok) {
@@ -251,32 +371,68 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         fetchAttempt();
     }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
 
+    // Keep a ref to the latest answers so handleSubmitAttempt doesn't need
+    // `answers` in its dependency array (which would recreate it on every option select).
+    const answersRef = useRef(answers);
+    answersRef.current = answers;
+
     const handleSubmitAttempt = useCallback(async () => {
-        if (!attemptToken || isSubmitting) return;
+        console.log("Aptitude: handleSubmitAttempt called. attemptToken:", attemptToken, "submittingRef:", submittingRef.current);
+        // Use ref-based guard so the check is synchronous and survives re-renders
+        if (!attemptToken || submittingRef.current) {
+            console.log("Aptitude: Submission aborted (missing token or already submitting).");
+            return;
+        }
+        
+        console.log("Aptitude: Proceeding with submission...");
+        submittingRef.current = true;
         setIsSubmitting(true);
+        
         try {
+            const currentAnswers = answersRef.current;
             const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ answers }),
+                body: JSON.stringify({ answers: currentAnswers }),
             });
 
             if (!response.ok) {
                 const errorText = await response.text().catch(() => "Unknown error");
+                
+                // If the attempt is already submitted, it's likely a duplicate request that succeeded first
+                if (response.status === 400 && errorText.includes('already submitted')) {
+                    console.warn('Attempt already submitted — performing hard redirect');
+                    await clearSession();
+                    // Use window.location.href for a guaranteed redirect even if router state is stale
+                    if (mode === 'trial') {
+                        window.location.href = '/assessment';
+                    } else {
+                        window.location.href = '/dashboard?completed=aptitude';
+                    }
+                    return;
+                }
+
                 console.error("Submit API Error:", response.status, errorText);
                 throw new Error(`Submit failed: ${response.status} - ${errorText}`);
             }
 
+            console.log("Aptitude: Submission API success (200), clearing session...");
             const result = await response.json();
             // Clear cache after successful submission
             await clearSession();
+            console.log("Aptitude: Calling onComplete...");
             onComplete(result);
         } catch (error) {
+            console.error("Aptitude: Submission caught error:", error);
+            // Only allow retry if it wasn't an "already submitted" error
+            // (which would have returned early above)
+            submittingRef.current = false;
             setLoadError((error as Error).message);
         } finally {
+            console.log("Aptitude: Submission finally block.");
             setIsSubmitting(false);
         }
-    }, [answers, attemptToken, clearSession, isSubmitting, onComplete]);
+    }, [attemptToken, clearSession, mode, onComplete, router]);
 
     useEffect(() => {
         if (isLoading || !attemptToken) return;
@@ -794,17 +950,78 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setShowSubmitModal(false)}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5"
+                                    disabled={isSubmitting}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Review Answers
                                 </button>
                                 <button
                                     type="button"
                                     onClick={confirmSubmit}
-                                    className="group flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition-all hover:bg-[#19be5e]"
+                                    disabled={isSubmitting}
+                                    className="group flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition-all hover:bg-[#19be5e] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Yes, Submit Test
-                                    <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Yes, Submit Test
+                                            <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Back Navigation Interception Warning Modal */}
+            {showBackWarningModal && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-[2px]" 
+                        onClick={() => setShowBackWarningModal(false)}
+                    />
+                    
+                    <motion.div 
+                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        className="relative w-full max-w-md transform overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl transition-all dark:border-white/[0.08] dark:bg-[#19211C]"
+                    >
+                        <div className="relative flex flex-col items-center text-center">
+                            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500 text-white">
+                                <AlertCircle size={28} />
+                            </div>
+                            
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Leave Assessment?</h2>
+                            <p className="mt-2.5 text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                                Your progress has been securely saved. You can return and continue your assessment exactly where you left off, as long as the timer does not run out.
+                            </p>
+
+                            <div className="mt-6 flex w-full flex-col gap-2.5 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowBackWarningModal(false);
+                                        // Use window.location to completely clear SPA state and history hooks cleanly
+                                        window.location.href = "/assessment";
+                                    }}
+                                    className="flex-1 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-700 border border-slate-200 dark:border-white/[0.08] dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all cursor-pointer text-center"
+                                >
+                                    Yes, Exit
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBackWarningModal(false)}
+                                    className="flex-1 px-5 py-3 rounded-xl bg-brand-green text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1bb85c] active:scale-95 transition-all cursor-pointer text-center"
+                                >
+                                    Resume Test
                                 </button>
                             </div>
                         </div>

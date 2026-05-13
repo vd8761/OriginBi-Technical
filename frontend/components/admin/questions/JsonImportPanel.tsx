@@ -29,6 +29,8 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         return {
           id: baseId, category: item.category || "QA", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
+          difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
+          explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
         } as AptitudeQuestion;
       }
       case "mnc": {
@@ -39,12 +41,16 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         return {
           id: baseId, topic: item.topic || "General", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
+          difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
+          explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
         } as MNCQuestion;
       }
       case "communication": {
         if (!item.taskType) throw new Error(`Q${i + 1}: missing "taskType".`);
         const cq: CommQuestion = {
           id: baseId, taskType: item.taskType, instructions: item.instructions || "",
+          difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
+          status: item.status,
         };
         if (item.questions) {
           cq.questions = item.questions.map((sq: { text: string; options?: { text: string }[]; correctOptionIndex?: number }, si: number) => {
@@ -72,6 +78,8 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         const rq: RoleQuestion = {
           id: baseId, questionType: item.questionType || "conceptual", text: item.text,
           options: opts, correctOptionId: opts[item.correctOptionIndex].id,
+          difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
+          explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
         };
         if (item.category) rq.category = item.category;
         if (item.subCategory) rq.subCategory = item.subCategory;

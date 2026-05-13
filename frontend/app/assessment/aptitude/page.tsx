@@ -1,9 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { Suspense, useCallback } from "react";
 import AptitudeEngine, { type AttemptSubmitResult } from "../../../components/assessment/aptitude/AptitudeEngine";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import { useAssessmentTracker } from "../../../lib/assessmentTracker";
 
 function AptitudeAssessmentContent() {
@@ -12,7 +11,7 @@ function AptitudeAssessmentContent() {
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
     const { markAssessmentComplete } = useAssessmentTracker();
 
-    const handleComplete = (result: AttemptSubmitResult) => {
+    const handleComplete = useCallback((result: AttemptSubmitResult) => {
         const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
         const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
         const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
@@ -78,9 +77,14 @@ function AptitudeAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        // Redirect to dashboard
-        router.push('/dashboard?completed=aptitude');
-    };
+        // Redirect to dashboard using hard redirect to ensure navigation
+        console.log("Aptitude: Submission complete, redirecting...");
+        if (mode === 'trial') {
+            window.location.href = '/assessment';
+        } else {
+            window.location.href = '/dashboard?completed=aptitude';
+        }
+    }, [markAssessmentComplete, mode]);
 
     return (
         <div className="min-h-screen w-full">

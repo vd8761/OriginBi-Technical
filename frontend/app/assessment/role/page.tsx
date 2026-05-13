@@ -58,7 +58,11 @@ function RoleAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        router.push('/dashboard?completed=role');
+        if (mode === 'trial') {
+            router.push('/assessment');
+        } else {
+            router.push('/dashboard?completed=role');
+        }
     };
 
     return (
