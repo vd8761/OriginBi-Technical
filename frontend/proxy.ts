@@ -8,9 +8,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-const ACCESS_TOKEN_COOKIE = "obi.accessToken";
+const ACCESS_TOKEN_COOKIE = "originbi:access-token";
 
-const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_API_BASE?.replace(/\/$/, "");
+const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "");
 const AUTH_API_BASE =
   process.env.AUTH_INTERNAL_URL?.replace(/\/$/, "") ??
   configuredAuthBase ??
@@ -43,7 +43,7 @@ export async function proxy(req: NextRequest) {
 function redirectToLogin(req: NextRequest) {
   const url = req.nextUrl.clone();
   const loginUrl = new URL("/", req.url);
-  loginUrl.searchParams.set("login", "required");
+  loginUrl.searchParams.set("login-required", "true");
   loginUrl.searchParams.set("next", `${url.pathname}${url.search}`);
   return NextResponse.redirect(loginUrl);
 }

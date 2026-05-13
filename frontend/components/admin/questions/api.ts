@@ -3,7 +3,7 @@
  * Replaces the localStorage-based storage.ts for real DB persistence.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
 const ADMIN_BASE = `${API_BASE}/api/assessment/admin`;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

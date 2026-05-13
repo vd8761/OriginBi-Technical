@@ -4,21 +4,18 @@ const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
 const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "");
 
 // Go exam-engine (attempts, code runs, plugins, etc.)
-export const API_BASE =
-  configuredApiBase ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8088");
+export const API_BASE = configuredApiBase || "";
 
 // NestJS assessment-service (Cognito auth, etc.)
-export const AUTH_API_BASE =
-  configuredAuthBase ??
-  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:4002");
+export const AUTH_API_BASE = configuredAuthBase || "";
 
 export const STUDENT_API_BASE =
-  process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") ?? "http://localhost:4004";
+  process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
 
-// ── Cognito token storage (browser only) ──────────────────────────────────
-const ACCESS_TOKEN_KEY = "obi.accessToken";
-const ID_TOKEN_KEY = "obi.idToken";
-const REFRESH_TOKEN_KEY = "obi.refreshToken";
+// ── Cognito token storage (browser only) - Main App Style ──────────────────
+const ACCESS_TOKEN_KEY = "originbi:access-token";
+const ID_TOKEN_KEY = "originbi:id-token";
+const REFRESH_TOKEN_KEY = "originbi:refresh-token";
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -306,9 +303,19 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
   if (auth) {
-    const token = getAccessToken();
+    const token = typeof window !== "undefined" 
+      ? (window.localStorage.getItem(ID_TOKEN_KEY) || window.localStorage.getItem(ACCESS_TOKEN_KEY))
+      : null;
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`);
+    }
+    
+    // Add X-User-Context if user data exists
+    if (typeof window !== "undefined") {
+      const userData = window.localStorage.getItem("user");
+      if (userData) {
+        headers.set("X-User-Context", userData);
+      }
     }
   }
   const base = baseOverride ?? API_BASE;
@@ -368,24 +375,12 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
     auth: false,
   });
   
-  // The student service might not return tokens immediately; 
-  // if it does, they are usually in AuthenticationResult
-  if (res.AuthenticationResult) {
-    setTokens({
-      accessToken: res.AuthenticationResult.AccessToken,
-      idToken: res.AuthenticationResult.IdToken,
-      refreshToken: res.AuthenticationResult.RefreshToken,
-    });
-  }
+  // Note: Main Student Service returns { success: true } and triggers emails.
+  // It doesn't return tokens; the user must log in after registration.
   
   return {
-    user: res.user || { email: input.email },
-    registration: res.registration || null,
-    tokens: res.AuthenticationResult ? {
-      accessToken: res.AuthenticationResult.AccessToken,
-      idToken: res.AuthenticationResult.IdToken,
-      refreshToken: res.AuthenticationResult.RefreshToken,
-    } : undefined
+    user: { email: input.email } as ApiUser,
+    registration: null,
   };
 }
 

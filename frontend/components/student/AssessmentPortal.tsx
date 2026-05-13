@@ -450,8 +450,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <Header
         currentView={currentHeaderView}
         onNavigate={(view) => {
-          if (["dashboard", "assessment", "profile", "details", "explore"].includes(view)) {
-            setCurrentView(view as AssessmentView);
+          if (["dashboard", "assessment", "profile", "explore"].includes(view)) {
+            router.push(`/${view}`);
+          } else if (view === "details") {
+            setCurrentView("details");
           }
         }}
         onLogout={() => onLogout?.()}
