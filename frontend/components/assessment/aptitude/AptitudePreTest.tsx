@@ -6,37 +6,94 @@ interface AptitudePreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    questions?: number | string;
+    duration?: string;
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
+    attemptsCount?: number;
+    skills?: string[];
 }
-
-const metrics = [
-    { label: "Questions", value: "60" },
-    { label: "Duration", value: "60 min" },
-    { label: "Sections", value: "4" },
-    { label: "Attempts", value: "1 out of 2" },
-];
-
-const checklist = [
-    "Keep one uninterrupted 60 minute window ready.",
-    "Use a laptop or desktop for the most stable test layout.",
-    "Avoid refreshing the browser after the assessment begins.",
-    "Ensure all questions are answered before submission.",
-];
-
-const skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"];
 
 const AptitudePreTest: React.FC<AptitudePreTestProps> = ({ 
     onStart, 
     onClose,
     accentColor = '#1ED36A',
     gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
-    mode = 'main'
+    mode = 'main',
+    questions = 60,
+    duration = "60 min",
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
+    attemptsCount: initialAttemptsCount,
+    skills = ["Quantitative", "Logical", "Data interpretation", "Abstract reasoning"]
 }) => {
+    const [attemptsCount, setAttemptsCount] = React.useState<number>(initialAttemptsCount ?? 0);
+
+    React.useEffect(() => {
+        if (initialAttemptsCount !== undefined) {
+            setAttemptsCount(initialAttemptsCount);
+            return;
+        }
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = "";
+                const storedProfile = localStorage.getItem("originbi:user-profile");
+                if (storedProfile) {
+                    const parsed = JSON.parse(storedProfile);
+                    if (parsed && parsed.email) {
+                        activeEmail = parsed.email;
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const json = await response.json();
+                const data = json.data || json;
+                if (active && data) {
+                    const stats = data['aptitude'] || { trial: 0, main: 0 };
+                    setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+                }
+            } catch (err) {
+                console.error("Failed to load attempt stats in pretest:", err);
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, [mode, initialAttemptsCount]);
+
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = '';
         };
     }, []);
+
+    const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+    const currentAttempt = attemptsCount + 1;
+
+    const metrics = [
+        { label: "Questions", value: String(questions) },
+        { label: "Duration", value: duration },
+        { label: "Sections", value: "4" },
+        { label: "Attempts", value: `${currentAttempt}/${limit}` },
+    ];
+
+    const checklist = [
+        `Keep one uninterrupted ${duration} window ready.`,
+        "Use a laptop or desktop for the most stable test layout.",
+        "Avoid refreshing the browser after the assessment begins.",
+        "Ensure all questions are answered before submission.",
+    ];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">

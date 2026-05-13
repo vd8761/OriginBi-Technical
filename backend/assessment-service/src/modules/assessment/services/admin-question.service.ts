@@ -9,6 +9,7 @@ interface ModuleConfig {
   readonly optionsTable?: string;
   readonly optionsFk?: string;
   readonly categoryColumn: string;
+  readonly subcategoryColumn?: string;
 }
 
 const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
@@ -17,7 +18,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'aptitude_question_id',
     optionsTable: 'tech_aptitude_options',
     optionsFk: 'aptitude_question_id',
-    categoryColumn: 'subcategory',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
   },
   grammar: {
     questionTable: 'tech_grammar_questions',
@@ -108,8 +110,10 @@ export class AdminQuestionService {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
       category: row[config.categoryColumn],
+      subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
       questionText: row.question_text,
+      explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
         text: o.option_text,
@@ -129,7 +133,7 @@ export class AdminQuestionService {
 
   async listQuestions(module: ModuleType, query: any) {
     const config = MODULE_CONFIGS[module];
-    const { assessmentId, category, status, search, mode } = query;
+    const { assessmentId, category, subcategory, status, search, mode } = query;
     const conditions: string[] = [];
     const params: any[] = [];
     let paramIdx = 1;
@@ -141,6 +145,10 @@ export class AdminQuestionService {
     if (category) {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
+    }
+    if (subcategory && config.subcategoryColumn) {
+      conditions.push(`q.${config.subcategoryColumn} = $${paramIdx++}`);
+      params.push(subcategory);
     }
     if (status) {
       conditions.push(`q.status = $${paramIdx++}`);
@@ -229,8 +237,10 @@ export class AdminQuestionService {
     const {
       assessmentId: reqAssessmentId,
       category,
+      subcategory,
       difficulty = 'medium',
       questionText,
+      explanation = null,
       options,
       correctOptionIndex = 0,
       marks = 1,
@@ -241,7 +251,7 @@ export class AdminQuestionService {
       userId,
     } = data;
 
-    if (!category || !questionText) throw new BadRequestException('category and questionText are required');
+    if ((!category && !subcategory) || !questionText) throw new BadRequestException('category/subcategory and questionText are required');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -255,13 +265,21 @@ export class AdminQuestionService {
         assessmentId = await this.ensureDefaultAssessment(queryRunner, module, resolvedUser);
       }
 
+      const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'image_url', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
+      const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode];
+      let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', 'NULL', '$7', '$8', '$9', '$10'];
+
+      if (config.subcategoryColumn && subcategory) {
+        columns.push(config.subcategoryColumn);
+        values.push(subcategory);
+        placeholders.push(`$${values.length}`);
+      }
+
       const qInsert = await queryRunner.query(
-        `INSERT INTO ${config.questionTable}
-            (assessment_id, ${config.categoryColumn}, difficulty, question_text, image_url,
-             correct_option_id, marks, negative_marks, status, mode)
-         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9)
+        `INSERT INTO ${config.questionTable} (${columns.join(', ')})
+         VALUES (${placeholders.join(', ')})
          RETURNING *`,
-        [assessmentId, category, difficulty, questionText, imageUrl, marks, negativeMarks, status, mode],
+        values,
       );
       const questionRow = qInsert[0];
       const questionId = questionRow[config.idColumn];
@@ -305,7 +323,7 @@ export class AdminQuestionService {
 
   async updateQuestion(module: ModuleType, id: number, data: any) {
     const config = MODULE_CONFIGS[module];
-    const { category, difficulty, questionText, options, correctOptionIndex, marks, negativeMarks, status, mode, imageUrl } = data;
+    const { category, subcategory, difficulty, questionText, explanation, options, correctOptionIndex, marks, negativeMarks, status, mode, imageUrl } = data;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -324,8 +342,10 @@ export class AdminQuestionService {
       let pIdx = 1;
 
       if (category !== undefined) { updates.push(`${config.categoryColumn} = $${pIdx++}`); params.push(category); }
+      if (subcategory !== undefined && config.subcategoryColumn) { updates.push(`${config.subcategoryColumn} = $${pIdx++}`); params.push(subcategory); }
       if (difficulty !== undefined) { updates.push(`difficulty = $${pIdx++}`); params.push(difficulty); }
       if (questionText !== undefined) { updates.push(`question_text = $${pIdx++}`); params.push(questionText); }
+      if (explanation !== undefined) { updates.push(`explanation = $${pIdx++}`); params.push(explanation); }
       if (marks !== undefined) { updates.push(`marks = $${pIdx++}`); params.push(marks); }
       if (negativeMarks !== undefined) { updates.push(`negative_marks = $${pIdx++}`); params.push(negativeMarks); }
       if (status !== undefined) { updates.push(`status = $${pIdx++}`); params.push(status); }
@@ -457,16 +477,27 @@ export class AdminQuestionService {
       let imported = 0;
       for (const q of questionList) {
         try {
-          const category = q.category || q.subcategory || q.topic_group || q.task_type || q.taskType || q.domain || 'General';
+          const category = q.category || 'General';
+          const subcategory = q.subcategory || null;
           const questionText = q.questionText || q.text || q.question_text;
+          const explanation = q.explanation || null;
           if (!questionText) continue;
 
+          const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
+          const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, null, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'];
+          let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9'];
+
+          if (config.subcategoryColumn && subcategory) {
+            columns.push(config.subcategoryColumn);
+            values.push(subcategory);
+            placeholders.push(`$${values.length}`);
+          }
+
           const qInsert = await queryRunner.query(
-            `INSERT INTO ${config.questionTable}
-                (assessment_id, ${config.categoryColumn}, difficulty, question_text, correct_option_id, marks, negative_marks, status, mode)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
+            `INSERT INTO ${config.questionTable} (${columns.join(', ')})
+             VALUES (${placeholders.join(', ')})
              RETURNING ${config.idColumn}`,
-            [assessmentId, category, q.difficulty || 'medium', questionText, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'],
+            values,
           );
           const newQId = qInsert[0][config.idColumn];
 
@@ -511,16 +542,32 @@ export class AdminQuestionService {
       const params: any[] = [];
       let where = '';
       if (moduleType) {
-        where = 'WHERE module_type = $1';
+        where = 'WHERE a.module_type = $1';
         params.push(moduleType);
       }
       return await this.dataSource.query(
-        `SELECT assessment_id, assessment_code, assessment_name, module_type,
-                total_time_minutes, total_questions, status, created_at,
-                categories, difficulty_marks, difficulty_negative_marks,
-                tab_switch_limit, anti_copy_enabled, shuffle_questions, shuffle_options,
-                amount, trial_attempts_limit, main_attempts_limit
-         FROM tech_assessments ${where} ORDER BY assessment_id DESC`,
+        `SELECT a.assessment_id, a.assessment_code, a.assessment_name, a.module_type,
+                a.total_time_minutes, a.total_questions, a.question_limit, a.status, a.created_at,
+                a.categories, a.difficulty_marks, a.difficulty_negative_marks,
+                a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
+                a.amount, a.trial_attempts_limit, a.main_attempts_limit,
+                (CASE 
+                  WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM tech_coding_questions WHERE assessment_id = a.assessment_id AND status='active')
+                  ELSE 0
+                END) as trial_questions_count,
+                (CASE 
+                  WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM tech_coding_questions WHERE assessment_id = a.assessment_id AND status='active')
+                  ELSE 0
+                END) as main_questions_count
+         FROM tech_assessments a ${where} ORDER BY a.assessment_id DESC`,
         params,
       );
     } catch (error) {
@@ -530,42 +577,42 @@ export class AdminQuestionService {
   }
 
   async updateAssessment(id: number, data: any) {
-    const { 
-      assessmentName, 
-      totalTimeMinutes, 
-      questionLimit, 
-      categories, 
-      difficultyMarks, 
-      difficultyNegativeMarks,
-      tabSwitchLimit,
-      antiCopyEnabled,
-      shuffleQuestions,
-      shuffleOptions,
-      amount,
-      trialAttemptsLimit,
-      mainAttemptsLimit
-    } = data;
+    const assessmentName = data.assessmentName !== undefined ? data.assessmentName : data.assessment_name;
+    const totalTimeMinutes = data.totalTimeMinutes !== undefined ? data.totalTimeMinutes : data.total_time_minutes;
+    const questionLimit = data.questionLimit !== undefined ? data.questionLimit : data.question_limit;
+    const categories = data.categories;
+    const difficultyMarks = data.difficultyMarks !== undefined ? data.difficultyMarks : data.difficulty_marks;
+    const difficultyNegativeMarks = data.difficultyNegativeMarks !== undefined ? data.difficultyNegativeMarks : data.difficulty_negative_marks;
+    const tabSwitchLimit = data.tabSwitchLimit !== undefined ? data.tabSwitchLimit : data.tab_switch_limit;
+    const antiCopyEnabled = data.antiCopyEnabled !== undefined ? data.antiCopyEnabled : data.anti_copy_enabled;
+    const shuffleQuestions = data.shuffleQuestions !== undefined ? data.shuffleQuestions : data.shuffle_questions;
+    const shuffleOptions = data.shuffleOptions !== undefined ? data.shuffleOptions : data.shuffle_options;
+    const amount = data.amount;
+    const trialAttemptsLimit = data.trialAttemptsLimit !== undefined ? data.trialAttemptsLimit : data.trial_attempts_limit;
+    const mainAttemptsLimit = data.mainAttemptsLimit !== undefined ? data.mainAttemptsLimit : data.main_attempts_limit;
     
     try {
       await this.dataSource.query(
         `UPDATE tech_assessments
          SET assessment_name = COALESCE($1, assessment_name),
              total_time_minutes = COALESCE($2, total_time_minutes),
-             categories = COALESCE($3, categories),
-             difficulty_marks = COALESCE($4, difficulty_marks),
-             difficulty_negative_marks = COALESCE($5, difficulty_negative_marks),
-             tab_switch_limit = COALESCE($6, tab_switch_limit),
-             anti_copy_enabled = COALESCE($7, anti_copy_enabled),
-             shuffle_questions = COALESCE($8, shuffle_questions),
-             shuffle_options = COALESCE($9, shuffle_options),
-             amount = COALESCE($10, amount),
-             trial_attempts_limit = COALESCE($11, trial_attempts_limit),
-             main_attempts_limit = COALESCE($12, main_attempts_limit),
+             question_limit = COALESCE($3, question_limit),
+             categories = COALESCE($4, categories),
+             difficulty_marks = COALESCE($5, difficulty_marks),
+             difficulty_negative_marks = COALESCE($6, difficulty_negative_marks),
+             tab_switch_limit = COALESCE($7, tab_switch_limit),
+             anti_copy_enabled = COALESCE($8, anti_copy_enabled),
+             shuffle_questions = COALESCE($9, shuffle_questions),
+             shuffle_options = COALESCE($10, shuffle_options),
+             amount = COALESCE($11, amount),
+             trial_attempts_limit = COALESCE($12, trial_attempts_limit),
+             main_attempts_limit = COALESCE($13, main_attempts_limit),
              updated_at = NOW()
-         WHERE assessment_id = $13`,
+         WHERE assessment_id = $14`,
         [
           assessmentName !== undefined ? assessmentName : null,
           totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
+          questionLimit !== undefined ? Number(questionLimit) : null,
           categories !== undefined ? (typeof categories === 'string' ? categories : JSON.stringify(categories)) : null,
           difficultyMarks !== undefined ? (typeof difficultyMarks === 'string' ? difficultyMarks : JSON.stringify(difficultyMarks)) : null,
           difficultyNegativeMarks !== undefined ? (typeof difficultyNegativeMarks === 'string' ? difficultyNegativeMarks : JSON.stringify(difficultyNegativeMarks)) : null,

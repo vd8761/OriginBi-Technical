@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ExploreView from "@/components/student/ExploreView";
 import Header from "@/components/student/Header";
 import { EXAMS, EXAM_DETAILS } from "@/lib/exams";
+import { useSession } from "@/lib/contexts/SessionContext";
 
 export default function ExplorePage() {
   const router = useRouter();
@@ -13,10 +14,9 @@ export default function ExplorePage() {
     router.push(`/explore/${exam.id}`);
   };
 
+  const { logout } = useSession();
   const handleLogout = () => {
-    localStorage.removeItem("originbi:access-token");
-    localStorage.removeItem("originbi:id-token");
-    localStorage.removeItem("originbi:user-profile");
+    logout();
     router.push("/");
   };
 
@@ -25,12 +25,8 @@ export default function ExplorePage() {
       // Already on explore
       return;
     }
-    // Route to home page with view parameter for other pages
-    if (view === "dashboard" || view === "assessment" || view === "profile") {
-      router.push(`/?view=${view}`);
-    } else {
-      router.push("/");
-    }
+    // Route directly to standard page
+    router.push(`/${view}`);
   };
 
   return (

@@ -4,6 +4,7 @@ import React, { useState, FormEvent, FocusEvent } from 'react';
 import Link from 'next/link';
 import { EyeIcon, EyeOffIcon } from '../icons';
 import { ApiError, loginUser } from '@/lib/api';
+import { useSession } from '@/lib/contexts/SessionContext';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
 
@@ -18,6 +19,7 @@ interface LoginFormProps {
 const LoginForm: React.FC<LoginFormProps> = ({
   onLoginSuccess,
 }) => {
+  const { login } = useSession();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [values, setValues] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -85,6 +87,19 @@ const LoginForm: React.FC<LoginFormProps> = ({
     setGeneralError('');
     try {
       const session = await loginUser(values.email, values.password);
+      
+      // Update SessionContext
+      if (session.tokens) {
+        login(
+          session.tokens.accessToken,
+          session.tokens.idToken,
+          {
+            name: session.registration?.fullName || session.user.email,
+            email: session.user.email,
+          }
+        );
+      }
+      
       onLoginSuccess(session.registration?.fullName || session.user.email);
     } catch (err) {
       setGeneralError(

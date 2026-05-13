@@ -42,7 +42,7 @@ const codingStatusRank: Record<CodingLangStatus, number> = {
 
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
-    const { isPaid, markPaid } = usePaidAssessments();
+    const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
     const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
     const [assignmentError, setAssignmentError] = useState("");
@@ -102,8 +102,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const [assessmentMode, setAssessmentMode] = useState<"trial" | "main">("main");
     const [pendingCodingLang, setPendingCodingLang] = useState<CodingLanguage | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<
-        | { kind: "exam"; key: PaymentKey; title: string; subtitle: string }
-        | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string }
+        | { kind: "exam"; key: PaymentKey; title: string; subtitle: string; assessmentId?: number | string; assessmentCode?: string }
+        | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string; assessmentId?: number | string; assessmentCode?: string }
         | null
     >(null);
 
@@ -141,6 +141,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             key: exam.id as PaymentKey,
             title: `Pay for ${exam.title}`,
             subtitle: `One-time access. Unlocks the full ${exam.shortTitle} assessment for you.`,
+            assessmentId: (exam as any).assessmentId,
+            assessmentCode: exam.id,
         });
     };
 
@@ -162,6 +164,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             language,
             title: `Pay for Coding (${language.name})`,
             subtitle: `Unlocks the coding assessment in ${language.name}. Each language is paid separately.`,
+            assessmentId: (exam as any).assessmentId,
+            assessmentCode: key,
         });
     };
 
@@ -184,6 +188,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             }
         } else {
             markPaid(paymentTarget.key);
+            refreshPurchases?.();
             startNonCodingAssessment();
         }
         setPaymentTarget(null);
@@ -224,7 +229,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
                 />
                 <div className="absolute inset-0 opacity-[0.10] dark:opacity-[0.06] assessment-grid" />
-            </div>             <Header
+            </div>
+
+            <Header
                 currentView="explore"
                 onNavigate={(view) => {
                     router.push(`/${view}`);
@@ -581,7 +588,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <CodingPreTest
                     language={pendingCodingLang}
                     mode={assessmentMode}
-                    onStart={(mode) => {
+                    // @ts-ignore
+                    onStart={(mode: 'trial' | 'main') => {
                         const langId = pendingCodingLang.id;
                         setPendingCodingLang(null);
                         router.push(`/assessment/coding?lang=${langId}&mode=${mode}`);
@@ -596,6 +604,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     subtitle={paymentTarget.subtitle}
                     amount={exam.price}
                     accent={accent}
+                    assessmentId={paymentTarget.assessmentId}
+                    assessmentCode={paymentTarget.assessmentCode}
                     onCancel={() => setPaymentTarget(null)}
                     onSuccess={() => {
                         return handlePaymentSuccess();
@@ -620,7 +630,7 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
                 Completed
             </span>
         ) : status === "ready" ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                 Ready to start
             </span>
         ) : (

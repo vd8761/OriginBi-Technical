@@ -41,6 +41,9 @@ export class TechRoleQuestion {
     @Column({ name: "question_text", type: "text" })
     questionText!: string;
 
+    @Column({ name: "explanation", type: "text", nullable: true })
+    explanation!: string | null;
+
     @Column({ name: "scenario_context", type: "text", nullable: true })
     scenarioContext!: string | null;
 

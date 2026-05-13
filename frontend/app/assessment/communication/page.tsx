@@ -58,7 +58,11 @@ function CommunicationAssessmentContent() {
             timeTakenSeconds: result.timeTakenSeconds,
         });
 
-        router.push('/dashboard?completed=communication');
+        if (mode === 'trial') {
+            router.push('/assessment');
+        } else {
+            router.push('/dashboard?completed=communication');
+        }
     };
 
     return (

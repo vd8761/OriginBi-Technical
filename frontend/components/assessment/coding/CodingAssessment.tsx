@@ -608,11 +608,33 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             if (!LEGACY_TECH_API_URL) {
                 setAttemptsCount(1);
                 setAttemptsLimit(null);
-                return;
             }
             try {
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/attempts-stats`),
+                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/attempts-stats${emailParam}`),
                     fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`)
                 ]);
                 if (!statsRes.ok || !assessmentsRes.ok) return;

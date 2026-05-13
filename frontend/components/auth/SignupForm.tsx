@@ -196,7 +196,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
     countryCode: "+91",
     phone: "",
     password: "",
-    role: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -208,11 +207,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
     { value: "OTHER", label: "Other" },
   ];
 
-  const roleOptions = [
-    { value: "SCHOOL_STUDENT", label: "School Student" },
-    { value: "COLLEGE_STUDENT", label: "College Student" },
-    { value: "EMPLOYEE", label: "Employee" },
-  ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -230,7 +224,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
     }
     if (!formData.phone.trim()) nextErrors.phone = "Mobile number is required.";
     if (formData.password.length < 8) nextErrors.password = "Use at least 8 characters.";
-    if (!formData.role) nextErrors.role = "Select your role.";
     setFormErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -244,7 +237,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
         gender: formData.gender,
         countryCode: formData.countryCode,
         mobileNumber: formData.phone,
-        role: formData.role,
       });
       onSignupSuccess?.(session.registration?.fullName || session.user.email);
     } catch (err) {
@@ -360,19 +352,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
         {formErrors.password && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.password}</p>}
       </div>
 
-      {/* Role */}
-      <CustomSelect
-        label="Role"
-        required
-        options={roleOptions}
-        value={formData.role}
-        onChange={(val) => {
-          setFormData((prev) => ({ ...prev, role: val }));
-          setFormErrors((prev) => ({ ...prev, role: "" }));
-        }}
-        placeholder="Select your role"
-        error={formErrors.role}
-      />
 
       {/* Submit Button */}
       <button

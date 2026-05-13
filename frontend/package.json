@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "set NODE_OPTIONS=--max-old-space-size=4096 && next dev",
-    "build": "set NODE_OPTIONS=--max-old-space-size=4096 && next build",
+    "dev": "NODE_OPTIONS=--max-old-space-size=4096 next dev",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -12,6 +12,7 @@
     "@headless-tree/core": "^1.6.3",
     "@headless-tree/react": "^1.6.3",
     "@radix-ui/react-slot": "^1.2.4",
+    "aws-amplify": "^6.17.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",

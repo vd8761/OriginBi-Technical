@@ -7,3 +7,4 @@ export * from "./grammar";
 export * from "./coding";
 export * from "./mnc";
 export * from "./role";
+export * from "./TechAssessmentPurchase";

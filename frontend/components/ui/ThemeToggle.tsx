@@ -13,10 +13,19 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
   theme: propTheme, 
   toggleTheme: propToggleTheme 
 }) => {
+  const [mounted, setMounted] = React.useState(false);
   const themeContext = useTheme();
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
   
   const theme = propTheme || themeContext.theme;
   const toggleTheme = propToggleTheme || themeContext.toggleTheme;
+
+  if (!mounted) {
+    return <div className="w-16 h-8" />; // Placeholder with same dimensions
+  }
 
   return (
     <button

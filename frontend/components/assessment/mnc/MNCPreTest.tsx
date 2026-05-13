@@ -6,14 +6,10 @@ interface MNCPreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
+    attemptsCount?: number;
 }
-
-const metrics = [
-    { label: "Questions", value: "40" },
-    { label: "Duration", value: "50 min" },
-    { label: "Format", value: "Multiple Choice" },
-    { label: "Attempts", value: "1 out of 1" },
-];
 
 const checklist = [
     "Focus on system design and algorithmic logic.",
@@ -33,14 +29,71 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
     onClose,
     accentColor = '#6366f1',
     gradient = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-    mode = 'main'
+    mode = 'main',
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
+    attemptsCount: initialAttemptsCount
 }) => {
+    const [attemptsCount, setAttemptsCount] = React.useState<number>(initialAttemptsCount ?? 0);
+
+    React.useEffect(() => {
+        if (initialAttemptsCount !== undefined) {
+            setAttemptsCount(initialAttemptsCount);
+            return;
+        }
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = "";
+                const storedProfile = localStorage.getItem("originbi:user-profile");
+                if (storedProfile) {
+                    const parsed = JSON.parse(storedProfile);
+                    if (parsed && parsed.email) {
+                        activeEmail = parsed.email;
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const json = await response.json();
+                const data = json.data || json;
+                if (active && data) {
+                    const stats = data['mnc'] || { trial: 0, main: 0 };
+                    setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+                }
+            } catch (err) {
+                console.error("Failed to load attempt stats in pretest:", err);
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, [mode, initialAttemptsCount]);
+
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = '';
         };
     }, []);
+
+    const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+    const currentAttempt = attemptsCount + 1;
+
+    const metrics = [
+        { label: "Questions", value: "40" },
+        { label: "Duration", value: "50 min" },
+        { label: "Format", value: "Multiple Choice" },
+        { label: "Attempts", value: `${currentAttempt}/${limit}` },
+    ];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
