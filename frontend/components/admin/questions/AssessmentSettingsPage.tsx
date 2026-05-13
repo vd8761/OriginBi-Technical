@@ -37,9 +37,14 @@ export default function AssessmentSettingsPage() {
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
   const [amount, setAmount] = useState<number | "">(0);
+  interface SubCategory {
+    id: string;
+    name: string;
+  }
   interface Category {
     id: string;
     name: string;
+    subcategories?: SubCategory[];
   }
 
   const [trialAttemptsLimit, setTrialAttemptsLimit] = useState<number | "">(5);
@@ -49,10 +54,50 @@ export default function AssessmentSettingsPage() {
   const [newCategoryId, setNewCategoryId] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [newSubCategoryNames, setNewSubCategoryNames] = useState<Record<string, string>>({});
 
   const handleStartEdit = (cat: Category) => {
     setEditingCategoryId(cat.id);
     setEditingCategoryName(cat.name);
+  };
+
+  const handleAddCategory = () => {
+    const trimmedId = newCategoryId.trim();
+    const trimmedName = newCategoryName.trim();
+    if (!trimmedId || !trimmedName) return;
+    if (categoriesList.find(c => c.id === trimmedId)) return;
+    setCategoriesList([...categoriesList, { id: trimmedId, name: trimmedName, subcategories: [] }]);
+    setNewCategoryId(""); setNewCategoryName(""); markDirty();
+  };
+
+  const handleAddSubCategory = (catId: string, subName: string) => {
+    const trimmed = subName.trim();
+    if (!trimmed) return;
+    const subId = trimmed.toLowerCase().replace(/\s+/g, "_");
+    setCategoriesList(categoriesList.map(c => {
+      if (c.id === catId) {
+        const subs = c.subcategories || [];
+        if (subs.find(s => s.id === subId)) return c;
+        return { ...c, subcategories: [...subs, { id: subId, name: trimmed }] };
+      }
+      return c;
+    }));
+    markDirty();
+  };
+
+  const handleRemoveSubCategory = (catId: string, subId: string) => {
+    setCategoriesList(categoriesList.map(c => {
+      if (c.id === catId) {
+        return { ...c, subcategories: (c.subcategories || []).filter(s => s.id !== subId) };
+      }
+      return c;
+    }));
+    markDirty();
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
   };
 
   const handleSaveEdit = (id: string) => {
@@ -62,11 +107,6 @@ export default function AssessmentSettingsPage() {
     setEditingCategoryId(null);
     setEditingCategoryName("");
     markDirty();
-  };
-
-  const handleCancelEdit = () => {
-    setEditingCategoryId(null);
-    setEditingCategoryName("");
   };
   const [easyMarks, setEasyMarks] = useState<number | "">(1);
   const [easyNeg, setEasyNeg] = useState<number | "">(0);
@@ -125,9 +165,16 @@ export default function AssessmentSettingsPage() {
     }
     return parsed.map((c: any) => {
       if (typeof c === "string") {
-        return { id: c, name: c };
+        return { id: c, name: c, subcategories: [] };
       }
-      return { id: c.id || c.name || "", name: c.name || c.id || "" };
+      return { 
+        id: c.id || c.name || "", 
+        name: c.name || c.id || "", 
+        subcategories: Array.isArray(c.subcategories) ? c.subcategories.map((sc: any) => ({
+          id: sc.id || sc.name || "",
+          name: sc.name || sc.id || ""
+        })) : []
+      };
     });
   };
 
@@ -197,20 +244,6 @@ export default function AssessmentSettingsPage() {
     finally { setSaving(false); }
   };
 
-  const handleAddCategory = () => {
-    const name = newCategoryName.trim();
-    const id = newCategoryId.trim() || name.toLowerCase().replace(/[^a-z0-9\-_]/g, "_").replace(/_+/g, "_");
-    
-    if (!name || !id) return;
-    if (categoriesList.some(c => c.id.toLowerCase() === id.toLowerCase() || c.name.toLowerCase() === name.toLowerCase())) {
-      alert("A category with this ID or Name already exists.");
-      return;
-    }
-    setCategoriesList([...categoriesList, { id, name }]);
-    setNewCategoryName("");
-    setNewCategoryId("");
-    markDirty();
-  };
 
   const inputCls = "block w-full max-w-lg rounded-lg border-0 py-2.5 px-4 bg-slate-50 dark:bg-white/5 text-black dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-black/50 dark:placeholder:text-white/50 focus:ring-2 focus:ring-inset focus:ring-brand-green sm:text-sm sm:leading-6 transition-all hover:ring-slate-300 dark:hover:ring-white/20";
   const labelCls = "block text-[15px] font-semibold leading-6 text-black dark:text-white";
@@ -406,97 +439,127 @@ export default function AssessmentSettingsPage() {
                         </div>
                       </div>
                     </div>
+                    
                     <div>
-                      <label className={labelCls}>Active Categories ({categoriesList.length})</label>
+                      <div className="flex items-center justify-between mb-6">
+                        <label className={labelCls}>Active Categories & Subcategories ({categoriesList.length})</label>
+                      </div>
+
                       {categoriesList.length === 0 ? (
-                        <div className="mt-4 p-8 text-center bg-gray-50 dark:bg-white/[0.02] border border-dashed border-gray-200 dark:border-white/10 rounded-2xl text-black dark:text-white font-medium text-sm">No categories configured yet.</div>
+                        <div className="p-12 text-center bg-gray-50 dark:bg-white/[0.02] border border-dashed border-gray-200 dark:border-white/10 rounded-2xl text-black/50 dark:text-white/40 font-medium text-sm">
+                          No categories configured yet. Add your first category above.
+                        </div>
                       ) : (
-                        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.01] shadow-sm max-w-2xl custom-scrollbar">
-                          <table className="min-w-[500px] w-full divide-y divide-slate-100 dark:divide-white/10">
-                            <thead className="bg-slate-50 dark:bg-white/5">
-                              <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">Category Name</th>
-                                <th scope="col" className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">Category ID</th>
-                                <th scope="col" className="px-6 py-3 text-center text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white w-20">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05] bg-transparent">
-                              {categoriesList.map(cat => {
-                                const isEditing = cat.id === editingCategoryId;
-                                return (
-                                  <tr key={cat.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.01] transition-colors group">
-                                    <td className="px-6 py-3.5 whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                          {categoriesList.map(cat => {
+                            const isEditing = cat.id === editingCategoryId;
+                            return (
+                              <div key={cat.id} className="flex flex-col bg-white dark:bg-[#1C2520] border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                                {/* Category Header */}
+                                <div className="p-5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.01]">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
                                       {isEditing ? (
-                                        <input
-                                          type="text"
-                                          value={editingCategoryName}
-                                          onChange={e => setEditingCategoryName(e.target.value)}
-                                          onKeyDown={e => e.key === "Enter" && handleSaveEdit(cat.id)}
-                                          className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-semibold max-w-xs focus:ring-2 focus:ring-brand-green/50 focus:outline-none text-slate-900 dark:text-white transition-all shadow-inner"
-                                          placeholder="Category Name"
-                                        />
+                                        <div className="flex gap-2">
+                                          <input
+                                            type="text"
+                                            autoFocus
+                                            value={editingCategoryName}
+                                            onChange={e => setEditingCategoryName(e.target.value)}
+                                            onKeyDown={e => e.key === "Enter" && handleSaveEdit(cat.id)}
+                                            className="bg-white dark:bg-black/20 border border-brand-green/30 rounded-lg px-3 py-1.5 text-sm font-bold w-full focus:ring-2 focus:ring-brand-green/20 outline-none text-black dark:text-white"
+                                          />
+                                        </div>
                                       ) : (
-                                        cat.name
+                                        <div>
+                                          <h3 className="font-bold text-[15px] text-black dark:text-white truncate">{cat.name}</h3>
+                                          <code className="text-[10px] font-mono font-bold text-black/40 dark:text-white/30 uppercase mt-0.5 block">{cat.id}</code>
+                                        </div>
                                       )}
-                                    </td>
-                                    <td className="px-6 py-3.5 whitespace-nowrap">
-                                      <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-xs font-mono font-bold text-slate-900 dark:text-white leading-normal border border-slate-200/50 dark:border-white/5 opacity-80">
-                                        {cat.id}
-                                      </span>
-                                    </td>
-                                    <td className="px-6 py-3.5 whitespace-nowrap text-center text-sm">
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        {isEditing ? (
-                                          <>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {isEditing ? (
+                                        <>
+                                          <button onClick={() => handleSaveEdit(cat.id)} className="p-1.5 rounded-md bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors">
+                                            <Check size={14} strokeWidth={2.5} />
+                                          </button>
+                                          <button onClick={handleCancelEdit} className="p-1.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors">
+                                            <X size={14} strokeWidth={2.5} />
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <button onClick={() => handleStartEdit(cat)} className="p-1.5 rounded-md text-black/40 dark:text-white/30 hover:text-brand-green hover:bg-brand-green/10 transition-all opacity-0 group-hover:opacity-100">
+                                            <Edit2 size={14} />
+                                          </button>
+                                          <button 
+                                            onClick={() => window.confirm(`Delete "${cat.name}"?`) && (setCategoriesList(categoriesList.filter(c => c.id !== cat.id)), markDirty())}
+                                            className="p-1.5 rounded-md text-black/40 dark:text-white/30 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Subcategories List */}
+                                <div className="p-5 flex-1 flex flex-col gap-4">
+                                  <div className="flex flex-col gap-2.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-black/40 dark:text-white/30">Subcategories</label>
+                                    <div className="flex flex-wrap gap-2 min-h-[32px]">
+                                      {(cat.subcategories || []).length === 0 ? (
+                                        <span className="text-[12px] italic text-black/30 dark:text-white/20">No subcategories defined</span>
+                                      ) : (
+                                        (cat.subcategories || []).map(sc => (
+                                          <div key={sc.id} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-white/[0.05] border border-gray-200 dark:border-white/5 text-[11px] font-bold text-black/70 dark:text-white/70 group/tag">
+                                            <span>{sc.name}</span>
                                             <button 
-                                              type="button" 
-                                              onClick={() => handleSaveEdit(cat.id)}
-                                              title="Save name"
-                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                                              onClick={() => handleRemoveSubCategory(cat.id, sc.id)}
+                                              className="text-black/30 dark:text-white/20 hover:text-red-500 transition-colors"
                                             >
-                                              <Check className="h-4 w-4 stroke-[2.5]" />
+                                              <X size={12} strokeWidth={2.5} />
                                             </button>
-                                            <button 
-                                              type="button" 
-                                              onClick={handleCancelEdit}
-                                              title="Cancel editing"
-                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-orange-500 dark:text-orange-400 hover:bg-orange-500/10 transition-colors cursor-pointer"
-                                            >
-                                              <X className="h-4 w-4 stroke-[2.5]" />
-                                            </button>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <button 
-                                              type="button" 
-                                              onClick={() => handleStartEdit(cat)}
-                                              title="Edit category name"
-                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-blue-500 dark:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
-                                            >
-                                              <Edit2 className="h-4 w-4" />
-                                            </button>
-                                            <button 
-                                              type="button" 
-                                              onClick={() => { 
-                                                if (window.confirm(`Are you sure you want to delete "${cat.name}"?`)) {
-                                                  setCategoriesList(categoriesList.filter(c => c.id !== cat.id)); 
-                                                  markDirty(); 
-                                                }
-                                              }}
-                                              title="Delete category"
-                                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-red-500 dark:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                                            >
-                                              <Trash2 className="h-4 w-4" />
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Add Subcategory Input */}
+                                  <div className="mt-auto pt-4 border-t border-gray-100 dark:border-white/5">
+                                    <div className="relative group/input">
+                                      <input 
+                                        type="text" 
+                                        placeholder="Add new subcategory..." 
+                                        value={newSubCategoryNames[cat.id] || ""}
+                                        onChange={e => setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                                        onKeyDown={e => {
+                                          if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || "");
+                                            setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" }));
+                                          }
+                                        }}
+                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-[12px] font-medium placeholder:text-black/30 dark:placeholder:text-white/20 outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green/50 transition-all"
+                                      />
+                                      <button 
+                                        onClick={() => {
+                                          handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || "");
+                                          setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" }));
+                                        }}
+                                        disabled={!(newSubCategoryNames[cat.id] || "").trim()}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-brand-green text-white shadow-lg shadow-brand-green/20 disabled:opacity-0 disabled:scale-90 transition-all"
+                                      >
+                                        <Plus size={14} strokeWidth={3} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

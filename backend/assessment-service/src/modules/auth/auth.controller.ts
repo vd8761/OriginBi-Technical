@@ -23,7 +23,6 @@ class RegisterDto {
   @IsString() @IsNotEmpty() gender!: string;
   @IsString() @IsNotEmpty() countryCode!: string;
   @IsString() @IsNotEmpty() mobileNumber!: string;
-  @IsString() @IsOptional() role?: string;
   @IsString() @IsOptional() groupName?: string;
 }
 
@@ -57,7 +56,6 @@ export class AuthController {
       gender: body.gender,
       countryCode: body.countryCode,
       mobileNumber: body.mobileNumber,
-      role: body.role,
       groupName: body.groupName,
     });
   }

@@ -38,7 +38,6 @@ export interface RegisterInput {
   gender: string;
   countryCode: string;
   mobileNumber: string;
-  role?: string;
   groupName?: string;
 }
 
@@ -112,20 +111,20 @@ export class CognitoService {
                 SET cognito_sub = COALESCE(cognito_sub, $1),
                     email = COALESCE(email, $2),
                     email_verified = TRUE,
-                    role = COALESCE(role, $3),
+                    role = COALESCE(role, 'STUDENT'),
                     updated_at = NOW()
               WHERE id = $4
               RETURNING id, email, role, cognito_sub, email_verified, is_active`,
-            [cognitoSub, input.email, input.role || 'STUDENT', r.id],
+            [cognitoSub, input.email, r.id],
           );
           userRow = updated[0];
         } else {
           const inserted = await tx.query(
             `INSERT INTO users
                 (cognito_sub, email, email_verified, role, is_active, is_blocked, login_count, metadata)
-             VALUES ($1, $2, TRUE, $3, TRUE, FALSE, 0, '{}'::jsonb)
+             VALUES ($1, $2, TRUE, 'STUDENT', TRUE, FALSE, 0, '{}'::jsonb)
              RETURNING id, email, role, cognito_sub, email_verified, is_active`,
-            [cognitoSub, input.email, input.role || 'STUDENT'],
+            [cognitoSub, input.email],
           );
           userRow = inserted[0];
         }

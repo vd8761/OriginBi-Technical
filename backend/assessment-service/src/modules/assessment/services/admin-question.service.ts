@@ -9,6 +9,7 @@ interface ModuleConfig {
   readonly optionsTable?: string;
   readonly optionsFk?: string;
   readonly categoryColumn: string;
+  readonly subcategoryColumn?: string;
 }
 
 const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
@@ -17,7 +18,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'aptitude_question_id',
     optionsTable: 'tech_aptitude_options',
     optionsFk: 'aptitude_question_id',
-    categoryColumn: 'subcategory',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
   },
   grammar: {
     questionTable: 'tech_grammar_questions',
@@ -108,8 +110,10 @@ export class AdminQuestionService {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
       category: row[config.categoryColumn],
+      subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
       questionText: row.question_text,
+      explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
         text: o.option_text,
@@ -129,7 +133,7 @@ export class AdminQuestionService {
 
   async listQuestions(module: ModuleType, query: any) {
     const config = MODULE_CONFIGS[module];
-    const { assessmentId, category, status, search, mode } = query;
+    const { assessmentId, category, subcategory, status, search, mode } = query;
     const conditions: string[] = [];
     const params: any[] = [];
     let paramIdx = 1;
@@ -141,6 +145,10 @@ export class AdminQuestionService {
     if (category) {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
+    }
+    if (subcategory && config.subcategoryColumn) {
+      conditions.push(`q.${config.subcategoryColumn} = $${paramIdx++}`);
+      params.push(subcategory);
     }
     if (status) {
       conditions.push(`q.status = $${paramIdx++}`);
@@ -229,8 +237,10 @@ export class AdminQuestionService {
     const {
       assessmentId: reqAssessmentId,
       category,
+      subcategory,
       difficulty = 'medium',
       questionText,
+      explanation = null,
       options,
       correctOptionIndex = 0,
       marks = 1,
@@ -241,7 +251,7 @@ export class AdminQuestionService {
       userId,
     } = data;
 
-    if (!category || !questionText) throw new BadRequestException('category and questionText are required');
+    if ((!category && !subcategory) || !questionText) throw new BadRequestException('category/subcategory and questionText are required');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -255,13 +265,21 @@ export class AdminQuestionService {
         assessmentId = await this.ensureDefaultAssessment(queryRunner, module, resolvedUser);
       }
 
+      const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'image_url', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
+      const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode];
+      let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', 'NULL', '$7', '$8', '$9', '$10'];
+
+      if (config.subcategoryColumn && subcategory) {
+        columns.push(config.subcategoryColumn);
+        values.push(subcategory);
+        placeholders.push(`$${values.length}`);
+      }
+
       const qInsert = await queryRunner.query(
-        `INSERT INTO ${config.questionTable}
-            (assessment_id, ${config.categoryColumn}, difficulty, question_text, image_url,
-             correct_option_id, marks, negative_marks, status, mode)
-         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9)
+        `INSERT INTO ${config.questionTable} (${columns.join(', ')})
+         VALUES (${placeholders.join(', ')})
          RETURNING *`,
-        [assessmentId, category, difficulty, questionText, imageUrl, marks, negativeMarks, status, mode],
+        values,
       );
       const questionRow = qInsert[0];
       const questionId = questionRow[config.idColumn];
@@ -305,7 +323,7 @@ export class AdminQuestionService {
 
   async updateQuestion(module: ModuleType, id: number, data: any) {
     const config = MODULE_CONFIGS[module];
-    const { category, difficulty, questionText, options, correctOptionIndex, marks, negativeMarks, status, mode, imageUrl } = data;
+    const { category, subcategory, difficulty, questionText, explanation, options, correctOptionIndex, marks, negativeMarks, status, mode, imageUrl } = data;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -324,8 +342,10 @@ export class AdminQuestionService {
       let pIdx = 1;
 
       if (category !== undefined) { updates.push(`${config.categoryColumn} = $${pIdx++}`); params.push(category); }
+      if (subcategory !== undefined && config.subcategoryColumn) { updates.push(`${config.subcategoryColumn} = $${pIdx++}`); params.push(subcategory); }
       if (difficulty !== undefined) { updates.push(`difficulty = $${pIdx++}`); params.push(difficulty); }
       if (questionText !== undefined) { updates.push(`question_text = $${pIdx++}`); params.push(questionText); }
+      if (explanation !== undefined) { updates.push(`explanation = $${pIdx++}`); params.push(explanation); }
       if (marks !== undefined) { updates.push(`marks = $${pIdx++}`); params.push(marks); }
       if (negativeMarks !== undefined) { updates.push(`negative_marks = $${pIdx++}`); params.push(negativeMarks); }
       if (status !== undefined) { updates.push(`status = $${pIdx++}`); params.push(status); }
@@ -457,16 +477,27 @@ export class AdminQuestionService {
       let imported = 0;
       for (const q of questionList) {
         try {
-          const category = q.category || q.subcategory || q.topic_group || q.task_type || q.taskType || q.domain || 'General';
+          const category = q.category || 'General';
+          const subcategory = q.subcategory || null;
           const questionText = q.questionText || q.text || q.question_text;
+          const explanation = q.explanation || null;
           if (!questionText) continue;
 
+          const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
+          const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, null, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'];
+          let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9'];
+
+          if (config.subcategoryColumn && subcategory) {
+            columns.push(config.subcategoryColumn);
+            values.push(subcategory);
+            placeholders.push(`$${values.length}`);
+          }
+
           const qInsert = await queryRunner.query(
-            `INSERT INTO ${config.questionTable}
-                (assessment_id, ${config.categoryColumn}, difficulty, question_text, correct_option_id, marks, negative_marks, status, mode)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
+            `INSERT INTO ${config.questionTable} (${columns.join(', ')})
+             VALUES (${placeholders.join(', ')})
              RETURNING ${config.idColumn}`,
-            [assessmentId, category, q.difficulty || 'medium', questionText, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'],
+            values,
           );
           const newQId = qInsert[0][config.idColumn];
 

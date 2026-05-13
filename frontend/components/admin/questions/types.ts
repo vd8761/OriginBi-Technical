@@ -38,6 +38,7 @@ export type QuestionStatus = "active" | "inactive";
 export interface AptitudeQuestion {
   id: string;
   category: string;
+  subcategory?: string;
   text: string;
   options: QuestionOption[];
   correctOptionId: string;

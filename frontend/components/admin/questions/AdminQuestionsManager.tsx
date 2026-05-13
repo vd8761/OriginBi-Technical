@@ -74,9 +74,9 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
   }
 }
 
-function getFilterCategories(t: AssessmentType): { key: string; label: string }[] {
+function getFilterCategories(t: AssessmentType): { key: string; label: string; subcategories?: any[] }[] {
   switch (t) {
-    case "aptitude": return APTITUDE_CATEGORIES.map(c => ({ key: c, label: `${c}` }));
+    case "aptitude": return APTITUDE_CATEGORIES.map(c => ({ key: c, label: `${c}`, subcategories: [] }));
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
@@ -85,7 +85,7 @@ function getFilterCategories(t: AssessmentType): { key: string; label: string }[
 
 function getSearchText(q: AnyQuestion, t: AssessmentType): string {
   switch (t) {
-    case "aptitude": { const a = q as AptitudeQuestion; return `${a.text} ${a.category}`.toLowerCase(); }
+    case "aptitude": { const a = q as AptitudeQuestion; return `${a.text} ${a.category} ${a.subcategory || ""}`.toLowerCase(); }
     case "mnc": { const m = q as MNCQuestion; return `${m.text} ${m.topic}`.toLowerCase(); }
     case "communication": { const c = q as CommQuestion; return `${c.instructions} ${c.prompt || ""} ${c.questions?.map(sq => sq.text).join(" ") || ""}`.toLowerCase(); }
     case "role": { const r = q as RoleQuestion; return `${r.text} ${r.category || ""} ${r.title || ""} ${r.scenarioContext || ""}`.toLowerCase(); }
@@ -111,7 +111,7 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
 
   switch (module) {
     case "aptitude":
-      return { ...common, category: q.category } as AptitudeQuestion;
+      return { ...common, category: q.category, subcategory: q.subcategory } as AptitudeQuestion;
     case "mnc":
       return { ...common, topic: q.category } as MNCQuestion;
     case "communication":
@@ -128,8 +128,14 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
   const correctIdx = common.options?.findIndex((o: any) => o.id === common.correctOptionId) ?? 0;
   
   let category = "";
+  let subcategory = "";
   switch (module) {
-    case "aptitude": category = (q as AptitudeQuestion).category; break;
+    case "aptitude": {
+      const aq = q as AptitudeQuestion;
+      category = aq.category;
+      subcategory = aq.subcategory || "";
+      break;
+    }
     case "mnc": category = (q as MNCQuestion).topic; break;
     case "communication": category = (q as CommQuestion).taskType; break;
     case "role": category = (q as RoleQuestion).questionType; break;
@@ -137,6 +143,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
 
   return {
     category,
+    subcategory,
     difficulty: common.difficulty || "medium",
     questionText: common.text || common.instructions || "",
     options: common.options?.map((o: any) => ({ text: o.text })),
@@ -169,6 +176,7 @@ export default function AdminQuestionsManager() {
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterSubCategory, setFilterSubCategory] = useState<string>("all");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -342,28 +350,34 @@ export default function AdminQuestionsManager() {
       if (cats.length > 0) {
         return cats.map((c: any) => {
           if (typeof c === "string") {
-            return { key: c, label: c };
+            return { key: c, label: c, subcategories: [] };
           }
           const id = c.id || c.name || "";
           const name = c.name || c.id || "";
-          return { key: id, label: name };
+          return { key: id, label: name, subcategories: c.subcategories || [] };
         });
       }
     }
     
-    return getFilterCategories(selectedModule);
+    return getFilterCategories(selectedModule) as { key: string; label: string; subcategories?: any[] }[];
   }, [selectedModule, activeAssessment]);
 
   const filtered = useMemo(() => {
     if (!selectedModule) return [];
     let result = questions;
     if (filterCategory !== "all") result = result.filter(q => getCatKey(q, selectedModule) === filterCategory);
+    if (filterSubCategory !== "all") {
+       result = result.filter(q => {
+         if (selectedModule === "aptitude") return (q as AptitudeQuestion).subcategory === filterSubCategory;
+         return true;
+       });
+    }
     if (searchQuery.trim()) {
       const lq = searchQuery.toLowerCase();
       result = result.filter(q => getSearchText(q, selectedModule).includes(lq));
     }
     return result;
-  }, [questions, filterCategory, searchQuery, selectedModule]);
+  }, [questions, filterCategory, filterSubCategory, searchQuery, selectedModule]);
 
   const categoryCounts = useMemo(() => {
     if (!selectedModule) return {};
@@ -791,7 +805,7 @@ export default function AdminQuestionsManager() {
                 value={filterCategory}
                 onChange={setFilterCategory}
                 options={[
-                  { label: `All Questions (${questions.length})`, value: "all" },
+                  { label: `All Categories (${questions.length})`, value: "all" },
                   ...filterCats.map(cat => ({
                     label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
                     value: cat.key
@@ -799,6 +813,23 @@ export default function AdminQuestionsManager() {
                 ]}
               />
             </div>
+
+            {selectedModule === "aptitude" && filterCategory !== "all" && (
+              <div className="w-full sm:w-64">
+                <CustomSelect
+                  label="Filter by Subcategory"
+                  value={filterSubCategory}
+                  onChange={setFilterSubCategory}
+                  options={[
+                    { label: "All Subcategories", value: "all" },
+                    ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
+                      label: sc.name,
+                      value: sc.id
+                    }))
+                  ]}
+                />
+              </div>
+            )}
           </div>
           
           {/* Action Buttons: Export, Clear, Bulk Import, Add New */}

@@ -27,8 +27,11 @@ export class TechAptitudeQuestion {
     @RelationId((question: TechAptitudeQuestion) => question.assessment)
     assessmentId!: string;
 
-    @Column({ name: "subcategory", type: "varchar", length: 100 })
-    subcategory!: string;
+    @Column({ name: "category", type: "varchar", length: 100, nullable: true })
+    category!: string;
+
+    @Column({ name: "subcategory", type: "varchar", length: 100, nullable: true })
+    subcategory!: string | null;
 
     @Column({
         name: "difficulty",
@@ -40,6 +43,9 @@ export class TechAptitudeQuestion {
 
     @Column({ name: "question_text", type: "text" })
     questionText!: string;
+
+    @Column({ name: "explanation", type: "text", nullable: true })
+    explanation!: string | null;
 
     @Column({ name: "image_url", type: "text", nullable: true })
     imageUrl!: string | null;

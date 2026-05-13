@@ -1,7 +1,7 @@
 "use client";
 
 const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
-const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_API_BASE?.replace(/\/$/, "");
+const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "");
 
 // Go exam-engine (attempts, code runs, plugins, etc.)
 export const API_BASE =
@@ -10,7 +10,10 @@ export const API_BASE =
 // NestJS assessment-service (Cognito auth, etc.)
 export const AUTH_API_BASE =
   configuredAuthBase ??
-  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5000/api");
+  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:4002");
+
+export const STUDENT_API_BASE =
+  process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") ?? "http://localhost:4004";
 
 // ── Cognito token storage (browser only) ──────────────────────────────────
 const ACCESS_TOKEN_KEY = "obi.accessToken";
@@ -350,25 +353,63 @@ function safeJson(text: string): any {
 // ── Auth (NestJS assessment-service, Cognito-backed) ──────────────────────
 
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  const res = await apiFetch<AuthResponse>("/auth/register", {
+  const res = await apiFetch<any>("/student/register/tech", {
     method: "POST",
-    body: JSON.stringify(input),
-    baseOverride: AUTH_API_BASE,
+    body: JSON.stringify({
+      full_name: input.fullName,
+      email: input.email,
+      mobile_number: input.mobileNumber,
+      country_code: input.countryCode,
+      password: input.password,
+      gender: input.gender,
+      is_tech_assessment: true,
+    }),
+    baseOverride: STUDENT_API_BASE,
     auth: false,
   });
-  if (res.tokens) setTokens(res.tokens);
-  return res;
+  
+  // The student service might not return tokens immediately; 
+  // if it does, they are usually in AuthenticationResult
+  if (res.AuthenticationResult) {
+    setTokens({
+      accessToken: res.AuthenticationResult.AccessToken,
+      idToken: res.AuthenticationResult.IdToken,
+      refreshToken: res.AuthenticationResult.RefreshToken,
+    });
+  }
+  
+  return {
+    user: res.user || { email: input.email },
+    registration: res.registration || null,
+    tokens: res.AuthenticationResult ? {
+      accessToken: res.AuthenticationResult.AccessToken,
+      idToken: res.AuthenticationResult.IdToken,
+      refreshToken: res.AuthenticationResult.RefreshToken,
+    } : undefined
+  };
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  const res = await apiFetch<AuthResponse>("/auth/login", {
+  const res = await apiFetch<any>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
     baseOverride: AUTH_API_BASE,
     auth: false,
   });
-  if (res.tokens) setTokens(res.tokens);
-  return res;
+
+  const tokens = res.AuthenticationResult ? {
+    accessToken: res.AuthenticationResult.AccessToken,
+    idToken: res.AuthenticationResult.IdToken,
+    refreshToken: res.AuthenticationResult.RefreshToken,
+  } : undefined;
+
+  if (tokens) setTokens(tokens);
+
+  return {
+    user: res.user || { email },
+    registration: res.registration || null,
+    tokens
+  };
 }
 
 export async function logoutUser(): Promise<void> {

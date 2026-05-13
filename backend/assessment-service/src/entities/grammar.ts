@@ -46,6 +46,9 @@ export class TechGrammarQuestion {
     @Column({ name: "question_text", type: "text" })
     questionText!: string;
 
+    @Column({ name: "explanation", type: "text", nullable: true })
+    explanation!: string | null;
+
     @Column({ name: "audio_url", type: "text", nullable: true })
     audioUrl!: string | null;
 
