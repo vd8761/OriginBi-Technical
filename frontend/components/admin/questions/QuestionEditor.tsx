@@ -51,6 +51,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
 
   // Aptitude
   const [aptCategory, setAptCategory] = useState("QA");
+  const [aptSubCategory, setAptSubCategory] = useState("");
+  const [explanation, setExplanation] = useState("");
   // MNC
   const [mncTopic, setMncTopic] = useState("General");
   // Role
@@ -100,8 +102,10 @@ export default function QuestionEditor({ question, assessmentType, categories = 
     switch (assessmentType) {
       case "aptitude": {
         const aq = question as AptitudeQuestion;
-        setText(aq.text); setOptions(aq.options); setCorrectId(aq.correctOptionId);
         setAptCategory(aq.category);
+        setAptSubCategory(aq.subcategory || "");
+        setText(aq.text); setOptions(aq.options); setCorrectId(aq.correctOptionId);
+        setExplanation(aq.explanation || "");
         setImageUrl(aq.imageUrl || null);
         break;
       }
@@ -109,6 +113,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         const mq = question as MNCQuestion;
         setText(mq.text); setOptions(mq.options); setCorrectId(mq.correctOptionId);
         setMncTopic(mq.topic);
+        setExplanation(mq.explanation || "");
         setImageUrl(mq.imageUrl || null);
         break;
       }
@@ -120,6 +125,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         setScenarioTitle(rq.title || ""); setScenarioContext(rq.scenarioContext || "");
         setTicketId(rq.ticketId || ""); setPriority(rq.priority || "Medium");
         setReportedBy(rq.reportedBy || "");
+        setExplanation(rq.explanation || "");
         setImageUrl(rq.imageUrl || null);
         break;
       }
@@ -129,6 +135,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         setCommPassage(cq.passage || ""); setCommPrompt(cq.prompt || "");
         setCommPrepTime(cq.prepTimeSeconds || 30); setCommRecordTime(cq.recordTimeSeconds || 90);
         setCommMinWords(cq.minWords || 50); setCommMaxWords(cq.maxWords || 200);
+        setExplanation(cq.explanation || "");
         setAudioUrl(cq.audioUrl || null);
         if (cq.questions) setCommSubQuestions(cq.questions.map(sq => ({
           id: sq.id, text: sq.text, options: sq.options, correctOptionId: sq.correctOptionId || sq.options[0]?.id || "",
@@ -253,11 +260,12 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         negativeMarks: 0.25,
         status,
         assessmentId,
+        explanation: explanation.trim(),
       };
 
       switch (assessmentType) {
         case "aptitude":
-          onSave({ ...common, category: aptCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as AptitudeQuestion);
+          onSave({ ...common, category: aptCategory, subcategory: aptSubCategory, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as AptitudeQuestion);
           break;
         case "mnc":
           onSave({ ...common, topic: mncTopic, text: text.trim(), options: options.filter(o => o.text.trim()), correctOptionId: correctId, imageUrl: finalImageUrl } as MNCQuestion);
@@ -352,19 +360,36 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                   </div>
 
                  {assessmentType === "aptitude" && (
-                  <div className="sm:col-span-2">
-                    <CustomSelect
-                      label="Aptitude Category"
-                      value={aptCategory}
-                      onChange={setAptCategory}
-                      options={
-                        categories && categories.length > 0
-                          ? categories.map(c => ({ label: c.name, value: c.id }))
-                          : APTITUDE_CATEGORIES.map(c => ({ label: APTITUDE_CATEGORY_LABELS[c], value: c }))
-                      }
-                    />
-                  </div>
-                 )}
+                   <div className="sm:col-span-2 space-y-4">
+                     <CustomSelect
+                       label="Aptitude Category"
+                       value={aptCategory}
+                       onChange={(v) => {
+                         setAptCategory(v);
+                         setAptSubCategory(""); // Reset subcategory on category change
+                       }}
+                       options={
+                         categories && categories.length > 0
+                           ? categories.map(c => ({ label: c.name, value: c.id }))
+                           : APTITUDE_CATEGORIES.map(c => ({ label: APTITUDE_CATEGORY_LABELS[c], value: c }))
+                       }
+                     />
+                     
+                     <CustomSelect
+                       label="Aptitude Subcategory"
+                       value={aptSubCategory}
+                       onChange={setAptSubCategory}
+                       options={(() => {
+                         if (!categories || categories.length === 0) return [];
+                         const selectedCat = (categories as any).find((c: any) => c.id === aptCategory);
+                         if (selectedCat && selectedCat.subcategories) {
+                           return selectedCat.subcategories.map((sc: any) => ({ label: sc.name, value: sc.id }));
+                         }
+                         return [];
+                       })()}
+                     />
+                   </div>
+                  )}
                  {assessmentType === "mnc" && (
                   <div className="sm:col-span-2">
                     <CustomSelect
@@ -426,6 +451,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                       />
                     </div>
                     <div className="sm:col-span-2"><label className={labelCls}>Instructions</label><textarea value={commInstructions} onChange={e => setCommInstructions(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Direct instructions..." /></div>
+                    <div className="sm:col-span-2"><label className={labelCls}>Explanation (Admin Only)</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Explain the answer for reference..." /></div>
                     {commTaskType === "reading" && <div className="sm:col-span-2"><label className={labelCls}>Passage</label><textarea value={commPassage} onChange={e => setCommPassage(e.target.value)} className={`${inputCls} resize-none`} rows={3} placeholder="Reading corpus..." /></div>}
                     {["speaking", "writing"].includes(commTaskType) && <div className="sm:col-span-2"><label className={labelCls}>Prompt</label><textarea value={commPrompt} onChange={e => setCommPrompt(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="User prompt..." /></div>}
                     {commTaskType === "speaking" && (
@@ -451,6 +477,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
               {assessmentType !== "communication" ? (
                 <div className="space-y-5">
                   <div><label className={labelCls}>Question Text</label><textarea value={text} onChange={e => setText(e.target.value)} className={`${inputCls} resize-none font-bold`} rows={2} placeholder="Question text..." /></div>
+                  
+                  <div><label className={labelCls}>Explanation (Admin Only)</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Explain the answer for reference..." /></div>
                   
                   {/* Image Upload Area */}
                   <div className="space-y-1.5">

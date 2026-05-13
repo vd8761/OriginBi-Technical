@@ -17,6 +17,7 @@ export interface ApiQuestion {
     id: number;
     assessmentId: number;
     category: string;
+    subcategory?: string;
     difficulty: "easy" | "medium" | "hard";
     questionText: string;
     options: ApiOption[];
@@ -34,6 +35,7 @@ export interface ApiQuestion {
 export interface CreateQuestionPayload {
     assessmentId?: number;
     category: string;
+    subcategory?: string;
     difficulty?: "easy" | "medium" | "hard";
     questionText: string;
     options?: { text: string }[];
@@ -108,6 +110,7 @@ export async function fetchQuestions(module: string, params?: {
     status?: string;
     mode?: string;
     search?: string;
+    subcategory?: string;
 }): Promise<ApiQuestion[]> {
     const query = new URLSearchParams();
     if (params?.assessmentId) query.set("assessmentId", String(params.assessmentId));
@@ -115,6 +118,7 @@ export async function fetchQuestions(module: string, params?: {
     if (params?.status) query.set("status", params.status);
     if (params?.mode) query.set("mode", params.mode);
     if (params?.search) query.set("search", params.search);
+    if (params?.subcategory) query.set("subcategory", params.subcategory);
 
     const qs = query.toString();
     const url = `${ADMIN_BASE}/${getBackendModule(module)}/questions${qs ? `?${qs}` : ""}`;
