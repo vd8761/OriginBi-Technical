@@ -90,6 +90,14 @@ export interface RegisterRequest {
   countryCode: string;
   mobileNumber: string;
   role?: string;
+  programCode?: string;
+  schoolLevel?: string;
+  schoolStream?: string;
+  studentBoard?: string;
+  departmentDegreeId?: string;
+  currentYear?: string;
+  currentRole?: string;
+  roleDescription?: string;
 }
 
 export interface Assignment {
@@ -375,6 +383,14 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       password: input.password,
       gender: input.gender,
       is_tech_assessment: true,
+      program_code: input.programCode,
+      school_level: input.schoolLevel,
+      school_stream: input.schoolStream,
+      student_board: input.studentBoard,
+      department_degree_id: input.departmentDegreeId,
+      current_year: input.currentYear,
+      current_role: input.currentRole,
+      role_description: input.roleDescription,
     }),
     baseOverride: STUDENT_API_BASE,
     auth: false,
@@ -387,6 +403,14 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
     user: { email: input.email } as ApiUser,
     registration: null,
   };
+}
+
+export async function getDepartments(): Promise<any[]> {
+  return apiFetch<any[]>("/student/departments", {
+    method: "POST",
+    baseOverride: STUDENT_API_BASE,
+    auth: false,
+  });
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
