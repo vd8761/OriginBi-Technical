@@ -20,47 +20,6 @@ const CloseIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const CheckCircleIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const TrendingUpIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-  </svg>
-);
-
-const ClockIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const TargetIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const LightbulbIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-  </svg>
-);
-
-const BarChartIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-);
-
-const AwardIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-  </svg>
-);
 
 const GoogleStyleAnalysisModal: React.FC<GoogleStyleAnalysisModalProps> = ({ 
   isOpen, 
@@ -94,6 +53,29 @@ const GoogleStyleAnalysisModal: React.FC<GoogleStyleAnalysisModalProps> = ({
   };
 
   const analysis = analyzePerformance(sections);
+  const sortedByScore = [...sections].sort((a, b) => a.score - b.score);
+  const laggingTopics = analysis.needsFocus.length
+    ? analysis.needsFocus
+    : sortedByScore.slice(0, Math.min(3, sortedByScore.length));
+  const strengthTopics = analysis.strong.length
+    ? analysis.strong
+    : sortedByScore.slice(-3).reverse();
+  const developingTopics = analysis.developing;
+  const focusTargets = laggingTopics.map((topic) => ({
+    ...topic,
+    gap: Math.max(0, 70 - topic.score),
+  }));
+  const completedAtLabel = result?.completedAt
+    ? new Date(result.completedAt).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "-";
+  const timeMinutes = parseInt(result?.timeTaken || "0", 10);
+  const timePerQ = timeMinutes > 0 && exam?.questions > 0
+    ? (timeMinutes / exam.questions).toFixed(1)
+    : "-";
 
   return (
     <AnimatePresence>
@@ -146,12 +128,11 @@ const GoogleStyleAnalysisModal: React.FC<GoogleStyleAnalysisModalProps> = ({
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <div className="p-6 sm:p-8 space-y-10">
 
-                  {/* Score Overview Section */}
+                  {/* Executive Summary */}
                   <div className="space-y-8">
-                    <div className="flex flex-col lg:flex-row items-center gap-8">
-                      {/* Score Ring */}
-                      <div className="shrink-0">
-                        <div className="relative w-36 h-36 mx-auto lg:mx-0">
+                    <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)] gap-8 items-center">
+                      <div className="flex justify-center lg:justify-start">
+                        <div className="relative w-36 h-36">
                           <svg className="w-full h-full -rotate-90">
                             <defs>
                               <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -176,60 +157,63 @@ const GoogleStyleAnalysisModal: React.FC<GoogleStyleAnalysisModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Quick Stats */}
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10">
-                          <ClockIcon className="w-5 h-5 text-gray-400 dark:text-gray-500 mb-2" />
-                          <p className="text-xl font-bold text-gray-900 dark:text-white">{result?.timeTaken || "0 min"}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</p>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10">
-                          <TargetIcon className="w-5 h-5 text-gray-400 dark:text-gray-500 mb-2" />
-                          <p className="text-xl font-bold text-gray-900 dark:text-white">{result?.accuracy || 0}%</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Accuracy</p>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10">
-                          <BarChartIcon className="w-5 h-5 text-gray-400 dark:text-gray-500 mb-2" />
-                          <p className="text-xl font-bold text-gray-900 dark:text-white">{sections.length}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sections</p>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10">
-                          <AwardIcon className="w-5 h-5 text-gray-400 dark:text-gray-500 mb-2" />
-                          <p className="text-xl font-bold text-gray-900 dark:text-white">{exam?.questions || 0}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Questions</p>
+                      <div className="space-y-4">
+                        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Assessment Summary
+                          <span className="mx-2 text-gray-300 dark:text-gray-600">•</span>
+                          <span className="normal-case tracking-normal">Completed {completedAtLabel}</span>
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 border-t border-b border-gray-200 dark:border-white/10 py-4">
+                          <div className="space-y-1">
+                            <p className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Accuracy</p>
+                            <p className="text-xl font-semibold text-gray-900 dark:text-white">{result?.accuracy || 0}%</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Time Taken</p>
+                            <p className="text-xl font-semibold text-gray-900 dark:text-white">{result?.timeTaken || "0 min"}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Pace / Question</p>
+                            <p className="text-xl font-semibold text-gray-900 dark:text-white">{timePerQ}m</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Sections</p>
+                            <p className="text-xl font-semibold text-gray-900 dark:text-white">{sections.length}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Section Breakdown */}
+                    {/* Section Performance */}
                     <div>
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Section Performance</h3>
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         {sections.map((section, idx) => (
                           <motion.div
                             key={section.name}
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 * idx }}
-                            className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10"
+                            transition={{ delay: 0.08 * idx }}
+                            className="grid grid-cols-12 items-center gap-4 py-3 border-b border-gray-200 dark:border-white/10"
                           >
-                            <div className="w-10 h-10 rounded-lg bg-white dark:bg-[#303438] flex items-center justify-center font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10">
-                              {idx + 1}
+                            <div className="col-span-12 sm:col-span-4">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">{section.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Weight {section.weight}</p>
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-semibold text-gray-900 dark:text-white">{section.name}</h4>
-                                <span className="text-sm font-bold" style={{ color: getScoreColor(section.score) }}>{section.score}%</span>
-                              </div>
+                            <div className="col-span-9 sm:col-span-6">
                               <div className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
                                 <motion.div
                                   initial={{ width: 0 }}
                                   animate={{ width: `${section.score}%` }}
-                                  transition={{ delay: 0.2 + idx * 0.1, duration: 0.8 }}
+                                  transition={{ delay: 0.2 + idx * 0.08, duration: 0.7 }}
                                   className="h-full rounded-full transition-all duration-300"
                                   style={{ backgroundColor: getScoreColor(section.score) }}
                                 />
                               </div>
+                            </div>
+                            <div className="col-span-3 sm:col-span-2 text-right">
+                              <p className="text-sm font-semibold" style={{ color: getScoreColor(section.score) }}>{section.score}%</p>
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400">{getScoreLabel(section.score)}</p>
                             </div>
                           </motion.div>
                         ))}
@@ -246,173 +230,95 @@ const GoogleStyleAnalysisModal: React.FC<GoogleStyleAnalysisModalProps> = ({
                       <div className="w-1 h-6 bg-brand-green rounded-full"></div>
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white">Performance Insights</h3>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Analysis of your strengths and areas for improvement</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Strengths, developing areas, and lagging topics based on section scores.</p>
 
-                    <div className="grid gap-4">
-                      {analysis.strong.length > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.1 }}
-                          className="p-5 rounded-xl bg-brand-green/[0.06] border border-brand-green/20"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-brand-green/20 flex items-center justify-center flex-shrink-0">
-                              <CheckCircleIcon className="w-5 h-5 text-brand-green" />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-900 dark:text-white mb-1">Strong Areas</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                You demonstrated excellent performance in these areas:
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {analysis.strong.map((s, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-3 py-1 rounded-lg bg-white dark:bg-[#303438] text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10"
-                                  >
-                                    {s.name} ({s.score}%)
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="border-l-2 border-emerald-500 pl-4">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Strengths</h4>
+                        {strengthTopics.length > 0 ? (
+                          <ul className="space-y-2">
+                            {strengthTopics.map((s) => (
+                              <li key={s.name} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+                                <span>{s.name}</span>
+                                <span className="text-xs font-semibold" style={{ color: getScoreColor(s.score) }}>{s.score}%</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No strong areas yet.</p>
+                        )}
+                      </div>
 
-                      {analysis.developing.length > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2 }}
-                          className="p-5 rounded-xl bg-amber-500/[0.06] border border-amber-500/20"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                              <TrendingUpIcon className="w-5 h-5 text-amber-500" />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-900 dark:text-white mb-1">Developing Areas</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                These areas show good potential for improvement:
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {analysis.developing.map((s, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-3 py-1 rounded-lg bg-white dark:bg-[#303438] text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10"
-                                  >
-                                    {s.name} ({s.score}%)
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
+                      <div className="border-l-2 border-amber-500 pl-4">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Developing</h4>
+                        {developingTopics.length > 0 ? (
+                          <ul className="space-y-2">
+                            {developingTopics.map((s) => (
+                              <li key={s.name} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+                                <span>{s.name}</span>
+                                <span className="text-xs font-semibold" style={{ color: getScoreColor(s.score) }}>{s.score}%</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No developing areas to highlight.</p>
+                        )}
+                      </div>
 
-                      {analysis.needsFocus.length > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.3 }}
-                          className="p-5 rounded-xl bg-rose-500/[0.06] border border-rose-500/20"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-rose-500/20 flex items-center justify-center flex-shrink-0">
-                              <LightbulbIcon className="w-5 h-5 text-rose-500" />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-900 dark:text-white mb-1">Areas Requiring Focus</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                Focus on these areas to improve your overall performance:
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {analysis.needsFocus.map((s, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-3 py-1 rounded-lg bg-white dark:bg-[#303438] text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10"
-                                  >
-                                    {s.name} ({s.score}%)
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
+                      <div className="border-l-2 border-rose-500 pl-4">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Lagging Topics</h4>
+                        {laggingTopics.length > 0 ? (
+                          <ul className="space-y-2">
+                            {laggingTopics.map((s) => (
+                              <li key={s.name} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+                                <span>{s.name}</span>
+                                <span className="text-xs font-semibold" style={{ color: getScoreColor(s.score) }}>{s.score}%</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No lagging topics detected.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Divider */}
                   <div className="border-t border-gray-200 dark:border-white/10"></div>
 
-                  {/* Recommendations Section */}
+                  {/* Study Focus */}
                   <div className="space-y-6">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Personalized Recommendations</h3>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Study Focus</h3>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Actionable steps to improve your performance</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Prioritize these topics next. This list is based on your lowest-scoring sections.</p>
 
-                    <div className="grid gap-4">
-                      {[
-                        {
-                          title: "Daily Practice Routine",
-                          description: "Spend 30 minutes daily on problem-solving exercises. Focus on weak areas identified in this analysis.",
-                          priority: "High",
-                          estimatedTime: "2 weeks",
-                          icon: <TargetIcon className="w-5 h-5 text-brand-green" />
-                        },
-                        {
-                          title: "Advanced Study Materials",
-                          description: "Explore advanced resources and practice problems to deepen your understanding.",
-                          priority: "Medium",
-                          estimatedTime: "1 month",
-                          icon: <LightbulbIcon className="w-5 h-5 text-blue-500" />
-                        },
-                        {
-                          title: "Mock Assessments",
-                          description: "Take weekly mock tests to track progress and build exam confidence.",
-                          priority: "High",
-                          estimatedTime: "Ongoing",
-                          icon: <AwardIcon className="w-5 h-5 text-purple-500" />
-                        },
-                      ].map((rec, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.1 * idx }}
-                          className="p-5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10"
-                        >
-                          <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-white dark:bg-[#303438] flex items-center justify-center flex-shrink-0 border border-gray-200 dark:border-white/10">
-                              {rec.icon}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-bold text-gray-900 dark:text-white">{rec.title}</h4>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                  rec.priority === 'High' 
-                                    ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400' 
-                                    : 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                                }`}>
-                                  {rec.priority} Priority
-                                </span>
+                    {focusTargets.length > 0 ? (
+                      <ol className="space-y-3">
+                        {focusTargets.map((topic, idx) => {
+                          const gapLabel = topic.gap > 0 ? `Gap ${topic.gap} pts` : "On target";
+                          return (
+                            <li
+                              key={topic.name}
+                              className="grid grid-cols-[24px_1fr_auto] gap-4 items-start border-b border-gray-200 dark:border-white/10 pb-3"
+                            >
+                              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">{idx + 1}.</span>
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white">{topic.name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Current {topic.score}%. Target 70% baseline.</p>
                               </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{rec.description}</p>
-                              <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                <span className="flex items-center gap-1">
-                                  <ClockIcon className="w-4 h-4" />
-                                  {rec.estimatedTime}
-                                </span>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold" style={{ color: getScoreColor(topic.score) }}>{topic.score}%</p>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">{gapLabel}</p>
                               </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No focus topics identified. Maintain your current performance.</p>
+                    )}
                   </div>
 
                 </div>
@@ -420,18 +326,12 @@ const GoogleStyleAnalysisModal: React.FC<GoogleStyleAnalysisModalProps> = ({
 
               {/* Action Footer */}
               <div className="px-6 sm:px-8 py-5 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#24272b]">
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex justify-end">
                   <button
                     onClick={onClose}
                     className="px-6 py-3 rounded-xl bg-white dark:bg-[#303438] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-white/10 transition-colors"
                   >
                     Close
-                  </button>
-                  <button
-                    className="flex-1 px-6 py-3 rounded-xl bg-brand-green text-white font-bold hover:bg-[#19be5e] transition-colors flex items-center justify-center gap-2"
-                  >
-                    <TargetIcon className="w-5 h-5" />
-                    Practice Again
                   </button>
                 </div>
               </div>
