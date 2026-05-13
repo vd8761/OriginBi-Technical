@@ -56,14 +56,15 @@ export default function AdminLoginPage() {
       const session = await fetchAuthSession();
       const tokens = session.tokens;
 
-      if (!tokens || !tokens.idToken) {
+      if (!tokens || !tokens.accessToken) {
         setError("Login session could not be created. Please try again.");
         return;
       }
 
-      const idTokenJwt = tokens.idToken.toString();
+      const idTokenJwt = tokens.idToken?.toString() || "";
+      const accessTokenJwt = tokens.accessToken.toString();
 
-      const idGroups = (tokens.idToken.payload['cognito:groups'] as string[]) || [];
+      const idGroups = (tokens.idToken?.payload['cognito:groups'] as string[]) || [];
       const accessGroups = (tokens.accessToken?.payload['cognito:groups'] as string[]) || [];
       const groups = [...new Set([...idGroups, ...accessGroups])];
 
@@ -76,9 +77,9 @@ export default function AdminLoginPage() {
 
       // 4. Verify with backend
       const apiBase = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "http://localhost:4001";
-      const res = await fetch(`${apiBase}/admin/me`, {
+      const res = await fetch(`${apiBase}/api/auth/session`, {
         method: "GET",
-        headers: { Authorization: `Bearer ${idTokenJwt}` },
+        headers: { Authorization: `Bearer ${accessTokenJwt}` },
       });
 
       if (!res.ok) {

@@ -9,8 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath:
-        process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local',
+      envFilePath: ['.env.local', '.env'],
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
