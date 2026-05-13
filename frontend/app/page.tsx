@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Login from "@/components/student/Login";
 import AssessmentPortal from "@/components/student/AssessmentPortal";
 import { motion, AnimatePresence } from "framer-motion";
+import { getSession, logoutUser } from "@/lib/api";
+
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 
 // Completion Toast Component
 const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose: () => void }) => {
@@ -47,17 +50,28 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 };
 
 // Inner component that uses search params
-import { useSession } from "@/lib/contexts/SessionContext";
-import { useRouter } from "next/navigation";
-
-type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
-
 function HomeContent() {
-  const { isLoggedIn, user, isLoading } = useSession();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState<string>("Student");
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  useEffect(() => {
+    getSession()
+      .then((session) => {
+        if (session) {
+          setUserName(session.registration?.fullName || session.user.email);
+          setIsLoggedIn(true);
+        }
+      })
+      .catch(() => {
+        setIsLoggedIn(false);
+      })
+      .finally(() => setBootstrapping(false));
+  }, []);
 
   useEffect(() => {
     // Check for view parameter
@@ -72,23 +86,32 @@ function HomeContent() {
     // Check for completion parameter
     const completed = searchParams.get("completed");
     if (completed) {
-      setShowCompletionToast(completed);
+      const id = window.setTimeout(() => setShowCompletionToast(completed), 0);
       // Clean up URL
       window.history.replaceState({}, "", window.location.pathname);
+      return () => window.clearTimeout(id);
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    if (isLoggedIn && !isLoading) {
-      router.replace("/explore");
+  const handleLoginSuccess = (name?: string) => {
+    if (name) setUserName(name);
+    setIsLoggedIn(true);
+    const next = searchParams.get("next");
+    if (next?.startsWith("/")) {
+      router.push(next);
     }
-  }, [isLoggedIn, isLoading, router]);
+  };
 
-  if (isLoading) {
+  const handleLogout = async () => {
+    await logoutUser().catch(() => undefined);
+    setIsLoggedIn(false);
+    setUserName("Student");
+  };
+
+  if (bootstrapping) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAFA] dark:bg-brand-dark-primary gap-4">
-        <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
-        <p className="text-sm font-bold text-slate-500 dark:text-brand-text-secondary uppercase tracking-widest animate-pulse">Loading experience...</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -105,9 +128,9 @@ function HomeContent() {
       </AnimatePresence>
       
       {!isLoggedIn ? (
-        <Login onLoginSuccess={() => router.replace("/explore")} />
+        <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal userName={user?.name} />
+        <AssessmentPortal userName={userName} onLogout={handleLogout} initialView={initialView} />
       )}
     </>
   );

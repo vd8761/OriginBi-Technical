@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
+import { ApiError, registerUser } from "@/lib/api";
 import { COUNTRY_CODES } from "@/lib/countryCodes";
-import { AnimatePresence, motion } from "motion/react";
 
 /* ─── Chevron Icon ─── */
 const ChevronDownIcon = ({ className }: { className?: string }) => (
@@ -184,12 +184,11 @@ function CustomSelect({
 /* ═══════════════════════ SIGNUP FORM ═══════════════════════ */
 
 interface SignupFormProps {
-  onSuccess?: () => void;
+  onSignupSuccess?: (userName?: string) => void;
 }
 
-const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
+const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     gender: "MALE",
@@ -197,8 +196,11 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
     countryCode: "+91",
     phone: "",
     password: "",
+    role: "",
   });
-  const [formErrors] = useState<Record<string, string>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generalError, setGeneralError] = useState("");
 
   const genderOptions = [
     { value: "MALE", label: "Male" },
@@ -206,68 +208,63 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
     { value: "OTHER", label: "Other" },
   ];
 
-
+  const roleOptions = [
+    { value: "SCHOOL_STUDENT", label: "School Student" },
+    { value: "COLLEGE_STUDENT", label: "College Student" },
+    { value: "EMPLOYEE", label: "Employee" },
+  ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setGeneralError("");
+    setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Basic Validation
-    if (!formData.name || !formData.email || !formData.phone || !formData.password) {
-      alert("Please fill in all required fields.");
-      return;
+    const nextErrors: Record<string, string> = {};
+    if (!formData.name.trim()) nextErrors.name = "Full name is required.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      nextErrors.email = "Enter a valid email address.";
     }
+    if (!formData.phone.trim()) nextErrors.phone = "Mobile number is required.";
+    if (formData.password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    if (!formData.role) nextErrors.role = "Select your role.";
+    setFormErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
-    setIsLoading(true);
+    setIsSubmitting(true);
+    setGeneralError("");
     try {
-      const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
-      const response = await fetch(`${studentServiceUrl}/student/register/tech`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          full_name: formData.name,
-          email: formData.email,
-          mobile_number: formData.phone,
-          country_code: formData.countryCode,
-          password: formData.password,
-          gender: formData.gender,
-        }),
+      const session = await registerUser({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.name,
+        gender: formData.gender,
+        countryCode: formData.countryCode,
+        mobileNumber: formData.phone,
+        role: formData.role,
       });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || "Registration failed. Please try again.");
-      }
-
-      // Reset form
-      setFormData({
-        name: "",
-        gender: "MALE",
-        email: "",
-        countryCode: "+91",
-        phone: "",
-        password: "",
-      });
-
-      if (onSuccess) {
-        onSuccess();
-      }
-
-    } catch (error: any) {
-      alert(error.message);
+      onSignupSuccess?.(session.registration?.fullName || session.user.email);
+    } catch (err) {
+      setGeneralError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to create account. Please try again.",
+      );
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      {generalError && (
+        <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">
+          {generalError}
+        </div>
+      )}
       {/* Name & Gender */}
       <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr] gap-4">
         {/* Full Name */}
@@ -282,7 +279,9 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
             onChange={handleChange}
             placeholder="Enter your full name"
             className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.name ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 text-sm font-normal text-slate-800 dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+            disabled={isSubmitting}
           />
+          {formErrors.name && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.name}</p>}
         </div>
 
         {/* Gender Toggle (Reference Style) */}
@@ -321,7 +320,9 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
           onChange={handleChange}
           placeholder="name@example.com"
           className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.email ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 text-sm font-normal text-slate-800 dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+          disabled={isSubmitting}
         />
+        {formErrors.email && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.email}</p>}
       </div>
 
       {/* Mobile Input (Reference Style) */}
@@ -346,6 +347,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
             onChange={handleChange}
             placeholder="Min 8 characters"
             className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.password ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 pr-12 text-sm font-normal text-slate-800 dark:text-brand-text-primary placeholder:text-brand-text-light-secondary dark:placeholder:text-brand-text-secondary outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+            disabled={isSubmitting}
           />
           <button
             type="button"
@@ -355,27 +357,31 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess }) => {
             {passwordVisible ? <EyeIcon className="h-5 w-5 text-brand-green" /> : <EyeOffIcon className="h-5 w-5 text-brand-green" />}
           </button>
         </div>
+        {formErrors.password && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.password}</p>}
       </div>
 
-
+      {/* Role */}
+      <CustomSelect
+        label="Role"
+        required
+        options={roleOptions}
+        value={formData.role}
+        onChange={(val) => {
+          setFormData((prev) => ({ ...prev, role: val }));
+          setFormErrors((prev) => ({ ...prev, role: "" }));
+        }}
+        placeholder="Select your role"
+        error={formErrors.role}
+      />
 
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={isLoading}
-        className="w-full h-14 mt-2 bg-brand-green hover:bg-brand-green/90 text-white text-base font-bold rounded-full transition-all active:scale-[0.98] cursor-pointer disabled:bg-brand-green/50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+        disabled={isSubmitting}
+        className="w-full h-14 mt-2 bg-brand-green hover:bg-brand-green/90 text-white text-base font-bold rounded-full transition-all active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:bg-brand-green/50"
       >
-        {isLoading ? (
-          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        ) : (
-          "Create Account"
-        )}
+        {isSubmitting ? "Creating..." : "Create Account"}
       </button>
-
-
     </form>
   );
 };

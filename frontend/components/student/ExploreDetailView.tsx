@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Header from "./Header";
@@ -24,6 +24,7 @@ import {
     useCompletedAssessments,
     type PaymentKey,
 } from "@/lib/payments";
+import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
 
 interface ExploreDetailViewProps {
@@ -43,23 +44,48 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const router = useRouter();
     const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
+    const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
+    const [assignmentError, setAssignmentError] = useState("");
+
+    const refreshAssignments = useCallback(async () => {
+        if (exam.id !== "coding") return;
+        try {
+            const data = await listAssignments();
+            setServerAssignments(data.assignments);
+            setAssignmentError("");
+        } catch (err) {
+            setAssignmentError(
+                err instanceof ApiError
+                    ? err.message
+                    : "Unable to load backend assignments.",
+            );
+        }
+    }, [exam.id]);
+
+    useEffect(() => {
+        const id = window.setTimeout(() => {
+            void refreshAssignments();
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, [refreshAssignments]);
 
     const codingEntries = useMemo(() => {
         if (exam.id !== "coding") return [];
         return CODING_LANGUAGES
             .map((lang) => {
                 const key = codingPaymentKey(lang.id);
-                const paid = isPaid(key);
-                const completed = isCompleted(key);
+                const assignment = serverAssignments.find((a) => a.assignmentRef === key);
+                const paid = !!assignment && assignment.status === "active";
+                const completed = !!assignment?.completed;
                 const status: CodingLangStatus = completed
                     ? "completed"
                     : paid
                         ? "ready"
                         : "locked";
-                return { lang, paid, completed, status };
+                return { lang, paid, completed, status, assignment };
             })
             .sort((a, b) => codingStatusRank[a.status] - codingStatusRank[b.status]);
-    }, [exam.id, isPaid, isCompleted]);
+    }, [exam.id, serverAssignments]);
 
     const codingSummary = useMemo(() => {
         const completed = codingEntries.filter((e) => e.status === "completed").length;
@@ -122,7 +148,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handleLanguagePick = (language: CodingLanguage) => {
         const key = codingPaymentKey(language.id);
-        if (isPaid(key)) {
+        const assignment = serverAssignments.find((a) => a.assignmentRef === key);
+        if (assignment?.completed) {
+            setShowLanguageModal(false);
+            return;
+        }
+        if (assignment?.status === "active") {
             setShowLanguageModal(false);
             setPendingCodingLang(language);
             return;
@@ -138,10 +169,28 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         });
     };
 
-    const handlePaymentSuccess = () => {
+    const handlePaymentSuccess = async () => {
         if (!paymentTarget) return;
-        markPaid(paymentTarget.key);
-        refreshPurchases?.();
+        if (paymentTarget.kind === "coding") {
+            try {
+                await demoPurchase(paymentTarget.key);
+                await refreshAssignments();
+                setShowLanguageModal(false);
+                setPendingCodingLang(paymentTarget.language);
+                setAssignmentError("");
+            } catch (err) {
+                const message =
+                    err instanceof ApiError
+                        ? err.message
+                        : "Payment recorded locally, but backend scheduling failed.";
+                setAssignmentError(message);
+                throw new Error(message);
+            }
+        } else {
+            markPaid(paymentTarget.key);
+            refreshPurchases?.();
+            startNonCodingAssessment();
+        }
         setPaymentTarget(null);
     };
 
@@ -154,6 +203,16 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         setAssessmentMode("trial");
         startNonCodingAssessment();
     };
+
+    const isCodingPaid = useCallback(
+        (key: PaymentKey) => serverAssignments.some((a) => a.assignmentRef === key && a.status === "active"),
+        [serverAssignments],
+    );
+
+    const isCodingCompleted = useCallback(
+        (key: PaymentKey) => serverAssignments.some((a) => a.assignmentRef === key && a.completed),
+        [serverAssignments],
+    );
 
     const primaryLabel = (() => {
         if (!isReady) return "Coming Soon";
@@ -170,12 +229,16 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
                 />
                 <div className="absolute inset-0 opacity-[0.10] dark:opacity-[0.06] assessment-grid" />
-            </div>             <Header
+            </div>
+
+            <Header
                 currentView="explore"
                 onNavigate={(view) => {
                     router.push(`/${view}`);
                 }}
-                onLogout={() => console.log("Logging out...")}
+                onLogout={() => {
+                    void logoutUser().finally(() => router.push("/"));
+                }}
             />
 
             <main className="relative z-10 mx-auto flex max-w-[1200px] flex-col gap-10 px-4 pb-32 pt-24 sm:px-6 lg:px-10">
@@ -273,6 +336,11 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             </span>
                         </div>
                     )}
+                    {isCoding && assignmentError && (
+                        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] font-semibold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                            {assignmentError}
+                        </div>
+                    )}
                 </section>
 
                 {/* Per-language status (coding only) */}
@@ -301,7 +369,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                     status={status}
                                     price={exam.price}
                                     onAction={() => {
-                                        if (status === "ready" || status === "completed") {
+                                        if (status === "completed") return;
+                                        if (status === "ready") {
                                             setPendingCodingLang(lang);
                                         } else {
                                             handleLanguagePick(lang);
@@ -508,8 +577,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <LanguageSelectModal
                     accent={accent}
                     price={exam.price}
-                    isPaid={isPaid}
-                    isCompleted={isCompleted}
+                    isPaid={isCodingPaid}
+                    isCompleted={isCodingCompleted}
                     onClose={() => setShowLanguageModal(false)}
                     onPick={handleLanguagePick}
                 />
@@ -538,7 +607,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     assessmentId={paymentTarget.assessmentId}
                     assessmentCode={paymentTarget.assessmentCode}
                     onCancel={() => setPaymentTarget(null)}
-                    onSuccess={handlePaymentSuccess}
+                    onSuccess={() => {
+                        return handlePaymentSuccess();
+                    }}
                 />
             )}
         </div>
@@ -559,7 +630,7 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
                 Completed
             </span>
         ) : status === "ready" ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                 Ready to start
             </span>
         ) : (
@@ -572,7 +643,7 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
         );
 
     const ctaLabel =
-        status === "completed" ? "Retake" : status === "ready" ? "Start" : "Pay & Unlock";
+        status === "completed" ? "Completed" : status === "ready" ? "Start" : "Pay & Unlock";
 
     return (
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
@@ -600,7 +671,8 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
             <button
                 type="button"
                 onClick={onAction}
-                className="shrink-0 rounded-full px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-all active:scale-95 hover:opacity-95"
+                disabled={status === "completed"}
+                className="shrink-0 rounded-full px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-all active:scale-95 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
                 style={{
                     background: status === "locked" ? `${lang.accent}18` : lang.accent,
                     color: status === "locked" ? lang.accent : readableTextOn(lang.accent),

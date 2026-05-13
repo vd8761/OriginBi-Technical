@@ -11,7 +11,7 @@ import type { Exam } from "../ExamCarousel";
 interface DashboardContentProps {
   userName: string;
   handleSelectExam: (exam: Exam) => void;
-  handleStartExam: (exam: Exam, tier?: any) => void;
+  handleStartExam: (exam: Exam) => void;
 }
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {

@@ -49,7 +49,7 @@ const Testimonial: React.FC = () => {
         <QuoteIcon className="w-10 h-10 text-primary" />
         
         <p className="text-2xl md:text-3xl font-medium leading-tight transition-all duration-500">
-          "{current.quote}"
+          &quot;{current.quote}&quot;
         </p>
 
         <div className="flex items-center justify-between">

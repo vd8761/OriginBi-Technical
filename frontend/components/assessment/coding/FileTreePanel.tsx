@@ -143,7 +143,9 @@ const FileTreePanel: React.FC<FileTreePanelProps> = ({
 }) => {
     const items = useMemo(() => buildItems(files), [files]);
     const itemsRef = useRef(items);
-    itemsRef.current = items;
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
     const itemsVersion = useMemo(() => Object.keys(items).join("|"), [items]);
 
     const [search, setSearch] = useState("");
@@ -179,7 +181,9 @@ const FileTreePanel: React.FC<FileTreePanelProps> = ({
     }, [menu, closeMenu]);
 
     const onOpenRef = useRef(onOpen);
-    onOpenRef.current = onOpen;
+    useEffect(() => {
+        onOpenRef.current = onOpen;
+    }, [onOpen]);
 
     // Ref to the tree instance so we can call rebuildTree() synchronously from onDrop.
     const treeInstanceRef = useRef<ReturnType<typeof useTree<TreeData>> | null>(null);
@@ -291,8 +295,9 @@ const FileTreePanel: React.FC<FileTreePanelProps> = ({
         ],
     });
 
-    // Keep ref in sync so onDrop (defined above) can call tree.rebuildTree().
-    treeInstanceRef.current = tree;
+    useEffect(() => {
+        treeInstanceRef.current = tree;
+    }, [tree]);
 
     // headless-tree caches its tree structure internally — calling rebuildTree() picks up new
     // items/children from the dataLoader so creates, renames and deletes show up immediately.
@@ -942,52 +947,69 @@ interface ContextMenuProps {
     ) => void;
 }
 
+interface ContextMenuItemRowProps {
+    icon: React.ReactNode;
+    label: string;
+    shortcut?: string;
+    onClick: () => void;
+    disabled?: boolean;
+    tone?: "default" | "danger";
+    muted: string;
+    text: string;
+    danger: string;
+    isLight: boolean;
+}
+
+const ContextMenuItemRow: React.FC<ContextMenuItemRowProps> = ({
+    icon,
+    label,
+    shortcut,
+    onClick,
+    disabled,
+    tone = "default",
+    muted,
+    text,
+    danger,
+    isLight,
+}) => (
+    <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+            e.stopPropagation();
+            if (!disabled) onClick();
+        }}
+        className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[12px] transition-colors"
+        style={{
+            color: disabled ? muted : tone === "danger" ? danger : text,
+            opacity: disabled ? 0.55 : 1,
+        }}
+        onMouseEnter={(e) => {
+            if (!disabled)
+                e.currentTarget.style.background = isLight
+                    ? "rgba(15,23,18,0.06)"
+                    : "rgba(255,255,255,0.07)";
+        }}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+        <span className="flex h-4 w-4 items-center justify-center" style={{ color: muted }}>
+            {icon}
+        </span>
+        <span className="flex-1">{label}</span>
+        {shortcut && (
+            <span className="font-mono text-[10.5px]" style={{ color: muted }}>
+                {shortcut}
+            </span>
+        )}
+    </button>
+);
+
 const ContextMenu: React.FC<ContextMenuProps> = ({ state, isLight, onAction }) => {
     const bg = isLight ? "#FFFFFF" : "#1B1F23";
     const border = isLight ? "rgba(15,23,18,0.12)" : "rgba(255,255,255,0.1)";
     const text = isLight ? "#0F1712" : "#FFFFFF";
     const muted = isLight ? "rgba(15,23,18,0.5)" : "rgba(255,255,255,0.45)";
     const danger = isLight ? "#C12027" : "#F17074";
-
-    const ItemRow: React.FC<{
-        icon: React.ReactNode;
-        label: string;
-        shortcut?: string;
-        onClick: () => void;
-        disabled?: boolean;
-        tone?: "default" | "danger";
-    }> = ({ icon, label, shortcut, onClick, disabled, tone = "default" }) => (
-        <button
-            type="button"
-            disabled={disabled}
-            onClick={(e) => {
-                e.stopPropagation();
-                if (!disabled) onClick();
-            }}
-            className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[12px] transition-colors"
-            style={{
-                color: disabled ? muted : tone === "danger" ? danger : text,
-                opacity: disabled ? 0.55 : 1,
-            }}
-            onMouseEnter={(e) => {
-                if (!disabled)
-                    e.currentTarget.style.background = isLight
-                        ? "rgba(15,23,18,0.06)"
-                        : "rgba(255,255,255,0.07)";
-            }}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-            <span className="flex h-4 w-4 items-center justify-center" style={{ color: muted }}>
-                {icon}
-            </span>
-            <span className="flex-1">{label}</span>
-            {shortcut && (
-                <span className="font-mono text-[10.5px]" style={{ color: muted }}>
-                    {shortcut}
-                </span>
-            )}
-        </button>
-    );
 
     const isRoot = state.path === ROOT_ID;
     const canModify = !state.readOnly && !isRoot;
@@ -1009,44 +1031,68 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ state, isLight, onAction }) =
             }}
             onClick={(e) => e.stopPropagation()}
         >
-            <ItemRow
+            <ContextMenuItemRow
                 icon={<FilePlus size={13} />}
                 label="New File"
                 onClick={() => onAction("new-file")}
+                muted={muted}
+                text={text}
+                danger={danger}
+                isLight={isLight}
             />
-            <ItemRow
+            <ContextMenuItemRow
                 icon={<FolderPlus size={13} />}
                 label="New Folder"
                 onClick={() => onAction("new-folder")}
+                muted={muted}
+                text={text}
+                danger={danger}
+                isLight={isLight}
             />
             <Divider isLight={isLight} />
-            <ItemRow
+            <ContextMenuItemRow
                 icon={<PencilLine size={13} />}
                 label="Rename"
                 shortcut="F2"
                 disabled={!canModify}
                 onClick={() => onAction("rename")}
+                muted={muted}
+                text={text}
+                danger={danger}
+                isLight={isLight}
             />
-            <ItemRow
+            <ContextMenuItemRow
                 icon={<Copy size={13} />}
                 label="Copy Path"
                 disabled={isRoot}
                 onClick={() => onAction("copy-path")}
+                muted={muted}
+                text={text}
+                danger={danger}
+                isLight={isLight}
             />
-            <ItemRow
+            <ContextMenuItemRow
                 icon={<Copy size={13} />}
                 label="Copy Relative Path"
                 disabled={isRoot}
                 onClick={() => onAction("copy-relative-path")}
+                muted={muted}
+                text={text}
+                danger={danger}
+                isLight={isLight}
             />
             <Divider isLight={isLight} />
-            <ItemRow
+            <ContextMenuItemRow
                 icon={<Trash2 size={13} />}
                 label="Delete"
                 shortcut="Del"
                 disabled={!canModify}
                 onClick={() => onAction("delete")}
                 tone="danger"
+                muted={muted}
+                text={text}
+                danger={danger}
+                isLight={isLight}
             />
         </div>
     );

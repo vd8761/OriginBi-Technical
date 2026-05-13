@@ -212,10 +212,13 @@ function ChangePasswordModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
 
     useEffect(() => {
         if (isOpen) {
-            setIsSuccess(false);
-            setFormData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-            setCurrentPasswordError(false);
-            setShowSecurityChecks(false);
+            const id = window.setTimeout(() => {
+                setIsSuccess(false);
+                setFormData({ oldPassword: '', newPassword: '', confirmPassword: '' });
+                setCurrentPasswordError(false);
+                setShowSecurityChecks(false);
+            }, 0);
+            return () => window.clearTimeout(id);
         }
     }, [isOpen]);
 

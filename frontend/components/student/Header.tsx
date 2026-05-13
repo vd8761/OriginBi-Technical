@@ -21,10 +21,22 @@ import {
 } from '../icons';
 import { capitalizeWords, getAvatarColor } from "../../lib/utils";
 
+type StudentHeaderView =
+    | "dashboard"
+    | "dashboard#results"
+    | "assessment"
+    | "profile"
+    | "details"
+    | "aptitude-results"
+    | "roadmaps"
+    | "counsellor"
+    | "debrief"
+    | "explore";
+
 interface HeaderProps {
     onLogout?: () => void;
-    currentView?: "dashboard" | "assessment" | "profile" | "details" | "aptitude-results" | "roadmaps" | "counsellor" | "debrief" | "explore";
-    onNavigate?: (view: any) => void;
+    currentView?: StudentHeaderView;
+    onNavigate?: (view: StudentHeaderView) => void;
 }
 
 interface NavItemProps {
@@ -171,7 +183,7 @@ const Header: React.FC<HeaderProps> = ({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [isMobileMenuOpen]);
 
-    const handleNavClick = (view: string) => {
+    const handleNavClick = (view: StudentHeaderView) => {
         onNavigate?.(view);
         setMobileMenuOpen(false);
     };

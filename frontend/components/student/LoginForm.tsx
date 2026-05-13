@@ -2,27 +2,22 @@
 
 import React, { useState, FormEvent, FocusEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { EyeIcon, EyeOffIcon } from '../icons';
-import { useSession } from '@/lib/contexts/SessionContext';
+import { ApiError, loginUser } from '@/lib/api';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
 
 // configureAmplify(); // ensure Amplify is configured
 
 interface LoginFormProps {
-  onLoginSuccess?: (userName?: string) => void;
+  onLoginSuccess: (userName?: string) => void;
   buttonClass?: string;
   portalMode?: 'student' | 'corporate' | 'admin';
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({
   onLoginSuccess,
-  buttonClass: _buttonClass,
-  portalMode: _portalMode,
 }) => {
-  const router = useRouter();
-  const { login } = useSession();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [values, setValues] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -78,80 +73,25 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setGeneralError('');
-    setErrors({ email: '', password: '' });
-
-    const emailErr = validateEmail(values.email);
-    const passErr = validatePassword(values.password);
-
-    if (emailErr || passErr) {
-      setErrors({ email: emailErr, password: passErr });
-      return;
-    }
+    const nextErrors = {
+      email: validateEmail(values.email),
+      password: validatePassword(values.password),
+    };
+    setErrors(nextErrors);
+    setTouched({ email: true, password: true });
+    if (nextErrors.email || nextErrors.password) return;
 
     setIsSubmitting(true);
-
+    setGeneralError('');
     try {
-      const authServiceUrl = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:4002';
-      const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || 'http://localhost:4004';
-
-      // 1. Authenticate with Auth Service (Cognito Login)
-      const loginRes = await fetch(`${authServiceUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: values.email,
-          password: values.password,
-        }),
-      });
-
-      if (!loginRes.ok) {
-        const errData = await loginRes.json().catch(() => null);
-        throw new Error(errData?.message || 'Invalid email or password.');
-      }
-
-      const loginData = await loginRes.json();
-      const accessToken = loginData.accessToken || loginData.AuthenticationResult?.AccessToken || "";
-      const idToken = loginData.idToken || loginData.AuthenticationResult?.IdToken || "";
-
-      // 2. Retrieve Student Profile to get the correct display name
-      let displayName = '';
-      try {
-        const profileRes = await fetch(`${studentServiceUrl}/student/profile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: values.email }),
-        });
-
-        if (profileRes.ok) {
-          const profileData = await profileRes.json();
-          displayName = profileData?.fullName || profileData?.metadata?.fullName || '';
-        }
-      } catch (profileErr) {
-        console.error('Failed to fetch user profile, falling back to email name', profileErr);
-      }
-
-      // Fallback name if profile fetch has no name or fails
-      if (!displayName) {
-        const emailPart = values.email.split('@')[0];
-        displayName = emailPart
-          .replace(/[._-]/g, ' ')
-          .replace(/\b\w/g, (l) => l.toUpperCase());
-      }
-
-      // 3. Update session reactively (which will also save to localStorage)
-      login(accessToken, idToken, {
-        name: displayName,
-        email: values.email,
-        joinedAt: new Date().toISOString(),
-      });
-
-      if (onLoginSuccess) {
-        onLoginSuccess(displayName);
-      }
-
-    } catch (error: any) {
-      setGeneralError(error.message || 'Login failed. Please check your credentials.');
+      const session = await loginUser(values.email, values.password);
+      onLoginSuccess(session.registration?.fullName || session.user.email);
+    } catch (err) {
+      setGeneralError(
+        err instanceof ApiError
+          ? err.message
+          : 'Unable to login. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }

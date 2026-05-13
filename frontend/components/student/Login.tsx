@@ -99,27 +99,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   onClick={() => setActiveTab("login")}
                   className="w-full h-14 bg-brand-green hover:bg-brand-green/90 text-white font-bold rounded-full shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 text-base uppercase tracking-wider"
                 >
-                  Proceed to Login
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
+                  Go to Login
                 </button>
               </motion.div>
             ) : (
-              <motion.div
-                key="auth-container"
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: -10 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              >
+              <div key="auth-tabs">
                 {/* Title Section */}
                 <div className="text-center mb-8">
                   <h1 className="font-sans font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight leading-tight text-[clamp(24px,3vw,36px)]">
@@ -205,7 +189,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                         exit={{ opacity: 0, scale: 0.98, y: -10 }}
                         transition={{ duration: 0.25, ease: "easeOut" }}
                       >
-                        <SignupForm onSuccess={() => setActiveTab("success")} />
+                        <SignupForm onSignupSuccess={() => setActiveTab("success")} />
                         <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
                           <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
                             Already have an account?{" "}
@@ -222,7 +206,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     )}
                   </AnimatePresence>
                 </motion.div>
-              </motion.div>
+              </div>
             )}
           </AnimatePresence>
 

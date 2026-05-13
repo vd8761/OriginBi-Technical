@@ -8,6 +8,7 @@ import { runWithJudge0, type RunResult } from "./runWithJudge0";
 import { reindent } from "./reindent";
 import FileTabs from "./FileTabs";
 import FileTreePanel from "./FileTreePanel";
+import type { CodeRunRequest } from "@/lib/api";
 
 export const PREFS_KEY = "originbi.coding.prefs";
 
@@ -75,6 +76,10 @@ interface CodeEditorProps {
     fontSize: number;
     theme: "dark" | "light";
     onCodeChange?: (code: string) => void;
+    initialFiles?: FileNode[];
+    initialEntryFile?: string;
+    onWorkspaceChange?: (payload: { language: string; files: FileNode[]; entryFile: string }) => void;
+    serverRun?: (input: CodeRunRequest) => Promise<RunResult | undefined>;
     /** When false, Ctrl+F find widget is disabled. Default true. */
     findEnabled?: boolean;
     /** When false, autocomplete is disabled. Default true. */
@@ -387,14 +392,26 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     fontSize,
     theme,
     onCodeChange,
+    initialFiles: restoredFiles,
+    initialEntryFile: restoredEntryFile,
+    onWorkspaceChange,
+    serverRun,
     findEnabled = true,
     suggestionsEnabled = true,
     lintsEnabled = true,
 }) => {
-    const initialFiles = useMemo(() => buildInitialFiles(question, lang), [question, lang]);
+    const initialFiles = useMemo(
+        () => (restoredFiles?.length ? restoredFiles.map((f) => ({ ...f })) : buildInitialFiles(question, lang)),
+        [question, lang, restoredFiles],
+    );
     const initialActive = useMemo(
-        () => initialEntryFile(question, lang, initialFiles),
-        [question, lang, initialFiles],
+        () => {
+            if (restoredEntryFile && initialFiles.some((file) => file.path === restoredEntryFile)) {
+                return restoredEntryFile;
+            }
+            return initialEntryFile(question, lang, initialFiles);
+        },
+        [question, lang, initialFiles, restoredEntryFile],
     );
 
     // Starters are authored at 4-space indent. If the user's saved pref differs,
@@ -447,23 +464,36 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     useEffect(() => {
         if (question.id !== prevQId.current) {
-            const raw = buildInitialFiles(question, lang);
+            const raw = restoredFiles?.length
+                ? restoredFiles.map((f) => ({ ...f }))
+                : buildInitialFiles(question, lang);
             const next =
                 tabSize === 4
                     ? raw
                     : raw.map((f) => ({ ...f, content: reindent(f.content ?? "", 4, tabSize) }));
-            const entry = initialEntryFile(question, lang, next);
+            const entry =
+                restoredEntryFile && next.some((file) => file.path === restoredEntryFile)
+                    ? restoredEntryFile
+                    : initialEntryFile(question, lang, next);
             setFiles(next);
             setOpenTabs([entry]);
             setActivePath(entry);
             setResult(null);
             prevQId.current = question.id;
         }
-    }, [question, lang, tabSize]);
+    }, [question, lang, restoredEntryFile, restoredFiles, tabSize]);
 
     useEffect(() => {
         onCodeChange?.(activeFile?.content ?? "");
     }, [activeFile?.content, onCodeChange]);
+
+    useEffect(() => {
+        onWorkspaceChange?.({
+            language: lang,
+            files,
+            entryFile: activePath,
+        });
+    }, [activePath, files, lang, onWorkspaceChange]);
 
     useEffect(() => () => {
         runAbortRef.current?.abort();
@@ -518,16 +548,36 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             setOutputOpen(true);
             setBottomTab("output");
             try {
-                const res = await runWithJudge0({
-                    lang,
-                    files,
-                    entryFile: question.entryFile?.[lang] ?? activePath,
-                    limits,
-                    mode,
-                    customStdin: mode === "custom" ? customInput : undefined,
-                    testCases: mode === "tests" ? question.testCases : undefined,
-                    signal: controller.signal,
-                });
+                const entryFile = question.entryFile?.[lang] ?? activePath;
+                const res = serverRun
+                    ? await serverRun({
+                        mode,
+                        language: lang,
+                        files,
+                        entryFile,
+                        customStdin: mode === "custom" ? customInput : undefined,
+                    })
+                    : process.env.NODE_ENV !== "production"
+                        ? await runWithJudge0({
+                        lang,
+                        files,
+                        entryFile,
+                        limits,
+                        mode,
+                        customStdin: mode === "custom" ? customInput : undefined,
+                        testCases: mode === "tests" ? question.testCases : undefined,
+                        signal: controller.signal,
+                    })
+                        : {
+                            type: "error" as const,
+                            stdout: "",
+                            stderr: "Server code execution is required in production.",
+                            testResults: null,
+                            time: "0ms",
+                            memory: "0 MB",
+                            summary: "Code runner unavailable.",
+                        };
+                if (!res) return;
                 setResult(res);
             } catch (e) {
                 if ((e as { name?: string })?.name === "AbortError") return;
@@ -535,7 +585,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                 setResult({
                     type: "error",
                     stdout: "",
-                    stderr: `Failed to reach Judge0: ${message}`,
+                    stderr: `Code run failed: ${message}`,
                     testResults: null,
                     time: "0ms",
                     memory: "0 MB",
@@ -555,6 +605,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             customInput,
             question.entryFile,
             question.testCases,
+            serverRun,
         ],
     );
 

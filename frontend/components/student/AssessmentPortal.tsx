@@ -16,6 +16,7 @@ import { ProfileIcon } from "../icons";
 import {
   EXAMS,
   EXAM_DETAILS,
+  CODING_LANGUAGES,
   type AssessmentId,
   type ExtendedExam,
   type PricingTier,
@@ -24,9 +25,11 @@ import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 import { useSession } from "@/lib/contexts/SessionContext";
 import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
+import { listAssignments, type Assignment } from "@/lib/api";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
+const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
@@ -38,12 +41,13 @@ const FILTERS: { label: string; value: AssessmentFilter }[] = [
 
 interface AssessmentPortalProps {
   userName?: string;
+  onLogout?: () => void;
   initialView?: AssessmentView;
 }
 
 type AssessmentMode = "trial" | "main";
 
-const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", initialView = "dashboard" }) => {
+const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", onLogout, initialView = "dashboard" }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -71,8 +75,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [filter, setFilter] = useState<AssessmentFilter>("all");
+  const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
   const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
+  const [paidAssignments, setPaidAssignments] = useState<Assignment[] | null>(null);
   const [completionPopup, setCompletionPopup] = useState<{
     completed: AssessmentId;
     next: AssessmentId | null;
@@ -133,18 +139,38 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   useEffect(() => {
     let active = true;
     const fetchAll = async () => {
+      if (!LEGACY_TECH_API_URL) return;
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
-        const response = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`);
+        if (!response.ok) return;
         const json = await response.json();
         if (json && json.data && active) {
           setAssessmentsList(json.data);
         }
-      } catch (err) {
-        console.error("Failed to load assessments dynamically:", err);
+      } catch {
+        // The Nest assessment admin API is optional for this frontend shell.
       }
     };
     fetchAll();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Pull the user's paid assignments so we can show only the assessments
+  // they've actually purchased. Coding is special — each language is its
+  // own assignment, so we end up with one card per paid language.
+  useEffect(() => {
+    let active = true;
+    const fetchPaid = async () => {
+      try {
+        const data = await listAssignments();
+        if (active) setPaidAssignments(data.assignments ?? []);
+      } catch {
+        if (active) setPaidAssignments([]);
+      }
+    };
+    fetchPaid();
     return () => {
       active = false;
     };
@@ -207,16 +233,58 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }, [searchParams, initialView]);
 
   const filteredExams = useMemo(() => {
-    const baseExams = dynamicExams.filter((exam) => exam.available && isPaid(exam.id as PaymentKey));
-    if (filter === "ready" || filter === "all") {
-      return baseExams;
+    // While we don't know yet, show nothing rather than flashing every card.
+    if (paidAssignments === null) return [];
+
+    const paidRefs = new Set(
+      paidAssignments
+        .filter((a) => a.status === "active" || a.status === "completed")
+        .map((a) => a.assignmentRef),
+    );
+
+    // For each exam, decide whether the user has paid for it. Coding is an
+    // exception: instead of one "Coding Assessment" card, expand into one
+    // card per language the user has paid for.
+    const result: ExtendedExam[] = [];
+    for (const exam of dynamicExams) {
+      if (exam.id === "coding") {
+        const codingPaid = CODING_LANGUAGES.filter((lang) =>
+          paidRefs.has(`coding:${lang.id}`),
+        );
+        for (const lang of codingPaid) {
+          // Synthesize a per-language card from the base coding exam.
+          const langAssignment = paidAssignments.find(
+            (a) => a.assignmentRef === `coding:${lang.id}`,
+          );
+          result.push({
+            ...exam,
+            id: `coding:${lang.id}` as any,
+            title: `${exam.title} · ${lang.name}`,
+            description: `${exam.description} (${lang.name})`,
+            statusLabel: langAssignment?.completed ? "Completed" : "Ready",
+            available: true,
+            // Keep the original `tags`/`icon` etc.; the language accent is
+            // wired in via accentColor so the card border picks it up.
+            accentColor: lang.accent,
+          } as ExtendedExam);
+        }
+        continue;
+      }
+      // Non-coding: include only if there's a matching paid assignment or legacy isPaid says so.
+      if (paidRefs.has(exam.id) || isPaid(exam.id as PaymentKey)) {
+        result.push(exam);
+      }
     }
+
+    const baseExams = result;
+    if (filter === "ready" || filter === "all") return baseExams;
     return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
-  }, [dynamicExams, filter, isPaid]);
+  }, [dynamicExams, filter, paidAssignments, isPaid]);
 
   const hasPurchasedAny = useMemo(() => {
+    if (paidAssignments && paidAssignments.length > 0) return true;
     return dynamicExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey));
-  }, [dynamicExams, isPaid]);
+  }, [dynamicExams, isPaid, paidAssignments]);
 
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);
@@ -276,6 +344,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }, [currentView, searchParams]);
 
   const launchAssessment = (examId: string, mode: AssessmentMode) => {
+    // Per-language coding cards encode the language in the id (`coding:python`).
+    if (examId.startsWith("coding:")) {
+      const lang = examId.slice("coding:".length);
+      router.push(`/assessment/coding?mode=${mode}&lang=${lang}`);
+      return;
+    }
     if (examId === "coding") {
       router.push(`/assessment/coding?mode=${mode}`);
       return;
@@ -375,8 +449,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       <Header
         currentView={currentHeaderView}
-        onNavigate={(view) => handleNavigate(view)}
-        onLogout={() => console.log("Logging out...")}
+        onNavigate={(view) => {
+          if (["dashboard", "assessment", "profile", "details", "explore"].includes(view)) {
+            setCurrentView(view as AssessmentView);
+          }
+        }}
+        onLogout={() => onLogout?.()}
       />
 
       {/* Next Step Notification Alert */}
@@ -451,8 +529,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={dynamicExams as any}
-            examDetails={EXAM_DETAILS as any}
+            assessments={EXAMS}
+            examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
             }}

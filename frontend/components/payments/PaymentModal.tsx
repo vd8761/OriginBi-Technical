@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSession } from "@/lib/contexts/SessionContext";
 
 interface PaymentModalProps {
@@ -11,7 +11,7 @@ interface PaymentModalProps {
     assessmentId?: number | string;
     assessmentCode?: string;
     onCancel: () => void;
-    onSuccess: () => void;
+    onSuccess: () => void | Promise<void>;
 }
 
 type Stage = "review" | "processing" | "success" | "error";
@@ -38,8 +38,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const [paidAt, setPaidAt] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const mountedRef = useRef(true);
+    const successHandledRef = useRef(false);
+
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
     const handlePay = async () => {
+        if (stage !== "review" || successHandledRef.current) return;
         setStage("processing");
         setErrorMessage(null);
 
@@ -90,10 +99,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     throw new Error("Sandbox payment recording failed on backend.");
                 }
 
-                const result = await verifyRes.json();
-                setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
-                setPaidAt(new Date());
-                setStage("success");
+                await onSuccess();
+                successHandledRef.current = true;
+                if (mountedRef.current) {
+                    setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                    setPaidAt(new Date());
+                    setStage("success");
+                }
                 return;
             }
 
@@ -132,19 +144,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                 throw new Error("Payment signature verification failed.");
                             }
 
-                            const result = await verifyRes.json();
-                            setRefId(response.razorpay_payment_id || generateRef());
-                            setPaidAt(new Date());
-                            setStage("success");
+                            await onSuccess();
+                            successHandledRef.current = true;
+                            if (mountedRef.current) {
+                                setRefId(response.razorpay_payment_id || generateRef());
+                                setPaidAt(new Date());
+                                setStage("success");
+                            }
                         } catch (err: any) {
                             console.error("Verification error:", err);
-                            setErrorMessage(err.message || "Failed to verify payment with server.");
-                            setStage("error");
+                            if (mountedRef.current) {
+                                setErrorMessage(err.message || "Failed to verify payment with server.");
+                                setStage("error");
+                            }
                         }
                     },
                     modal: {
                         onDismiss: () => {
-                            setStage("review");
+                            if (mountedRef.current) setStage("review");
                         },
                     },
                     prefill: {
@@ -167,12 +184,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
             document.body.appendChild(script);
         } catch (err: any) {
-            console.warn("Razorpay flow failed, falling back to simulated payment modal:", err);
-            // Fallback: Simulation mode for local testing
-            window.setTimeout(() => {
-                setPaidAt(new Date());
-                setStage("success");
-            }, 1200);
+            console.error("Payment flow failed:", err);
+            if (mountedRef.current) {
+                setErrorMessage(err.message || "Unable to initiate payment.");
+                setStage("error");
+            }
         }
     };
 
@@ -237,7 +253,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                     </span>
                                 </div>
                                 <p className="mt-2 text-[11.5px] text-slate-400 dark:text-gray-500 leading-relaxed">
-                                    Includes instant lifetime access to the test. If Razorpay is unconfigured, we will run in secure Sandbox Simulator mode automatically.
+                                    Includes instant lifetime access to the test. Our secure payment gateway ensures your transaction is protected.
                                 </p>
                             </div>
 
@@ -380,12 +396,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             </div>
 
                             <p className="text-[12px] text-slate-500 dark:text-gray-400 leading-relaxed">
-                                Save this reference number for your records. You can start the assessment from this page any time &mdash; we won&apos;t auto-launch it for you.
+                                Save this reference number for your records. The assessment has been scheduled and is ready now.
                             </p>
 
                             <button
                                 type="button"
-                                onClick={onSuccess}
+                                onClick={onCancel}
                                 className="self-stretch rounded-full px-6 py-2.5 text-[12px] font-bold uppercase tracking-wider text-white shadow-md transition-all hover:opacity-95 active:scale-95"
                                 style={{ background: accent, boxShadow: `0 8px 18px ${accent}40` }}
                             >

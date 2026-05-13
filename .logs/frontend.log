@@ -1,0 +1,14 @@
+
+> originbi-technical@0.1.0 dev
+> next dev --hostname 0.0.0.0 --port 3000
+
+▲ Next.js 16.2.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 1645ms
+- Experiments (use with caution):
+  ⨯ preloadEntriesOnStart
+  ⨯ turbopackSourceMaps
+
+ GET / 200 in 2.2s (next.js: 708ms, application-code: 1522ms)
