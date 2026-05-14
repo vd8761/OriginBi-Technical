@@ -21,7 +21,7 @@
 --      resolver can resolve "what languages did this user pay for?" with a
 --      single join.
 --
--- This migration uses -- +goose NO TRANSACTION because ALTER TYPE ... ADD
+-- This migration uses the NO TRANSACTION directive (see the goose header above) because ALTER TYPE ... ADD
 -- VALUE cannot have its new value used in the same transaction in Postgres,
 -- and we both add the 'language'/'runner' enum values AND insert plugin rows
 -- using them. Every statement is idempotent (IF NOT EXISTS / ON CONFLICT /

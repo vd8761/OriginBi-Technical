@@ -116,6 +116,23 @@ func (r *Registry) Reload(ctx context.Context) error {
 		return fmt.Errorf("pluginhost: iterate plugin rows: %w", err)
 	}
 
+	// Inject kernel-provided slugs as synthetic manifests so plugins that
+	// declare them in `requires` resolve cleanly. The kernel is the host
+	// runtime itself — not a database row — see docs/plugin-architecture/
+	// plugin-model.md ("runtime.exam-session: kernel; not a plugin row").
+	for _, slug := range kernelSlugs() {
+		if _, exists := bySlug[slug]; exists {
+			continue
+		}
+		bySlug[slug] = &Manifest{
+			Slug:             slug,
+			Name:             slug,
+			Version:          "kernel",
+			PluginType:       PluginType("kernel"),
+			EnabledByDefault: true,
+		}
+	}
+
 	order, errs := resolveGraph(bySlug)
 
 	// Fatal only if a blocking slug has an unresolved problem.
@@ -223,4 +240,13 @@ func (r *Registry) LoadedAt() time.Time {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.loadedAt
+}
+
+// kernelSlugs lists capability slugs that the exam-engine itself satisfies
+// at runtime. Plugins are allowed to declare these in `requires` without a
+// matching row in the plugins table.
+func kernelSlugs() []string {
+	return []string{
+		"runtime.exam-session",
+	}
 }

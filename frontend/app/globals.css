@@ -1302,11 +1302,17 @@
   gap: 9px;
   width: min(420px, 36vw);
   height: 38px;
-  padding: 0 12px;
+  padding: 0 8px 0 12px;
   border: 1px solid var(--admin-border-strong);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--admin-fg-3);
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.admin-search:focus-within {
+  border-color: rgba(30, 211, 106, 0.45);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .admin-search input {

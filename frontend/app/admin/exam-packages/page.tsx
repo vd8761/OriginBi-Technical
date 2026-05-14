@@ -1,9 +1,28 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Clock, IndianRupee, PackageCheck, Plus } from "lucide-react";
+import {
+  Clock,
+  Copy,
+  Edit3,
+  IndianRupee,
+  MoreHorizontal,
+  PackageCheck,
+  Plus,
+  Users,
+} from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  ErrorState,
+  Modal,
+  PillTabs,
+  StatusDot,
+} from "@/components/admin/ui";
 import {
   createExamPackage,
   listExamPackages,
@@ -12,11 +31,27 @@ import {
   type Plugin,
 } from "@/lib/api";
 
+type PackageStatus = "all" | "published" | "draft" | "archived";
+
 function ExamPackagesInner() {
+  useRegisterAdminPage({
+    eyebrow: "Catalog / Assessments",
+    title: "Exam Packages",
+    subtitle: "Bundle exams with language plugins, duration limits, score caps, and pricing.",
+    breadcrumb: [
+      { label: "Admin Hub", href: "/admin" },
+      { label: "Assessments" },
+    ],
+  });
+
   const [packages, setPackages] = useState<AdminExamPackage[]>([]);
   const [languages, setLanguages] = useState<Plugin[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<PackageStatus>("all");
+  const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string>("");
   const [newPkg, setNewPkg] = useState({
     title: "",
     slug: "",
@@ -27,14 +62,40 @@ function ExamPackagesInner() {
     maxScore: 100,
   });
 
-  useEffect(() => {
+  const reload = React.useCallback(() => {
+    setLoading(true);
+    setError(null);
     listExamPackages()
       .then((data) => setPackages(data.examPackages))
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load packages."));
+      .catch((err) => setError(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    reload();
     listPlugins({ category: "language" })
       .then((data) => setLanguages(data.plugins))
       .catch(() => undefined);
-  }, []);
+  }, [reload]);
+
+  const counts = useMemo(() => {
+    const byStatus = packages.reduce<Record<string, number>>((acc, pkg) => {
+      acc[pkg.status] = (acc[pkg.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    return {
+      all: packages.length,
+      published: byStatus.published ?? 0,
+      draft: byStatus.draft ?? 0,
+      archived: byStatus.archived ?? 0,
+    };
+  }, [packages]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return packages;
+    return packages.filter((p) => p.status === filter);
+  }, [filter, packages]);
 
   const toggleLang = (slug: string) => {
     setNewPkg((pkg) => ({
@@ -45,10 +106,10 @@ function ExamPackagesInner() {
     }));
   };
 
-  const create = async (event: React.FormEvent) => {
+  const submitCreate = async (event: React.FormEvent) => {
     event.preventDefault();
     setCreating(true);
-    setError("");
+    setCreateError("");
     try {
       await createExamPackage({
         title: newPkg.title,
@@ -60,8 +121,7 @@ function ExamPackagesInner() {
         max_score: newPkg.maxScore,
         currency: "INR",
       });
-      const refreshed = await listExamPackages();
-      setPackages(refreshed.examPackages);
+      setCreateOpen(false);
       setNewPkg({
         title: "",
         slug: "",
@@ -71,8 +131,9 @@ function ExamPackagesInner() {
         totalTimeSeconds: 5400,
         maxScore: 100,
       });
+      reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed.");
+      setCreateError(err instanceof Error ? err.message : "Create failed.");
     } finally {
       setCreating(false);
     }
@@ -80,37 +141,184 @@ function ExamPackagesInner() {
 
   return (
     <div className="admin-page">
-      <div className="admin-page-header">
-        <div>
-          <p className="admin-page-eyebrow">Catalog / Assessments</p>
-          <h2 className="admin-page-title">Exam Packages</h2>
-          <p className="admin-page-copy">
-            Bundle exams with language plugins, duration limits, score caps, and optional purchase pricing.
-          </p>
+      <div className="admin-control-row">
+        <PillTabs
+          value={filter}
+          onChange={setFilter}
+          tabs={[
+            { value: "all", label: "All", count: counts.all },
+            { value: "published", label: "Published", count: counts.published },
+            { value: "draft", label: "Drafts", count: counts.draft },
+            { value: "archived", label: "Archived", count: counts.archived },
+          ]}
+        />
+        <div className="admin-row">
+          <button type="button" className="admin-btn admin-btn-secondary">
+            <Copy size={14} /> Duplicate
+          </button>
+          <button
+            type="button"
+            className="admin-btn admin-btn-primary"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus size={14} /> New Package
+          </button>
         </div>
-        <span className="admin-badge admin-badge-green">
-          <span className="admin-dot" />
-          {packages.length} packages
-        </span>
       </div>
 
-      {error && <div className="admin-error">{error}</div>}
+      {error !== null ? (
+        <ErrorState
+          title="Couldn't load exam packages"
+          error={error}
+          onRetry={reload}
+          hint="Make sure NEXT_PUBLIC_API_BASE points at the running exam-engine."
+        />
+      ) : null}
 
-      <section className="admin-card admin-card-pad">
-        <div className="admin-control-row" style={{ marginBottom: 16 }}>
-          <div>
-            <h3 className="admin-card-title">Create New Package</h3>
-            <p className="admin-card-subtitle">Use the same backend package API with the updated admin UI.</p>
-          </div>
-          <PackageCheck size={18} color="var(--admin-green)" />
+      {!error && (
+        <section className="admin-grid-2">
+          {filtered.map((pkg) => {
+            const tone = pkg.status === "published" ? "green" : pkg.status === "draft" ? "amber" : "neutral";
+            const minutes = Math.round(pkg.totalTimeSeconds / 60);
+            return (
+              <Card key={pkg.id}>
+                <div className="admin-control-row" style={{ marginBottom: 14 }}>
+                  <div className="admin-row">
+                    <span
+                      className="admin-module-icon"
+                      style={{ background: "var(--admin-blue-soft)", color: "var(--admin-blue)" }}
+                    >
+                      <PackageCheck size={20} />
+                    </span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: "var(--admin-fg)" }}>
+                        {pkg.title}
+                      </div>
+                      <div className="admin-row" style={{ marginTop: 4, gap: 6 }}>
+                        <Badge tone="neutral">{pkg.slug}</Badge>
+                        <Badge tone={tone} dot>{pkg.status}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="admin-icon-btn" type="button" aria-label="More">
+                    <MoreHorizontal size={14} />
+                  </button>
+                </div>
+
+                <div className="admin-grid-4" style={{ gap: 8, marginBottom: 14 }}>
+                  {[
+                    { label: "Score", value: pkg.maxScore },
+                    { label: "Duration", value: `${minutes}m` },
+                    { label: "Status", value: pkg.status },
+                    { label: "Created", value: new Date(pkg.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      style={{
+                        padding: "10px 12px",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: "var(--admin-r-md)",
+                        background: "rgba(255,255,255,0.025)",
+                      }}
+                    >
+                      <p className="admin-stat-label">{s.label}</p>
+                      <strong style={{ color: "var(--admin-fg)", fontSize: 15 }}>{s.value}</strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div
+                  className="admin-control-row"
+                  style={{ paddingTop: 14, borderTop: "1px solid var(--admin-border)" }}
+                >
+                  <span style={{ fontSize: 11.5, color: "var(--admin-fg-4)" }}>
+                    Created {new Date(pkg.createdAt).toLocaleDateString()}
+                  </span>
+                  <div className="admin-row">
+                    <button type="button" className="admin-btn admin-btn-ghost" style={{ fontSize: 11.5 }}>
+                      Analytics
+                    </button>
+                    <Link
+                      href={`/admin/exam-packages/${pkg.id}`}
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11.5 }}
+                    >
+                      <Edit3 size={12} /> Edit
+                    </Link>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </section>
+      )}
+
+      {!error && !loading && filtered.length === 0 && (
+        <EmptyState
+          icon={<PackageCheck size={26} />}
+          title="No exam packages yet"
+          description="Create your first package to bundle a set of questions, languages, and time limits."
+          action={
+            <button type="button" className="admin-btn admin-btn-primary" onClick={() => setCreateOpen(true)}>
+              <Plus size={14} /> New Package
+            </button>
+          }
+        />
+      )}
+
+      {loading && !error && (
+        <div className="admin-grid-2">
+          {[0, 1].map((i) => (
+            <div key={i} className="admin-skeleton" style={{ height: 220 }} />
+          ))}
         </div>
-        <form onSubmit={create} className="admin-grid-2">
+      )}
+
+      {!loading && !error && (
+        <p style={{ display: "inline-flex", gap: 8, color: "var(--admin-fg-3)", fontSize: 12, alignItems: "center" }}>
+          <StatusDot tone="green" /> Showing {filtered.length} of {counts.all} packages
+        </p>
+      )}
+
+      <Modal
+        open={createOpen}
+        onClose={() => !creating && setCreateOpen(false)}
+        eyebrow="New Exam Package"
+        title="Bundle questions, languages, and limits"
+        footer={
+          <>
+            <span className="admin-autosave">
+              <Users size={13} color="var(--admin-fg-3)" /> Visible in catalog after publish
+            </span>
+            <div className="admin-row">
+              <button
+                type="button"
+                className="admin-btn admin-btn-ghost"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="new-package-form"
+                className="admin-btn admin-btn-primary"
+                disabled={creating}
+              >
+                <Plus size={14} /> {creating ? "Creating..." : "Create Package"}
+              </button>
+            </div>
+          </>
+        }
+      >
+        <form id="new-package-form" onSubmit={submitCreate} className="admin-grid-2">
           <Field label="Title">
             <input
               required
               value={newPkg.title}
               onChange={(event) => setNewPkg({ ...newPkg, title: event.target.value })}
               className="admin-field"
+              placeholder="Python Coding Challenge"
             />
           </Field>
           <Field label="Slug">
@@ -128,18 +336,21 @@ function ExamPackagesInner() {
               onChange={(event) => setNewPkg({ ...newPkg, description: event.target.value })}
               rows={3}
               className="admin-field"
-              style={{ paddingTop: 10, minHeight: 88 }}
+              style={{ paddingTop: 10, minHeight: 90 }}
+              placeholder="Optional internal note that helps editors understand the bundle."
             />
           </Field>
-          <Field label="Time Limit">
+          <Field label="Time limit (seconds)">
             <input
               type="number"
               value={newPkg.totalTimeSeconds}
-              onChange={(event) => setNewPkg({ ...newPkg, totalTimeSeconds: Number(event.target.value) })}
+              onChange={(event) =>
+                setNewPkg({ ...newPkg, totalTimeSeconds: Number(event.target.value) })
+              }
               className="admin-field"
             />
           </Field>
-          <Field label="Max Score">
+          <Field label="Max score">
             <input
               type="number"
               value={newPkg.maxScore}
@@ -147,7 +358,7 @@ function ExamPackagesInner() {
               className="admin-field"
             />
           </Field>
-          <Field label="Price in paise">
+          <Field label="Price (paise)">
             <input
               type="number"
               value={newPkg.priceCents}
@@ -155,65 +366,40 @@ function ExamPackagesInner() {
               className="admin-field"
             />
           </Field>
-          <div className="admin-form-label">
-            Bound Languages
-            <div className="admin-row" style={{ flexWrap: "wrap" }}>
-              {languages.map((language) => (
-                <button
-                  key={language.id}
-                  type="button"
-                  onClick={() => toggleLang(language.slug)}
-                  className={`admin-btn ${newPkg.languages.includes(language.slug) ? "admin-btn-primary" : "admin-btn-secondary"}`}
-                >
-                  {language.name}
-                </button>
-              ))}
+          <div className="admin-grid-span">
+            <p className="admin-form-label" style={{ marginBottom: 8 }}>Bound languages</p>
+            <div className="admin-row" style={{ flexWrap: "wrap", gap: 6 }}>
+              {languages.length === 0 && (
+                <span className="admin-card-subtitle">No language plugins available yet.</span>
+              )}
+              {languages.map((language) => {
+                const enabled = newPkg.languages.includes(language.slug);
+                return (
+                  <button
+                    key={language.id}
+                    type="button"
+                    onClick={() => toggleLang(language.slug)}
+                    className={`admin-btn ${enabled ? "admin-btn-primary" : "admin-btn-secondary"}`}
+                  >
+                    {language.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div>
-            <button type="submit" disabled={creating} className="admin-btn admin-btn-primary">
-              <Plus size={14} /> {creating ? "Creating..." : "Create Package"}
-            </button>
-          </div>
+          {createError && (
+            <div className="admin-error admin-grid-span" style={{ whiteSpace: "normal" }}>
+              {createError}
+            </div>
+          )}
         </form>
-      </section>
+      </Modal>
 
-      <section className="admin-grid-3">
-        {packages.map((pkg) => (
-          <Link key={pkg.id} href={`/admin/exam-packages/${pkg.id}`} className="admin-module-card">
-            <div className="admin-control-row">
-              <span className="admin-module-icon" style={{ background: "rgba(56,189,248,0.14)", color: "var(--admin-blue)" }}>
-                <PackageCheck size={20} />
-              </span>
-              <span className={`admin-badge ${pkg.status === "published" ? "admin-badge-green" : "admin-badge-amber"}`}>
-                <span className="admin-dot" />
-                {pkg.status}
-              </span>
-            </div>
-            <div>
-              <h3 className="admin-card-title">{pkg.title}</h3>
-              <p className="admin-card-subtitle admin-mono">{pkg.slug}</p>
-            </div>
-            <div className="admin-row">
-              <span className="admin-badge">
-                <Clock size={12} /> {Math.round(pkg.totalTimeSeconds / 60)} min
-              </span>
-              <span className="admin-badge">Score {pkg.maxScore}</span>
-              <span className="admin-badge">
-                <IndianRupee size={12} /> catalog
-              </span>
-            </div>
-            <p className="admin-card-subtitle">Created {new Date(pkg.createdAt).toLocaleDateString()}</p>
-          </Link>
-        ))}
-      </section>
-
-      {packages.length === 0 && (
-        <div className="admin-card admin-card-pad" style={{ textAlign: "center", padding: 44 }}>
-          <PackageCheck size={32} color="var(--admin-fg-4)" />
-          <h3 className="admin-card-title" style={{ marginTop: 14 }}>No exam packages yet</h3>
-        </div>
-      )}
+      {/* Footer hint with currency icon to keep parity with the design "₹ catalog" badge */}
+      <div className="admin-row" style={{ color: "var(--admin-fg-4)", fontSize: 11, gap: 6 }}>
+        <Clock size={12} />
+        <IndianRupee size={12} /> Priced packages appear in the public catalog automatically when published.
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Archive,
+  Check,
   Code2,
   Download,
   FileText,
@@ -12,6 +13,15 @@ import {
   Upload,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  ErrorState,
+  SegmentedToggle,
+  StatusDot,
+} from "@/components/admin/ui";
 import {
   archiveAdminQuestion,
   listAdminQuestions,
@@ -24,10 +34,10 @@ function difficultyLabel(n: number) {
   return ["-", "Easy", "Easy+", "Medium", "Hard", "Hard+"][n] ?? "?";
 }
 
-function difficultyTone(n: number) {
-  if (n <= 2) return "admin-badge-green";
-  if (n === 3) return "admin-badge-amber";
-  return "admin-badge-red";
+function difficultyTone(n: number): "green" | "amber" | "red" {
+  if (n <= 2) return "green";
+  if (n === 3) return "amber";
+  return "red";
 }
 
 function getBodyText(q: AdminQuestion, key: string, fallback = "") {
@@ -36,8 +46,19 @@ function getBodyText(q: AdminQuestion, key: string, fallback = "") {
 }
 
 function CodingListInner() {
+  useRegisterAdminPage({
+    eyebrow: "Question Banks",
+    title: "Coding Question Bank",
+    subtitle: "Manage problems, judge limits, and test cases for the assessment.coding plugin.",
+    breadcrumb: [
+      { label: "Admin Hub", href: "/admin" },
+      { label: "Question Banks", href: "/admin/coding" },
+      { label: "Coding" },
+    ],
+  });
+
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState<number>(0);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -47,6 +68,7 @@ function CodingListInner() {
 
   const reload = React.useCallback(() => {
     setLoading(true);
+    setError(null);
     listAdminQuestions({
       pluginSlug: "assessment.coding",
       search: search.trim() || undefined,
@@ -54,9 +76,7 @@ function CodingListInner() {
       includeArchived,
     })
       .then((data) => setQuestions(data.questions))
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Question lookup failed."),
-      )
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includeArchived]);
@@ -81,7 +101,7 @@ function CodingListInner() {
       await archiveAdminQuestion(id);
       reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Archive failed.");
+      setError(err);
     }
   };
 
@@ -107,61 +127,74 @@ function CodingListInner() {
       </div>
 
       <section className="admin-grid-3">
-        <div className="admin-module-card">
+        <Card className="admin-module-card" pad={false}>
           <div className="admin-control-row">
-            <span className="admin-module-icon" style={{ background: "rgba(255,183,3,0.14)", color: "var(--admin-amber)" }}>
+            <span
+              className="admin-module-icon"
+              style={{ background: "var(--admin-amber-soft)", color: "var(--admin-amber)" }}
+            >
               <Code2 size={20} />
             </span>
-            <span className="admin-badge admin-badge-amber">Primary</span>
+            <Badge tone="amber">Primary</Badge>
           </div>
           <div>
             <h3 className="admin-card-title">Coding Problems</h3>
-            <p className="admin-card-subtitle">Starter code, limits, judge options, and test cases.</p>
+            <p className="admin-card-subtitle">
+              Starter code, limits, judge options, and test cases.
+            </p>
           </div>
           <div className="admin-row">
-            <span className="admin-badge">Trial 12</span>
-            <span className="admin-badge">Main {questions.length}</span>
+            <Badge tone="neutral">Trial 12</Badge>
+            <Badge tone="neutral">Main {questions.length}</Badge>
           </div>
-        </div>
-        <div className="admin-module-card">
+        </Card>
+        <Card className="admin-module-card" pad={false}>
           <div className="admin-control-row">
-            <span className="admin-module-icon" style={{ background: "rgba(30,211,106,0.14)", color: "var(--admin-green)" }}>
+            <span
+              className="admin-module-icon"
+              style={{ background: "var(--admin-green-soft)", color: "var(--admin-green)" }}
+            >
               <FileText size={20} />
             </span>
-            <span className="admin-badge admin-badge-green">Versioned</span>
+            <Badge tone="green">Versioned</Badge>
           </div>
           <div>
             <h3 className="admin-card-title">Question Snapshots</h3>
-            <p className="admin-card-subtitle">Published attempts keep their original frozen version.</p>
+            <p className="admin-card-subtitle">
+              Published attempts keep their original frozen version.
+            </p>
           </div>
           <div className="admin-row">
-            <span className="admin-badge">Draft safe</span>
-            <span className="admin-badge">Immutable attempts</span>
+            <Badge tone="neutral">Draft safe</Badge>
+            <Badge tone="neutral">Immutable attempts</Badge>
           </div>
-        </div>
-        <div className="admin-module-card">
+        </Card>
+        <Card className="admin-module-card" pad={false}>
           <div className="admin-control-row">
-            <span className="admin-module-icon" style={{ background: "rgba(56,189,248,0.14)", color: "var(--admin-blue)" }}>
+            <span
+              className="admin-module-icon"
+              style={{ background: "var(--admin-blue-soft)", color: "var(--admin-blue)" }}
+            >
               <Archive size={20} />
             </span>
-            <span className="admin-badge">Archive</span>
+            <Badge tone="blue">Archive</Badge>
           </div>
           <div>
             <h3 className="admin-card-title">Lifecycle Controls</h3>
-            <p className="admin-card-subtitle">Hide questions without breaking in-flight assessments.</p>
+            <p className="admin-card-subtitle">
+              Hide questions without breaking in-flight assessments.
+            </p>
           </div>
-          <div className="admin-row">
-            <label className="admin-row admin-muted" style={{ fontSize: 12 }}>
-              <input
-                type="checkbox"
-                checked={includeArchived}
-                onChange={(event) => setIncludeArchived(event.target.checked)}
-                style={{ accentColor: "var(--admin-green)" }}
-              />
-              Show archived
-            </label>
-          </div>
-        </div>
+          <label className="admin-row" style={{ fontSize: 12, color: "var(--admin-fg-3)", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(event) => setIncludeArchived(event.target.checked)}
+              style={{ accentColor: "var(--admin-green)" }}
+            />
+            Show archived
+          </label>
+        </Card>
       </section>
 
       <form
@@ -171,15 +204,15 @@ function CodingListInner() {
         }}
         className="admin-control-row"
       >
-        <div className="admin-row">
-          <div className="admin-segment">
-            <button type="button" className={mode === "trial" ? "is-active" : ""} onClick={() => setMode("trial")}>
-              Trial
-            </button>
-            <button type="button" className={mode === "main" ? "is-active" : ""} onClick={() => setMode("main")}>
-              Main
-            </button>
-          </div>
+        <div className="admin-row" style={{ flexWrap: "wrap", gap: 10 }}>
+          <SegmentedToggle
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "trial", label: "Trial" },
+              { value: "main", label: "Main" },
+            ]}
+          />
           <select className="admin-select" value={topic} onChange={(event) => setTopic(event.target.value)}>
             <option value="all">All topics</option>
             {topics.map((item) => (
@@ -200,7 +233,7 @@ function CodingListInner() {
               </option>
             ))}
           </select>
-          <label className="admin-search" style={{ width: 260 }}>
+          <label className="admin-search" style={{ width: 280 }}>
             <Search size={14} />
             <input
               value={search}
@@ -219,93 +252,135 @@ function CodingListInner() {
         </div>
       </form>
 
-      {error && <div className="admin-error">{error}</div>}
+      {error !== null ? (
+        <ErrorState
+          title="Couldn't load coding problems"
+          error={error}
+          onRetry={reload}
+          hint="If you just started the dev server, make sure NEXT_PUBLIC_API_BASE points at the Go exam-engine."
+        />
+      ) : null}
 
-      <section className="admin-grid-2">
-        {filtered.map((q) => {
-          const category = getBodyText(q, "category", "Coding");
-          const description = getBodyText(q, "description", "No description has been added for this problem yet.");
-          const tags = Array.isArray(q.body?.tags) ? (q.body.tags as string[]).slice(0, 3) : [];
-          return (
-            <article key={q.id} className="admin-problem-card">
-              <div className="admin-control-row">
-                <div className="admin-row">
-                  <span className="admin-mono admin-muted" style={{ fontSize: 11 }}>
-                    {q.id.slice(0, 8)}
-                  </span>
-                  <span className={`admin-badge ${q.isArchived ? "" : "admin-badge-green"}`}>
-                    <span className="admin-dot" />
-                    {q.isArchived ? "archived" : "active"}
-                  </span>
+      {!error && (
+        <section className="admin-grid-2">
+          {filtered.map((q) => {
+            const category = getBodyText(q, "category", "Coding");
+            const description = getBodyText(
+              q,
+              "description",
+              "No description has been added for this problem yet.",
+            );
+            const tags = Array.isArray(q.body?.tags)
+              ? (q.body.tags as string[]).slice(0, 4)
+              : [];
+            return (
+              <article key={q.id} className="admin-problem-card">
+                <div className="admin-control-row">
+                  <div className="admin-row">
+                    <span className="admin-mono" style={{ fontSize: 11.5, color: "var(--admin-fg-3)" }}>
+                      {q.id.slice(0, 8)}
+                    </span>
+                    <Badge tone={q.isArchived ? "neutral" : "green"} dot>
+                      {q.isArchived ? "archived" : "active"}
+                    </Badge>
+                  </div>
+                  <Badge tone={difficultyTone(q.difficulty)}>{difficultyLabel(q.difficulty)}</Badge>
                 </div>
-                <span className={`admin-badge ${difficultyTone(q.difficulty)}`}>
-                  {difficultyLabel(q.difficulty)}
-                </span>
-              </div>
 
-              <div>
-                <Link href={`/admin/coding/${q.id}`} style={{ fontSize: 16, fontWeight: 850, color: "var(--admin-fg)" }}>
-                  {q.title}
-                </Link>
-                <p className="admin-card-subtitle" style={{ lineHeight: 1.55 }}>
-                  {description.replace(/[`*]/g, "").slice(0, 170)}
-                  {description.length > 170 ? "..." : ""}
-                </p>
-              </div>
-
-              <div className="admin-grid-4" style={{ gap: 8 }}>
-                <div className="admin-card admin-card-pad" style={{ padding: 10 }}>
-                  <p className="admin-stat-label">Score</p>
-                  <strong>{q.maxScore}</strong>
-                </div>
-                <div className="admin-card admin-card-pad" style={{ padding: 10 }}>
-                  <p className="admin-stat-label">Version</p>
-                  <strong>v{q.versionNumber}</strong>
-                </div>
-                <div className="admin-card admin-card-pad" style={{ padding: 10 }}>
-                  <p className="admin-stat-label">Topic</p>
-                  <strong>{category}</strong>
-                </div>
-                <div className="admin-card admin-card-pad" style={{ padding: 10 }}>
-                  <p className="admin-stat-label">Mode</p>
-                  <strong>{mode}</strong>
-                </div>
-              </div>
-
-              <div className="admin-control-row">
-                <div className="admin-row">
-                  {tags.length > 0 ? (
-                    tags.map((tag) => (
-                      <span key={tag} className="admin-badge">
-                        {tag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="admin-badge">{category}</span>
-                  )}
-                </div>
-                <div className="admin-row">
-                  <Link href={`/admin/coding/${q.id}`} className="admin-btn admin-btn-secondary">
-                    Edit
+                <div>
+                  <Link
+                    href={`/admin/coding/${q.id}`}
+                    style={{ fontSize: 16, fontWeight: 800, color: "var(--admin-fg)", textDecoration: "none" }}
+                  >
+                    {q.title}
                   </Link>
-                  {!q.isArchived && (
-                    <button type="button" onClick={() => onArchive(q.id)} className="admin-btn admin-btn-ghost">
-                      Archive
-                    </button>
-                  )}
+                  <p
+                    className="admin-card-subtitle"
+                    style={{ lineHeight: 1.55, marginTop: 6 }}
+                  >
+                    {description.replace(/[`*]/g, "").slice(0, 170)}
+                    {description.length > 170 ? "..." : ""}
+                  </p>
                 </div>
-              </div>
-            </article>
-          );
-        })}
-      </section>
 
-      {filtered.length === 0 && !loading && (
-        <div className="admin-card admin-card-pad" style={{ textAlign: "center", padding: 48 }}>
-          <Code2 size={32} color="var(--admin-fg-4)" />
-          <h3 className="admin-card-title" style={{ marginTop: 14 }}>No coding problems found</h3>
-          <p className="admin-card-subtitle">Try adjusting the filters or create your first redesigned problem.</p>
+                <div className="admin-grid-4" style={{ gap: 8 }}>
+                  {[
+                    { label: "Score", value: q.maxScore },
+                    { label: "Version", value: `v${q.versionNumber}` },
+                    { label: "Topic", value: category },
+                    { label: "Mode", value: mode },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      style={{
+                        padding: "10px 12px",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: "var(--admin-r-md)",
+                        background: "rgba(255,255,255,0.025)",
+                      }}
+                    >
+                      <p className="admin-stat-label">{stat.label}</p>
+                      <strong style={{ color: "var(--admin-fg)", fontSize: 13 }}>{stat.value}</strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="admin-control-row">
+                  <div className="admin-row" style={{ flexWrap: "wrap", gap: 6 }}>
+                    {(tags.length > 0 ? tags : [category]).map((tag) => (
+                      <Badge key={tag} tone="neutral">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="admin-row">
+                    <Link href={`/admin/coding/${q.id}`} className="admin-btn admin-btn-secondary">
+                      Edit
+                    </Link>
+                    {!q.isArchived && (
+                      <button
+                        type="button"
+                        onClick={() => onArchive(q.id)}
+                        className="admin-btn admin-btn-ghost"
+                      >
+                        <Archive size={13} /> Archive
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+
+      {!error && !loading && filtered.length === 0 && (
+        <EmptyState
+          icon={<Code2 size={26} />}
+          title="No coding problems found"
+          description="Try adjusting the filters above or create your first redesigned problem."
+          action={
+            <Link href="/admin/coding/new" className="admin-btn admin-btn-primary">
+              <Plus size={14} /> New Problem
+            </Link>
+          }
+        />
+      )}
+
+      {loading && !error && (
+        <div className="admin-grid-2">
+          {[0, 1].map((i) => (
+            <div key={i} className="admin-skeleton" style={{ height: 200 }} />
+          ))}
         </div>
+      )}
+
+      {!loading && !error && questions.length > 0 && (
+        <p style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--admin-fg-3)", fontSize: 12 }}>
+          <Check size={13} color="var(--admin-green)" />
+          Showing {filtered.length} of {questions.length} problems · {mode} pool
+          <StatusDot tone="green" />
+        </p>
       )}
     </div>
   );

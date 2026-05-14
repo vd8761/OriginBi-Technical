@@ -2,13 +2,17 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Blocks, CheckCircle2, SlidersHorizontal } from "lucide-react";
+import { Blocks, CheckCircle2 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import { Badge, Card, EmptyState, ErrorState, PillTabs } from "@/components/admin/ui";
 import { listPlugins, updatePluginState, type Plugin } from "@/lib/api";
 
 const states: Plugin["platformState"][] = ["enabled", "restricted", "disabled"];
 
-const categoryFacets = [
+type CategoryValue = "" | "assessment" | "evaluation" | "language" | "runner" | "proctoring" | "feature" | "media";
+
+const categoryFacets: { value: CategoryValue; label: string }[] = [
   { value: "", label: "All" },
   { value: "assessment", label: "Assessment" },
   { value: "evaluation", label: "Evaluation" },
@@ -19,23 +23,42 @@ const categoryFacets = [
   { value: "media", label: "Media" },
 ];
 
-function stateClass(state: Plugin["platformState"]) {
-  if (state === "enabled") return "admin-badge-green";
-  if (state === "restricted") return "admin-badge-amber";
-  return "";
+function stateTone(state: Plugin["platformState"]) {
+  if (state === "enabled") return "green" as const;
+  if (state === "restricted") return "amber" as const;
+  return "neutral" as const;
 }
 
 function AdminPluginsInner() {
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState<string | null>(null);
-  const [category, setCategory] = useState<string>("");
+  useRegisterAdminPage({
+    eyebrow: "System / Plugins",
+    title: "Plugin Registry",
+    subtitle: "Platform controls for assessment plugins, language runtimes, evaluators, runners, and addons.",
+    breadcrumb: [
+      { label: "Admin Hub", href: "/admin" },
+      { label: "Plugins" },
+    ],
+  });
 
-  useEffect(() => {
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [error, setError] = useState<unknown>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [category, setCategory] = useState<CategoryValue>("");
+
+  const reload = React.useCallback(() => {
+    setLoading(true);
+    setError(null);
     listPlugins(category ? { category } : {})
       .then((data) => setPlugins(data.plugins))
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load plugins."));
+      .catch((err) => setError(err))
+      .finally(() => setLoading(false));
   }, [category]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    reload();
+  }, [reload]);
 
   const grouped = useMemo(() => {
     return plugins.reduce<Record<string, Plugin[]>>((acc, plugin) => {
@@ -47,59 +70,38 @@ function AdminPluginsInner() {
 
   const setPluginState = async (plugin: Plugin, state: Plugin["platformState"]) => {
     setSaving(plugin.id);
-    setError("");
+    setError(null);
     try {
       await updatePluginState(plugin.id, { state, config: plugin.platformConfig ?? {} });
       setPlugins((current) =>
-        current.map((item) =>
-          item.id === plugin.id ? { ...item, platformState: state } : item,
-        ),
+        current.map((item) => (item.id === plugin.id ? { ...item, platformState: state } : item)),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Plugin update failed.");
+      setError(err);
     } finally {
       setSaving(null);
     }
   };
 
+  const enabledCount = plugins.filter((p) => p.platformState === "enabled").length;
+
   return (
     <div className="admin-page">
-      <div className="admin-page-header">
-        <div>
-          <p className="admin-page-eyebrow">System / Plugins</p>
-          <h2 className="admin-page-title">Plugin Registry</h2>
-          <p className="admin-page-copy">
-            Platform-level controls for assessment plugins, language runtimes, evaluators, runners, and addons.
-          </p>
-        </div>
+      <div className="admin-control-row">
+        <PillTabs
+          value={category}
+          onChange={(next) => setCategory(next as CategoryValue)}
+          tabs={categoryFacets.map((f) => ({ value: f.value, label: f.label }))}
+        />
         <div className="admin-row">
-          <span className="admin-badge admin-badge-green">
-            <span className="admin-dot" />
-            {plugins.filter((plugin) => plugin.platformState === "enabled").length} enabled
-          </span>
-          <span className="admin-badge">
-            {plugins.length} total
-          </span>
+          <Badge tone="green" dot>{enabledCount} enabled</Badge>
+          <Badge tone="neutral">{plugins.length} total</Badge>
         </div>
       </div>
 
-      <div className="admin-row" style={{ flexWrap: "wrap" }}>
-        {categoryFacets.map((facet) => (
-          <button
-            key={facet.value || "all"}
-            type="button"
-            onClick={() => setCategory(facet.value)}
-            className={`admin-btn ${category === facet.value ? "admin-btn-primary" : "admin-btn-secondary"}`}
-          >
-            {facet.value === "language" ? <SlidersHorizontal size={13} /> : <Blocks size={13} />}
-            {facet.label}
-          </button>
-        ))}
-      </div>
+      {error !== null ? <ErrorState title="Couldn't load plugins" error={error} onRetry={reload} /> : null}
 
-      {error && <div className="admin-error">{error}</div>}
-
-      {Object.entries(grouped).map(([bucket, items]) => (
+      {!error && Object.entries(grouped).map(([bucket, items]) => (
         <section key={bucket} className="admin-stack">
           <div className="admin-control-row">
             <div>
@@ -109,34 +111,38 @@ function AdminPluginsInner() {
           </div>
           <div className="admin-grid-2">
             {items.map((plugin) => (
-              <article key={plugin.id} className="admin-card admin-card-pad admin-stack">
+              <Card key={plugin.id}>
                 <div className="admin-control-row">
                   <div>
-                    <Link href={`/admin/plugins/${plugin.id}`} style={{ color: "var(--admin-fg)", fontWeight: 850 }}>
+                    <Link
+                      href={`/admin/plugins/${plugin.id}`}
+                      style={{ color: "var(--admin-fg)", fontWeight: 800, textDecoration: "none" }}
+                    >
                       {plugin.name}
                     </Link>
                     <p className="admin-card-subtitle admin-mono">
-                      {plugin.slug} / v{plugin.version}
+                      {plugin.slug} · v{plugin.version}
                     </p>
                   </div>
-                  <span className={`admin-badge ${stateClass(plugin.platformState)}`}>
-                    <span className="admin-dot" />
+                  <Badge tone={stateTone(plugin.platformState)} dot>
                     {plugin.platformState}
-                  </span>
+                  </Badge>
                 </div>
 
-                <div className="admin-row">
-                  {plugin.pluginType && <span className="admin-badge">{plugin.pluginType}</span>}
-                  {plugin.category && <span className="admin-badge">{plugin.category}</span>}
-                  {plugin.requiresLicense && <span className="admin-badge admin-badge-amber">licensed</span>}
-                  {plugin.configSchema && <span className="admin-badge admin-badge-green">schema</span>}
+                <div className="admin-row" style={{ marginTop: 14, flexWrap: "wrap", gap: 6 }}>
+                  {plugin.pluginType && <Badge tone="neutral">{plugin.pluginType}</Badge>}
+                  {plugin.category && <Badge tone="blue">{plugin.category}</Badge>}
+                  {plugin.requiresLicense && <Badge tone="amber">licensed</Badge>}
+                  {plugin.configSchema && <Badge tone="green">schema</Badge>}
                 </div>
 
                 {plugin.dependents && plugin.dependents.length > 0 && (
-                  <p className="admin-card-subtitle">Used by: {plugin.dependents.join(", ")}</p>
+                  <p className="admin-card-subtitle" style={{ marginTop: 12 }}>
+                    Used by: {plugin.dependents.join(", ")}
+                  </p>
                 )}
 
-                <div className="admin-row" style={{ marginTop: "auto" }}>
+                <div className="admin-row" style={{ marginTop: 16, gap: 6 }}>
                   {states.map((state) => {
                     const active = plugin.platformState === state;
                     return (
@@ -147,17 +153,33 @@ function AdminPluginsInner() {
                         disabled={saving === plugin.id || active}
                         className={`admin-btn ${active ? "admin-btn-primary" : "admin-btn-secondary"}`}
                       >
-                        {active && <CheckCircle2 size={13} />}
+                        {active && <CheckCircle2 size={12} />}
                         {state}
                       </button>
                     );
                   })}
                 </div>
-              </article>
+              </Card>
             ))}
           </div>
         </section>
       ))}
+
+      {!error && !loading && plugins.length === 0 && (
+        <EmptyState
+          icon={<Blocks size={26} />}
+          title="No plugins available"
+          description="Plugins are loaded from the exam-engine. Confirm the service is running and registered."
+        />
+      )}
+
+      {loading && !error && (
+        <div className="admin-grid-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="admin-skeleton" style={{ height: 180 }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

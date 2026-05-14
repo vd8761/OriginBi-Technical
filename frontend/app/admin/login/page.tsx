@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
 import { signIn, fetchAuthSession, signOut } from "aws-amplify/auth";
 import { configureAmplify } from "@/lib/aws-amplify-config";
@@ -15,6 +15,11 @@ function getErrorMessage(err: unknown) {
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextParam = searchParams.get("next");
+  const safeNext = nextParam && nextParam.startsWith("/admin") && !nextParam.startsWith("/admin/login")
+    ? nextParam
+    : "/admin";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -24,10 +29,11 @@ export default function AdminLoginPage() {
 
   useEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
-    if (adminSession === "true") {
-      router.push("/admin");
+    const idToken = localStorage.getItem("originbi:id-token");
+    if (adminSession === "true" && idToken) {
+      router.push(safeNext);
     }
-  }, [router]);
+  }, [router, safeNext]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -65,8 +71,19 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const apiBase = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "";
-      if (!apiBase) throw new Error("Admin API Base URL not configured.");
+      // Auth/admin endpoints live on the NestJS assessment-service. Prefer
+      // the legacy ADMIN_API_BASE_URL if someone set it, otherwise fall back
+      // to the documented NEXT_PUBLIC_AUTH_SERVICE_URL.
+      const apiBase = (
+        process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ||
+        process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
+        ""
+      ).replace(/\/$/, "");
+      if (!apiBase) {
+        throw new Error(
+          "Auth service URL not configured. Set NEXT_PUBLIC_AUTH_SERVICE_URL in frontend/.env.local.",
+        );
+      }
 
       const res = await fetch(`${apiBase}/admin/me`, {
         method: "GET",
@@ -93,10 +110,25 @@ export default function AdminLoginPage() {
       const backendUser = data.user || {};
       const metadata = backendUser.metadata || {};
 
+      // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
+      // ID_TOKEN_KEY) and what AdminGuard checks. Previously these were
+      // written under legacy underscore/bare names, so apiFetch sent no
+      // Authorization header → every request 401'd → guard bounced back to
+      // login → loop. Keep the legacy keys around too in case anything else
+      // still reads them, but the colon-dash keys are the source of truth.
+      const accessTokenJwt = tokens.accessToken?.toString() || idTokenJwt;
+      const refreshTokenJwt =
+        (session.tokens && (session.tokens as { refreshToken?: { toString(): string } }).refreshToken?.toString()) || "";
+      localStorage.setItem("originbi:id-token", idTokenJwt);
+      localStorage.setItem("originbi:access-token", accessTokenJwt);
+      if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
+      // Legacy keys — kept for any older code paths that haven't migrated.
       localStorage.setItem("originbi_id_token", idTokenJwt);
-      localStorage.setItem("accessToken", idTokenJwt);
+      localStorage.setItem("accessToken", accessTokenJwt);
       sessionStorage.setItem("idToken", idTokenJwt);
-      sessionStorage.setItem("accessToken", idTokenJwt);
+      sessionStorage.setItem("accessToken", accessTokenJwt);
+      // Cookie used by the older proxy setup.
+      document.cookie = `obi.accessToken=${accessTokenJwt}; path=/; samesite=lax; max-age=${60 * 60 * 24 * 7}`;
       localStorage.setItem(
         "user",
         JSON.stringify({
@@ -109,7 +141,7 @@ export default function AdminLoginPage() {
       localStorage.setItem("originbi:admin-session", "true");
 
       setSuccess(true);
-      setTimeout(() => router.push("/admin"), 700);
+      setTimeout(() => router.push(safeNext), 700);
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
@@ -118,7 +150,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="admin-page" style={{ minHeight: "calc(100vh - 124px)", justifyContent: "center" }}>
+    <div className="admin-page">
       <section className="admin-grid-2" style={{ alignItems: "stretch" }}>
         <div className="admin-card admin-card-pad" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 420 }}>
           <div>

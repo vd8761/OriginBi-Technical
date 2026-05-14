@@ -42,7 +42,11 @@ function clearTokens() {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(ID_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-  
+  // Admin gate flag must clear in lockstep with the JWTs, otherwise
+  // AdminGuard sees flag=true, renders the page, and every API call 401s
+  // forever. (See AdminGuard.tsx — it gates purely on this flag.)
+  window.localStorage.removeItem("originbi:admin-session");
+
   const cookieBase = "path=/; samesite=lax; max-age=0";
   document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=; ${cookieBase}`;
   document.cookie = `${ACCESS_TOKEN_KEY}=; ${cookieBase}`;
@@ -351,11 +355,13 @@ export interface AdminUserEntitlement {
 
 export class ApiError extends Error {
   status: number;
+  raw?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, raw?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.raw = raw;
   }
 }
 
@@ -431,18 +437,43 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
   if (auth) {
-    const token = typeof window !== "undefined" 
-      ? (window.localStorage.getItem(ID_TOKEN_KEY) || window.localStorage.getItem(ACCESS_TOKEN_KEY))
+    // The exam-engine's Cognito verifier (backend/exam-engine/internal/auth/
+    // cognito.go) requires token_use=access — sending the id token gets
+    // rejected with `token_use "id" is not 'access'`. Prefer the access
+    // token; fall back to the id token only if access isn't stored (e.g.
+    // older sessions written before login was fixed).
+    const token = typeof window !== "undefined"
+      ? (window.localStorage.getItem(ACCESS_TOKEN_KEY) || window.localStorage.getItem(ID_TOKEN_KEY))
       : null;
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`);
     }
     
-    // Add X-User-Context if user data exists
+    // Add X-User-Context if user data exists. The exam-engine's auth.Middleware
+    // (backend/exam-engine/internal/auth/auth.go) trusts an upstream gateway
+    // and reads X-User-Id / X-Org-Id directly — when the frontend talks to the
+    // engine without going through the NestJS gateway, we must inject those
+    // headers ourselves from the stored user object or every request 401s.
     if (typeof window !== "undefined") {
       const userData = window.localStorage.getItem("user");
       if (userData) {
         headers.set("X-User-Context", userData);
+        try {
+          const parsed = JSON.parse(userData);
+          // user.id can come back as either a number (Postgres bigint serialized
+          // as JSON number) or a string (when it round-trips through localStorage
+          // that was originally written as a string). Coerce + validate either.
+          const rawId = parsed?.id;
+          const idStr = typeof rawId === "number" ? String(rawId) : typeof rawId === "string" ? rawId : "";
+          if (idStr && /^\d+$/.test(idStr) && Number(idStr) > 0 && !headers.has("X-User-Id")) {
+            headers.set("X-User-Id", idStr);
+          }
+          if (parsed && typeof parsed.orgId === "string" && parsed.orgId && !headers.has("X-Org-Id")) {
+            headers.set("X-Org-Id", parsed.orgId);
+          }
+        } catch {
+          // Stored user payload is not JSON — skip header injection.
+        }
       }
     }
   }
@@ -465,6 +496,20 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
     clearTokens();
   }
 
+  // Final 401 from an admin-API call: the user has no usable session for the
+  // exam-engine. Redirect to /admin/login so they can re-authenticate instead
+  // of letting the page sit on stale data and re-fire 401s on every refetch.
+  // Temporarily disabled while diagnosing why valid tokens still 401.
+  if (res.status === 401 && auth && typeof window !== "undefined") {
+    clearTokens();
+    if (window.location.pathname.startsWith("/admin") &&
+        !window.location.pathname.startsWith("/admin/login")) {
+      window.location.replace(
+        `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+      );
+    }
+  }
+
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (!res.ok) {
@@ -472,7 +517,7 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
       (data && (data.message || data.error)) ??
       (Array.isArray(data?.message) ? data.message.join(", ") : null) ??
       res.statusText;
-    throw new ApiError(res.status, msg);
+    throw new ApiError(res.status, msg, data?.__raw);
   }
   return data as T;
 }
@@ -481,7 +526,16 @@ function safeJson(text: string): any {
   try {
     return JSON.parse(text);
   } catch {
-    return { message: text };
+    // Non-JSON body (commonly an HTML error page from a misrouted request).
+    // Avoid surfacing the entire payload as the error message — callers
+    // render this string in error toasts and that creates the appearance
+    // of a "404 dump". Keep a short snippet plus the raw payload tucked
+    // onto __raw for debugging surfaces (e.g. ErrorState <details>).
+    const looksLikeHtml = /^\s*<(?:!doctype|html|head|body)\b/i.test(text);
+    const summary = looksLikeHtml
+      ? "Backend returned an HTML page instead of JSON (likely a misconfigured API base or unreachable service)."
+      : text.slice(0, 240).trim() || "Request failed.";
+    return { message: summary, __raw: text };
   }
 }
 
