@@ -18,6 +18,9 @@ import (
 
 	"github.com/originbi/exam-engine/internal/auth"
 	"github.com/originbi/exam-engine/internal/db"
+	"github.com/originbi/exam-engine/internal/pluginhost"
+	assessmentcoding "github.com/originbi/exam-engine/plugins/assessment-coding"
+	evaluationllm "github.com/originbi/exam-engine/plugins/evaluation-llm"
 )
 
 type Server struct {
@@ -29,9 +32,42 @@ type Server struct {
 	judgeHTTPClient *http.Client
 	cognito         *auth.CognitoVerifier
 	defaultOrgID    string
+	// plugins is set by AttachPluginRegistry after server.New. Handlers must
+	// handle nil for compat with tests that don't bootstrap a registry.
+	plugins *pluginhost.Registry
 }
 
-func New(pool *db.Pool, logger *slog.Logger, cognito *auth.CognitoVerifier, defaultOrgID string) *Server {
+// AttachPluginRegistry binds an in-memory plugin registry to the server and
+// registers the in-process action handlers owned by assessment.coding.
+func (s *Server) AttachPluginRegistry(r *pluginhost.Registry) error {
+	s.plugins = r
+	if r == nil {
+		return nil
+	}
+	if err := r.RegisterAction(assessmentcoding.Slug, assessmentcoding.ActionRunCustom, s.handleCodingAction); err != nil {
+		return err
+	}
+	if err := r.RegisterAction(assessmentcoding.Slug, assessmentcoding.ActionRunTests, s.handleCodingAction); err != nil {
+		return err
+	}
+	if err := r.RegisterAction(assessmentcoding.Slug, assessmentcoding.ActionSubmit, s.handleCodingAction); err != nil {
+		return err
+	}
+	if err := evaluationllm.Register(r); err != nil {
+		return err
+	}
+	return nil
+}
+
+func New(pool *db.Pool, logger *slog.Logger, opts ...any) *Server {
+	var cognito *auth.CognitoVerifier
+	var defaultOrgID string
+	if len(opts) > 0 {
+		cognito, _ = opts[0].(*auth.CognitoVerifier)
+	}
+	if len(opts) > 1 {
+		defaultOrgID, _ = opts[1].(string)
+	}
 	s := &Server{
 		pool:         pool,
 		logger:       logger,
@@ -82,6 +118,7 @@ func (s *Server) routes() chi.Router {
 			r.Get("/me/registration", s.getRegistration)
 			r.Put("/me/registration", s.updateRegistration)
 			r.Get("/me/assignments", s.listAssignments)
+			r.Get("/me/languages", s.meLanguages)
 			r.Post("/purchases/demo", s.demoPurchase)
 			r.Post("/attempts/start", s.startAttempt)
 			r.Get("/attempts/{attempt_id}/snapshot", s.attemptSnapshot)
@@ -90,8 +127,28 @@ func (s *Server) routes() chi.Router {
 			r.Post("/attempts/{attempt_id}/submit", s.submitAttempt)
 			r.Post("/attempts/{attempt_id}/heartbeat", s.heartbeat)
 			r.Post("/attempts/{attempt_id}/events", s.ingestEvents)
+			r.Get("/admin/questions", s.listAdminQuestions)
+			r.Post("/admin/questions", s.createAdminQuestion)
+			r.Post("/admin/questions/bulk-import", s.bulkImportAdminQuestions)
+			r.Get("/admin/questions/{question_id}", s.getAdminQuestion)
+			r.Put("/admin/questions/{question_id}", s.updateAdminQuestion)
+			r.Delete("/admin/questions/{question_id}", s.deleteAdminQuestion)
+			r.Get("/admin/questions/{question_id}/test-cases", s.listAdminQuestionTestCases)
+			r.Post("/admin/questions/{question_id}/test-cases", s.appendAdminQuestionTestCase)
+			r.Put("/admin/questions/{question_id}/test-cases/{tc_id}", s.updateAdminQuestionTestCase)
+			r.Delete("/admin/questions/{question_id}/test-cases/{tc_id}", s.deleteAdminQuestionTestCase)
 			r.Get("/admin/plugins", s.listPlugins)
+			r.Post("/admin/plugins", s.createPlugin)
+			r.Get("/admin/plugins/{plugin_id}", s.getPlugin)
 			r.Put("/admin/plugins/{plugin_id}", s.updatePlugin)
+			r.Put("/admin/plugins/{plugin_id}/state", s.updatePluginState)
+			r.Get("/admin/plugins/{plugin_id}/dependents", s.pluginDependentsHandler)
+			r.Get("/admin/exam-packages", s.listExamPackages)
+			r.Post("/admin/exam-packages", s.createExamPackage)
+			r.Get("/admin/exam-packages/{pkg_id}", s.getExamPackage)
+			r.Put("/admin/exam-packages/{pkg_id}", s.updateExamPackage)
+			r.Post("/admin/pricing-items", s.createPricingItem)
+			r.Get("/admin/users/{user_id}/entitlements", s.adminUserEntitlements)
 			r.Get("/admin/judge0/health", s.judge0Health)
 		})
 	})
@@ -122,7 +179,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With, Authorization, X-User-Id, X-Org-Id")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With, Authorization, X-User-Id, X-Org-Id, X-User-Context")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

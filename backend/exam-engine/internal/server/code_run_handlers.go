@@ -1,18 +1,13 @@
 package server
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/originbi/exam-engine/internal/auth"
+	"github.com/originbi/exam-engine/internal/pluginhost"
+	assessmentcoding "github.com/originbi/exam-engine/plugins/assessment-coding"
+	evaluationtestcase "github.com/originbi/exam-engine/plugins/evaluation-testcase"
+	runnerjudge0 "github.com/originbi/exam-engine/plugins/runner-judge0"
 )
 
 type codeFileDTO struct {
@@ -59,55 +58,30 @@ type codeTestResultDTO struct {
 }
 
 type dbTestCase struct {
-	ID       uuid.UUID
-	Ordinal  int
-	Name     string
-	Stdin    string
-	Expected string
+	ID               uuid.UUID
+	Ordinal          int
+	Name             string
+	Stdin            string
+	Expected         string
+	Comparator       string
+	ComparatorConfig json.RawMessage
 }
 
-type judge0Status struct {
-	ID          int    `json:"id"`
-	Description string `json:"description"`
-}
-
-type judge0RawResult struct {
-	Stdout        *string      `json:"stdout"`
-	Stderr        *string      `json:"stderr"`
-	CompileOutput *string      `json:"compile_output"`
-	Message       *string      `json:"message"`
-	Status        judge0Status `json:"status"`
-	Time          *string      `json:"time"`
-	Memory        *int         `json:"memory"`
-	Token         string       `json:"token"`
-}
-
-type judge0Result struct {
-	Stdout        string
-	Stderr        string
-	CompileOutput string
-	Message       string
-	Status        judge0Status
-	Time          *string
-	Memory        *int
-	Token         string
-}
-
-type judge0Language struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
-type judge0LanguageHealth struct {
-	Language  string `json:"language"`
-	Judge0ID  int    `json:"judge0Id"`
-	Available bool   `json:"available"`
-}
+type judge0Status = runnerjudge0.Status
+type judge0RawResult = runnerjudge0.RawResult
+type judge0Result = runnerjudge0.Result
 
 const (
 	maxCodeFiles            = 24
 	maxCodeFilePathBytes    = 255
 	maxCandidateSourceBytes = 256 << 10
+)
+
+var (
+	errCodeRunnerBusy      = errors.New("code runner is busy; retry shortly")
+	errNoTestCases         = errors.New("no test cases defined")
+	errLanguageNotEntitled = errors.New("LANGUAGE_NOT_ENTITLED")
+	errRunnerUnavailable   = errors.New("code runner unavailable")
 )
 
 func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
@@ -123,47 +97,20 @@ func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, judge0BaseURL()+"/languages", nil)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "health request failed")
+	if s.plugins == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unavailable",
+			"error":  "plugin registry unavailable",
+		})
 		return
 	}
-	res, err := s.judgeHTTPClient.Do(req)
+	required, err := runnerjudge0.Health(ctx, s.plugins, s.judgeHTTPClient, judge0BaseURL())
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"status": "unreachable",
 			"error":  err.Error(),
 		})
 		return
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-			"status": "unhealthy",
-			"error":  fmt.Sprintf("Judge0 returned status %d", res.StatusCode),
-		})
-		return
-	}
-
-	var languages []judge0Language
-	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&languages); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-			"status": "unhealthy",
-			"error":  "language response decode failed",
-		})
-		return
-	}
-	available := map[int]bool{}
-	for _, lang := range languages {
-		available[lang.ID] = true
-	}
-	required := []judge0LanguageHealth{
-		{Language: "python", Judge0ID: 71, Available: available[71]},
-		{Language: "java", Judge0ID: 62, Available: available[62]},
-		{Language: "cpp", Judge0ID: 54, Available: available[54]},
-		{Language: "javascript", Judge0ID: 63, Available: available[63]},
-		{Language: "c", Judge0ID: 50, Available: available[50]},
-		{Language: "multi-file", Judge0ID: 89, Available: available[89]},
 	}
 	status := "ready"
 	for _, item := range required {
@@ -200,71 +147,263 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Mode = strings.ToLower(strings.TrimSpace(req.Mode))
-	req.Language = strings.ToLower(strings.TrimSpace(req.Language))
+	req.Language = runnerjudge0.NormalizeLanguageSlug(req.Language)
 	req.EntryFile = strings.TrimSpace(req.EntryFile)
 	if err := validateCodeRunRequest(&req, false); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
 	ctx, cancel := contextWithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	tests, err := s.loadRunTests(ctx, attemptID, principal.UserID, examQuestionID, req.Mode, req.Language)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "active attempt/question not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "testcase lookup failed")
+	if err := s.ensureLanguageEntitled(ctx, principal.UserID, req.Language); err != nil {
+		writeLanguageErr(w, err)
 		return
 	}
-	if req.Mode == "tests" && len(tests) == 0 {
-		writeError(w, http.StatusBadRequest, "no test cases defined")
+	payload, err := json.Marshal(req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "run payload encode failed")
 		return
+	}
+	action := actionForRunMode(req.Mode)
+	if s.plugins != nil {
+		resp, err := s.plugins.Dispatch(ctx, pluginhost.ActionRequest{
+			AttemptID:      attemptID,
+			ExamQuestionID: examQuestionID,
+			UserID:         principal.UserID,
+			Action:         action,
+			Payload:        payload,
+		})
+		if err != nil {
+			if errors.Is(err, pluginhost.ErrActionUnknown) {
+				writeError(w, http.StatusServiceUnavailable, "code runner unavailable")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "code action failed")
+			return
+		}
+		writeJSON(w, resp.HTTPStatus, resp.Body)
+		return
+	}
+	resp, err := s.executeCodeRunAction(ctx, principal.UserID, attemptID, examQuestionID, req)
+	if err != nil {
+		writeCodeRunErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleCodingAction(ctx context.Context, _ *pluginhost.Registry, actionReq pluginhost.ActionRequest) (pluginhost.ActionResponse, error) {
+	var req codeRunRequest
+	if err := json.Unmarshal(actionReq.Payload, &req); err != nil {
+		body, _ := json.Marshal(map[string]string{"error": "invalid coding action payload"})
+		return pluginhost.ActionResponse{HTTPStatus: http.StatusBadRequest, Body: body}, nil
+	}
+	req.Mode = strings.ToLower(strings.TrimSpace(req.Mode))
+	req.Language = runnerjudge0.NormalizeLanguageSlug(req.Language)
+	req.EntryFile = strings.TrimSpace(req.EntryFile)
+	if err := validateCodeRunRequest(&req, actionReq.Action == assessmentcoding.ActionSubmit); err != nil {
+		body, _ := json.Marshal(map[string]string{"error": err.Error()})
+		return pluginhost.ActionResponse{HTTPStatus: http.StatusBadRequest, Body: body}, nil
+	}
+	if err := s.ensureLanguageEntitled(ctx, actionReq.UserID, req.Language); err != nil {
+		status, body := codeRunErrResponse(err)
+		return pluginhost.ActionResponse{HTTPStatus: status, Body: body}, nil
+	}
+	resp, err := s.executeCodeRunAction(ctx, actionReq.UserID, actionReq.AttemptID, actionReq.ExamQuestionID, req)
+	if err != nil {
+		status, body := codeRunErrResponse(err)
+		return pluginhost.ActionResponse{HTTPStatus: status, Body: body}, nil
+	}
+	body, _ := json.Marshal(resp)
+	return pluginhost.ActionResponse{HTTPStatus: http.StatusOK, Body: body}, nil
+}
+
+func (s *Server) executeCodeRunAction(
+	ctx context.Context,
+	userID int64,
+	attemptID uuid.UUID,
+	examQuestionID uuid.UUID,
+	req codeRunRequest,
+) (codeRunResponse, error) {
+	if err := s.ensureRunnerAvailable(ctx); err != nil {
+		return codeRunResponse{}, err
+	}
+	body, err := s.loadQuestionBodyForAttempt(ctx, attemptID, userID, examQuestionID)
+	if err != nil {
+		return codeRunResponse{}, fmt.Errorf("question body lookup failed: %w", err)
+	}
+	if err := s.validateCodingAnswerPayload(req, body); err != nil {
+		return codeRunResponse{}, err
+	}
+	tests, err := s.loadRunTests(ctx, attemptID, userID, examQuestionID, req.Mode, req.Language)
+	if err != nil {
+		return codeRunResponse{}, fmt.Errorf("testcase lookup failed: %w", err)
+	}
+	if req.Mode == "tests" && len(tests) == 0 {
+		return codeRunResponse{}, errNoTestCases
 	}
 
 	select {
 	case s.codeRunSem <- struct{}{}:
 		defer func() { <-s.codeRunSem }()
 	default:
-		_ = s.recordAttemptEvent(r.Context(), attemptID, "code_run_rejected", 2, &examQuestionID, map[string]any{
+		_ = s.recordAttemptEvent(ctx, attemptID, "code_run_rejected", 2, &examQuestionID, map[string]any{
 			"reason":   "engine_busy",
 			"mode":     req.Mode,
 			"language": req.Language,
 		})
-		writeError(w, http.StatusTooManyRequests, "code runner is busy; retry shortly")
-		return
+		return codeRunResponse{}, errCodeRunnerBusy
 	}
 
-	runID, err := s.persistRunStart(ctx, principal.UserID, attemptID, examQuestionID, req)
+	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "active attempt/question not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "run persistence failed")
-		return
+		return codeRunResponse{}, fmt.Errorf("run persistence failed: %w", err)
 	}
 
-	payload, err := buildJudge0Payload(req)
+	payload, err := s.buildJudge0Payload(req)
 	if err != nil {
-		_ = s.finishRunWithError(r.Context(), runID, err.Error())
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		_ = s.finishRunWithError(ctx, runID, err.Error())
+		return codeRunResponse{}, err
 	}
 
-	runCtx, runCancel := context.WithTimeout(r.Context(), 90*time.Second)
+	runCtx, runCancel := context.WithTimeout(ctx, 90*time.Second)
 	defer runCancel()
 	resp, err := s.executeJudge0(runCtx, runID, req, payload, tests)
 	if err != nil {
-		_ = s.finishRunWithError(r.Context(), runID, err.Error())
-		writeError(w, http.StatusBadGateway, "Judge0 execution failed: "+err.Error())
+		_ = s.finishRunWithError(ctx, runID, err.Error())
+		return codeRunResponse{}, fmt.Errorf("Judge0 execution failed: %w", err)
+	}
+	return resp, nil
+}
+
+func (s *Server) loadQuestionBodyForAttempt(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID) ([]byte, error) {
+	var body []byte
+	err := s.pool.QueryRow(ctx, `
+		SELECT qv.body
+		FROM attempts a
+		JOIN exam_questions eq
+		     ON eq.exam_version_id = a.exam_version_id
+		    AND eq.id = $2
+		JOIN question_versions qv ON qv.id = eq.question_version_id
+		WHERE a.id = $1
+		  AND a.candidate_user_id = $3
+		  AND a.status IN ('started','in_progress','paused')
+	`, attemptID, examQuestionID, userID).Scan(&body)
+	return body, err
+}
+
+func actionForRunMode(mode string) string {
+	switch mode {
+	case "custom":
+		return assessmentcoding.ActionRunCustom
+	case "final":
+		return assessmentcoding.ActionSubmit
+	default:
+		return assessmentcoding.ActionRunTests
+	}
+}
+
+func (s *Server) ensureLanguageEntitled(ctx context.Context, userID int64, langSlug string) error {
+	if s.plugins == nil {
+		return nil
+	}
+	m := s.plugins.BySlug(langSlug)
+	if m == nil || !m.IsLanguage() {
+		return errors.New("unsupported language")
+	}
+	ok, err := s.plugins.IsLanguageEntitledForUser(ctx, userID, langSlug)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errLanguageNotEntitled
+	}
+	return nil
+}
+
+func (s *Server) ensureRunnerAvailable(ctx context.Context) error {
+	if s.plugins == nil {
+		return nil
+	}
+	ok, err := s.plugins.IsPluginAvailable(ctx, runnerjudge0.Slug)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errRunnerUnavailable
+	}
+	return nil
+}
+
+func (s *Server) legacyItemRefForLanguage(langSlug string) string {
+	if s.plugins == nil {
+		return ""
+	}
+	m := s.plugins.BySlug(runnerjudge0.NormalizeLanguageSlug(langSlug))
+	if m == nil {
+		return ""
+	}
+	cfg, err := m.DecodeLanguageConfig()
+	if err != nil {
+		return ""
+	}
+	return runnerjudge0.LegacyItemRef(cfg)
+}
+
+func writeLanguageErr(w http.ResponseWriter, err error) {
+	if errors.Is(err, errLanguageNotEntitled) {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "LANGUAGE_NOT_ENTITLED",
+		})
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeError(w, http.StatusBadRequest, err.Error())
+}
+
+func writeCodeRunErr(w http.ResponseWriter, err error) {
+	status, body := codeRunErrResponse(err)
+	writeJSON(w, status, body)
+}
+
+func codeRunErrResponse(err error) (int, json.RawMessage) {
+	var validationErrs assessmentcoding.ValidationErrors
+	if errors.As(err, &validationErrs) {
+		body, _ := json.Marshal(map[string]any{"errors": validationErrs})
+		return http.StatusUnprocessableEntity, body
+	}
+	status := http.StatusInternalServerError
+	msg := "code run failed"
+	switch {
+	case errors.Is(err, errLanguageNotEntitled):
+		status = http.StatusForbidden
+		msg = "LANGUAGE_NOT_ENTITLED"
+	case errors.Is(err, pgx.ErrNoRows):
+		status = http.StatusNotFound
+		msg = "active attempt/question not found"
+	case errors.Is(err, errCodeRunnerBusy):
+		status = http.StatusTooManyRequests
+		msg = errCodeRunnerBusy.Error()
+	case errors.Is(err, errNoTestCases):
+		status = http.StatusBadRequest
+		msg = errNoTestCases.Error()
+	case errors.Is(err, errRunnerUnavailable):
+		status = http.StatusServiceUnavailable
+		msg = errRunnerUnavailable.Error()
+	case strings.Contains(err.Error(), "Judge0 execution failed"):
+		status = http.StatusBadGateway
+		msg = err.Error()
+	default:
+		msg = err.Error()
+	}
+	body, _ := json.Marshal(map[string]string{"error": msg})
+	return status, body
 }
 
 func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string, language string) ([]dbTestCase, error) {
+	itemRef := s.legacyItemRefForLanguage(language)
+	if itemRef == "" {
+		itemRef = "coding:" + runnerjudge0.LegacyLanguageName(language)
+	}
 	var exists int
 	err := s.pool.QueryRow(ctx, `
 		SELECT 1
@@ -278,9 +417,9 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 		  AND a.status IN ('started','in_progress','paused')
 		  AND (
 		      assign.assignment_ref IS NULL
-		      OR assign.assignment_ref = 'coding:' || $4
+		      OR assign.assignment_ref = $4
 		  )
-	`, attemptID, examQuestionID, userID, language).Scan(&exists)
+	`, attemptID, examQuestionID, userID, itemRef).Scan(&exists)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +427,8 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 		return nil, nil
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT tc.id, tc.ordinal, COALESCE(tc.name, ''), tc.stdin, tc.expected_stdout
+		SELECT tc.id, tc.ordinal, COALESCE(tc.name, ''), tc.stdin, tc.expected_stdout,
+		       tc.comparator, tc.comparator_config
 		FROM exam_questions eq
 		JOIN question_test_cases tc ON tc.question_version_id = eq.question_version_id
 		WHERE eq.id = $1
@@ -302,7 +442,7 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 	tests := []dbTestCase{}
 	for rows.Next() {
 		var tc dbTestCase
-		if err := rows.Scan(&tc.ID, &tc.Ordinal, &tc.Name, &tc.Stdin, &tc.Expected); err != nil {
+		if err := rows.Scan(&tc.ID, &tc.Ordinal, &tc.Name, &tc.Stdin, &tc.Expected, &tc.Comparator, &tc.ComparatorConfig); err != nil {
 			return nil, err
 		}
 		tests = append(tests, tc)
@@ -423,7 +563,12 @@ func (s *Server) executeJudge0(
 		if actual == "" {
 			actual = r.Status.Description
 		}
-		passed := r.Status.ID == 3 && strings.TrimSpace(r.Stdout) == strings.TrimSpace(tc.Expected)
+		passed := false
+		if r.Status.ID == 3 {
+			if ok, err := evaluationtestcase.Compare(tc.Comparator, tc.Expected, r.Stdout, tc.ComparatorConfig); err == nil {
+				passed = ok
+			}
+		}
 		if passed {
 			passCount++
 		} else if firstFail == nil {
@@ -616,175 +761,27 @@ func (s *Server) finishRunWithError(ctx context.Context, runID uuid.UUID, msg st
 }
 
 func (s *Server) postJudge0(ctx context.Context, payload map[string]any, stdin string) (judge0Result, error) {
-	body := cloneMap(payload)
-	body["stdin"] = encodeBase64(stdin)
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return judge0Result{}, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, judge0BaseURL()+"/submissions?base64_encoded=true&wait=true", bytes.NewReader(raw))
-	if err != nil {
-		return judge0Result{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	res, err := s.judgeHTTPClient.Do(req)
-	if err != nil {
-		return judge0Result{}, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return judge0Result{}, fmt.Errorf("status %d", res.StatusCode)
-	}
-	var rawResult judge0RawResult
-	if err := json.NewDecoder(io.LimitReader(res.Body, 2<<20)).Decode(&rawResult); err != nil {
-		return judge0Result{}, err
-	}
-	return decodeJudge0(rawResult), nil
+	return runnerjudge0.Client{
+		BaseURL:    judge0BaseURL(),
+		HTTPClient: s.judgeHTTPClient,
+	}.Post(ctx, payload, stdin)
 }
 
-func buildJudge0Payload(req codeRunRequest) (map[string]any, error) {
-	languageID, source, sourceIsBase64, err := submissionSource(req.Language, req.Files, req.EntryFile)
-	if err != nil {
-		return nil, err
+func (s *Server) buildJudge0Payload(req codeRunRequest) (map[string]any, error) {
+	files := make([]runnerjudge0.File, 0, len(req.Files))
+	for _, f := range req.Files {
+		files = append(files, runnerjudge0.File{
+			Path:     f.Path,
+			Content:  f.Content,
+			ReadOnly: f.ReadOnly,
+			Language: f.Language,
+		})
 	}
-	body := map[string]any{
-		"language_id":                  languageID,
-		"cpu_time_limit":               3,
-		"wall_time_limit":              8,
-		"memory_limit":                 131072,
-		"stack_limit":                  32768,
-		"max_processes_and_or_threads": 32,
-		"max_file_size":                1024,
-	}
-	if languageID == 89 {
-		body["source_code"] = ""
-		body["additional_files"] = source
-	} else if sourceIsBase64 {
-		body["source_code"] = source
-	} else {
-		body["source_code"] = encodeBase64(source)
-	}
-	return body, nil
-}
-
-func submissionSource(lang string, files []codeFileDTO, entryFile string) (int, string, bool, error) {
-	if lang == "javascript" {
-		return 63, inlineJavaScript(files, entryFile), false, nil
-	}
-	execFiles := executableFiles(files)
-	if len(execFiles) > 1 {
-		zipB64, err := buildMultiFileZip(lang, execFiles, entryFile)
-		return 89, zipB64, true, err
-	}
-	ids := map[string]int{
-		"python": 71,
-		"java":   62,
-		"cpp":    54,
-		"c":      50,
-	}
-	id, ok := ids[lang]
-	if !ok {
-		return 0, "", false, errors.New("unsupported language")
-	}
-	if len(execFiles) > 0 {
-		return id, execFiles[0].Content, false, nil
-	}
-	return id, files[0].Content, false, nil
-}
-
-func buildMultiFileZip(lang string, files []codeFileDTO, entryFile string) (string, error) {
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	for _, f := range files {
-		name := safeZipPath(f.Path)
-		if name == "" {
-			continue
-		}
-		w, err := zw.Create(name)
-		if err != nil {
-			return "", err
-		}
-		if _, err := w.Write([]byte(f.Content)); err != nil {
-			return "", err
-		}
-	}
-	scripts := runScriptsFor(lang, files, entryFile)
-	if err := addExecutableZipFile(zw, "run", scripts["run"]); err != nil {
-		return "", err
-	}
-	if compile := scripts["compile"]; compile != "" {
-		if err := addExecutableZipFile(zw, "compile", compile); err != nil {
-			return "", err
-		}
-	}
-	if err := zw.Close(); err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
-}
-
-func addExecutableZipFile(zw *zip.Writer, name string, content string) error {
-	h := &zip.FileHeader{Name: name, Method: zip.Deflate}
-	h.SetMode(0755)
-	w, err := zw.CreateHeader(h)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write([]byte(content))
-	return err
-}
-
-func runScriptsFor(lang string, files []codeFileDTO, entryFile string) map[string]string {
-	entry := entryFile
-	if entry == "" {
-		entry = firstWritableFile(files)
-	}
-	switch lang {
-	case "python":
-		return map[string]string{"run": fmt.Sprintf("#!/bin/sh\nexec python3 %q\n", entry)}
-	case "java":
-		mainClass := javaMainClass(files, entry)
-		return map[string]string{
-			"compile": "#!/bin/sh\nset -e\njavac $(find . -name '*.java')\n",
-			"run":     fmt.Sprintf("#!/bin/sh\nexec java -cp . %s\n", mainClass),
-		}
-	case "cpp":
-		return map[string]string{
-			"compile": "#!/bin/sh\nset -e\ng++ -O2 -std=c++17 $(find . -name '*.cpp') -o main\n",
-			"run":     "#!/bin/sh\nexec ./main\n",
-		}
-	case "c":
-		return map[string]string{
-			"compile": "#!/bin/sh\nset -e\ngcc -O2 $(find . -name '*.c') -o main\n",
-			"run":     "#!/bin/sh\nexec ./main\n",
-		}
-	default:
-		return map[string]string{"run": fmt.Sprintf("#!/bin/sh\nexec cat %q\n", entry)}
-	}
-}
-
-func inlineJavaScript(files []codeFileDTO, entryFile string) string {
-	entry := findFile(files, entryFile)
-	if entry == nil {
-		for i := range files {
-			if strings.HasSuffix(files[i].Path, ".js") && !files[i].ReadOnly {
-				entry = &files[i]
-				break
-			}
-		}
-	}
-	if entry == nil {
-		return files[0].Content
-	}
-	helpers := []string{}
-	for i := range files {
-		if files[i].Path == entry.Path || !strings.HasSuffix(files[i].Path, ".js") || files[i].ReadOnly {
-			continue
-		}
-		helpers = append(helpers, "// --- "+files[i].Path+" ---\n"+stripJSExports(files[i].Content))
-	}
-	entrySource := stripRelativeRequires(entry.Content)
-	return strings.Join(append(helpers, "// --- "+entry.Path+" ---\n"+entrySource), "\n\n")
+	return runnerjudge0.BuildPayload(runnerjudge0.NewRuntime(s.plugins), runnerjudge0.PayloadRequest{
+		Language:  req.Language,
+		Files:     files,
+		EntryFile: req.EntryFile,
+	})
 }
 
 func responseForSingleRun(runID uuid.UUID, r judge0Result) codeRunResponse {
@@ -796,19 +793,6 @@ func responseForSingleRun(runID uuid.UUID, r judge0Result) codeRunResponse {
 		Memory:  formatJudge0Memory(pointerMemory(r.Memory)),
 		Summary: headlineForJudge0(r.Status),
 		RunID:   runID.String(),
-	}
-}
-
-func decodeJudge0(raw judge0RawResult) judge0Result {
-	return judge0Result{
-		Stdout:        decodeMaybeBase64(raw.Stdout),
-		Stderr:        decodeMaybeBase64(raw.Stderr),
-		CompileOutput: decodeMaybeBase64(raw.CompileOutput),
-		Message:       decodeMaybeBase64(raw.Message),
-		Status:        raw.Status,
-		Time:          raw.Time,
-		Memory:        raw.Memory,
-		Token:         raw.Token,
 	}
 }
 
@@ -915,34 +899,11 @@ func pointerMemory(v *int) int {
 	return *v
 }
 
-func decodeMaybeBase64(v *string) string {
-	if v == nil || *v == "" {
-		return ""
-	}
-	bytes, err := base64.StdEncoding.DecodeString(*v)
-	if err != nil {
-		return *v
-	}
-	return string(bytes)
-}
-
-func encodeBase64(v string) string {
-	return base64.StdEncoding.EncodeToString([]byte(v))
-}
-
 func judge0BaseURL() string {
 	if v := strings.TrimRight(os.Getenv("JUDGE0_URL"), "/"); v != "" {
 		return v
 	}
 	return "http://localhost:2358"
-}
-
-func cloneMap(in map[string]any) map[string]any {
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 func nullEmpty(v string) any {
@@ -960,12 +921,7 @@ func nullableCustomStdin(req codeRunRequest) any {
 }
 
 func validCodingLanguage(v string) bool {
-	switch v {
-	case "python", "java", "cpp", "javascript", "c":
-		return true
-	default:
-		return false
-	}
+	return strings.HasPrefix(runnerjudge0.NormalizeLanguageSlug(v), "language.")
 }
 
 func validateCodeRunRequest(req *codeRunRequest, allowFinal bool) error {
@@ -1021,28 +977,6 @@ func validateCodeRunRequest(req *codeRunRequest, allowFinal bool) error {
 	return nil
 }
 
-func executableFiles(files []codeFileDTO) []codeFileDTO {
-	out := []codeFileDTO{}
-	for _, f := range files {
-		if f.ReadOnly && !isSourcePath(f.Path) {
-			continue
-		}
-		if isSourcePath(f.Path) {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-func isSourcePath(p string) bool {
-	switch path.Ext(p) {
-	case ".py", ".js", ".java", ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp":
-		return true
-	default:
-		return false
-	}
-}
-
 func firstWritableFile(files []codeFileDTO) string {
 	for _, f := range files {
 		if !f.ReadOnly {
@@ -1055,62 +989,12 @@ func firstWritableFile(files []codeFileDTO) string {
 	return ""
 }
 
-func findFile(files []codeFileDTO, p string) *codeFileDTO {
-	for i := range files {
-		if files[i].Path == p {
-			return &files[i]
-		}
-	}
-	return nil
-}
-
-func javaMainClass(files []codeFileDTO, entryFile string) string {
-	if strings.HasSuffix(entryFile, ".java") {
-		base := path.Base(entryFile)
-		return strings.TrimSuffix(base, ".java")
-	}
-	re := regexp.MustCompile(`public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)`)
-	for _, f := range files {
-		if !strings.HasSuffix(f.Path, ".java") {
-			continue
-		}
-		if m := re.FindStringSubmatch(f.Content); len(m) == 2 {
-			return m[1]
-		}
-	}
-	return "Main"
-}
-
-func stripJSExports(src string) string {
-	reObject := regexp.MustCompile(`(?m)^\s*module\.exports\s*=\s*\{[^}]*\}\s*;?\s*$`)
-	reSingle := regexp.MustCompile(`(?m)^\s*module\.exports\s*=\s*[A-Za-z_$][\w$]*\s*;?\s*$`)
-	reNamed := regexp.MustCompile(`(?m)^\s*exports\.([A-Za-z_$][\w$]*)\s*=`)
-	src = reObject.ReplaceAllString(src, "")
-	src = reSingle.ReplaceAllString(src, "")
-	return reNamed.ReplaceAllString(src, "const $1 =")
-}
-
-func stripRelativeRequires(src string) string {
-	reDecl := regexp.MustCompile(`(?m)^\s*(?:const|let|var)\s+[^=;]+=\s*require\(\s*['"]\./[^'"]+['"]\s*\)\s*;?\s*$`)
-	reBare := regexp.MustCompile(`(?m)^\s*require\(\s*['"]\./[^'"]+['"]\s*\)\s*;?\s*$`)
-	src = reDecl.ReplaceAllString(src, "")
-	return reBare.ReplaceAllString(src, "")
-}
-
 func mapJudge0Stdout(results []judge0Result) []string {
 	out := make([]string, 0, len(results))
 	for _, r := range results {
 		out = append(out, r.Stdout)
 	}
 	return out
-}
-
-func safeZipPath(p string) string {
-	clean := strings.TrimPrefix(path.Clean("/"+p), "/")
-	if clean == "." || strings.HasPrefix(clean, "../") {
-		return ""
-	}
-	return clean
 }
 
 func isSafeCandidatePath(p string) bool {

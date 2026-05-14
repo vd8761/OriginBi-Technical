@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-coding/config.schema.json",
+  "title": "assessment.coding config",
+  "description": "Per-scope (platform/org/exam/question) configuration for the coding assessment plugin. Lower scopes can further restrict but cannot widen what an upper scope allows.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "allowedLanguages": {
+      "type": "array",
+      "description": "Plugin slugs (language.python, language.java, …) permitted at this scope. Omit to inherit from the parent scope.",
+      "items": { "type": "string", "pattern": "^language\\." },
+      "uniqueItems": true
+    },
+    "allowQuestionOverride": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether a question may further restrict allowedLanguages below the exam-section setting."
+    },
+    "actions": {
+      "type": "object",
+      "description": "Per-action toggles. Disabling an action removes the corresponding candidate button.",
+      "additionalProperties": false,
+      "properties": {
+        "runCustom": { "type": "boolean", "default": true },
+        "runTests":  { "type": "boolean", "default": true },
+        "submit":    { "type": "boolean", "default": true }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxFiles":          { "type": "integer", "minimum": 1, "maximum": 64, "default": 16 },
+        "maxFileBytes":      { "type": "integer", "minimum": 256, "maximum": 1048576, "default": 65536 },
+        "maxTotalBytes":     { "type": "integer", "minimum": 1024, "maximum": 8388608, "default": 524288 },
+        "maxStdinBytes":     { "type": "integer", "minimum": 0, "maximum": 1048576, "default": 8192 }
+      }
+    }
+  }
+}

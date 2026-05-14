@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-coding/question-body.schema.json",
+  "title": "Coding question body",
+  "description": "JSONB shape stored in question_versions.body for coding-type questions authored by the assessment.coding plugin. References language.* plugin slugs (not the legacy 'coding:python' pricing strings).",
+  "type": "object",
+  "required": ["type", "title", "prompt"],
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "const": "coding",
+      "description": "Discriminator. Always 'coding' for this plugin."
+    },
+    "responseType": {
+      "type": "string",
+      "enum": ["code"],
+      "default": "code"
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "section": { "type": "string", "maxLength": 100 },
+    "difficulty": {
+      "type": "string",
+      "enum": ["easy", "medium", "hard"]
+    },
+    "promptFormat": {
+      "type": "string",
+      "enum": ["markdown", "html", "plain"],
+      "default": "markdown",
+      "description": "Renderer hint. New questions default to markdown; existing seeded questions are stamped 'html' by migration 013."
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Body in the format named by promptFormat."
+    },
+    "allowedLanguages": {
+      "type": "array",
+      "description": "Optional per-question restriction. Plugin slugs. Omit to inherit the exam-section's allowed languages.",
+      "items": { "type": "string", "pattern": "^language\\." },
+      "uniqueItems": true
+    },
+    "entryFile": {
+      "type": "object",
+      "description": "Per-language entry file. Keys are language slugs (language.python, …). Required when starterFiles has multiple files for that language; falls back to LanguageConfig.defaultEntryFile otherwise.",
+      "additionalProperties": { "type": "string" }
+    },
+    "starterCode": {
+      "type": "object",
+      "description": "Shorthand for single-file questions. Keys are language slugs. Equivalent to a one-element starterFiles entry per language. Back-compatible with existing seed shape.",
+      "additionalProperties": { "type": "string" }
+    },
+    "starterFiles": {
+      "type": "object",
+      "description": "Per-language starter file sets, multi-file aware.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["path", "content"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 260,
+              "description": "Workspace-relative path. Must not contain '..' segments."
+            },
+            "content": { "type": "string" },
+            "readOnly": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true the entire file is locked: the candidate's submitted content must match the snapshot byte-for-byte. Backend rejects modifications with LOCKED_FILE_MODIFIED."
+            },
+            "lockedRegions": {
+              "type": "array",
+              "description": "Optional region-level locks within the file. Backend rejects modifications inside any locked region with LOCKED_REGION_MODIFIED, returning startLine + endLine + reason.",
+              "items": {
+                "type": "object",
+                "required": ["startLine", "endLine"],
+                "additionalProperties": false,
+                "properties": {
+                  "startLine": { "type": "integer", "minimum": 1 },
+                  "endLine":   { "type": "integer", "minimum": 1 },
+                  "reason":    { "type": "string", "maxLength": 200 }
+                }
+              }
+            },
+            "language": {
+              "type": "string",
+              "description": "Monaco language hint for files whose extension is ambiguous (README.md, etc.)."
+            }
+          }
+        }
+      }
+    },
+    "samples": {
+      "type": "array",
+      "description": "Visible-to-candidate example I/O. Distinct from question_test_cases — these are documentation, not graded.",
+      "items": {
+        "type": "object",
+        "required": ["input", "output"],
+        "additionalProperties": false,
+        "properties": {
+          "input":       { "type": "string" },
+          "output":      { "type": "string" },
+          "explanation": { "type": "string" }
+        }
+      }
+    },
+    "constraints": { "type": "string", "maxLength": 4000 },
+    "hints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["afterFailures", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "afterFailures": { "type": "integer", "minimum": 1 },
+          "text":          { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url":     { "type": ["string", "null"] },
+        "caption": { "type": "string" },
+        "alt":     { "type": "string" }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type":     { "type": "string", "enum": ["video", "audio"] },
+        "embedUrl": { "type": ["string", "null"] },
+        "caption":  { "type": "string" }
+      }
+    },
+    "pretext": {
+      "type": "object",
+      "description": "Optional code block shown above the prompt.",
+      "additionalProperties": false,
+      "properties": {
+        "language": { "type": "string" },
+        "code":     { "type": "string" }
+      }
+    },
+    "judgeConfig": {
+      "type": "object",
+      "description": "Per-question overrides for judging behavior. Defaults inherit from the language plugin's runtime config.",
+      "additionalProperties": false,
+      "properties": {
+        "timeLimitMs":          { "type": "integer", "minimum": 100, "maximum": 60000 },
+        "memoryLimitKb":        { "type": "integer", "minimum": 16384, "maximum": 1048576 },
+        "strictWhitespace":     { "type": "boolean" },
+        "stopOnFirstFailure":   { "type": "boolean" },
+        "partialCredit":        { "type": "boolean" },
+        "showWrongAnswerDiff":  { "type": "boolean" }
+      }
+    }
+  }
+}

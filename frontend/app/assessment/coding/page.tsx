@@ -4,10 +4,21 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CodingAssessment from "@/components/assessment/coding/CodingAssessment";
 import { LANG_META } from "@/components/assessment/coding/CodeEditor";
-import { ApiError, startAttempt, type AttemptSnapshot } from "@/lib/api";
+import {
+    ApiError,
+    listMyLanguages,
+    startAttempt,
+    type AttemptSnapshot,
+    type MeLanguage,
+} from "@/lib/api";
 
 const VALID_LANGS = Object.keys(LANG_META);
 type AssessmentMode = "trial" | "main";
+
+// Normalize the legacy URL param "python" to the plugin slug "language.python"
+// so we can compare against /v1/me/languages output (which is plugin-slug shaped).
+const toPluginSlug = (legacy: string) =>
+    legacy.startsWith("language.") ? legacy : `language.${legacy}`;
 
 function LoadingView() {
     return (
@@ -35,9 +46,32 @@ function CodingAssessmentInner() {
             return;
         }
         let cancelled = false;
-        startAttempt({ assignmentRef: `coding:${lang}` })
-            .then((data) => {
-                if (!cancelled) setSnapshot(data);
+        // Run snapshot + entitlement lookup in parallel. We need entitlements to
+        // verify the candidate actually owns this language before we even render
+        // the editor (backend enforces this on run/submit, but bouncing early
+        // gives a cleaner UX than letting them edit code that can't run).
+        Promise.all([
+            startAttempt({ assignmentRef: `coding:${lang}` }),
+            listMyLanguages().catch((err) => {
+                // Entitlement endpoint is optional during transition; warn but
+                // don't fail the whole load — backend still gates run/submit.
+                console.warn("listMyLanguages failed", err);
+                return { languages: [] as MeLanguage[] };
+            }),
+        ])
+            .then(([snap, ents]) => {
+                if (cancelled) return;
+                const wanted = toPluginSlug(lang);
+                const allowed = new Set(ents.languages.map((l) => l.slug));
+                // Only enforce when we have a non-empty list — empty list means
+                // the endpoint is unreachable or the user has none entitled.
+                if (ents.languages.length > 0 && !allowed.has(wanted)) {
+                    setError(
+                        `You don't have access to ${lang}. Purchase or request entitlement before retrying.`,
+                    );
+                    return;
+                }
+                setSnapshot(snap);
             })
             .catch((err) => {
                 if (cancelled) return;

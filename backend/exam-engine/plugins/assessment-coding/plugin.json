@@ -1,0 +1,27 @@
+{
+  "id": "assessment.coding",
+  "slug": "assessment.coding",
+  "name": "Coding Assessment",
+  "version": "1.0.0",
+  "type": "base",
+  "category": "assessment",
+  "enabledByDefault": true,
+  "requiresLicense": false,
+  "requires": ["runtime.exam-session"],
+  "extends": [],
+  "provides": [
+    "assessment.type.coding",
+    "question.type.code",
+    "runtime.action.coding.run-custom",
+    "runtime.action.coding.run-tests",
+    "runtime.action.coding.submit"
+  ],
+  "configSchemaRef": "schemas/config.schema.json",
+  "questionBodySchemaRef": "schemas/question-body.schema.json",
+  "answerSchemaRef": "schemas/answer.schema.json",
+  "events": [
+    "code.run.started",
+    "code.run.completed",
+    "code.submitted"
+  ]
+}

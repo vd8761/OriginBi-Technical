@@ -1,0 +1,14 @@
+{
+  "id": "evaluator.openai",
+  "slug": "evaluator.openai",
+  "name": "OpenAI Evaluator",
+  "version": "1.0.0",
+  "type": "addon",
+  "category": "evaluation",
+  "enabledByDefault": false,
+  "requiresLicense": true,
+  "requires": ["evaluation.llm"],
+  "extends": ["evaluation.llm"],
+  "provides": ["llm.provider"],
+  "configSchemaRef": "schemas/config.schema.json"
+}

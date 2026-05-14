@@ -431,13 +431,23 @@ func (s *Server) bootstrapAdmin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) isAdmin(ctx context.Context, userID int64) bool {
 	ctx, cancel := contextWithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	var ok bool
+	// The active schema has no is_admin/status/deleted_at columns — admin
+	// status is derived from the `role` enum on `users`. userFromBearer
+	// already maps role → user.IsAdmin the same way (cf. ~50 lines below).
+	var role *string
 	err := s.pool.QueryRow(ctx, `
-		SELECT is_admin
+		SELECT role
 		FROM users
-		WHERE id = $1 AND deleted_at IS NULL AND status = 'active'
-	`, userID).Scan(&ok)
-	return err == nil && ok
+		WHERE id = $1 AND is_active = TRUE AND is_blocked = FALSE
+	`, userID).Scan(&role)
+	if err != nil || role == nil {
+		return false
+	}
+	switch *role {
+	case "ADMIN", "SUPER_ADMIN", "STAFF":
+		return true
+	}
+	return false
 }
 
 func (s *Server) registrationForUser(ctx context.Context, userID int64) (registrationDTO, error) {

@@ -376,6 +376,12 @@ export const detectLanguageForPath = (path: string, fallbackLang: string): strin
     return EXT_TO_MONACO[ext] ?? LANG_TO_MONACO[fallbackLang] ?? "plaintext";
 };
 
+interface MonacoLockedRegion {
+    startLine: number;
+    endLine: number;
+    reason?: string;
+}
+
 interface MonacoEditorProps {
     /** Stable identifier for the open file. Used as the model URI so undo history is preserved per file. */
     path: string;
@@ -387,6 +393,15 @@ interface MonacoEditorProps {
     tabSize?: number;
     theme: "dark" | "light";
     readOnly?: boolean;
+    /** Line ranges the candidate cannot edit (1-indexed inclusive). The editor
+     * renders them with a locked-region decoration AND reverts any edit that
+     * touches them. The backend is the authority — this is UX only. */
+    lockedRegions?: MonacoLockedRegion[];
+    /** When true (default), edits inside `lockedRegions` are reverted in-place.
+     * Set to false for the admin authoring panel, where the admin is *defining*
+     * the locked regions and must be able to edit them while seeing the
+     * highlight overlay. */
+    enforceLockedRegions?: boolean;
     onChange?: (value: string) => void;
     /** Optional Shift+Alt+F handler — re-indent / format the active file. */
     onFormat?: () => void;
@@ -398,6 +413,27 @@ interface MonacoEditorProps {
     lintsEnabled?: boolean;
 }
 
+/** Injects CSS for locked-region line decorations. Idempotent. */
+const ensureLockedRegionCss = () => {
+    if (typeof document === "undefined") return;
+    const STYLE_ID = "monaco-locked-region-css";
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+        .monaco-editor .obi-locked-line {
+            background-color: rgba(255, 183, 3, 0.10) !important;
+        }
+        .monaco-editor .obi-locked-glyph::before {
+            content: '\\1F512';
+            font-size: 11px;
+            opacity: 0.6;
+        }
+    `;
+    document.head.appendChild(style);
+};
+
+
 const MonacoEditor: React.FC<MonacoEditorProps> = ({
     path,
     value,
@@ -406,6 +442,8 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     tabSize = 4,
     theme,
     readOnly,
+    lockedRegions,
+    enforceLockedRegions = true,
     onChange,
     onFormat,
     findEnabled = true,
@@ -424,6 +462,21 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const suppressOnChange = useRef(false);
     const changeListenerRef = useRef<{ dispose: () => void } | null>(null);
     const tooltipTeardownRef = useRef<(() => void) | null>(null);
+    // Snapshot of locked-line content keyed by line number. Captured the first
+    // time we see content for that file, and used to revert any edit that
+    // changes those lines.
+    const lockedSnapshotRef = useRef<Map<number, string>>(new Map());
+    const lockedRegionsRef = useRef<MonacoLockedRegion[] | undefined>(lockedRegions);
+    const enforceLockedRef = useRef<boolean>(enforceLockedRegions);
+    const decorationIdsRef = useRef<string[]>([]);
+
+    useEffect(() => {
+        lockedRegionsRef.current = lockedRegions;
+    }, [lockedRegions]);
+
+    useEffect(() => {
+        enforceLockedRef.current = enforceLockedRegions;
+    }, [enforceLockedRegions]);
 
     useEffect(() => {
         onChangeRef.current = onChange;
@@ -460,10 +513,114 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
         changeListenerRef.current?.dispose();
         const subscription = editor.onDidChangeModelContent(() => {
             if (suppressOnChange.current) return;
+            // Locked-region enforcement: if any line in a locked range now
+            // differs from its snapshot content, revert that single line. We
+            // do this synchronously inside the same change event so the user
+            // sees zero flicker. The backend re-validates on every run/submit.
+            const regions = lockedRegionsRef.current;
+            const model = editor.getModel();
+            // Skip the revert pass when locks are visual-only (admin authoring).
+            if (regions && regions.length > 0 && model && enforceLockedRef.current) {
+                const monaco = monacoRef.current;
+                const snapshot = lockedSnapshotRef.current;
+                const edits: Array<{
+                    range: ReturnType<NonNullable<typeof monaco>["Range"]["lift"]> | null;
+                    text: string;
+                    forceMoveMarkers: boolean;
+                }> = [];
+                if (monaco) {
+                    for (const region of regions) {
+                        for (let line = region.startLine; line <= region.endLine; line++) {
+                            const expected = snapshot.get(line);
+                            if (expected === undefined) continue;
+                            const lineCount = model.getLineCount();
+                            if (line > lineCount) {
+                                // Locked line was deleted entirely — re-insert
+                                // it at the end of the file. (Rare; happens
+                                // when candidate selects across the boundary.)
+                                edits.push({
+                                    range: monaco.Range.lift({
+                                        startLineNumber: lineCount,
+                                        startColumn: model.getLineMaxColumn(lineCount),
+                                        endLineNumber: lineCount,
+                                        endColumn: model.getLineMaxColumn(lineCount),
+                                    }),
+                                    text: "\n" + expected,
+                                    forceMoveMarkers: false,
+                                });
+                                continue;
+                            }
+                            const actual = model.getLineContent(line);
+                            if (actual !== expected) {
+                                edits.push({
+                                    range: monaco.Range.lift({
+                                        startLineNumber: line,
+                                        startColumn: 1,
+                                        endLineNumber: line,
+                                        endColumn: model.getLineMaxColumn(line),
+                                    }),
+                                    text: expected,
+                                    forceMoveMarkers: false,
+                                });
+                            }
+                        }
+                    }
+                }
+                if (edits.length > 0) {
+                    suppressOnChange.current = true;
+                    model.pushEditOperations(
+                        editor.getSelections() ?? null,
+                        edits.filter((e) => e.range !== null) as Parameters<typeof model.pushEditOperations>[1],
+                        () => null,
+                    );
+                    suppressOnChange.current = false;
+                }
+            }
             const v = editor.getValue();
             onChangeRef.current?.(v);
         });
         changeListenerRef.current = subscription;
+    };
+
+    // Capture the snapshot of locked-line content the first time we mount or
+    // when the file path changes. This is the "frozen" content we compare
+    // against on every edit.
+    const captureLockedSnapshot = (model: MonacoModel, regions: MonacoLockedRegion[] | undefined) => {
+        lockedSnapshotRef.current.clear();
+        if (!regions || regions.length === 0) return;
+        const lineCount = model.getLineCount();
+        for (const region of regions) {
+            for (let line = region.startLine; line <= region.endLine; line++) {
+                if (line < 1 || line > lineCount) continue;
+                lockedSnapshotRef.current.set(line, model.getLineContent(line));
+            }
+        }
+    };
+
+    // Render line-level decorations for locked regions. Called whenever the
+    // active file's locked regions change.
+    const applyLockedDecorations = () => {
+        const editor = editorRef.current;
+        const monaco = monacoRef.current;
+        if (!editor || !monaco) return;
+        const regions = lockedRegionsRef.current;
+        const decorations: Parameters<typeof editor.deltaDecorations>[1] = [];
+        if (regions) {
+            for (const region of regions) {
+                decorations.push({
+                    range: new monaco.Range(region.startLine, 1, region.endLine, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: "obi-locked-line",
+                        glyphMarginClassName: "obi-locked-glyph",
+                        hoverMessage: region.reason
+                            ? { value: `Locked: ${region.reason}` }
+                            : { value: "This region is locked." },
+                    },
+                });
+            }
+        }
+        decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations);
     };
 
     useEffect(() => {
@@ -471,6 +628,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
         ensureMonacoCss();
         ensureWidgetOverflowFix();
+        ensureLockedRegionCss();
 
         loadMonaco().then((monaco) => {
             if (disposed || !containerRef.current) return;
@@ -478,6 +636,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
             monacoRef.current = monaco;
 
             const initialModel = ensureModel(monaco, pathRef.current, valueRef.current, language);
+            captureLockedSnapshot(initialModel, lockedRegionsRef.current);
 
             const editor = monaco.editor.create(containerRef.current, {
                 model: initialModel,
@@ -527,6 +686,12 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
             attachChangeListener(editor);
             editorRef.current = editor;
+            // Need glyph margin on for the lock icon to render; we keep it off
+            // by default but flip it on when locked regions are present.
+            if (lockedRegionsRef.current && lockedRegionsRef.current.length > 0) {
+                editor.updateOptions({ glyphMargin: true });
+            }
+            applyLockedDecorations();
 
             editor.addAction({
                 id: "originbi.formatActiveFile",
@@ -574,9 +739,25 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
                 next.setValue(value);
                 suppressOnChange.current = false;
             }
+            // Re-capture lock snapshot for the new file and re-render decorations.
+            captureLockedSnapshot(next, lockedRegionsRef.current);
+            applyLockedDecorations();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [path]);
+
+    // React to locked-region changes (e.g., when admin updates the spec on a
+    // version published mid-attempt — rare but possible).
+    useEffect(() => {
+        const editor = editorRef.current;
+        const model = editor?.getModel();
+        if (!editor || !model) return;
+        captureLockedSnapshot(model, lockedRegions);
+        applyLockedDecorations();
+        const showGlyph = !!(lockedRegions && lockedRegions.length > 0);
+        editor.updateOptions({ glyphMargin: showGlyph });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lockedRegions]);
 
     // Sync incoming value into the active model without thrashing the undo stack.
     useEffect(() => {

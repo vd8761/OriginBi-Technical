@@ -139,13 +139,22 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.ItemRef = strings.ToLower(strings.TrimSpace(req.ItemRef))
-	if !isCodingItemRef(req.ItemRef) {
+	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	if s.plugins == nil {
+		writeError(w, http.StatusServiceUnavailable, "plugin registry unavailable")
+		return
+	}
+	ok, err := s.plugins.IsPurchasableLanguagePlugin(ctx, req.ItemRef)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "plugin lookup failed")
+		return
+	}
+	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported itemRef")
 		return
 	}
 
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "db unavailable")
@@ -232,15 +241,6 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		PurchaseID: purchaseID.String(),
 		Assignment: dto,
 	})
-}
-
-func isCodingItemRef(v string) bool {
-	switch v {
-	case "coding:python", "coding:java", "coding:cpp", "coding:javascript", "coding:c":
-		return true
-	default:
-		return false
-	}
 }
 
 func nullTimePtr(v sql.NullTime) *time.Time {
