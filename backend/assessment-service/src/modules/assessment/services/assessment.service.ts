@@ -308,7 +308,7 @@ export class AssessmentService {
         );
         if (questions.length === 0 && requestedMode === 'trial') {
           this.logger.warn(`No trial questions found for ${module}, falling back to main mode`);
-          requestedMode = 'main';
+          // Note: we keep requestedMode as 'trial' for the question limit logic below
           questions = await queryRunner.query(
             `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = 'main'`,
             [assessment.assessment_id],
@@ -325,9 +325,15 @@ export class AssessmentService {
         : questions;
 
       let finalQuestions = shuffled;
-      const questionLimit = Number(assessment.question_limit || 0);
-      if (questionLimit > 0 && shuffled.length > questionLimit) {
-        finalQuestions = shuffled.slice(0, questionLimit);
+      if (requestedMode === 'trial') {
+        if (shuffled.length > 5) {
+          finalQuestions = shuffled.slice(0, 5);
+        }
+      } else {
+        const questionLimit = Number(assessment.question_limit || 0);
+        if (questionLimit > 0 && shuffled.length > questionLimit) {
+          finalQuestions = shuffled.slice(0, questionLimit);
+        }
       }
 
       for (let i = 0; i < finalQuestions.length; i++) {
@@ -969,7 +975,10 @@ export class AssessmentService {
         questionsPerBlock,
         totalQuestions,
         currentBlock: firstBlock,
+        totalBlocks: mode === 'trial' ? 1 : blockConfig.blocksPerAssessment,
+        questionsPerBlock: mode === 'trial' ? 5 : blockConfig.questionsPerBlock,
         isBlockBased: true,
+        totalQuestions: mode === 'trial' ? 5 : (blockConfig.blocksPerAssessment * blockConfig.questionsPerBlock)
       };
     } catch (error) {
       if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();

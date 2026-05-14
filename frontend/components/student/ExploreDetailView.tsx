@@ -177,7 +177,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 await demoPurchase(paymentTarget.key);
                 await refreshAssignments();
                 setShowLanguageModal(false);
-                setPendingCodingLang(paymentTarget.language);
+                // After successful payment, take user to the assessment library
+                router.push("/assessment?view=assessment");
                 setAssignmentError("");
             } catch (err) {
                 if (isSandboxMode) {
@@ -199,7 +200,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         } else {
             markPaid(paymentTarget.key);
             refreshPurchases?.();
-            startNonCodingAssessment();
+            // After successful payment, take user to the assessment library
+            router.push("/assessment?view=assessment");
         }
         setPaymentTarget(null);
     };

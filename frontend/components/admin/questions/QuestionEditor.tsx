@@ -66,6 +66,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   const [reportedBy, setReportedBy] = useState("");
   // Communication
   const [commTaskType, setCommTaskType] = useState<CommTaskType>("mcq");
+  const [commCategory, setCommCategory] = useState("");
+  const [commSubCategory, setCommSubCategory] = useState("");
   const [commInstructions, setCommInstructions] = useState("");
   const [commPassage, setCommPassage] = useState("");
   const [commPrompt, setCommPrompt] = useState("");
@@ -131,7 +133,10 @@ export default function QuestionEditor({ question, assessmentType, categories = 
       }
       case "communication": {
         const cq = question as CommQuestion;
-        setCommTaskType(cq.taskType); setCommInstructions(cq.instructions);
+        setCommTaskType(cq.taskType); 
+        setCommCategory(cq.category || "");
+        setCommSubCategory(cq.subcategory || "");
+        setCommInstructions(cq.instructions);
         setCommPassage(cq.passage || ""); setCommPrompt(cq.prompt || "");
         setCommPrepTime(cq.prepTimeSeconds || 30); setCommRecordTime(cq.recordTimeSeconds || 90);
         setCommMinWords(cq.minWords || 50); setCommMaxWords(cq.maxWords || 200);
@@ -280,6 +285,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         case "communication":
           onSave({
             ...common, taskType: commTaskType, instructions: commInstructions.trim(),
+            category: commCategory.trim(), subcategory: commSubCategory.trim(),
             ...(finalAudioUrl ? { audioUrl: finalAudioUrl } : {}),
             ...(commPassage ? { passage: commPassage } : {}),
             ...(commPrompt ? { prompt: commPrompt } : {}),
@@ -450,6 +456,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                         options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({ label: v, value: k }))}
                       />
                     </div>
+                    <div><label className={labelCls}>Category</label><input value={commCategory} onChange={e => setCommCategory(e.target.value)} className={inputCls} placeholder="Professional Ethics" /></div>
+                    <div><label className={labelCls}>Sub-Category</label><input value={commSubCategory} onChange={e => setCommSubCategory(e.target.value)} className={inputCls} placeholder="Email Communication" /></div>
                     <div className="sm:col-span-2"><label className={labelCls}>Instructions</label><textarea value={commInstructions} onChange={e => setCommInstructions(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Direct instructions..." /></div>
                     <div className="sm:col-span-2"><label className={labelCls}>Explanation (Admin Only)</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Explain the answer for reference..." /></div>
                     {commTaskType === "reading" && <div className="sm:col-span-2"><label className={labelCls}>Passage</label><textarea value={commPassage} onChange={e => setCommPassage(e.target.value)} className={`${inputCls} resize-none`} rows={3} placeholder="Reading corpus..." /></div>}

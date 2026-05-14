@@ -1,0 +1,15 @@
+{
+  "id": "evaluation.llm",
+  "slug": "evaluation.llm",
+  "name": "LLM Evaluator",
+  "version": "1.0.0",
+  "type": "addon",
+  "category": "evaluation",
+  "enabledByDefault": false,
+  "requiresLicense": true,
+  "requires": ["assessment.coding"],
+  "extends": ["assessment.coding"],
+  "provides": ["evaluator.llm-response"],
+  "configSchemaRef": "schemas/config.schema.json",
+  "actions": ["llm.evaluate"]
+}

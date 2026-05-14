@@ -22,6 +22,7 @@ import (
 	"github.com/originbi/exam-engine/internal/config"
 	"github.com/originbi/exam-engine/internal/db"
 	"github.com/originbi/exam-engine/internal/migrate"
+	"github.com/originbi/exam-engine/internal/pluginhost"
 	"github.com/originbi/exam-engine/internal/server"
 )
 
@@ -70,7 +71,21 @@ func run() error {
 	}
 	logger.Info("cognito verifier initialized", "user_pool_id", cfg.CognitoUserPoolID)
 
+	// Plugin registry must load after migrations have populated migrations 008
+	// and 012 (assessment.coding plus language.* plugins). Only assessment.coding
+	// is blocking: optional addon failures (e.g. evaluator.openai missing the
+	// evaluation.llm base) log a warning and proceed.
+	pluginRegistry, err := pluginhost.Bootstrap(rootCtx, pool, logger, pluginhost.BootstrapOptions{
+		BlockingSlugs: map[string]bool{"assessment.coding": true},
+	})
+	if err != nil {
+		return err
+	}
+
 	srv := server.New(pool, logger, verifier, cfg.DefaultOrgID)
+	if err := srv.AttachPluginRegistry(pluginRegistry); err != nil {
+		return err
+	}
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPAddr,

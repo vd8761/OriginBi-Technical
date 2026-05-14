@@ -78,11 +78,24 @@ export function getLimitsFor(lang: string, override?: Partial<ExecutionLimits>):
     return { ...base, ...(override ?? {}) };
 }
 
+// Region of lines that the candidate cannot modify. Matches the JSON shape
+// produced by the admin authoring panel and validated on the backend by
+// assessment.coding's runtime.go on every run/submit.
+export interface LockedRegion {
+    startLine: number;
+    endLine: number;
+    reason?: string;
+}
+
 export interface FileNode {
     path: string;
     content: string;
     readOnly?: boolean;
     language?: string;
+    // When present, these line ranges are visually locked in the editor and
+    // edit attempts are reverted on the client. Backend re-validates on every
+    // run, so this is UX only — defense in depth is server-side.
+    lockedRegions?: LockedRegion[];
 }
 
 export interface Question {
@@ -104,6 +117,10 @@ export interface Question {
     entryFile?: Record<string, string>;
     testCases?: TestCase[];
     limits?: Partial<ExecutionLimits>;
+    // Plugin slugs (e.g., "language.python") the question allows. Intersected
+    // with user entitlements + section config on the candidate side; if the
+    // intersection is empty the candidate is bounced to /explore/coding.
+    allowedLanguages?: string[];
 }
 
 // ---------------------------------------------------------------------------

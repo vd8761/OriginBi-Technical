@@ -112,21 +112,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         };
     }, [isLoading, isSubmitting, questions.length]);
 
-    // ── Intercept refresh/tab close/page exit (beforeunload) ──
-    useEffect(() => {
-        if (isLoading || isSubmitting || questions.length === 0) return;
 
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            e.preventDefault();
-            e.returnValue = "Your progress is saved and you can return anytime before the timer runs out.";
-            return e.returnValue;
-        };
-
-        window.addEventListener("beforeunload", handleBeforeUnload);
-        return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-        };
-    }, [isLoading, isSubmitting, questions.length]);
 
     useEffect(() => {
         const fetchEngineStats = async () => {

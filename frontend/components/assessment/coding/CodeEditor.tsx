@@ -889,6 +889,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                                     tabSize={tabSize}
                                     theme={theme}
                                     readOnly={activeFile.readOnly}
+                                    lockedRegions={activeFile.lockedRegions}
                                     onChange={handleEditorChange}
                                     onFormat={handleFormat}
                                     findEnabled={findEnabled}

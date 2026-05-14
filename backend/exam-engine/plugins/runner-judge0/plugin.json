@@ -1,0 +1,13 @@
+{
+  "id": "runner.judge0",
+  "slug": "runner.judge0",
+  "name": "Judge0 Runner",
+  "version": "1.0.0",
+  "type": "addon",
+  "category": "runner",
+  "enabledByDefault": true,
+  "requiresLicense": false,
+  "requires": [],
+  "extends": [],
+  "provides": ["code.runner"]
+}

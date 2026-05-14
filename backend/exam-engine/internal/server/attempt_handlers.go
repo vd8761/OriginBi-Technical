@@ -15,6 +15,10 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/originbi/exam-engine/internal/auth"
+	"github.com/originbi/exam-engine/internal/pluginhost"
+	assessmentcoding "github.com/originbi/exam-engine/plugins/assessment-coding"
+	evaluationtestcase "github.com/originbi/exam-engine/plugins/evaluation-testcase"
+	runnerjudge0 "github.com/originbi/exam-engine/plugins/runner-judge0"
 )
 
 type attemptDTO struct {
@@ -384,7 +388,12 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.runFinalCodeForAttempt(r.Context(), principal.UserID, attemptID); err != nil {
-		writeError(w, http.StatusBadGateway, "final code evaluation failed: "+err.Error())
+		status, body := codeRunErrResponse(err)
+		if status == http.StatusInternalServerError {
+			writeError(w, http.StatusBadGateway, "final code evaluation failed: "+err.Error())
+			return
+		}
+		writeJSON(w, status, body)
 		return
 	}
 
@@ -941,7 +950,7 @@ func (s *Server) saveAnswerTx(
 
 type finalCodeAnswer struct {
 	ExamQuestionID uuid.UUID
-	AssignmentLang string
+	AssignmentRef  string
 	Body           []byte
 	Payload        []byte
 }
@@ -957,7 +966,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 	defer queryCancel()
 	rows, err := s.pool.Query(queryCtx, `
 		SELECT ans.exam_question_id,
-		       replace(COALESCE(assign.assignment_ref, ''), 'coding:', ''),
+		       COALESCE(assign.assignment_ref, ''),
 		       qv.body,
 		       ans.payload
 		FROM attempts a
@@ -978,7 +987,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 	codeAnswers := []finalCodeAnswer{}
 	for rows.Next() {
 		var ans finalCodeAnswer
-		if err := rows.Scan(&ans.ExamQuestionID, &ans.AssignmentLang, &ans.Body, &ans.Payload); err != nil {
+		if err := rows.Scan(&ans.ExamQuestionID, &ans.AssignmentRef, &ans.Body, &ans.Payload); err != nil {
 			return err
 		}
 		if isCodeResponseBody(ans.Body) {
@@ -994,9 +1003,9 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 		if len(ans.Payload) > 0 {
 			_ = json.Unmarshal(ans.Payload, &payload)
 		}
-		payload.Language = strings.ToLower(strings.TrimSpace(payload.Language))
+		payload.Language = runnerjudge0.NormalizeLanguageSlug(payload.Language)
 		if payload.Language == "" {
-			payload.Language = strings.ToLower(strings.TrimSpace(ans.AssignmentLang))
+			payload.Language = s.languageSlugForAssignmentRef(ctx, ans.AssignmentRef)
 		}
 		req := codeRunRequest{
 			Mode:      "final",
@@ -1008,6 +1017,12 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 			continue
 		}
 		if err := validateCodeRunRequest(&req, true); err != nil {
+			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
+		}
+		if err := s.ensureLanguageEntitled(ctx, userID, req.Language); err != nil {
+			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
+		}
+		if err := s.validateCodingAnswerPayload(req, ans.Body); err != nil {
 			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
 		}
 
@@ -1028,7 +1043,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 			return fmt.Errorf("question %s final run start: %w", ans.ExamQuestionID, err)
 		}
 
-		judgePayload, err := buildJudge0Payload(req)
+		judgePayload, err := s.buildJudge0Payload(req)
 		if err != nil {
 			_ = s.finishRunWithError(ctx, runID, err.Error())
 			return fmt.Errorf("question %s final payload: %w", ans.ExamQuestionID, err)
@@ -1042,6 +1057,130 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 		}
 	}
 	return nil
+}
+
+func (s *Server) languageSlugForAssignmentRef(ctx context.Context, assignmentRef string) string {
+	assignmentRef = strings.ToLower(strings.TrimSpace(assignmentRef))
+	if assignmentRef == "" {
+		return ""
+	}
+	if s.plugins != nil {
+		if m, err := s.plugins.LanguagePluginByItemRef(ctx, assignmentRef); err == nil && m != nil {
+			return m.Slug
+		}
+	}
+	return runnerjudge0.NormalizeLanguageSlug(strings.TrimPrefix(assignmentRef, "coding:"))
+}
+
+func (s *Server) validateCodingAnswerPayload(req codeRunRequest, rawBody []byte) error {
+	var body assessmentcoding.QuestionBody
+	_ = json.Unmarshal(rawBody, &body)
+	langSlug := runnerjudge0.NormalizeLanguageSlug(req.Language)
+	legacyLang := runnerjudge0.LegacyLanguageName(langSlug)
+
+	allowed := normalizeBodyLanguages(body.AllowedLanguages)
+	snapshot := starterFilesForLanguage(body.StarterFiles, langSlug, legacyLang)
+	if len(snapshot) == 0 {
+		starterCode := starterCodeForLanguage(body.StarterCode, langSlug, legacyLang)
+		if starterCode != "" {
+			entry := entryFileForLanguage(body.EntryFile, langSlug, legacyLang)
+			if entry == "" {
+				entry = req.EntryFile
+			}
+			if entry == "" {
+				entry = defaultEntryFileForLanguage(s.plugins, langSlug)
+			}
+			if entry != "" {
+				snapshot = []assessmentcoding.StarterFile{{Path: entry, Content: starterCode}}
+			}
+		}
+	}
+
+	answer := assessmentcoding.Answer{
+		Language:    langSlug,
+		EntryFile:   req.EntryFile,
+		CustomStdin: req.CustomStdin,
+		Files:       make([]assessmentcoding.AnswerFile, 0, len(req.Files)),
+	}
+	for _, f := range req.Files {
+		answer.Files = append(answer.Files, assessmentcoding.AnswerFile{
+			Path:    f.Path,
+			Content: f.Content,
+		})
+	}
+	return assessmentcoding.ValidateAnswer(&answer, assessmentcoding.RuntimeContext{
+		Language:         langSlug,
+		AllowedLanguages: allowed,
+		Snapshot:         snapshot,
+		DefaultEntryFile: defaultEntryFileForLanguage(s.plugins, langSlug),
+		MaxFiles:         maxCodeFiles,
+		MaxFileBytes:     maxCandidateSourceBytes,
+		MaxTotalBytes:    maxCandidateSourceBytes,
+	})
+}
+
+func normalizeBodyLanguages(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, v := range values {
+		if strings.TrimSpace(v) == "" {
+			continue
+		}
+		slug := runnerjudge0.NormalizeLanguageSlug(v)
+		if seen[slug] {
+			continue
+		}
+		seen[slug] = true
+		out = append(out, slug)
+	}
+	return out
+}
+
+func starterFilesForLanguage(files map[string][]assessmentcoding.StarterFile, langSlug string, legacyLang string) []assessmentcoding.StarterFile {
+	if len(files) == 0 {
+		return nil
+	}
+	if xs := files[langSlug]; len(xs) > 0 {
+		return xs
+	}
+	return files[legacyLang]
+}
+
+func starterCodeForLanguage(code map[string]string, langSlug string, legacyLang string) string {
+	if len(code) == 0 {
+		return ""
+	}
+	if v := code[langSlug]; v != "" {
+		return v
+	}
+	return code[legacyLang]
+}
+
+func entryFileForLanguage(entries map[string]string, langSlug string, legacyLang string) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	if v := entries[langSlug]; v != "" {
+		return v
+	}
+	return entries[legacyLang]
+}
+
+func defaultEntryFileForLanguage(reg interface {
+	BySlug(string) *pluginhost.Manifest
+}, langSlug string) string {
+	if reg == nil {
+		return ""
+	}
+	m := reg.BySlug(langSlug)
+	if m == nil {
+		return ""
+	}
+	cfg, err := m.DecodeLanguageConfig()
+	if err != nil {
+		return ""
+	}
+	return cfg.DefaultEntryFile
 }
 
 func isCodeResponseBody(body []byte) bool {
@@ -1220,35 +1359,45 @@ func (s *Server) gradeCodingAnswerTx(ctx context.Context, tx pgx.Tx, ans answerF
 		return 0, nil, err
 	}
 
-	var totalTests int
-	var passedTests int
-	var totalWeight float64
-	var passedWeight float64
+	var isNegativeMarked bool
+	var negativeScore float64
 	if err := tx.QueryRow(ctx, `
-		SELECT COUNT(*),
-		       COALESCE(SUM(CASE WHEN r.passed THEN 1 ELSE 0 END), 0)::int,
-		       COALESCE(SUM(COALESCE(tc.weight, 1)), 0)::float8,
-		       COALESCE(SUM(CASE WHEN r.passed THEN COALESCE(tc.weight, 1) ELSE 0 END), 0)::float8
+		SELECT is_negative_marked, negative_score::float8
+		FROM question_versions
+		WHERE id = $1
+	`, ans.QuestionVersionID).Scan(&isNegativeMarked, &negativeScore); err != nil {
+		return 0, nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT r.passed, COALESCE(tc.weight, 1)::float8
 		FROM code_run_test_results r
 		LEFT JOIN question_test_cases tc ON tc.id = r.test_case_id
 		WHERE r.code_run_id = $1
-	`, runID).Scan(&totalTests, &passedTests, &totalWeight, &passedWeight); err != nil {
+		ORDER BY r.ordinal
+	`, runID)
+	if err != nil {
 		return 0, nil, err
 	}
-	score := 0.0
-	if totalWeight > 0 {
-		score = ans.MaxScore * passedWeight / totalWeight
+	defer rows.Close()
+	cases := []evaluationtestcase.CaseResult{}
+	for rows.Next() {
+		var tc evaluationtestcase.CaseResult
+		if err := rows.Scan(&tc.Passed, &tc.Weight); err != nil {
+			return 0, nil, err
+		}
+		cases = append(cases, tc)
 	}
-	feedback, _ := json.Marshal(map[string]any{
-		"type":         "coding",
-		"runId":        runID.String(),
-		"passedTests":  passedTests,
-		"totalTests":   totalTests,
-		"passedWeight": passedWeight,
-		"totalWeight":  totalWeight,
-		"maxScore":     ans.MaxScore,
+	if err := rows.Err(); err != nil {
+		return 0, nil, err
+	}
+	result := evaluationtestcase.PartialCredit(evaluationtestcase.ScoreInput{
+		MaxScore:         ans.MaxScore,
+		IsNegativeMarked: isNegativeMarked,
+		NegativeScore:    negativeScore,
+		Cases:            cases,
 	})
-	return score, feedback, nil
+	return result.Score, evaluationtestcase.Feedback(runID.String(), ans.MaxScore, result), nil
 }
 
 func validQuestionState(v string) bool {

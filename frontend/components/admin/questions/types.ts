@@ -91,6 +91,8 @@ export type CommTaskType = "audio" | "reading" | "speaking" | "writing" | "mcq";
 export interface CommQuestion {
   id: string;
   taskType: CommTaskType;
+  category?: string;
+  subcategory?: string;
   instructions: string;
   // For audio / reading / mcq
   questions?: { id: string; text: string; options: QuestionOption[]; correctOptionId?: string }[];

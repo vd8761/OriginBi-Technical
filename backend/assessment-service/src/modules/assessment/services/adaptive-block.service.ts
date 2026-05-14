@@ -233,6 +233,18 @@ export class AdaptiveBlockService {
             [attemptId, Number(questions[i].id), displayOrder, req.blockNumber, i + 1],
           );
         }
+      // Get questions for this block
+      const questions = await this.fetchQuestionsForBlock(
+        queryRunner,
+        request.assessmentId,
+        targetDifficulty,
+        request.mode === 'trial' ? 5 : blockConfig.questionsPerBlock,
+        request.mode,
+        request.previousPerformance
+      );
+
+      if (questions.length === 0) {
+        throw new BadRequestException(`No questions available for difficulty: ${targetDifficulty}`);
       }
 
       // 8. Update adaptive_blocks: store question IDs + mark generated
