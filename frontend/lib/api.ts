@@ -65,7 +65,7 @@ export interface ApiRegistration {
   countryCode: string;
   mobileNumber: string;
   status: string;
-  isTechAssessment: boolean;
+  isTechAssessment: number;
 }
 
 export interface AuthTokens {
@@ -382,7 +382,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       country_code: input.countryCode,
       password: input.password,
       gender: input.gender,
-      is_tech_assessment: true,
+      is_tech_assessment: 1,
       program_code: input.programCode,
       school_level: input.schoolLevel,
       school_stream: input.schoolStream,
