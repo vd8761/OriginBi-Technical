@@ -106,7 +106,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               <div key="auth-tabs">
                 {/* Title Section */}
                 <div className="text-center mb-8">
-                  <h1 className="font-sans font-bold text-brand-text-light-primary dark:text-brand-text-primary tracking-tight leading-tight text-[clamp(24px,3vw,36px)]">
+                  <h1 className="font-sans font-bold text-black dark:text-white tracking-tight leading-tight text-[clamp(24px,3vw,36px)]">
                     {activeTab === "login" ? (
                       <>
                         Welcome <span className="text-brand-green">Back</span>
@@ -117,7 +117,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                       </>
                     )}
                   </h1>
-                  <p className="font-sans text-brand-text-light-secondary dark:text-brand-text-secondary font-normal tracking-normal leading-relaxed mt-2 text-[clamp(13px,1vw,15px)]">
+                  <p className="font-sans text-black dark:text-white font-normal tracking-normal leading-relaxed mt-2 text-[clamp(13px,1vw,15px)]">
                     {activeTab === "login"
                       ? "Login to access your technical assessments"
                       : "Create your account to begin your assessment"
@@ -133,7 +133,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     className={`flex-1 text-sm font-semibold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer z-10 ${
                       activeTab === "login"
                         ? "bg-brand-green text-white"
-                        : "text-slate-500 dark:text-brand-text-secondary hover:text-brand-green"
+                        : "text-black dark:text-white hover:text-brand-green"
                     }`}
                   >
                     Login
@@ -144,7 +144,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     className={`flex-1 text-sm font-semibold uppercase tracking-wider rounded-full transition-all duration-300 cursor-pointer z-10 ${
                       activeTab === "signup"
                         ? "bg-brand-green text-white"
-                        : "text-slate-500 dark:text-brand-text-secondary hover:text-brand-green"
+                        : "text-black dark:text-white hover:text-brand-green"
                     }`}
                   >
                     Sign Up
@@ -169,7 +169,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                       >
                         <LoginForm onLoginSuccess={(name) => onLoginSuccess(name)} />
                         <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
-                          <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
+                          <p className="text-sm text-black dark:text-white">
                             Don&apos;t have an account?{" "}
                             <button
                               type="button"
@@ -191,7 +191,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                       >
                         <SignupForm onSignupSuccess={() => setActiveTab("success")} />
                         <div className="text-center mt-6 pt-4 border-t border-brand-light-tertiary/50 dark:border-white/5">
-                          <p className="text-sm text-brand-text-light-secondary dark:text-brand-text-secondary">
+                          <p className="text-sm text-black dark:text-white">
                             Already have an account?{" "}
                             <button
                               type="button"

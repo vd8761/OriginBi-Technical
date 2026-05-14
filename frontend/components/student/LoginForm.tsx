@@ -130,7 +130,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
       <div>
         <label
           htmlFor="email"
-          className="block font-sans text-[clamp(14px,0.9vw,18px)] font-semibold text-slate-500 dark:text-white mb-2 leading-none tracking-[0px]"
+          className="block font-sans text-[clamp(14px,0.9vw,18px)] font-semibold text-black dark:text-white mb-2 leading-none tracking-[0px]"
         >
           Email ID
         </label>
@@ -142,7 +142,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           onChange={handleChange}
           onBlur={handleBlur}
           autoFocus
-          className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-slate-800 dark:text-brand-text-primary placeholder:text-slate-400 dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full transition-colors duration-300 ${isEmailInvalid
+          className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-black dark:text-white placeholder:text-black dark:placeholder:text-white font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full transition-colors duration-300 ${isEmailInvalid
             ? "border-red-500 focus:ring-red-500 focus:border-red-500"
             : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
             }`}
@@ -164,7 +164,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
       <div>
         <label
           htmlFor="password"
-          className="block font-sans text-[14px] font-semibold text-slate-500 dark:text-white mb-2 leading-none tracking-[0px]"
+          className="block font-sans text-[14px] font-semibold text-black dark:text-white mb-2 leading-none tracking-[0px]"
         >
           Password
         </label>
@@ -177,7 +177,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="Enter your password"
-            className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-slate-800 dark:text-brand-text-primary placeholder:text-slate-400 dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full pr-16 transition-colors duration-300 ${isPasswordInvalid
+            className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-black dark:text-white placeholder:text-black dark:placeholder:text-white font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full pr-16 transition-colors duration-300 ${isPasswordInvalid
               ? "border-red-500 focus:ring-red-500 focus:border-red-500"
               : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
               }`}
@@ -188,7 +188,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           <button
             type="button"
             onClick={togglePasswordVisibility}
-            className="absolute inset-y-0 right-0 cursor-pointer flex items-center pr-4 text-brand-text-light-secondary hover:text-brand-text-light-primary dark:text-brand-text-secondary dark:hover:text-white transition-colors duration-300"
+            className="absolute inset-y-0 right-0 cursor-pointer flex items-center pr-4 text-black hover:text-brand-green dark:text-white dark:hover:text-brand-green transition-colors duration-300"
             aria-label={passwordVisible ? "Hide password" : "Show password"}
           >
             {passwordVisible ? (
@@ -210,7 +210,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         <div className="flex justify-end mt-3">
           <Link
             href="/student/forgot-password"
-            className="text-sm text-slate-500 dark:text-brand-text-secondary hover:text-brand-green transition-colors font-semibold"
+            className="text-sm text-black dark:text-white hover:text-brand-green transition-colors font-semibold"
           >
             Forgot Password?
           </Link>

@@ -274,7 +274,6 @@ func (s *AssessmentService) StartAttempt(module string, req models.StartAttemptR
 			query := fmt.Sprintf("SELECT %s FROM %s WHERE assessment_id = ? AND status = 'active' AND mode = ?", config.IDCol, config.Questions)
 			err = tx.Raw(query, assessment.AssessmentID, requestedMode).Scan(&questions).Error
 			if (err != nil || len(questions) == 0) && requestedMode == "trial" {
-				requestedMode = "main"
 				err = tx.Raw(query, assessment.AssessmentID, "main").Scan(&questions).Error
 			}
 		}
@@ -348,13 +347,13 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 
 	extraSelect := ""
 	if isAptitude {
-		extraSelect = ", q.image_url, q.marks, q.negative_marks"
+		extraSelect = ", q.image_url, q.marks, q.negative_marks, q.category, q.subcategory"
 	} else if isGrammar {
-		extraSelect = ", q.task_type, q.audio_url, q.passage_text, q.reference_answer, q.marks, q.negative_marks"
+		extraSelect = ", q.task_type, q.audio_url, q.passage_text, q.reference_answer, q.marks, q.negative_marks, q.category, q.subcategory"
 	} else if isRole {
-		extraSelect = ", q.domain, q.question_type, q.scenario_context, q.marks, q.negative_marks"
+		extraSelect = ", q.domain, q.question_type, q.scenario_context, q.marks, q.negative_marks, q.category, q.subcategory"
 	} else if isMnc {
-		extraSelect = ", q.topic_group, q.marks, q.negative_marks"
+		extraSelect = ", q.topic_group, q.marks, q.negative_marks, q.category, q.subcategory"
 	}
 
 	difficultySelect := ""
@@ -408,19 +407,23 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 		// MNC specific fields
 		var topicGroup sql.NullString
 
+		// Shared category fields
+		var category sql.NullString
+		var subcategory sql.NullString
+
 		scanDest := []interface{}{&displayOrder, &questionId, &text}
 		if config.HasDifficulty {
 			scanDest = append(scanDest, &difficulty)
 		}
 
 		if isAptitude {
-			scanDest = append(scanDest, &imageUrl, &marks, &negativeMarks)
+			scanDest = append(scanDest, &imageUrl, &marks, &negativeMarks, &category, &subcategory)
 		} else if isGrammar {
-			scanDest = append(scanDest, &taskType, &audioUrl, &passageText, &referenceAnswer, &marks, &negativeMarks)
+			scanDest = append(scanDest, &taskType, &audioUrl, &passageText, &referenceAnswer, &marks, &negativeMarks, &category, &subcategory)
 		} else if isRole {
-			scanDest = append(scanDest, &domain, &questionType, &scenarioContext, &marks, &negativeMarks)
+			scanDest = append(scanDest, &domain, &questionType, &scenarioContext, &marks, &negativeMarks, &category, &subcategory)
 		} else if isMnc {
-			scanDest = append(scanDest, &topicGroup, &marks, &negativeMarks)
+			scanDest = append(scanDest, &topicGroup, &marks, &negativeMarks, &category, &subcategory)
 		}
 
 		if err := rows.Scan(scanDest...); err != nil {
@@ -444,14 +447,20 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 			q.Difficulty = difficulty.String
 		}
 
-		if isAptitude && imageUrl.Valid {
-			q.ImageUrl = imageUrl.String
+		if isAptitude {
+			if imageUrl.Valid {
+				q.ImageUrl = imageUrl.String
+			}
+			q.Category = category.String
+			q.Subcategory = subcategory.String
 		}
 		if isGrammar {
 			q.TaskType = taskType.String
 			q.AudioUrl = audioUrl.String
 			q.PassageText = passageText.String
 			q.ReferenceAnswer = referenceAnswer.String
+			q.Category = category.String
+			q.Subcategory = subcategory.String
 		}
 		if isRole {
 			if questionType.String == "scenario" {
@@ -459,11 +468,17 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 			} else {
 				q.Type = "conceptual"
 			}
-			q.Category = domain.String
+			q.Category = category.String      // Priority to category column
+			q.Subcategory = subcategory.String
+			if q.Category == "" {
+				q.Category = domain.String    // Fallback to domain for backward compat
+			}
 			q.ScenarioContext = scenarioContext.String
 		}
 		if isMnc {
 			q.Topic = topicGroup.String
+			q.Category = category.String
+			q.Subcategory = subcategory.String
 		}
 
 		// Retrieve options
