@@ -482,17 +482,19 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
           />
           {formData.schoolLevel === "HSC" && (
             <>
-              <CustomSelect
-                label="Stream"
-                required
-                options={SCHOOL_STREAMS}
-                value={formData.schoolStream}
-                onChange={(val) => handleSelectChange("schoolStream", val)}
-                error={formErrors.schoolStream}
-                placeholder="Select Stream"
-                disabled={isSubmitting}
-              />
-              <div className="space-y-1.5">
+              <div className="sm:col-span-2">
+                <CustomSelect
+                  label="Stream"
+                  required
+                  options={SCHOOL_STREAMS}
+                  value={formData.schoolStream}
+                  onChange={(val) => handleSelectChange("schoolStream", val)}
+                  error={formErrors.schoolStream}
+                  placeholder="Select Stream"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-black dark:text-white ml-1">
                   Current Year (1-2) <span className="text-red-500">*</span>
                 </label>
@@ -529,7 +531,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
               disabled={isSubmitting || loadingDepts}
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 sm:col-span-2">
             <label className="block text-xs font-semibold uppercase tracking-wider text-black dark:text-white ml-1">
               Current Year (1-6) <span className="text-red-500">*</span>
             </label>
