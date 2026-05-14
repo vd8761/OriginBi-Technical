@@ -14,6 +14,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
   useEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
     if (adminSession === "true") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsAuthorized(true);
     } else {
       router.push("/admin/login");
@@ -22,11 +23,22 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAFA] dark:bg-brand-dark-primary gap-4">
-        <div className="w-12 h-12 border-4 border-brand-green/20 border-t-brand-green rounded-full animate-spin" />
-        <p className="text-sm font-bold text-slate-500 dark:text-brand-text-secondary uppercase tracking-widest animate-pulse">
+      <div className="admin-card admin-card-pad" style={{ display: "grid", minHeight: 360, placeItems: "center" }}>
+        <div style={{ display: "grid", placeItems: "center", gap: 14 }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "999px",
+              border: "4px solid rgba(30,211,106,0.16)",
+              borderTopColor: "var(--admin-green)",
+              animation: "coding-spin 0.8s linear infinite",
+            }}
+          />
+          <p className="admin-page-eyebrow">
           Verifying authorization...
-        </p>
+          </p>
+        </div>
       </div>
     );
   }

@@ -220,10 +220,133 @@ export interface Plugin {
   slug: string;
   name: string;
   version: string;
+  pluginType?: string;
+  category?: string;
+  requires?: string[];
+  extends?: string[];
+  provides?: string[];
+  schema?: Record<string, unknown>;
+  configSchema?: Record<string, unknown> | null;
   requiresLicense: boolean;
   enabledByDefault: boolean;
   platformState: "disabled" | "enabled" | "restricted";
   platformConfig: Record<string, unknown>;
+  dependents?: string[];
+}
+
+// LanguageSchema is the shape inside plugins.schema for category='language'.
+// Matches plugins.schema JSONB seeded by migration 012.
+export interface LanguageSchema {
+  displayName: string;
+  judge0LanguageId: number;
+  fileExtension: string;
+  defaultEntryFile?: string;
+  compileFlags?: string | null;
+  timeLimitMs?: number;
+  memoryLimitKb?: number;
+  stackLimitKb?: number;
+  processesLimit?: number;
+  outputLimitKb?: number;
+  supportsMultiFile?: boolean;
+  monacoLanguageId: string;
+  icon?: string | null;
+  legacyItemRef?: string | null;
+}
+
+export interface MeLanguage {
+  slug: string;
+  displayName: string;
+  monacoLanguageId: string;
+  icon?: string | null;
+  source: "purchase" | "org" | "free-tier";
+  itemRef?: string;
+  orgId?: string;
+}
+
+export interface AdminQuestion {
+  id: string;
+  pluginId: string;
+  pluginSlug: string;
+  title: string;
+  isArchived: boolean;
+  currentVersionId: string;
+  versionNumber: number;
+  difficulty: number;
+  estimatedTimeSeconds?: number;
+  body: Record<string, unknown>;
+  maxScore: number;
+  isNegativeMarked: boolean;
+  negativeScore: number;
+  createdAt: string;
+}
+
+export interface AdminTestCase {
+  id: string;
+  questionVersionId: string;
+  ordinal: number;
+  name: string;
+  isSample: boolean;
+  isHidden: boolean;
+  weight: number;
+  stdin: string;
+  expectedStdout: string;
+  comparator: string;
+  comparatorConfig: Record<string, unknown>;
+}
+
+export interface AdminTestCaseInput {
+  name?: string;
+  is_sample?: boolean;
+  is_hidden?: boolean;
+  weight?: number;
+  stdin?: string;
+  expected_stdout?: string;
+  comparator?: string;
+  comparator_config?: Record<string, unknown>;
+}
+
+export interface AdminQuestionInput {
+  title: string;
+  plugin_slug?: string;
+  body: Record<string, unknown>;
+  test_cases?: AdminTestCaseInput[];
+  max_score?: number;
+  is_negative_marked?: boolean;
+  negative_score?: number;
+  difficulty?: number;
+  estimated_time_seconds?: number;
+}
+
+export interface AdminExamPackage {
+  id: string;
+  currentVersionId: string;
+  title: string;
+  slug: string;
+  description?: string;
+  status: string;
+  totalTimeSeconds: number;
+  maxScore: number;
+  settings: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AdminExamPackageInput {
+  title: string;
+  slug: string;
+  description?: string;
+  total_time_seconds?: number;
+  max_score?: number;
+  languages?: string[];
+  price_cents?: number;
+  currency?: string;
+}
+
+export interface AdminUserEntitlement {
+  slug: string;
+  displayName: string;
+  source: string;
+  itemRef?: string;
+  orgId?: string;
 }
 
 export class ApiError extends Error {
@@ -541,16 +664,219 @@ export async function submitAttempt(
   });
 }
 
-export async function listPlugins(): Promise<{ plugins: Plugin[] }> {
-  return apiFetch<{ plugins: Plugin[] }>("/v1/admin/plugins");
+export async function listPlugins(
+  options: { category?: string } = {},
+): Promise<{ plugins: Plugin[] }> {
+  const q = options.category ? `?category=${encodeURIComponent(options.category)}` : "";
+  return apiFetch<{ plugins: Plugin[] }>(`/v1/admin/plugins${q}`);
 }
 
+export async function getPlugin(pluginId: string): Promise<Plugin> {
+  return apiFetch<Plugin>(`/v1/admin/plugins/${pluginId}`);
+}
+
+export async function createPlugin(input: {
+  kind: string;
+  slug: string;
+  name: string;
+  version: string;
+  schema: Record<string, unknown>;
+  plugin_type: string;
+  category: string;
+  requires?: string[];
+  extends?: string[];
+  provides?: string[];
+  requires_license?: boolean;
+  enabled_by_default?: boolean;
+}): Promise<Plugin> {
+  return apiFetch<Plugin>("/v1/admin/plugins", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Updates plugin metadata (name, version, schema). For state changes
+ * (enable/disable/restrict) use updatePluginState.
+ */
+export async function updatePluginMetadata(
+  pluginId: string,
+  input: { name?: string; version?: string; schema?: Record<string, unknown> },
+): Promise<Plugin> {
+  return apiFetch<Plugin>(`/v1/admin/plugins/${pluginId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updatePluginState(
+  pluginId: string,
+  input: { state: Plugin["platformState"]; config?: Record<string, unknown> },
+): Promise<void> {
+  await apiFetch<{ status: string }>(`/v1/admin/plugins/${pluginId}/state`, {
+    method: "PUT",
+    body: JSON.stringify({ state: input.state, config: input.config ?? {} }),
+  });
+}
+
+/** Back-compat shim — old plugins page called updatePlugin(id, { state }). */
 export async function updatePlugin(
   pluginId: string,
   input: { state: Plugin["platformState"]; config?: Record<string, unknown> },
 ): Promise<void> {
-  await apiFetch<{ status: string }>(`/v1/admin/plugins/${pluginId}`, {
-    method: "PUT",
-    body: JSON.stringify({ state: input.state, config: input.config ?? {} }),
+  return updatePluginState(pluginId, input);
+}
+
+export async function getPluginDependents(
+  pluginId: string,
+): Promise<{ dependents: string[] }> {
+  return apiFetch<{ dependents: string[] }>(`/v1/admin/plugins/${pluginId}/dependents`);
+}
+
+// ── Candidate-side: language entitlements ─────────────────────────────────
+
+export async function listMyLanguages(): Promise<{ languages: MeLanguage[] }> {
+  return apiFetch<{ languages: MeLanguage[] }>("/v1/me/languages");
+}
+
+// ── Admin question authoring ──────────────────────────────────────────────
+
+export async function listAdminQuestions(
+  filters: { pluginSlug?: string; search?: string; difficulty?: number; includeArchived?: boolean } = {},
+): Promise<{ questions: AdminQuestion[] }> {
+  const params = new URLSearchParams();
+  if (filters.pluginSlug) params.set("plugin_slug", filters.pluginSlug);
+  if (filters.search) params.set("search", filters.search);
+  if (filters.difficulty) params.set("difficulty", String(filters.difficulty));
+  if (filters.includeArchived) params.set("archived", "true");
+  const qs = params.toString();
+  return apiFetch<{ questions: AdminQuestion[] }>(
+    `/v1/admin/questions${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getAdminQuestion(questionId: string): Promise<AdminQuestion> {
+  return apiFetch<AdminQuestion>(`/v1/admin/questions/${questionId}`);
+}
+
+export async function createAdminQuestion(
+  input: AdminQuestionInput,
+): Promise<{ id: string; current_version_id: string; version_number: number }> {
+  return apiFetch(`/v1/admin/questions`, {
+    method: "POST",
+    body: JSON.stringify(input),
   });
+}
+
+export async function updateAdminQuestion(
+  questionId: string,
+  input: AdminQuestionInput,
+): Promise<{ id: string; current_version_id: string; version_number: number }> {
+  return apiFetch(`/v1/admin/questions/${questionId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function archiveAdminQuestion(questionId: string): Promise<void> {
+  await apiFetch(`/v1/admin/questions/${questionId}`, { method: "DELETE" });
+}
+
+export async function listAdminTestCases(
+  questionId: string,
+): Promise<{ testCases: AdminTestCase[] }> {
+  return apiFetch<{ testCases: AdminTestCase[] }>(
+    `/v1/admin/questions/${questionId}/test-cases`,
+  );
+}
+
+export async function appendAdminTestCase(
+  questionId: string,
+  input: AdminTestCaseInput,
+): Promise<AdminTestCase> {
+  return apiFetch<AdminTestCase>(`/v1/admin/questions/${questionId}/test-cases`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateAdminTestCase(
+  questionId: string,
+  tcId: string,
+  input: AdminTestCaseInput,
+): Promise<AdminTestCase> {
+  return apiFetch<AdminTestCase>(`/v1/admin/questions/${questionId}/test-cases/${tcId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteAdminTestCase(
+  questionId: string,
+  tcId: string,
+): Promise<void> {
+  await apiFetch(`/v1/admin/questions/${questionId}/test-cases/${tcId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function bulkImportAdminQuestions(
+  payload: { questions: AdminQuestionInput[] },
+): Promise<{ created: Array<{ id: string }> }> {
+  return apiFetch(`/v1/admin/questions/bulk-import`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ── Exam packages + pricing ───────────────────────────────────────────────
+
+export async function listExamPackages(): Promise<{ examPackages: AdminExamPackage[] }> {
+  return apiFetch<{ examPackages: AdminExamPackage[] }>(`/v1/admin/exam-packages`);
+}
+
+export async function getExamPackage(pkgId: string): Promise<AdminExamPackage> {
+  return apiFetch<AdminExamPackage>(`/v1/admin/exam-packages/${pkgId}`);
+}
+
+export async function createExamPackage(
+  input: AdminExamPackageInput,
+): Promise<AdminExamPackage> {
+  return apiFetch<AdminExamPackage>(`/v1/admin/exam-packages`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateExamPackage(
+  pkgId: string,
+  input: AdminExamPackageInput,
+): Promise<AdminExamPackage> {
+  return apiFetch<AdminExamPackage>(`/v1/admin/exam-packages/${pkgId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createPricingItem(input: {
+  item_kind: string;
+  item_ref: string;
+  plugin_id?: string;
+  price_cents: number;
+  currency?: string;
+}): Promise<{ id: string }> {
+  return apiFetch(`/v1/admin/pricing-items`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ── User entitlements (support tool) ──────────────────────────────────────
+
+export async function getUserEntitlements(
+  userId: string,
+): Promise<{ entitlements: AdminUserEntitlement[] }> {
+  return apiFetch<{ entitlements: AdminUserEntitlement[] }>(
+    `/v1/admin/users/${userId}/entitlements`,
+  );
 }
