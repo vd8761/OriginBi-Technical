@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-coding/answer.schema.json",
+  "title": "Coding answer payload",
+  "description": "Submitted by the candidate for run-custom, run-tests, and submit actions. Matches the existing RunRequest shape in code_run_handlers.go.",
+  "type": "object",
+  "required": ["language", "files"],
+  "additionalProperties": false,
+  "properties": {
+    "language": {
+      "type": "string",
+      "pattern": "^language\\.",
+      "description": "Plugin slug of the language the candidate selected. Must be in the user's entitlement set."
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "content"],
+        "additionalProperties": false,
+        "properties": {
+          "path":    { "type": "string", "minLength": 1, "maxLength": 260 },
+          "content": { "type": "string" }
+        }
+      }
+    },
+    "entryFile": {
+      "type": "string",
+      "description": "Path of the file to compile/run. Must exist in `files`. Falls back to LanguageConfig.defaultEntryFile when omitted."
+    },
+    "customStdin": {
+      "type": "string",
+      "description": "Used only by run-custom; ignored for run-tests/submit."
+    }
+  }
+}

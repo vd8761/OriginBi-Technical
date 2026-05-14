@@ -118,6 +118,9 @@ const mapSnapshotQuestion = (question: SnapshotQuestion): Question => {
             expected: tc.expected ?? "",
         })),
         limits: body.limits,
+        allowedLanguages: Array.isArray(body.allowedLanguages)
+            ? body.allowedLanguages.map((v) => String(v))
+            : undefined,
     };
 };
 

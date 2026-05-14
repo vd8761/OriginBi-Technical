@@ -41,8 +41,8 @@ func TestDatabaseReady(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version < 11 {
-		t.Fatalf("expected migration version >= 11, got %d", version)
+	if version < 14 {
+		t.Fatalf("expected migration version >= 14, got %d", version)
 	}
 
 	requiredTables := []string{
@@ -157,5 +157,125 @@ func TestDatabaseReady(t *testing.T) {
 	}
 	if plugins == 0 {
 		t.Fatal("expected seeded plugins")
+	}
+
+	// Migration 012: the language catalog must be present as plugins with
+	// category='language'. Every language listed here previously lived in the
+	// hardcoded Judge0 map in code_run_handlers.go.
+	requiredLanguageSlugs := []string{
+		"language.python",
+		"language.java",
+		"language.cpp",
+		"language.c",
+		"language.javascript",
+		"language.go",
+	}
+	for _, slug := range requiredLanguageSlugs {
+		var exists bool
+		if err := db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM plugins
+				WHERE slug = $1 AND category = 'language' AND plugin_type = 'addon'
+			)
+		`, slug).Scan(&exists); err != nil {
+			t.Fatalf("check language plugin %s: %v", slug, err)
+		}
+		if !exists {
+			t.Fatalf("expected language plugin %s with category='language'", slug)
+		}
+	}
+
+	// Migration 012: the previously seeded 'code.judge0' (UUID …0013) is now
+	// 'assessment.coding'. Same UUID, so all FKs from exam_sections.plugin_id
+	// and questions.plugin_id stay intact.
+	var codingSlug string
+	if err := db.QueryRowContext(ctx, `
+		SELECT slug FROM plugins WHERE id = '00000000-0000-0000-0000-000000000013'
+	`).Scan(&codingSlug); err != nil {
+		t.Fatalf("check assessment.coding identity: %v", err)
+	}
+	if codingSlug != "assessment.coding" {
+		t.Fatalf("expected plugin …0013 to be 'assessment.coding', got %q", codingSlug)
+	}
+
+	// Migration 012: existing 'coding:python' pricing rows are linked to their
+	// language plugin so the entitlement resolver can join them.
+	var linkedPricing int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM pricing_items pi
+		JOIN plugins p ON p.id = pi.plugin_id
+		WHERE pi.item_kind = 'coding_language'
+		  AND p.category = 'language'
+	`).Scan(&linkedPricing); err != nil {
+		t.Fatalf("check pricing_items.plugin_id backfill: %v", err)
+	}
+	if linkedPricing != 5 {
+		t.Fatalf("expected 5 coding_language pricing rows linked to language plugins, got %d", linkedPricing)
+	}
+
+	// Migration 013: locked_regions column for region-level read-only enforcement.
+	var lockedRegionsExists bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name = 'code_submission_files'
+			  AND column_name = 'locked_regions'
+		)
+	`).Scan(&lockedRegionsExists); err != nil {
+		t.Fatalf("check code_submission_files.locked_regions: %v", err)
+	}
+	if !lockedRegionsExists {
+		t.Fatal("expected code_submission_files.locked_regions column from migration 013")
+	}
+
+	// Migration 013: every seeded question_versions row now carries a promptFormat
+	// so the candidate-side renderer can dispatch (existing seeds stamped 'html').
+	var unstampedBodies int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM question_versions
+		WHERE body ? 'prompt' AND NOT (body ? 'promptFormat')
+	`).Scan(&unstampedBodies); err != nil {
+		t.Fatalf("check question_versions promptFormat backfill: %v", err)
+	}
+	if unstampedBodies != 0 {
+		t.Fatalf("expected all prompt bodies to carry promptFormat after migration 013, got %d missing", unstampedBodies)
+	}
+
+	// Migration 014: the broken (NULL-distinct) purchases unique index has been
+	// replaced by two partial indexes; verify the new shape exists and the
+	// legacy one is gone.
+	var legacyIdx bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM pg_indexes
+			WHERE schemaname = 'public'
+			  AND indexname = 'purchases_user_item_provider_ref_idx'
+		)
+	`).Scan(&legacyIdx); err != nil {
+		t.Fatalf("check purchases legacy index: %v", err)
+	}
+	if legacyIdx {
+		t.Fatal("expected purchases_user_item_provider_ref_idx to be replaced by migration 014")
+	}
+	for _, idx := range []string{
+		"purchases_user_item_provider_ref_present_idx",
+		"purchases_user_item_no_provider_idx",
+		"code_runs_answer_final_idx",
+		"ope_org_enabled_idx",
+	} {
+		var exists bool
+		if err := db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM pg_indexes
+				WHERE schemaname = 'public' AND indexname = $1
+			)
+		`, idx).Scan(&exists); err != nil {
+			t.Fatalf("check index %s: %v", idx, err)
+		}
+		if !exists {
+			t.Fatalf("expected index %s from migration 014", idx)
+		}
 	}
 }

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.local/plugins/evaluator-anthropic/config.schema.json",
+  "title": "Anthropic Evaluator Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["model", "credentialRef"],
+  "properties": {
+    "provider": {
+      "type": "string",
+      "const": "anthropic",
+      "default": "anthropic"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "default": "claude-3-5-haiku-latest"
+    },
+    "credentialRef": {
+      "type": "string",
+      "pattern": "^secret://",
+      "description": "Secret reference, for example secret://anthropic/default."
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300,
+      "default": 60
+    },
+    "temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0
+    }
+  }
+}
