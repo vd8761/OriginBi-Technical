@@ -150,7 +150,12 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
   // Calculate time per question (rough estimate)
   const timeStr = result.timeTaken || "0 min";
   const timeMinutes = parseInt(timeStr) || 0;
-  const timePerQ = timeMinutes > 0 && exam.questions > 0 ? (timeMinutes / exam.questions).toFixed(1) : "-";
+  const correctCount = result.correctCount ?? 0;
+  const wrongCount = result.wrongCount ?? 0;
+  const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
+  const totalQuestions = result.totalQuestions ?? detail?.questions ?? exam.questions ?? answeredCount;
+  const skippedCount = result.skippedCount ?? Math.max(0, totalQuestions - answeredCount);
+  const timePerQ = timeMinutes > 0 && totalQuestions > 0 ? (timeMinutes / totalQuestions).toFixed(1) : "-";
 
   return (
     <AnimatePresence>
@@ -227,26 +232,37 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                     </div>
 
                     {/* Quick Stats */}
-                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div className="bg-gray-50 rounded-2xl p-4">
                         <ClockIcon c="w-4 h-4 text-gray-400 mb-2" />
                         <p className="text-xl font-bold text-gray-900">{result.timeTaken}</p>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wider">Total Time</p>
+                        <p className="text-[10px] text-gray-400">Avg: {timePerQ}m/q</p>
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4">
                         <TargetIcon c="w-4 h-4 text-gray-400 mb-2" />
-                        <p className="text-xl font-bold text-gray-900">{sections.length}</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Sections</p>
+                        <p className="text-xl font-bold text-gray-900">{answeredCount}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Answered</p>
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4">
                         <BarChartIcon c="w-4 h-4 text-gray-400 mb-2" />
-                        <p className="text-xl font-bold text-gray-900">{timePerQ}m</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Per Question</p>
+                        <p className="text-xl font-bold text-gray-900">{correctCount}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Correct</p>
                       </div>
                       <div className="bg-gray-50 rounded-2xl p-4">
                         <AwardIcon c="w-4 h-4 text-gray-400 mb-2" />
-                        <p className="text-xl font-bold text-gray-900">{exam.questions}</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Questions</p>
+                        <p className="text-xl font-bold text-gray-900">{wrongCount}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Wrong</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-2xl p-4">
+                        <AlertIcon c="w-4 h-4 text-gray-400 mb-2" />
+                        <p className="text-xl font-bold text-gray-900">{skippedCount}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Skipped</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-2xl p-4">
+                        <BookIcon c="w-4 h-4 text-gray-400 mb-2" />
+                        <p className="text-xl font-bold text-gray-900">{totalQuestions}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Total Qs</p>
                       </div>
                     </div>
                   </div>

@@ -30,6 +30,10 @@ import { listAssignments, type Assignment } from "@/lib/api";
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
 const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
+const TECH_API_BASE =
+  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
@@ -117,16 +121,20 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           }
         }
 
-        const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
         const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-        const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+        if (!TECH_API_BASE) return;
+        const response = await fetch(`${TECH_API_BASE}/api/assessment/attempts-stats${emailParam}`);
+        if (!response.ok) return;
         const json = await response.json();
         const data = json.data || json;
         if (json && data && active) {
           setAttemptsStats(data);
         }
       } catch (err) {
-        console.error("Failed to load attempt statistics:", err);
+        // Optional dashboard enrichment; backend can be unavailable in UI-only sessions.
+        if (active) {
+          setAttemptsStats({});
+        }
       }
     };
 

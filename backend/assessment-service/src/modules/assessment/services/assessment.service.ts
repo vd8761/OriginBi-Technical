@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { AdaptiveBlockService } from './adaptive-block.service';
@@ -21,8 +21,7 @@ export class AssessmentService {
 
   constructor(
     private dataSource: DataSource,
-    @Inject(forwardRef(() => AdaptiveBlockService))
-    private adaptiveBlockService: AdaptiveBlockService
+    private adaptiveBlockService: AdaptiveBlockService,
   ) {}
 
   async getAttemptsStats(userIdParam?: any) {
@@ -454,6 +453,99 @@ export class AssessmentService {
     return this.startAttempt('aptitude', data);
   }
 
+  /**
+   * Returns only the current (unlocked) block's questions.
+   * The UI uses this to know exactly which 5 questions to show.
+   */
+  async getCurrentBlock(token: string) {
+    // Detect module from token prefix
+    const moduleType =
+      token.includes('BLOCK') && token.startsWith('APT') ? 'aptitude' :
+      token.includes('BLOCK') && token.startsWith('GRA') ? 'grammar' :
+      token.includes('BLOCK') && token.startsWith('MNC') ? 'mnc' :
+      token.startsWith('APT-') ? 'aptitude' :
+      token.startsWith('GRA-') || token.startsWith('COM-') ? 'grammar' :
+      token.startsWith('MNC-') ? 'mnc' : 'aptitude';
+
+    const tableMap = this.getTableMap();
+    const config = tableMap[moduleType];
+    if (!config) throw new BadRequestException(`Unknown module for token: ${token}`);
+
+    const attemptRows = await this.dataSource.query(
+      `SELECT a.*, ass.shuffle_options, ass.block_config
+       FROM ${config.attempts} a
+       JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
+       WHERE a.attempt_token = $1`,
+      [token],
+    );
+    const attempt = attemptRows[0];
+    if (!attempt) throw new NotFoundException('Attempt not found');
+    const attemptId = attempt[config.attemptIdCol];
+
+    // Find the current active block number (highest in_progress or last generated)
+    const blockRow = await this.dataSource.query(
+      `SELECT block_number, difficulty_achieved
+       FROM block_attempts
+       WHERE attempt_token = $1 AND status = 'in_progress'
+       ORDER BY block_number DESC LIMIT 1`,
+      [token],
+    );
+    if (!blockRow.length) throw new BadRequestException('No active block found');
+    const currentBlockNumber = blockRow[0].block_number;
+    const currentDifficulty = blockRow[0].difficulty_achieved;
+
+    // Fetch only the current block's questions — filter by block_number, NOT is_locked.
+    // Previous blocks are locked in DB but the UI only ever sees the current block.
+    const questionRows = await this.dataSource.query(
+      `SELECT aq.display_order, aq.block_sequence_order, aq.block_number,
+              q.${config.idCol} AS question_id, q.question_text, q.difficulty,
+              q.${config.catCol} AS category, q.marks, q.negative_marks, q.image_url
+       FROM ${config.junction} aq
+       JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+       WHERE aq.${config.attemptIdCol} = $1
+         AND aq.block_number = $2
+       ORDER BY aq.block_sequence_order ASC`,
+      [attemptId, currentBlockNumber],
+    );
+
+    const questions: any[] = [];
+    for (const q of questionRows) {
+      const options = await this.dataSource.query(
+        `SELECT option_id::text AS id, option_text AS text
+         FROM ${config.options}
+         WHERE ${config.idCol} = $1
+         ORDER BY option_id ASC`,
+        [q.question_id],
+      );
+      questions.push({
+        id: q.question_id,
+        text: q.question_text,
+        difficulty: q.difficulty,
+        category: q.category,
+        marks: Number(q.marks),
+        negativeMarks: Number(q.negative_marks),
+        imageUrl: q.image_url ?? undefined,
+        options,
+        blockNumber: q.block_number,
+        blockSequenceOrder: q.block_sequence_order,
+        displayOrder: q.display_order,
+      });
+    }
+
+    const rawBC = attempt.block_config ?? {};
+    const totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 1);
+
+    return {
+      attemptToken: token,
+      currentBlockNumber,
+      totalBlocks,
+      difficulty: currentDifficulty,
+      isLastBlock: currentBlockNumber === totalBlocks,
+      questions,
+      totalQuestionsInBlock: questions.length,
+    };
+  }
+
   async getAttemptQuestions(token: string) {
     try {
       const moduleType =
@@ -754,18 +846,23 @@ export class AssessmentService {
     }
   }
 
+  // ─── Block-based attempt ────────────────────────────────────────────────────
+
   async startBlockBasedAttempt(module: string, data: any) {
     const { assessmentId, assessmentCode, userId, mode = 'main' } = data;
     this.logger.log(`startBlockBasedAttempt: module=${module}, code=${assessmentCode}, mode=${mode}`);
-    
+
+    const dbModule = module === 'communication' ? 'grammar' : module;
+    const tableMap = this.getTableMap();
+    const config = tableMap[dbModule];
+    if (!config) throw new BadRequestException(`Module ${module} not supported`);
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const dbModule = module === 'communication' ? 'grammar' : module;
-      
-      // Get assessment with block configuration
+      // 1. Resolve assessment
       let assessment: any;
       if (assessmentId) {
         const rows = await queryRunner.query(
@@ -779,88 +876,100 @@ export class AssessmentService {
           [assessmentCode, dbModule],
         );
         assessment = rows[0];
-        if (!assessment) {
-          this.logger.warn(`Code ${assessmentCode} not found, using active ${module} assessment`);
-          const fallback = await queryRunner.query(
-            `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`,
-            [dbModule],
-          );
-          assessment = fallback[0];
-        }
-      } else {
-        const rows = await queryRunner.query(
+      }
+      if (!assessment) {
+        const fallback = await queryRunner.query(
           `SELECT * FROM tech_assessments WHERE module_type = $1 AND status = 'active' ORDER BY assessment_id DESC LIMIT 1`,
           [dbModule],
         );
-        assessment = rows[0];
+        assessment = fallback[0];
       }
-
       if (!assessment) throw new NotFoundException(`${module} assessment not found`);
 
-      // Check if this is a block-based assessment
-      const blockConfig = assessment.block_config as any;
-      if (!blockConfig?.enabled) {
-        // Fallback to regular attempt
-        await queryRunner.rollbackTransaction();
-        return this.startAttempt(module, data);
+      // 2. Count available questions (mode-aware, with safe fallback if mode column absent)
+      const modeColExists = await this.columnExistsSafe(queryRunner, config.questions, 'mode');
+      const countParams: any[] = [assessment.assessment_id];
+      let countWhere = `WHERE assessment_id = $1 AND status = 'active'`;
+      if (config.hasMode && modeColExists) {
+        countParams.push(mode === 'trial' ? 'trial' : 'main');
+        countWhere += ` AND (mode = $${countParams.length} OR mode IS NULL)`;
+      }
+      const countRows = await queryRunner.query(
+        `SELECT COUNT(*)::int AS count FROM ${config.questions} ${countWhere}`,
+        countParams,
+      );
+      let totalQuestions = countRows.length ? Number(countRows[0].count) : 0;
+      if (totalQuestions === 0) {
+        throw new BadRequestException('No active questions found for this assessment');
       }
 
+      // 3. Compute block layout
+      const rawBlockConfig = assessment.block_config ?? {};
+      const questionsPerBlock = Math.max(
+        1,
+        Number(rawBlockConfig.questionsPerBlock ?? rawBlockConfig.questions_per_block ?? 5),
+      );
+      const qLimit = Number(assessment.question_limit ?? 0);
+      if (qLimit > 0) totalQuestions = Math.min(totalQuestions, qLimit);
+      const totalBlocks = Math.ceil(totalQuestions / questionsPerBlock);
+
+      // 4. Persist updated block_config so generateBlock can read it
+      const newBlockConfig = {
+        enabled: true,
+        blocksPerAssessment: totalBlocks,
+        questionsPerBlock,
+      };
+      await queryRunner.query(
+        `UPDATE tech_assessments SET block_config = $1 WHERE assessment_id = $2`,
+        [JSON.stringify(newBlockConfig), assessment.assessment_id],
+      );
+
+      // 5. Resolve user
       const resolvedUserId = await this.resolveUserId(queryRunner, userId);
       if (!resolvedUserId) throw new BadRequestException('No users found.');
 
+      // 6. Create attempt record
       const now = new Date();
       const durationMinutes = Number(assessment.total_time_minutes || 60);
       const expiresAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
-      const attemptToken = `${module.substring(0, 3).toUpperCase()}-BLOCK-${crypto.randomUUID()}`;
+      const attemptToken = `${dbModule.substring(0, 3).toUpperCase()}-BLOCK-${crypto.randomUUID()}`;
+      const shuffleSeed = crypto.randomBytes(8).toString('hex');
 
-      const tableMap = this.getTableMap();
-      const config = tableMap[module];
-      if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
+      await queryRunner.query(
+        `INSERT INTO ${config.attempts}
+           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())`,
+        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+      );
 
-      // Create attempt record
-      let attemptResult: any[];
-      if (module === 'coding') {
-        attemptResult = await queryRunner.query(
-          `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, status, started_at, expires_at, created_at, updated_at)
-           VALUES ($1, $2, $3, 'in_progress', $4, $5, NOW(), NOW())
-           RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt],
-        );
-      } else {
-        attemptResult = await queryRunner.query(
-          `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
-           RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, crypto.randomBytes(8).toString('hex'), now, expiresAt],
-        );
-      }
+      // 7. Commit so generateBlock can read the attempt row
+      await queryRunner.commitTransaction();
 
-      // Initialize adaptive blocks if not already done
-      await this.adaptiveBlockService.initializeAdaptiveBlocks(assessment.assessment_id);
+      // 8. Initialize adaptive_blocks rows (idempotent)
+      await this.adaptiveBlockService.initializeAdaptiveBlocks(assessment.assessment_id, {
+        blocksPerAssessment: totalBlocks,
+        questionsPerBlock,
+      });
 
-      // Generate first block
+      // 9. Generate block 1
       const firstBlock = await this.adaptiveBlockService.generateBlock({
         assessmentId: assessment.assessment_id,
         blockNumber: 1,
         userId: resolvedUserId,
-        mode: mode === 'trial' ? 'trial' : 'main'
+        mode: mode === 'trial' ? 'trial' : 'main',
+        attemptToken,
       });
-
-      await queryRunner.commitTransaction();
 
       return {
         attemptToken,
         expiresAt,
         durationSeconds: durationMinutes * 60,
         mode,
-        blockConfig,
+        totalBlocks,
+        questionsPerBlock,
+        totalQuestions,
         currentBlock: firstBlock,
-        totalBlocks: blockConfig.blocksPerAssessment,
-        questionsPerBlock: blockConfig.questionsPerBlock,
         isBlockBased: true,
-        totalQuestions: firstBlock.questions.length,
       };
     } catch (error) {
       if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
@@ -871,68 +980,292 @@ export class AssessmentService {
     }
   }
 
-  async getNextBlock(attemptToken: string, blockNumber: number, performance: any) {
-    try {
-      // Complete current block
-      const completionResult = await this.adaptiveBlockService.completeBlock(
-        attemptToken,
-        blockNumber,
-        performance
-      );
+  async getNextBlock(
+    attemptToken: string,
+    blockNumber: number,
+    performance: { accuracy?: number; timeTaken?: number; answers?: Record<string, string> },
+  ) {
+    // 1. Score current block and lock previous ones
+    const completionResult = await this.adaptiveBlockService.completeBlock(
+      attemptToken,
+      blockNumber,
+      performance,
+    );
 
-      if (!completionResult.canProceed) {
-        return {
-          canProceed: false,
-          message: 'All blocks completed'
-        };
-      }
-
-      // Get attempt details to generate next block
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-
-      const attemptDetails = await queryRunner.query(
-        `SELECT a.assessment_id, a.user_id, a.mode 
-         FROM tech_aptitude_attempts a 
-         WHERE a.attempt_token = $1`,
-        [attemptToken]
-      );
-
-      if (!attemptDetails.length) {
-        throw new NotFoundException('Attempt not found');
-      }
-
-      const attempt = attemptDetails[0];
-
-      // Generate next block
-      const nextBlock = await this.adaptiveBlockService.generateBlock({
-        assessmentId: attempt.assessment_id,
-        blockNumber: blockNumber + 1,
-        previousPerformance: {
-          accuracy: performance.accuracy,
-          timeTaken: performance.timeTaken,
-          difficultyAchieved: completionResult.nextBlockDifficulty
-        },
-        userId: attempt.user_id,
-        mode: attempt.mode
-      });
-
-      await queryRunner.release();
-
+    if (!completionResult.canProceed) {
       return {
-        canProceed: true,
-        nextBlock,
-        nextBlockDifficulty: completionResult.nextBlockDifficulty
+        canProceed: false,
+        message: 'All blocks completed. Call submit-block-based to finalise.',
+        blockSummary: {
+          blockNumber,
+          accuracyScore: completionResult.accuracyScore,
+          correctCount: completionResult.correctCount,
+          totalCount: completionResult.totalCount,
+        },
       };
-    } catch (error) {
-      this.logger.error('getNextBlock error:', error);
-      throw error;
     }
+
+    // 2. Load attempt details for next-block generation
+    const attemptRows = await this.dataSource.query(
+      `SELECT assessment_id, user_id FROM tech_aptitude_attempts WHERE attempt_token = $1`,
+      [attemptToken],
+    );
+    if (!attemptRows.length) throw new NotFoundException('Attempt not found');
+
+    const { assessment_id, user_id } = attemptRows[0];
+
+    // 3. Use the difficulty_achieved returned directly from completeBlock
+    const difficultyAchieved = completionResult.difficultyAchieved ?? 'medium';
+
+    // 4. Generate next block
+    const nextBlock = await this.adaptiveBlockService.generateBlock({
+      assessmentId: Number(assessment_id),
+      blockNumber: blockNumber + 1,
+      previousPerformance: {
+        accuracy: completionResult.accuracyScore,
+        timeTaken: Number(performance.timeTaken ?? 0),
+        difficultyAchieved,
+      },
+      userId: Number(user_id),
+      mode: 'main',
+      attemptToken,
+    });
+
+    return {
+      canProceed: true,
+      nextBlock,
+      blockSummary: {
+        blockNumber,
+        accuracyScore: completionResult.accuracyScore,
+        correctCount: completionResult.correctCount,
+        totalCount: completionResult.totalCount,
+        nextBlockDifficulty: completionResult.nextBlockDifficulty,
+      },
+    };
   }
 
   async submitBlockBasedAttempt(module: string, token: string, body: any) {
-    // This will be called when all blocks are completed
-    // For now, delegate to regular submit method but with block-aware logic
-    return this.submitAttempt(module, token, body);
+    const dbModule = module === 'communication' ? 'grammar' : module;
+    const tableMap = this.getTableMap();
+    const config = tableMap[dbModule];
+    if (!config) throw new BadRequestException(`Module ${module} not supported`);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Load attempt
+      const attemptRows = await queryRunner.query(
+        `SELECT * FROM ${config.attempts} WHERE attempt_token = $1`,
+        [token],
+      );
+      const attempt = attemptRows[0];
+      if (!attempt) throw new NotFoundException('Attempt not found');
+      if (attempt.status !== 'in_progress') {
+        throw new BadRequestException('Attempt already submitted');
+      }
+      const attemptId = attempt[config.attemptIdCol];
+
+      // 2. Re-evaluate ALL questions from scratch using the LATEST selected_option_id.
+      //    This is the authoritative final evaluation — it reflects any changes the user
+      //    made by navigating back to previous blocks.
+      const allQuestions = await queryRunner.query(
+        `SELECT aq.attempt_question_id,
+                aq.${config.idCol} AS question_id,
+                aq.selected_option_id,
+                aq.block_number,
+                q.correct_option_id,
+                q.marks,
+                q.negative_marks,
+                q.${config.catCol} AS category,
+                ass.negative_mark_enabled,
+                ass.negative_mark_value
+         FROM ${config.junction} aq
+         JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+         JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+         WHERE aq.${config.attemptIdCol} = $1
+         ORDER BY aq.display_order ASC`,
+        [attemptId],
+      );
+
+      let totalPositive = 0;
+      let totalNegative = 0;
+      let correctCount = 0;
+      const totalCount = allQuestions.length;
+
+      // Per-category breakdown
+      const categoryMap: Record<string, { correct: number; total: number; score: number; maxScore: number }> = {};
+      // Per-block breakdown
+      const blockMap: Record<number, { correct: number; total: number; positive: number; negative: number }> = {};
+
+      for (const aq of allQuestions) {
+        const cat = aq.category ?? 'General';
+        const blk = Number(aq.block_number ?? 0);
+
+        if (!categoryMap[cat]) categoryMap[cat] = { correct: 0, total: 0, score: 0, maxScore: 0 };
+        if (!blockMap[blk]) blockMap[blk] = { correct: 0, total: 0, positive: 0, negative: 0 };
+
+        const qMarks = Number(aq.marks || 1);
+        const negMarks = aq.negative_mark_enabled
+          ? Number(aq.negative_marks || aq.negative_mark_value || 0)
+          : 0;
+
+        categoryMap[cat].total++;
+        categoryMap[cat].maxScore += qMarks;
+        blockMap[blk].total++;
+
+        const sel = aq.selected_option_id;
+
+        if (sel !== null && sel !== undefined && String(sel) !== '') {
+          const isCorrect = String(sel) === String(aq.correct_option_id);
+          const scoreAwarded = isCorrect ? qMarks : 0;
+          const negApplied = isCorrect ? 0 : negMarks;
+
+          if (isCorrect) {
+            correctCount++;
+            totalPositive += scoreAwarded;
+            categoryMap[cat].correct++;
+            categoryMap[cat].score += scoreAwarded;
+            blockMap[blk].correct++;
+            blockMap[blk].positive += scoreAwarded;
+          } else {
+            totalNegative += negApplied;
+            categoryMap[cat].score -= negApplied;
+            blockMap[blk].negative += negApplied;
+          }
+
+          // Write final authoritative scores
+          await queryRunner.query(
+            `UPDATE ${config.junction}
+             SET is_correct=$1, score_awarded=$2, negative_applied=$3
+             WHERE attempt_question_id=$4`,
+            [isCorrect, scoreAwarded, negApplied, aq.attempt_question_id],
+          );
+        } else {
+          // Unanswered — zero score
+          await queryRunner.query(
+            `UPDATE ${config.junction}
+             SET is_correct=NULL, score_awarded=0, negative_applied=0
+             WHERE attempt_question_id=$1`,
+            [aq.attempt_question_id],
+          );
+        }
+      }
+
+      const rawTotal = totalPositive - totalNegative;
+      const totalScore = rawTotal < 0 ? 0 : rawTotal;
+      const accuracyPct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+      const now = new Date();
+      const timeTakenSeconds = Math.max(
+        0,
+        Math.round((now.getTime() - new Date(attempt.started_at).getTime()) / 1000),
+      );
+
+      // 3. Finalise attempt record
+      await queryRunner.query(
+        `UPDATE ${config.attempts}
+         SET status='submitted', submitted_at=$1,
+             positive_score=$2, negative_score=$3,
+             total_score=$4, time_taken_seconds=$5, updated_at=NOW()
+         WHERE ${config.attemptIdCol}=$6`,
+        [now, totalPositive, totalNegative, totalScore, timeTakenSeconds, attemptId],
+      );
+
+      // 4. Build per-block summary from blockMap + block_attempts
+      const blockAttemptRows = await queryRunner.query(
+        `SELECT block_number, difficulty_achieved, time_taken_seconds, accuracy_score
+         FROM block_attempts WHERE attempt_token=$1 ORDER BY block_number`,
+        [token],
+      );
+
+      const blockSummaries = blockAttemptRows.map((ba: any) => {
+        const blk = Number(ba.block_number);
+        const bm = blockMap[blk] ?? { correct: 0, total: 0, positive: 0, negative: 0 };
+        const blkScore = Math.max(0, bm.positive - bm.negative);
+        const blkAcc = bm.total > 0 ? Math.round((bm.correct / bm.total) * 100) : 0;
+        return {
+          blockNumber: blk,
+          difficulty: ba.difficulty_achieved,
+          timeTakenSeconds: ba.time_taken_seconds,
+          totalQuestions: bm.total,
+          correctQuestions: bm.correct,
+          blockScore: parseFloat(blkScore.toFixed(2)),
+          accuracyPct: blkAcc,
+        };
+      });
+
+      // 5. Build category sections for dashboard
+      const sections = Object.entries(categoryMap).map(([cat, v]) => ({
+        name: cat,
+        correct: v.correct,
+        total: v.total,
+        score: Math.max(0, parseFloat(v.score.toFixed(2))),
+        maxScore: parseFloat(v.maxScore.toFixed(2)),
+        accuracyPct: v.total > 0 ? Math.round((v.correct / v.total) * 100) : 0,
+      }));
+
+      const weakCategories = sections.filter(s => s.accuracyPct < 50).map(s => s.name);
+      const strongCategories = sections.filter(s => s.accuracyPct >= 80).map(s => s.name);
+
+      await queryRunner.commitTransaction();
+
+      // 6. Write analytics asynchronously (non-blocking)
+      setImmediate(() => {
+        this.adaptiveBlockService.writePerformanceAnalytics(
+          token,
+          Number(attempt.assessment_id),
+          Number(attempt.user_id),
+          totalScore,
+          totalPositive,
+          totalNegative,
+          totalCount,
+          correctCount,
+          timeTakenSeconds,
+        ).catch(e => this.logger.error('Analytics write failed (non-fatal):', e));
+      });
+
+      return {
+        success: true,
+        token,
+        totalScore,
+        positiveScore: totalPositive,
+        negativeScore: totalNegative,
+        correctCount,
+        totalQuestions: totalCount,
+        accuracyPct,
+        timeTakenSeconds,
+        status: 'completed',
+        // Dashboard data
+        sections,
+        weakCategories,
+        strongCategories,
+        blockSummaries,
+      };
+    } catch (error) {
+      if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
+      this.logger.error(`submitBlockBasedAttempt (${module}) error:`, error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /** Safe column-existence check (used inside transactions) */
+  private async columnExistsSafe(
+    queryRunner: any,
+    table: string,
+    column: string,
+  ): Promise<boolean> {
+    try {
+      const rows = await queryRunner.query(
+        `SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+        [table, column],
+      );
+      return rows.length > 0;
+    } catch {
+      return false;
+    }
   }
 }

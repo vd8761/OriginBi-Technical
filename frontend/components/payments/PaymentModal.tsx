@@ -15,6 +15,10 @@ interface PaymentModalProps {
 }
 
 type Stage = "review" | "processing" | "success" | "error";
+const TECH_API_BASE =
+    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+    "";
 
 const generateRef = () => {
     const segment = () =>
@@ -54,12 +58,23 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
         // Fallback email if no logged-in user is found
         const email = user?.email || "candidate@originbi.com";
+        const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
 
         try {
-            const TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
-            
+            // Frontend-only sandbox mode: bypass backend order creation entirely.
+            if (isRazorpayDisabled) {
+                await onSuccess();
+                successHandledRef.current = true;
+                if (mountedRef.current) {
+                    setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                    setPaidAt(new Date());
+                    setStage("success");
+                }
+                return;
+            }
+
             // 1. Create Razorpay order on backend
-            const orderRes = await fetch(`${TECH_API_URL}/api/assessment/purchase/create-order`, {
+            const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -75,39 +90,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             }
 
             const order = await orderRes.json();
-
-            // Check if Razorpay is explicitly disabled in client environment
-            const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
-
-            if (isRazorpayDisabled) {
-                // Directly call backend to verify and record mock sandbox payment
-                const verifyRes = await fetch(`${TECH_API_URL}/api/assessment/purchase/verify-payment`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        email,
-                        assessmentId: assessmentId || 1,
-                        assessmentCode: assessmentCode || "general",
-                        razorpay_order_id: order.orderId,
-                        razorpay_payment_id: `pay_sandbox_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-                        razorpay_signature: "signature_mock",
-                        amount,
-                    }),
-                });
-
-                if (!verifyRes.ok) {
-                    throw new Error("Sandbox payment recording failed on backend.");
-                }
-
-                await onSuccess();
-                successHandledRef.current = true;
-                if (mountedRef.current) {
-                    setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
-                    setPaidAt(new Date());
-                    setStage("success");
-                }
-                return;
-            }
 
             // 2. Load Razorpay script dynamically
             const script = document.createElement("script");
@@ -126,7 +108,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         setStage("processing");
                         try {
                             // 3. Verify payment signature on backend
-                            const verifyRes = await fetch(`${TECH_API_URL}/api/assessment/purchase/verify-payment`, {
+                            const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
@@ -184,6 +166,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
             document.body.appendChild(script);
         } catch (err: any) {
+            const message = err?.message || "";
+            const isNetworkFailure =
+                err instanceof TypeError ||
+                /failed to fetch|networkerror|err_connection_refused/i.test(message);
+            if (isNetworkFailure) {
+                if (mountedRef.current) {
+                    setErrorMessage("Payment service is unavailable right now. Start the assessment backend or use sandbox mode.");
+                    setStage("error");
+                }
+                return;
+            }
             console.error("Payment flow failed:", err);
             if (mountedRef.current) {
                 setErrorMessage(err.message || "Unable to initiate payment.");

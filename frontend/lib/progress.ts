@@ -65,6 +65,15 @@ export interface AssessmentResult {
   overallScore: number; // 0-100
   accuracy: number;
   timeTaken: string; // e.g. "48 min"
+  timeTakenSeconds?: number;
+  totalQuestions?: number;
+  answeredCount?: number;
+  correctCount?: number;
+  wrongCount?: number;
+  skippedCount?: number;
+  positiveScore?: number;
+  negativeScore?: number;
+  netScore?: number;
   sections: SectionResult[];
   insights: { type: "strength" | "improvement" | "time" | "pattern"; text: string }[];
   archetypeSnapshot?: string; // e.g. "Analytical Thinker"

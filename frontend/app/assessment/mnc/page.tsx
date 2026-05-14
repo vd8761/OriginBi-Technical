@@ -13,10 +13,13 @@ function MNCAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
-        const totalQuestions = result.totalQuestions ?? (result.correctCount + result.wrongCount);
-        const answeredCount = result.answeredCount ?? (result.correctCount + result.wrongCount);
+        const correctCount = result.correctCount ?? 0;
+        const wrongCount = result.wrongCount ?? 0;
+        const totalQuestions = result.totalQuestions ?? (correctCount + wrongCount);
+        const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
+        const skippedCount = Math.max(0, totalQuestions - answeredCount);
         const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
-        const accuracy = accuracyBase > 0 ? Math.round((result.correctCount / accuracyBase) * 100) : 0;
+        const accuracy = accuracyBase > 0 ? Math.round((correctCount / accuracyBase) * 100) : 0;
         const overallScore = Math.max(0, Math.round(result.totalScore));
         const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
         const sections = [
@@ -29,6 +32,15 @@ function MNCAssessmentContent() {
             overallScore,
             accuracy,
             timeTaken: `${timeTakenMinutes} min`,
+            timeTakenSeconds: result.timeTakenSeconds,
+            totalQuestions,
+            answeredCount,
+            correctCount,
+            wrongCount,
+            skippedCount,
+            positiveScore: result.positiveScore,
+            negativeScore: result.negativeScore,
+            netScore: overallScore,
             sections,
             insights: [
                 { type: "strength" as const, text: "Strong problem-solving approach in aptitude sections." },

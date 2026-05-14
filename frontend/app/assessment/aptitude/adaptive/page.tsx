@@ -29,71 +29,72 @@ function AdaptiveAptitudeContent() {
   }, [searchParams]);
 
   const handleComplete = (result: AttemptSubmitResult) => {
-    alert("🎯 ASSESSMENT COMPLETED! Redirecting to dashboard...");
     console.log("Adaptive assessment completed:", result);
-    
-    // Store results for later use
-    localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
-    
-    console.log("🔄 Redirecting to dashboard in 2 seconds...");
-    
-    // Force redirect with timeout to ensure it happens
-    setTimeout(() => {
-      console.log("⚡ Executing redirect now...");
-      window.location.href = "/dashboard";
-    }, 2000);
-    
-    // Also try immediate redirect
-    window.location.href = "/dashboard";
-    
-    // Final fallback
-    setTimeout(() => {
-      if (window.location.pathname !== "/dashboard") {
-        console.log("🚨 Redirect failed, trying replace method...");
-        window.location.replace("/dashboard");
-      }
-    }, 3000);
-  };
 
-  // Test redirect function (for debugging)
-  const testRedirect = () => {
-    console.log("🧪 Testing redirect to dashboard...");
+    const correctCount = result.correctCount ?? 0;
+    const wrongCount = result.wrongCount ?? 0;
+    const totalQuestions = result.totalQuestions ?? (correctCount + wrongCount);
+    const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
+    const skippedCount = Math.max(0, totalQuestions - answeredCount);
+    const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
+    const accuracy = accuracyBase > 0 ? Math.round((correctCount / accuracyBase) * 100) : 0;
+    const overallScore = Math.max(0, Math.round(result.totalScore));
+    const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
+    const sections = [
+      { name: "Overall", score: accuracy, weight: "100%" },
+    ];
+
+    const insights: { type: "strength" | "improvement" | "time"; text: string }[] = [];
+    const strongSections = sections.filter((s) => s.score >= 75);
+    const weakSections = sections.filter((s) => s.score < 50);
+
+    if (strongSections.length > 0) {
+      insights.push({
+        type: "strength",
+        text: `Strong performance in ${strongSections.map((s) => s.name).join(", ")}. Your logical reasoning abilities are well-developed.`
+      });
+    }
+    if (weakSections.length > 0) {
+      insights.push({
+        type: "improvement",
+        text: `Focus on improving ${weakSections.map((s) => s.name).join(", ")} to increase your overall score.`
+      });
+    }
+    insights.push({
+      type: "time",
+      text: "You completed the assessment within the time limit. Good time management!"
+    });
+
+    const assessmentResult = {
+      assessmentId: "aptitude" as const,
+      completedAt: new Date().toISOString(),
+      overallScore,
+      accuracy,
+      timeTaken: `${timeTakenMinutes} min`,
+      timeTakenSeconds: result.timeTakenSeconds,
+      totalQuestions,
+      answeredCount,
+      correctCount,
+      wrongCount,
+      skippedCount,
+      positiveScore: result.positiveScore,
+      negativeScore: result.negativeScore,
+      netScore: overallScore,
+      sections,
+      insights,
+    };
+
+    localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
+    const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
+    existingResults.aptitude = assessmentResult;
+    localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
+    window.dispatchEvent(new CustomEvent("originbi:results-changed"));
+
     router.push("/dashboard");
   };
 
   return (
     <div className="min-h-screen w-full">
-      {/* Debug test buttons - remove in production */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        <button
-          onClick={testRedirect}
-          className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 block"
-        >
-          Test Router Redirect
-        </button>
-        <button
-          onClick={() => {
-            const mockResult = {
-              totalScore: 100,
-              correctCount: 5,
-              wrongCount: 0,
-              accuracy: 1.0,
-              timeTakenSeconds: 300
-            };
-            handleComplete(mockResult);
-          }}
-          className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 block"
-        >
-          Test Complete Flow
-        </button>
-        <button
-          onClick={() => window.location.href = "/dashboard"}
-          className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 block"
-        >
-          Direct Dashboard
-        </button>
-      </div>
-      
       <AdaptiveAptitudeEngine
         onComplete={handleComplete}
         assessmentCode={assessmentCode}

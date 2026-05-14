@@ -234,7 +234,7 @@ func (s *Server) nextAptitudeBlock(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	attemptID, assessmentID, userID, startedAt, err := loadAptitudeAttemptByToken(ctx, tx, token)
+	attemptID, assessmentID, userID, _, err := loadAptitudeAttemptByToken(ctx, tx, token)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "attempt not found")
@@ -534,11 +534,11 @@ func generateAptitudeBlock(
 	for i := 0; i < bConfig.QuestionsPerBlock; i++ {
 		difficulty := difficulties[i]
 		category := categoryOrder[i%len(categoryOrder)]
-		q, err := selectAptitudeQuestion(ctx, tx, assessment.AssessmentID, attemptID, difficulty, category, usedIDs)
+		q, qID, err := selectAptitudeQuestion(ctx, tx, assessment.AssessmentID, attemptID, difficulty, category, usedIDs)
 		if err != nil {
 			return aptitudeBlockResponse{}, err
 		}
-		usedIDs = append(usedIDs, q.ID)
+		usedIDs = append(usedIDs, qID)
 		questions = append(questions, q)
 
 		displayOrder := (blockNumber-1)*bConfig.QuestionsPerBlock + (i + 1)
@@ -548,7 +548,7 @@ func generateAptitudeBlock(
 			    block_number, block_sequence_order, is_locked
 			) VALUES ($1, $2, $3, $4, $5, false)
 			ON CONFLICT (aptitude_attempt_id, aptitude_question_id) DO NOTHING
-		`, attemptID, q.ID, displayOrder, blockNumber, i+1)
+		`, attemptID, qID, displayOrder, blockNumber, i+1)
 		if err != nil {
 			return aptitudeBlockResponse{}, err
 		}
@@ -994,7 +994,7 @@ func selectAptitudeQuestion(
 	difficulty string,
 	category string,
 	usedIDs []int64,
-) (aptitudeBlockQuestion, error) {
+) (aptitudeBlockQuestion, int64, error) {
 	var q aptitudeBlockQuestion
 	var qID int64
 	var imageURL *string
@@ -1020,18 +1020,18 @@ func selectAptitudeQuestion(
 			LIMIT 1
 		`, assessmentID, difficulty, usedIDs)
 		if err := row.Scan(&qID, &q.Text, &q.Difficulty, &q.Category, &q.Marks, &q.NegativeMarks, &imageURL); err != nil {
-			return aptitudeBlockQuestion{}, err
+			return aptitudeBlockQuestion{}, 0, err
 		}
 	}
 
 	opts, err := fetchAptitudeOptions(ctx, tx, qID)
 	if err != nil {
-		return aptitudeBlockQuestion{}, err
+		return aptitudeBlockQuestion{}, 0, err
 	}
 	q.ID = strconv.FormatInt(qID, 10)
 	q.ImageURL = imageURL
 	q.Options = opts
-	return q, nil
+	return q, qID, nil
 }
 
 func fetchAptitudeOptions(ctx context.Context, tx pgx.Tx, questionID int64) ([]aptitudeBlockOption, error) {
