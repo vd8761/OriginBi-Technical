@@ -25,6 +25,10 @@ export interface BaseRoleQuestion {
     type: RoleQuestionType;
     text: string;
     options: Option[];
+    metadata?: {
+        kind?: 'mcq' | 'msq' | 'tf';
+        [key: string]: any;
+    };
 }
 
 export interface ConceptualQuestion extends BaseRoleQuestion {
@@ -83,7 +87,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     mode = 'main'
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(ROLE_TOTAL_TIME);
     const [totalTime, setTotalTime] = useState(ROLE_TOTAL_TIME);
@@ -183,12 +187,12 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             setQuestions(normalizeQuestions(cachedSession.questions as any[]));
         }
         if (cachedSession.answers) {
-            const restored: Record<string, string> = {};
+            const restored: Record<string, string | string[]> = {};
             for (const [qId, val] of Object.entries(cachedSession.answers)) {
                 if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-                    restored[qId] = val.optionId as string;
-                } else if (typeof val === 'string') {
-                    restored[qId] = val;
+                    restored[qId] = val.optionId as string | string[];
+                } else if (typeof val === 'string' || Array.isArray(val)) {
+                    restored[qId] = val as any;
                 }
             }
             setAnswers(restored);
@@ -231,6 +235,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                 reportedBy: q.reportedBy ?? q.reported_by,
                 text: q.text ?? q.questionText ?? q.question_text ?? "",
                 options,
+                metadata: q.metadata ?? {},
             } as ScenarioQuestion;
         }
 
@@ -241,6 +246,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             subCategory: q.subCategory ?? q.sub_category,
             text: q.text ?? q.questionText ?? q.question_text ?? "",
             options,
+            metadata: q.metadata ?? {},
         } as ConceptualQuestion;
     });
 
@@ -378,9 +384,26 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
 
     const handleOptionSelect = (optionId: string) => {
         if (!currentQuestion) return;
-        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
-        // Persist answer to cache immediately
-        cacheSaveAnswer(currentQuestion.id, { optionId });
+        const kind = (currentQuestion as any).metadata?.kind || 'mcq';
+
+        let newAnswer: string | string[];
+
+        if (kind === 'msq') {
+            const currentVal = answers[currentQuestion.id];
+            let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
+            
+            if (selectedIds.includes(optionId)) {
+                selectedIds = selectedIds.filter(id => id !== optionId);
+            } else {
+                selectedIds = [...selectedIds, optionId];
+            }
+            newAnswer = selectedIds;
+        } else {
+            newAnswer = optionId;
+        }
+
+        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: newAnswer }));
+        cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
 
         if (markedForReview.has(currentQuestion.id)) {
             const newMarked = new Set(markedForReview);
@@ -441,8 +464,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         if (currentQuestion.type === "conceptual") {
             return (
                 <ConceptualQuestionComponent
-                    question={currentQuestion}
-                    selectedOptionId={selectedOption}
+                    question={currentQuestion as ConceptualQuestion}
+                    selectedOptionId={selectedOption as any}
                     onSelectOption={handleOptionSelect}
                 />
             );
@@ -450,8 +473,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
 
         return (
             <ScenarioQuestionComponent
-                question={currentQuestion}
-                selectedOptionId={selectedOption}
+                question={currentQuestion as ScenarioQuestion}
+                selectedOptionId={selectedOption as any}
                 onSelectOption={handleOptionSelect}
             />
         );
@@ -563,12 +586,12 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                                         Question {currentIndex + 1}
                                     </h2>
                                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                        {currentQuestion.category && (
+                                        {'category' in currentQuestion && currentQuestion.category && (
                                             <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-white/5 dark:text-slate-400 border border-slate-200 dark:border-white/10 uppercase tracking-tight">
                                                 {currentQuestion.category}
                                             </span>
                                         )}
-                                        {currentQuestion.subCategory && (
+                                        {'subCategory' in currentQuestion && currentQuestion.subCategory && (
                                             <span className="inline-flex items-center rounded bg-brand-green/5 px-2 py-0.5 text-[9px] font-bold text-brand-green border border-brand-green/10 uppercase tracking-tight">
                                                 {currentQuestion.subCategory}
                                             </span>

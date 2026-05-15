@@ -296,22 +296,38 @@ export class AssessmentService {
       let requestedMode = mode === 'trial' ? 'trial' : 'main';
       let questions: any[] = [];
 
+      const enabledTypes = assessment.enabled_question_types || {};
+      const showMcq = enabledTypes.mcq !== false;
+      const showMsq = enabledTypes.msq !== false;
+      const showTf = enabledTypes.true_false !== false;
+
+      const typeFilter = `AND (
+        ( (q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = 'mcq') AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE ) OR
+        ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
+        ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE )
+      )`;
+
       if (!config.hasMode) {
         // role and coding have no mode column
         questions = await queryRunner.query(
-          `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active'`,
+          `SELECT q.${config.idCol} FROM ${config.questions} q
+           JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${typeFilter}`,
           [assessment.assessment_id],
         );
       } else {
         questions = await queryRunner.query(
-          `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = $2`,
+          `SELECT q.${config.idCol} FROM ${config.questions} q
+           JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+           WHERE q.assessment_id = $1 AND q.status = 'active' AND q.mode = $2 ${typeFilter}`,
           [assessment.assessment_id, requestedMode],
         );
         if (questions.length === 0 && requestedMode === 'trial') {
           this.logger.warn(`No trial questions found for ${module}, falling back to main mode`);
-          // Note: we keep requestedMode as 'trial' for the question limit logic below
           questions = await queryRunner.query(
-            `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = 'main'`,
+            `SELECT q.${config.idCol} FROM ${config.questions} q
+             JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+             WHERE q.assessment_id = $1 AND q.status = 'active' AND q.mode = 'main' ${typeFilter}`,
             [assessment.assessment_id],
           );
         }
@@ -391,6 +407,7 @@ export class AssessmentService {
     } else if (isMnc) {
       extraSelect = ', q.topic_group, q.marks, q.negative_marks';
     }
+    extraSelect += ', q.metadata';
 
     const difficultySelect = config.hasDifficulty ? ', q.difficulty' : '';
     const textColumn = isCoding ? 'q.problem_statement' : 'q.question_text';
@@ -428,6 +445,7 @@ export class AssessmentService {
         options: finalOptions,
         marks: q.marks ? Number(q.marks) : undefined,
         negativeMarks: q.negative_marks ? Number(q.negative_marks) : undefined,
+        metadata: q.metadata || {},
       };
 
       if (config.hasDifficulty && q.difficulty !== undefined) {
@@ -536,7 +554,7 @@ export class AssessmentService {
         `SELECT aq.*, ${correctOptCol}, q.marks, q.negative_marks,
                 q.${config.catCol} as category, ${difficultyCol},
                 ass.negative_mark_enabled, ass.negative_mark_value, ${taskTypeCol},
-                ass.categories as assessment_categories
+                ass.categories as assessment_categories, q.metadata as question_metadata
          FROM ${config.junction} aq
          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
          JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
@@ -680,10 +698,32 @@ export class AssessmentService {
           continue;
         }
 
-        // MCQ modules: aptitude, mnc, role
+        // Scoring Logic: Support MSQ, TF, and MCQ
         if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
           sectionMap[category].answeredCount++;
-          const isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
+          
+          const qMetadata = aq.question_metadata || {};
+          const kind = qMetadata.kind || 'mcq';
+          let isCorrectAnswer = false;
+
+          if (kind === 'msq') {
+            const studentChoices = Array.isArray(selectedOptionId) 
+              ? selectedOptionId.map(String) 
+              : (selectedOptionId ? [String(selectedOptionId)] : []);
+            
+            const correctChoices = Array.isArray(qMetadata.correctOptionIds)
+              ? qMetadata.correctOptionIds.map(String)
+              : [];
+            
+            // All-or-nothing check for MSQ
+            isCorrectAnswer = studentChoices.length > 0 &&
+                             studentChoices.length === correctChoices.length &&
+                             studentChoices.every(id => correctChoices.includes(id));
+          } else {
+            // Standard MCQ / TF (single choice)
+            isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
+          }
+
           const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
           const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;
 
@@ -698,9 +738,16 @@ export class AssessmentService {
 
           await queryRunner.query(
             `UPDATE ${config.junction}
-             SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW()
-             WHERE attempt_question_id = $5`,
-            [selectedOptionId, isCorrectAnswer, scoreAwarded, negativeApplied, aq.attempt_question_id],
+             SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW(), metadata = $5
+             WHERE attempt_question_id = $6`,
+            [
+              Array.isArray(selectedOptionId) ? null : selectedOptionId, 
+              isCorrectAnswer, 
+              scoreAwarded, 
+              negativeApplied, 
+              aq.attempt_question_id,
+              JSON.stringify({ selectedOptionIds: Array.isArray(selectedOptionId) ? selectedOptionId : [selectedOptionId] })
+            ],
           );
         } else {
           await queryRunner.query(

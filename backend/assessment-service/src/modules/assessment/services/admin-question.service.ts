@@ -302,6 +302,24 @@ export class AdminQuestionService {
           [correctOptionId, questionId],
         );
         questionRow.correct_option_id = correctOptionId;
+
+        // Resolve temp correctOptionIds in metadata
+        if (data.metadata?.kind === 'msq' && Array.isArray(data.metadata.correctOptionIds)) {
+          const resolvedIds = data.metadata.correctOptionIds.map(id => {
+            if (String(id).startsWith('opt_')) {
+              const idx = parseInt(String(id).split('_')[1]);
+              return insertedOptions[idx]?.option_id;
+            }
+            return id;
+          }).filter(Boolean);
+          
+          const updatedMetadata = { ...data.metadata, correctOptionIds: resolvedIds };
+          await queryRunner.query(
+            `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
+            [JSON.stringify(updatedMetadata), questionId]
+          );
+          questionRow.metadata = updatedMetadata;
+        }
       }
 
       await queryRunner.query(
@@ -370,7 +388,25 @@ export class AdminQuestionService {
         }
         const cIdx = typeof correctOptionIndex === 'number' ? correctOptionIndex : 0;
         const safeIdx = Math.min(Math.max(0, cIdx), insertedOptions.length - 1);
-        await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOptions[safeIdx].option_id, id]);
+        const correctOptionId = insertedOptions[safeIdx].option_id;
+        await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [correctOptionId, id]);
+
+        // Resolve temp correctOptionIds in metadata
+        if (data.metadata?.kind === 'msq' && Array.isArray(data.metadata.correctOptionIds)) {
+          const resolvedIds = data.metadata.correctOptionIds.map(oid => {
+            if (String(oid).startsWith('opt_')) {
+              const idx = parseInt(String(oid).split('_')[1]);
+              return insertedOptions[idx]?.option_id;
+            }
+            return oid;
+          }).filter(Boolean);
+          
+          const updatedMetadata = { ...data.metadata, correctOptionIds: resolvedIds };
+          await queryRunner.query(
+            `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
+            [JSON.stringify(updatedMetadata), id]
+          );
+        }
       }
 
       await queryRunner.commitTransaction();

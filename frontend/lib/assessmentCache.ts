@@ -40,8 +40,8 @@ const LS_INDEX_PREFIX = 'obi_assess_idx_';
 // ── Types ─────────────────────────────────────────────────────
 
 export interface AnswerValue {
-  // MCQ: the selected option id (string)
-  optionId?: string;
+  // MCQ/MSQ: the selected option id(s) (string or array of strings)
+  optionId?: string | string[];
   // Text-based (writing / speaking)
   text?: string;
   // Audio-based

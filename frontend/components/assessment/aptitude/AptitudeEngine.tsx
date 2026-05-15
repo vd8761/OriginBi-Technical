@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
@@ -27,6 +27,10 @@ interface Question {
     marks?: number;
     negativeMarks?: number;
     explanation?: string;
+    metadata?: {
+        kind?: 'mcq' | 'msq' | 'tf';
+        [key: string]: any;
+    };
 }
 
 export interface AttemptSubmitResult {
@@ -69,7 +73,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 }) => {
     const router = useRouter();
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
     const [totalTime, setTotalTime] = useState(APTITUDE_TOTAL_TIME);
@@ -225,12 +229,12 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 setQuestions(normalizeQuestions(cachedSession.questions as any[]));
             }
             if (cachedSession.answers) {
-                const restored: Record<string, string> = {};
+                const restored: Record<string, string | string[]> = {};
                 for (const [qId, val] of Object.entries(cachedSession.answers)) {
                     if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-                        restored[qId] = val.optionId as string;
-                    } else if (typeof val === 'string') {
-                        restored[qId] = val;
+                        restored[qId] = val.optionId as string | string[];
+                    } else if (typeof val === 'string' || Array.isArray(val)) {
+                        restored[qId] = val as any;
                     }
                 }
                 setAnswers(restored);
@@ -269,6 +273,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         marks: q.marks !== undefined ? Number(q.marks) : undefined,
         negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
         explanation: q.explanation ?? undefined,
+        metadata: q.metadata ?? {},
     }));
 
     const currentQuestion = questions[currentIndex];
@@ -454,10 +459,30 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     });
 
     const handleOptionSelect = (optionId: string) => {
-        const newAnswers = { ...answers, [currentQuestion.id]: optionId };
+        const question = currentQuestion;
+        const kind = question.metadata?.kind || 'mcq';
+
+        let newAnswer: string | string[];
+
+        if (kind === 'msq') {
+            const currentVal = answers[question.id];
+            let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
+            
+            if (selectedIds.includes(optionId)) {
+                selectedIds = selectedIds.filter(id => id !== optionId);
+            } else {
+                selectedIds = [...selectedIds, optionId];
+            }
+            newAnswer = selectedIds;
+        } else {
+            // MCQ or TF
+            newAnswer = optionId;
+        }
+
+        const newAnswers = { ...answers, [currentQuestion.id]: newAnswer };
         setAnswers(newAnswers);
         // Persist to cache immediately
-        cacheSaveAnswer(currentQuestion.id, { optionId });
+        cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
     };
 
     const handleClear = () => {
@@ -697,7 +722,10 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
                         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                             {currentQuestion.options.map((option, index) => {
-                                const isSelected = answers[currentQuestion.id] === option.id;
+                                const kind = currentQuestion.metadata?.kind || 'mcq';
+                                const isSelected = kind === 'msq'
+                                    ? (Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).includes(option.id))
+                                    : answers[currentQuestion.id] === option.id;
 
                                 return (
                                     <button
@@ -716,7 +744,9 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                                 ? "bg-brand-green text-[#0f1712]"
                                                 : "bg-brand-green/10 text-brand-green"
                                         }`}>
-                                            {labelForIndex(index)}
+                                            {kind === 'msq' ? (
+                                                isSelected ? <Check size={18} strokeWidth={3} /> : labelForIndex(index)
+                                            ) : labelForIndex(index)}
                                         </span>
                                         <span className={`text-sm font-semibold leading-6 ${
                                             isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"
