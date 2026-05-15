@@ -3,10 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
-import { signIn, fetchAuthSession, signOut } from "aws-amplify/auth";
-import { configureAmplify } from "@/lib/aws-amplify-config";
-
-configureAmplify();
+import { loginUser } from "@/lib/api";
 
 function getErrorMessage(err: unknown) {
   if (err instanceof Error) return err.message;
@@ -41,74 +38,22 @@ export default function AdminLoginPage() {
     setIsSubmitting(true);
 
     try {
-      try {
-        await signOut();
-      } catch {
-        // Ignore stale Cognito sessions.
-      }
-
-      const signInResult = await signIn({ username: email, password });
-      if (!signInResult.isSignedIn) {
-        setError("Your account login needs an additional step. Please contact the administrator.");
-        return;
-      }
-
-      const session = await fetchAuthSession();
+      const session = await loginUser(email, password, { group: "ADMIN" });
       const tokens = session.tokens;
-      if (!tokens?.accessToken) {
-        setError("Login session could not be created. Please try again.");
-        return;
-      }
+      const backendUser = session.user || {};
+      const backendRegistration = session.registration;
+      const isAdmin =
+        backendUser.isAdmin === true ||
+        ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(String(backendUser.role || "").toUpperCase());
 
-      const idTokenJwt = tokens.idToken?.toString() || "";
-      const idGroups = (tokens.idToken?.payload["cognito:groups"] as string[]) || [];
-      const accessGroups = (tokens.accessToken?.payload["cognito:groups"] as string[]) || [];
-      const groups = [...new Set([...idGroups, ...accessGroups])];
-
-      if (!groups.includes("ADMIN")) {
-        await signOut();
+      if (!tokens?.accessToken || !tokens.idToken || !isAdmin) {
+        localStorage.removeItem("originbi:admin-session");
+        localStorage.removeItem("originbi:access-token");
+        localStorage.removeItem("originbi:id-token");
+        localStorage.removeItem("originbi:refresh-token");
         setError("You are not allowed to access this portal with these credentials.");
         return;
       }
-
-      // Auth/admin endpoints live on the NestJS assessment-service. Prefer
-      // the legacy ADMIN_API_BASE_URL if someone set it, otherwise fall back
-      // to the documented NEXT_PUBLIC_AUTH_SERVICE_URL.
-      const apiBase = (
-        process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ||
-        process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
-        ""
-      ).replace(/\/$/, "");
-      if (!apiBase) {
-        throw new Error(
-          "Auth service URL not configured. Set NEXT_PUBLIC_AUTH_SERVICE_URL in frontend/.env.local.",
-        );
-      }
-
-      const res = await fetch(`${apiBase}/admin/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${idTokenJwt}`,
-          "X-User-Context": JSON.stringify({ email }),
-        },
-      });
-
-      if (!res.ok) {
-        let backendMessage = "Unable to verify your administrative access.";
-        try {
-          const data = await res.json();
-          if (data && typeof data.message === "string") backendMessage = data.message;
-        } catch {
-          // Keep fallback message.
-        }
-        await signOut();
-        setError(backendMessage);
-        return;
-      }
-
-      const data = await res.json();
-      const backendUser = data.user || {};
-      const metadata = backendUser.metadata || {};
 
       // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
       // ID_TOKEN_KEY) and what AdminGuard checks. Previously these were
@@ -116,9 +61,9 @@ export default function AdminLoginPage() {
       // Authorization header → every request 401'd → guard bounced back to
       // login → loop. Keep the legacy keys around too in case anything else
       // still reads them, but the colon-dash keys are the source of truth.
-      const accessTokenJwt = tokens.accessToken?.toString() || idTokenJwt;
-      const refreshTokenJwt =
-        (session.tokens && (session.tokens as { refreshToken?: { toString(): string } }).refreshToken?.toString()) || "";
+      const accessTokenJwt = tokens.accessToken;
+      const idTokenJwt = tokens.idToken;
+      const refreshTokenJwt = tokens.refreshToken || "";
       localStorage.setItem("originbi:id-token", idTokenJwt);
       localStorage.setItem("originbi:access-token", accessTokenJwt);
       if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
@@ -133,7 +78,7 @@ export default function AdminLoginPage() {
         "user",
         JSON.stringify({
           id: backendUser.id || 0,
-          name: metadata.fullName || backendUser.email?.split("@")[0] || "Admin",
+          name: backendRegistration?.fullName || backendUser.email?.split("@")[0] || "Admin",
           email: backendUser.email || email,
           role: "ADMIN",
         }),

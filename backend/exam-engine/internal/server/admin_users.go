@@ -11,9 +11,9 @@ type adminUserDTO struct {
 	ID              int64   `json:"id"`
 	Email           string  `json:"email"`
 	FullName        string  `json:"fullName"`
-	Role            string  `json:"role"`           // raw DB value (ADMIN/SUPER_ADMIN/STAFF/PROCTOR/STUDENT/…)
-	RoleGroup       string  `json:"roleGroup"`      // "Admin" | "Proctor" | "Student"
-	Status          string  `json:"status"`         // active | blocked | pending
+	Role            string  `json:"role"`      // raw DB value (ADMIN/SUPER_ADMIN/STAFF/PROCTOR/STUDENT/…)
+	RoleGroup       string  `json:"roleGroup"` // "Admin" | "Proctor" | "Student"
+	Status          string  `json:"status"`    // active | blocked | pending
 	InstitutionName string  `json:"institutionName"`
 	Assessments     int64   `json:"assessments"`
 	LastSeenAt      *string `json:"lastSeenAt"`
@@ -21,11 +21,11 @@ type adminUserDTO struct {
 }
 
 type adminUsersResponse struct {
-	Users   []adminUserDTO `json:"users"`
-	Total   int64          `json:"total"`
-	Limit   int            `json:"limit"`
-	Offset  int            `json:"offset"`
-	Counts  adminUserCounts `json:"counts"`
+	Users  []adminUserDTO  `json:"users"`
+	Total  int64           `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+	Counts adminUserCounts `json:"counts"`
 }
 
 type adminUserCounts struct {
@@ -138,7 +138,11 @@ func (s *Server) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(u.email, ''),
 		       COALESCE(r.full_name, ''),
 		       COALESCE(u.role, '')                                       AS role,
-		       COALESCE(r.institution_name, '')                           AS institution,
+		       COALESCE(
+		           r.metadata->>'institutionName',
+		           r.metadata->>'institution_name',
+		           ''
+		       )                                                          AS institution,
 		       u.is_active,
 		       u.is_blocked,
 		       u.last_login_at,
@@ -160,13 +164,13 @@ func (s *Server) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 	out := make([]adminUserDTO, 0, limit)
 	for rows.Next() {
 		var (
-			u             adminUserDTO
-			isActive      bool
-			isBlocked     bool
-			lastLogin     *time.Time
-			createdAt     *time.Time
-			roleRaw       string
-			institution   string
+			u           adminUserDTO
+			isActive    bool
+			isBlocked   bool
+			lastLogin   *time.Time
+			createdAt   *time.Time
+			roleRaw     string
+			institution string
 		)
 		if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &roleRaw, &institution,
 			&isActive, &isBlocked, &lastLogin, &createdAt, &u.Assessments); err != nil {

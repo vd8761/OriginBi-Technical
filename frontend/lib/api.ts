@@ -6,8 +6,8 @@ const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/
 // Go exam-engine (attempts, code runs, plugins, etc.)
 export const API_BASE = configuredApiBase || "";
 
-// NestJS assessment-service (Cognito auth, etc.)
-export const AUTH_API_BASE = configuredAuthBase || "";
+// OriginBI auth-service from the sibling app (Cognito auth).
+export const AUTH_API_BASE = configuredAuthBase || "http://localhost:4002";
 
 export const STUDENT_API_BASE =
   process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
@@ -54,12 +54,14 @@ function clearTokens() {
 }
 
 export interface ApiUser {
-  id: string;
+  id: string | number;
   email: string;
   role: string | null;
   cognitoSub: string | null;
   emailVerified: boolean;
   isActive: boolean;
+  isAdmin?: boolean;
+  status?: string;
 }
 
 export interface ApiRegistration {
@@ -94,6 +96,7 @@ export interface RegisterRequest {
   countryCode: string;
   mobileNumber: string;
   role?: string;
+  registrationSource?: string;
 }
 
 export interface Assignment {
@@ -550,58 +553,116 @@ function errorMessageFrom(data: ErrorEnvelope | null): string | null {
   return null;
 }
 
-// ── Auth (NestJS assessment-service, Cognito-backed) ──────────────────────
+// ── Auth (sibling auth-service, Cognito-backed) ───────────────────────────
 
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  // Main Student Service returns `{ success: true }` and triggers emails.
-  // It doesn't return tokens, so we don't read the response — the user must
-  // log in after registration.
-  await apiFetch<{ success?: boolean }>("/student/register/tech", {
+  await assertRegistrationEmailAvailable(input.email);
+  const registrationSource = input.registrationSource || "originbi-technical";
+
+  const cognito = await apiFetch<{ sub?: string; email?: string; group?: string }>("/internal/cognito/users", {
     method: "POST",
     body: JSON.stringify({
-      full_name: input.fullName,
       email: input.email,
-      mobile_number: input.mobileNumber,
-      country_code: input.countryCode,
       password: input.password,
-      gender: input.gender,
-      is_tech_assessment: true,
+      groupName: input.role === "ADMIN" ? "ADMIN" : "STUDENT",
     }),
-    baseOverride: STUDENT_API_BASE,
+    baseOverride: AUTH_API_BASE,
     auth: false,
   });
 
-  return {
-    user: { email: input.email } as ApiUser,
-    registration: null,
-  };
+  if (!cognito.sub) {
+    throw new ApiError(502, "Auth service did not return a Cognito user id.");
+  }
+
+  return apiFetch<AuthResponse>("/v1/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      name: input.fullName,
+      gender: input.gender,
+      countryCode: input.countryCode,
+      phone: input.mobileNumber,
+      role: input.role || "STUDENT",
+      registrationSource,
+      cognitoSub: cognito.sub,
+      metadata: {
+        source: registrationSource,
+        cognitoGroup: cognito.group || "STUDENT",
+      },
+    }),
+    baseOverride: API_BASE,
+    auth: false,
+  });
 }
 
 interface LoginResponseBody {
   accessToken?: string;
   idToken?: string;
   refreshToken?: string;
-  user?: ApiUser;
-  registration?: ApiRegistration | null;
+  expiresIn?: number;
+  tokenType?: string;
 }
 
-export async function loginUser(email: string, password: string): Promise<AuthResponse> {
+interface EmailAvailabilityResponse {
+  available: boolean;
+}
+
+interface LoginOptions {
+  group?: string;
+}
+
+async function assertRegistrationEmailAvailable(email: string): Promise<void> {
+  const result = await apiFetch<EmailAvailabilityResponse>(
+    `/v1/auth/email-availability?email=${encodeURIComponent(email)}`,
+    {
+      baseOverride: API_BASE,
+      auth: false,
+    },
+  );
+  if (!result.available) {
+    throw new ApiError(409, "email already registered");
+  }
+}
+
+export async function loginUser(
+  email: string,
+  password: string,
+  options: LoginOptions = {},
+): Promise<AuthResponse> {
   const res = await apiFetch<LoginResponseBody>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      ...(options.group ? { group: options.group } : {}),
+    }),
     baseOverride: AUTH_API_BASE,
     auth: false,
   });
 
-  const tokens = res.accessToken && res.idToken
-    ? { accessToken: res.accessToken, idToken: res.idToken, refreshToken: res.refreshToken }
-    : undefined;
+  if (!res.accessToken || !res.idToken) {
+    throw new ApiError(502, "Auth service did not return a complete token set.");
+  }
 
-  if (tokens) setTokens(tokens);
+  const tokens = {
+    accessToken: res.accessToken,
+    idToken: res.idToken,
+    refreshToken: res.refreshToken,
+    expiresIn: res.expiresIn,
+    tokenType: res.tokenType,
+  };
+  setTokens(tokens);
+
+  const session = await getSession();
+  if (!session) {
+    throw new ApiError(
+      401,
+      "Login succeeded in Cognito, but this account is not registered in OriginBI Technical.",
+    );
+  }
 
   return {
-    user: res.user ?? ({ email } as ApiUser),
-    registration: res.registration ?? null,
+    ...session,
     tokens,
   };
 }
@@ -626,8 +687,8 @@ export async function logoutUser(): Promise<void> {
 export async function getSession(): Promise<AuthResponse | null> {
   if (!getAccessToken()) return null;
   try {
-    const res = await apiFetch<Omit<AuthResponse, "tokens">>("/auth/session", {
-      baseOverride: AUTH_API_BASE,
+    const res = await apiFetch<Omit<AuthResponse, "tokens">>("/v1/auth/session", {
+      baseOverride: API_BASE,
     });
     return { ...res, tokens: undefined };
   } catch (err) {

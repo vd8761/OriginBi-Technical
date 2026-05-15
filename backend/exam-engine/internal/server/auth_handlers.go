@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	sessionCookieName = "ob_session"
-	sessionTTL        = 24 * time.Hour
+	sessionCookieName           = "ob_session"
+	sessionTTL                  = 24 * time.Hour
+	technicalRegistrationSource = "originbi-technical"
 )
 
 type authResponse struct {
@@ -58,39 +59,42 @@ type userDTO struct {
 }
 
 type registrationDTO struct {
-	FullName        string          `json:"fullName"`
-	Gender          string          `json:"gender"`
-	CountryCode     string          `json:"countryCode"`
-	Phone           string          `json:"phone"`
-	Role            string          `json:"role"`
-	DateOfBirth     *string         `json:"dateOfBirth,omitempty"`
-	City            string          `json:"city,omitempty"`
-	State           string          `json:"state,omitempty"`
-	Country         string          `json:"country,omitempty"`
-	EducationLevel  string          `json:"educationLevel,omitempty"`
-	InstitutionName string          `json:"institutionName,omitempty"`
-	GraduationYear  *int            `json:"graduationYear,omitempty"`
-	WorkStatus      string          `json:"workStatus,omitempty"`
-	Metadata        json.RawMessage `json:"metadata,omitempty"`
+	FullName         string          `json:"fullName"`
+	Gender           string          `json:"gender"`
+	CountryCode      string          `json:"countryCode"`
+	Phone            string          `json:"phone"`
+	Role             string          `json:"role"`
+	DateOfBirth      *string         `json:"dateOfBirth,omitempty"`
+	City             string          `json:"city,omitempty"`
+	State            string          `json:"state,omitempty"`
+	Country          string          `json:"country,omitempty"`
+	EducationLevel   string          `json:"educationLevel,omitempty"`
+	InstitutionName  string          `json:"institutionName,omitempty"`
+	GraduationYear   *int            `json:"graduationYear,omitempty"`
+	WorkStatus       string          `json:"workStatus,omitempty"`
+	IsTechAssessment bool            `json:"isTechAssessment"`
+	Metadata         json.RawMessage `json:"metadata,omitempty"`
 }
 
 type registerRequest struct {
-	Email           string          `json:"email"`
-	Password        string          `json:"password"`
-	Name            string          `json:"name"`
-	Gender          string          `json:"gender"`
-	CountryCode     string          `json:"countryCode"`
-	Phone           string          `json:"phone"`
-	Role            string          `json:"role"`
-	DateOfBirth     string          `json:"dateOfBirth"`
-	City            string          `json:"city"`
-	State           string          `json:"state"`
-	Country         string          `json:"country"`
-	EducationLevel  string          `json:"educationLevel"`
-	InstitutionName string          `json:"institutionName"`
-	GraduationYear  *int            `json:"graduationYear"`
-	WorkStatus      string          `json:"workStatus"`
-	Metadata        json.RawMessage `json:"metadata"`
+	Email              string          `json:"email"`
+	Password           string          `json:"password"`
+	CognitoSub         string          `json:"cognitoSub"`
+	Name               string          `json:"name"`
+	Gender             string          `json:"gender"`
+	CountryCode        string          `json:"countryCode"`
+	Phone              string          `json:"phone"`
+	Role               string          `json:"role"`
+	RegistrationSource string          `json:"registrationSource"`
+	DateOfBirth        string          `json:"dateOfBirth"`
+	City               string          `json:"city"`
+	State              string          `json:"state"`
+	Country            string          `json:"country"`
+	EducationLevel     string          `json:"educationLevel"`
+	InstitutionName    string          `json:"institutionName"`
+	GraduationYear     *int            `json:"graduationYear"`
+	WorkStatus         string          `json:"workStatus"`
+	Metadata           json.RawMessage `json:"metadata"`
 }
 
 type loginRequest struct {
@@ -105,6 +109,37 @@ type bootstrapAdminRequest struct {
 	Name     string `json:"name"`
 }
 
+type emailAvailabilityResponse struct {
+	Available bool `json:"available"`
+}
+
+func (s *Server) emailAvailability(w http.ResponseWriter, r *http.Request) {
+	if !s.limiter.allow(rateKey(r, "email-availability"), 30, time.Minute) {
+		writeError(w, http.StatusTooManyRequests, tooManyRequestsMessage(30, time.Minute))
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("email")))
+	if !validEmail(email) {
+		writeError(w, http.StatusBadRequest, "valid email is required")
+		return
+	}
+
+	ctx, cancel := contextWithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	var exists bool
+	if err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM users
+			WHERE lower(email) = lower($1)
+		)
+	`, email).Scan(&exists); err != nil {
+		writeError(w, http.StatusInternalServerError, "email lookup failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, emailAvailabilityResponse{Available: !exists})
+}
+
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if !s.limiter.allow(rateKey(r, "register"), 8, time.Minute) {
 		writeError(w, http.StatusTooManyRequests, tooManyRequestsMessage(8, time.Minute))
@@ -114,13 +149,13 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req, maxAuthBodyBytes) {
 		return
 	}
-	if err := normalizeRegistrationInput(&req, true); err != nil {
+	if err := normalizeRegistrationInput(&req, false); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "password hashing failed")
+	req.CognitoSub = strings.TrimSpace(req.CognitoSub)
+	if req.CognitoSub == "" {
+		writeError(w, http.StatusBadRequest, "cognitoSub is required")
 		return
 	}
 
@@ -133,48 +168,62 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
+	var existingID int64
+	err = tx.QueryRow(ctx, `
+		SELECT id
+		FROM users
+		WHERE lower(email) = lower($1)
+		LIMIT 1
+	`, req.Email).Scan(&existingID)
+	if err == nil {
+		writeError(w, http.StatusConflict, "email already registered")
+		return
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusInternalServerError, "user lookup failed")
+		return
+	}
+
+	metadataBytes, isTechAssessment, err := registrationMetadata(&req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "metadata encode failed")
+		return
+	}
+
 	var user userDTO
 	err = tx.QueryRow(ctx, `
-		INSERT INTO users (email, password)
-		VALUES ($1, $2)
-		RETURNING id, email, status, is_admin
-	`, req.Email, string(hash)).Scan(&user.ID, &user.Email, &user.Status, &user.IsAdmin)
+		INSERT INTO users (
+		    email, cognito_sub, role, name, email_verified, is_active,
+		    is_blocked, metadata, created_at, updated_at
+		)
+		VALUES ($1, $2, 'STUDENT', $3, TRUE, TRUE, FALSE, $4::jsonb, now(), now())
+		RETURNING id, COALESCE(email, ''), 'active', FALSE
+	`, req.Email, req.CognitoSub, req.Name, metadataBytes).Scan(&user.ID, &user.Email, &user.Status, &user.IsAdmin)
 	if err != nil {
-		if strings.Contains(err.Error(), "duplicate") {
-			writeError(w, http.StatusConflict, "email already registered")
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "create user failed")
 		return
 	}
 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO registrations (
-			user_id, full_name, gender, country_code, phone, user_role,
-			date_of_birth, city, state, country, education_level,
-			institution_name, graduation_year, work_status, metadata
+			user_id, registration_source, full_name, gender, country_code,
+			mobile_number, status, payment_status, payment_required,
+			metadata, is_deleted, is_tech_assessment, created_at, updated_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
-	`, user.ID, req.Name, req.Gender, req.CountryCode, req.Phone, req.Role,
-		nullableDate(req.DateOfBirth), req.City, req.State, req.Country, req.EducationLevel,
-		req.InstitutionName, req.GraduationYear, req.WorkStatus, []byte(req.Metadata)); err != nil {
+		VALUES ($1, 'SELF', $2, $3, $4, $5, 'COMPLETED',
+		        'NOT_REQUIRED', FALSE, $6::jsonb, FALSE, $7, now(), now())
+	`, user.ID, req.Name, req.Gender, req.CountryCode, req.Phone, metadataBytes, isTechAssessment); err != nil {
 		writeError(w, http.StatusInternalServerError, "create registration failed")
 		return
 	}
 
-	token, expires, err := createSession(ctx, tx, user.ID, r)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "create session failed")
-		return
-	}
 	if err := tx.Commit(ctx); err != nil {
 		writeError(w, http.StatusInternalServerError, "commit failed")
 		return
 	}
-	setSessionCookie(w, token, expires)
 
 	reg, _ := s.registrationForUser(r.Context(), user.ID)
-	writeJSON(w, http.StatusCreated, authResponse{User: user, Registration: reg, ExpiresAt: expires})
+	writeJSON(w, http.StatusCreated, authResponse{User: user, Registration: reg})
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -310,18 +359,24 @@ func (s *Server) updateRegistration(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	metadataBytes, isTechAssessment, err := registrationMetadata(&req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "metadata encode failed")
+		return
+	}
 	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	_, err = s.pool.Exec(ctx, `
 		UPDATE registrations
-		SET full_name=$2, gender=$3, country_code=$4, phone=$5, user_role=$6,
-		    date_of_birth=$7, city=$8, state=$9, country=$10, education_level=$11,
-		    institution_name=$12, graduation_year=$13, work_status=$14,
-		    metadata=$15::jsonb, updated_at=now()
-		WHERE user_id=$1
-	`, principal.UserID, req.Name, req.Gender, req.CountryCode, req.Phone, req.Role,
-		nullableDate(req.DateOfBirth), req.City, req.State, req.Country, req.EducationLevel,
-		req.InstitutionName, req.GraduationYear, req.WorkStatus, []byte(req.Metadata))
+		SET full_name=$2,
+		    gender=$3,
+		    country_code=$4,
+		    mobile_number=$5,
+		    metadata=$6::jsonb,
+		    is_tech_assessment = CASE WHEN $7 THEN TRUE ELSE is_tech_assessment END,
+		    updated_at=now()
+		WHERE user_id=$1 AND is_deleted = FALSE
+	`, principal.UserID, req.Name, req.Gender, req.CountryCode, req.Phone, metadataBytes, isTechAssessment)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
@@ -454,29 +509,52 @@ func (s *Server) registrationForUser(ctx context.Context, userID int64) (registr
 	ctx, cancel := contextWithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var reg registrationDTO
-	var dob *time.Time
-	var grad *int
 	var metadata []byte
 	err := s.pool.QueryRow(ctx, `
-		SELECT full_name, gender, country_code, phone, user_role, date_of_birth,
-		       COALESCE(city, ''), COALESCE(state, ''), COALESCE(country, ''),
-		       COALESCE(education_level, ''), COALESCE(institution_name, ''),
-		       graduation_year, COALESCE(work_status, ''), metadata
+		SELECT COALESCE(full_name, ''),
+		       COALESCE(gender, ''),
+		       COALESCE(country_code, '+91'),
+		       COALESCE(mobile_number, ''),
+		       COALESCE(status, ''),
+		       COALESCE(is_tech_assessment, FALSE),
+		       metadata
 		FROM registrations
-		WHERE user_id = $1
-	`, userID).Scan(&reg.FullName, &reg.Gender, &reg.CountryCode, &reg.Phone, &reg.Role,
-		&dob, &reg.City, &reg.State, &reg.Country, &reg.EducationLevel, &reg.InstitutionName,
-		&grad, &reg.WorkStatus, &metadata)
+		WHERE user_id = $1 AND is_deleted = FALSE
+		ORDER BY created_at DESC, id DESC
+		LIMIT 1
+	`, userID).Scan(&reg.FullName, &reg.Gender, &reg.CountryCode, &reg.Phone, &reg.Role, &reg.IsTechAssessment, &metadata)
 	if err != nil {
 		return registrationDTO{}, err
 	}
-	if dob != nil {
-		v := dob.Format("2006-01-02")
-		reg.DateOfBirth = &v
-	}
-	reg.GraduationYear = grad
 	if len(metadata) > 0 {
 		reg.Metadata = json.RawMessage(metadata)
+		var meta map[string]any
+		if err := json.Unmarshal(metadata, &meta); err == nil {
+			if v, ok := meta["institutionName"].(string); ok {
+				reg.InstitutionName = v
+			} else if v, ok := meta["institution_name"].(string); ok {
+				reg.InstitutionName = v
+			}
+			if v, ok := meta["city"].(string); ok {
+				reg.City = v
+			}
+			if v, ok := meta["state"].(string); ok {
+				reg.State = v
+			}
+			if v, ok := meta["country"].(string); ok {
+				reg.Country = v
+			}
+			if v, ok := meta["educationLevel"].(string); ok {
+				reg.EducationLevel = v
+			} else if v, ok := meta["education_level"].(string); ok {
+				reg.EducationLevel = v
+			}
+			if v, ok := meta["workStatus"].(string); ok {
+				reg.WorkStatus = v
+			} else if v, ok := meta["work_status"].(string); ok {
+				reg.WorkStatus = v
+			}
+		}
 	}
 	return reg, nil
 }
@@ -509,15 +587,35 @@ func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, 
 	defer dbCancel()
 	var user userDTO
 	var role *string
+	identity := strings.TrimSpace(claims.Email)
+	if identity == "" {
+		identity = strings.TrimSpace(claims.Username)
+	}
 	err = s.pool.QueryRow(dbCtx, `
 		SELECT id, COALESCE(email, ''), role
 		FROM users
-		WHERE cognito_sub = $1
+		WHERE (
+		        cognito_sub = $1
+		        OR (
+		            $2 <> ''
+		            AND lower(COALESCE(email, '')) = lower($2)
+		            AND COALESCE(cognito_sub, '') = ''
+		        )
+		      )
 		  AND is_active = TRUE
 		  AND is_blocked = FALSE
-	`, claims.Sub).Scan(&user.ID, &user.Email, &role)
+		ORDER BY CASE WHEN cognito_sub = $1 THEN 0 ELSE 1 END, id
+		LIMIT 1
+	`, claims.Sub, identity).Scan(&user.ID, &user.Email, &role)
 	if err != nil {
 		return userDTO{}, time.Time{}, false
+	}
+	if identity != "" {
+		_, _ = s.pool.Exec(dbCtx, `
+			UPDATE users
+			SET cognito_sub = $2, updated_at = now()
+			WHERE id = $1 AND COALESCE(cognito_sub, '') = ''
+		`, user.ID, claims.Sub)
 	}
 	user.Status = "active"
 	if role != nil {
@@ -663,6 +761,52 @@ func rateKey(r *http.Request, action string) string {
 	return action + ":" + clientIP(r)
 }
 
+func registrationMetadata(req *registerRequest) ([]byte, bool, error) {
+	if len(req.Metadata) == 0 {
+		req.Metadata = json.RawMessage("{}")
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(req.Metadata, &metadata); err != nil {
+		return nil, false, err
+	}
+
+	source := req.RegistrationSource
+	if source == "" {
+		source = metadataString(metadata, "source")
+	}
+	if source == "" {
+		source = technicalRegistrationSource
+	}
+	req.RegistrationSource = source
+
+	metadata["source"] = source
+	metadata["fullName"] = req.Name
+	metadata["mobileNumber"] = req.Phone
+	metadata["countryCode"] = req.CountryCode
+	metadata["gender"] = req.Gender
+	metadata["cognitoSub"] = req.CognitoSub
+	metadata["hasChangedPassword"] = true
+
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, false, err
+	}
+	return metadataBytes, isOriginBITechnicalSource(source), nil
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	if v, ok := metadata[key].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
+func isOriginBITechnicalSource(source string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(source))
+	normalized = strings.NewReplacer("-", "", "_", "", " ", "").Replace(normalized)
+	return normalized == "originbitechnical"
+}
+
 func normalizeRegistrationInput(req *registerRequest, requirePassword bool) error {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Name = strings.TrimSpace(req.Name)
@@ -670,6 +814,7 @@ func normalizeRegistrationInput(req *registerRequest, requirePassword bool) erro
 	req.CountryCode = strings.TrimSpace(req.CountryCode)
 	req.Phone = strings.TrimSpace(req.Phone)
 	req.Role = strings.ToUpper(strings.TrimSpace(req.Role))
+	req.RegistrationSource = strings.TrimSpace(req.RegistrationSource)
 	req.DateOfBirth = strings.TrimSpace(req.DateOfBirth)
 	req.City = strings.TrimSpace(req.City)
 	req.State = strings.TrimSpace(req.State)
@@ -684,10 +829,11 @@ func normalizeRegistrationInput(req *registerRequest, requirePassword bool) erro
 	if len(req.Name) > 160 {
 		return errors.New("name is too long")
 	}
-	if requirePassword {
-		if !validEmail(req.Email) || !validPassword(req.Password) {
-			return errors.New("valid email and password are required")
-		}
+	if !validEmail(req.Email) {
+		return errors.New("valid email is required")
+	}
+	if requirePassword && !validPassword(req.Password) {
+		return errors.New("valid password is required")
 	}
 	if req.Gender == "" {
 		req.Gender = "OTHER"
@@ -720,7 +866,7 @@ func normalizeRegistrationInput(req *registerRequest, requirePassword bool) erro
 	}
 	if len(req.City) > 120 || len(req.State) > 120 || len(req.Country) > 120 ||
 		len(req.EducationLevel) > 120 || len(req.InstitutionName) > 200 ||
-		len(req.WorkStatus) > 120 {
+		len(req.WorkStatus) > 120 || len(req.RegistrationSource) > 120 {
 		return errors.New("registration field is too long")
 	}
 	if len(req.Metadata) == 0 {
