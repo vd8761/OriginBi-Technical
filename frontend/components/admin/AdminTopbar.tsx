@@ -152,7 +152,7 @@ export default function AdminTopbar() {
                 {subtitle}
               </p>
             ) : (
-              <p className="mt-1 text-[11px] font-bold text-brand-green uppercase tracking-[0.2em]">{eyebrow}</p>
+              <p className="mt-1 text-[11px] font-bold text-brand-green tracking-wide">{eyebrow}</p>
             )}
           </div>
         </div>

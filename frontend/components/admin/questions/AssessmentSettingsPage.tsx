@@ -275,7 +275,7 @@ export default function AssessmentSettingsPage() {
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-green/10 border border-brand-green/20"
                   >
                     <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
-                    <span className="text-[11px] font-black uppercase tracking-widest text-brand-green">Changes Saved</span>
+                    <span className="text-[11px] font-bold text-brand-green">Changes Saved</span>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -283,7 +283,7 @@ export default function AssessmentSettingsPage() {
               <button 
                 onClick={handleSave} 
                 disabled={!hasModifications || saving}
-                className={`group relative flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${
+                className={`group relative flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${
                   hasModifications && !saving 
                     ? "bg-brand-green text-[#0f1411] shadow-xl shadow-brand-green/20 hover:shadow-brand-green/30 hover:-translate-y-0.5 active:scale-95" 
                     : "bg-white/5 text-slate-500 cursor-not-allowed opacity-60 border border-white/5"
