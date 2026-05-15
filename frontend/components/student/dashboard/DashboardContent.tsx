@@ -39,24 +39,26 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isPaid } = usePaidAssessments();
-  const { isSyncing, isInitialized: isHydrated } = useDataHydration();
+  const { isSyncing, isInitialized: isHydrated, completions } = useDataHydration();
 
   // Redirect new users to explore page instead of showing empty dashboard.
   // Only redirect after we've confirmed the paid set is loaded AND there's no
   // in-flight completion result to display.
-  const hasPurchases = useMemo(() => {
-    return EXAMS.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
-  }, [isPaid]);
+  const hasContent = useMemo(() => {
+    const hasPurchases = EXAMS.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
+    const hasCompletions = completions.size > 0;
+    return hasPurchases || hasCompletions;
+  }, [isPaid, completions]);
 
   const justCompleted = searchParams.get("completed");
 
   useEffect(() => {
     if (!isHydrated || isSyncing) return;
     if (justCompleted) return;
-    if (!hasPurchases) {
+    if (!hasContent) {
       router.push("/explore");
     }
-  }, [isHydrated, isSyncing, hasPurchases, justCompleted, router]);
+  }, [isHydrated, isSyncing, hasContent, justCompleted, router]);
 
   // Show a spinner while we wait for the initial hydration, or while
   // syncing progress.

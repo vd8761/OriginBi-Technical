@@ -91,10 +91,10 @@ const getSkillLabel = (score: number) => {
 };
 
 const getSkillBg = (score: number) => {
-  if (score >= 80) return "bg-green-50 text-green-700 border-green-200";
-  if (score >= 65) return "bg-cyan-50 text-cyan-700 border-cyan-200";
-  if (score >= 50) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-700 border-red-200";
+  if (score >= 80) return "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/30";
+  if (score >= 65) return "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/30";
+  if (score >= 50) return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30";
+  return "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/30";
 };
 
 const analyzePerformance = (sections: SectionResult[]) => {
@@ -302,35 +302,35 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                         {/* Quick Stats */}
                         <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
                           <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <ClockIcon c="w-4 h-4 text-gray-400 dark:text-gray-300 mb-2" />
+                            <ClockIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
                             <p className="text-xl font-bold text-gray-900 dark:text-white">{result.timeTaken}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300 uppercase tracking-wider">Total Time</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300">Avg: {timePerQ}m/q</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Time</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50">Avg: {timePerQ}m/q</p>
                           </div>
                           <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <TargetIcon c="w-4 h-4 text-gray-400 dark:text-gray-300 mb-2" />
+                            <TargetIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
                             <p className="text-xl font-bold text-gray-900 dark:text-white">{answeredCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300 uppercase tracking-wider">Answered</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Answered</p>
                           </div>
                           <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <BarChartIcon c="w-4 h-4 text-gray-400 dark:text-gray-300 mb-2" />
+                            <BarChartIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
                             <p className="text-xl font-bold text-gray-900 dark:text-white">{correctCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300 uppercase tracking-wider">Correct</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Correct</p>
                           </div>
                           <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <AwardIcon c="w-4 h-4 text-gray-400 dark:text-gray-300 mb-2" />
+                            <AwardIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
                             <p className="text-xl font-bold text-gray-900 dark:text-white">{wrongCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300 uppercase tracking-wider">Wrong</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Wrong</p>
                           </div>
                           <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <AlertIcon c="w-4 h-4 text-gray-400 dark:text-gray-300 mb-2" />
+                            <AlertIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
                             <p className="text-xl font-bold text-gray-900 dark:text-white">{skippedCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300 uppercase tracking-wider">Skipped</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Skipped</p>
                           </div>
                           <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <BookIcon c="w-4 h-4 text-gray-400 dark:text-gray-300 mb-2" />
+                            <BookIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
                             <p className="text-xl font-bold text-gray-900 dark:text-white">{totalQuestions}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-300 uppercase tracking-wider">Total Qs</p>
+                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Qs</p>
                           </div>
                         </div>
                       </div>
@@ -346,11 +346,11 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                           <table className="w-full">
                             <thead>
                               <tr className="bg-gray-50 dark:bg-white/5">
-                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider px-4 py-3">Section</th>
-                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider px-4 py-3">Weight</th>
-                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider px-4 py-3">Score</th>
-                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider px-4 py-3">Level</th>
-                                <th className="text-right text-[11px] font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider px-4 py-3">Visual</th>
+                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-white/50 uppercase tracking-wider px-4 py-3">Section</th>
+                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-white/50 uppercase tracking-wider px-4 py-3">Weight</th>
+                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-white/50 uppercase tracking-wider px-4 py-3">Score</th>
+                                <th className="text-left text-[11px] font-semibold text-gray-500 dark:text-white/50 uppercase tracking-wider px-4 py-3">Level</th>
+                                <th className="text-right text-[11px] font-semibold text-gray-500 dark:text-white/50 uppercase tracking-wider px-4 py-3">Visual</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-white/10">
@@ -366,7 +366,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                                     <span className="text-sm font-semibold text-gray-900 dark:text-white">{section.name}</span>
                                   </td>
                                   <td className="px-4 py-3.5">
-                                    <span className="text-xs text-gray-500 dark:text-gray-300">{section.weight}</span>
+                                    <span className="text-xs text-gray-500 dark:text-white/50">{section.weight}</span>
                                   </td>
                                   <td className="px-4 py-3.5">
                                     <span className="text-sm font-bold" style={{ color: getSkillColor(section.score) }}>{section.score}%</span>
@@ -404,17 +404,17 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                       {/* ===== PERFORMANCE SUMMARY ===== */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     {analysis.strong.length > 0 && (
-                      <div className="bg-green-50/60 rounded-2xl p-5 border border-green-100">
+                      <div className="bg-green-50/60 rounded-2xl p-5 border border-green-100 dark:bg-green-500/10 dark:border-green-500/20">
                         <div className="flex items-center gap-2 mb-3">
-                          <CheckIcon c="w-4 h-4 text-green-600" />
-                          <h4 className="text-sm font-bold text-green-800">Strong Areas</h4>
-                          <span className="ml-auto text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">{analysis.strong.length}</span>
+                          <CheckIcon c="w-4 h-4 text-green-600 dark:text-green-400" />
+                          <h4 className="text-sm font-bold text-green-800 dark:text-green-400">Strong Areas</h4>
+                          <span className="ml-auto text-xs font-bold text-green-600 bg-green-100 dark:bg-green-500/20 dark:text-green-400 px-2 py-0.5 rounded-full">{analysis.strong.length}</span>
                         </div>
                         <div className="space-y-2">
                           {analysis.strong.map(s => (
                             <div key={s.name} className="flex items-center justify-between">
-                              <span className="text-xs text-green-700">{s.name}</span>
-                              <span className="text-xs font-bold text-green-600">{s.score}%</span>
+                              <span className="text-xs text-green-700 dark:text-white">{s.name}</span>
+                              <span className="text-xs font-bold text-green-600 dark:text-green-400">{s.score}%</span>
                             </div>
                           ))}
                         </div>
@@ -422,17 +422,17 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                     )}
 
                     {analysis.developing.length > 0 && (
-                      <div className="bg-amber-50/60 rounded-2xl p-5 border border-amber-100">
+                      <div className="bg-amber-50/60 rounded-2xl p-5 border border-amber-100 dark:bg-amber-500/10 dark:border-amber-500/20">
                         <div className="flex items-center gap-2 mb-3">
-                          <TrendUpIcon c="w-4 h-4 text-amber-600" />
-                          <h4 className="text-sm font-bold text-amber-800">Developing</h4>
-                          <span className="ml-auto text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">{analysis.developing.length}</span>
+                          <TrendUpIcon c="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          <h4 className="text-sm font-bold text-amber-800 dark:text-amber-400">Developing</h4>
+                          <span className="ml-auto text-xs font-bold text-amber-600 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 px-2 py-0.5 rounded-full">{analysis.developing.length}</span>
                         </div>
                         <div className="space-y-2">
                           {analysis.developing.map(s => (
                             <div key={s.name} className="flex items-center justify-between">
-                              <span className="text-xs text-amber-700">{s.name}</span>
-                              <span className="text-xs font-bold text-amber-600">{s.score}%</span>
+                              <span className="text-xs text-amber-700 dark:text-white">{s.name}</span>
+                              <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{s.score}%</span>
                             </div>
                           ))}
                         </div>
@@ -440,17 +440,17 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                     )}
 
                     {analysis.needsFocus.length > 0 && (
-                      <div className="bg-red-50/60 rounded-2xl p-5 border border-red-100">
+                      <div className="bg-red-50/60 rounded-2xl p-5 border border-red-100 dark:bg-red-500/10 dark:border-red-500/20">
                         <div className="flex items-center gap-2 mb-3">
-                          <AlertIcon c="w-4 h-4 text-red-600" />
-                          <h4 className="text-sm font-bold text-red-800">Needs Focus</h4>
-                          <span className="ml-auto text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">{analysis.needsFocus.length}</span>
+                          <AlertIcon c="w-4 h-4 text-red-600 dark:text-red-400" />
+                          <h4 className="text-sm font-bold text-red-800 dark:text-red-400">Needs Focus</h4>
+                          <span className="ml-auto text-xs font-bold text-red-600 bg-red-100 dark:bg-red-500/20 dark:text-red-400 px-2 py-0.5 rounded-full">{analysis.needsFocus.length}</span>
                         </div>
                         <div className="space-y-2">
                           {analysis.needsFocus.map(s => (
                             <div key={s.name} className="flex items-center justify-between">
-                              <span className="text-xs text-red-700">{s.name}</span>
-                              <span className="text-xs font-bold text-red-600">{s.score}%</span>
+                              <span className="text-xs text-red-700 dark:text-white">{s.name}</span>
+                              <span className="text-xs font-bold text-red-600 dark:text-red-400">{s.score}%</span>
                             </div>
                           ))}
                         </div>
@@ -462,7 +462,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                       <div className="mb-8">
                     <div className="flex items-center gap-2 mb-4">
                       <LightbulbIcon c="w-4 h-4 text-[#1ed36a]" />
-                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">How to Improve</h3>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">How to Improve</h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {advice.map((tip, idx) => (
@@ -471,16 +471,16 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.15 * idx }}
-                          className="flex gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-100"
+                          className="flex gap-4 p-5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10"
                         >
                           <div className="shrink-0">
-                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-500">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-white/70">
                               {tip.tag}
                             </span>
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-gray-900 mb-1">{tip.title}</h4>
-                            <p className="text-xs text-gray-500 leading-relaxed">{tip.content}</p>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-1">{tip.title}</h4>
+                            <p className="text-xs text-gray-500 dark:text-white/60 leading-relaxed">{tip.content}</p>
                           </div>
                         </motion.div>
                       ))}
@@ -492,7 +492,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                         <div className="mb-8">
                       <div className="flex items-center gap-2 mb-4">
                         <TargetIcon c="w-4 h-4 text-[#1ed36a]" />
-                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Skills Evaluated</h3>
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Skills Evaluated</h3>
                       </div>
                       <div className="space-y-3">
                         {detail.skills.map((skill, idx) => (
@@ -501,14 +501,14 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.1 * idx }}
-                            className="flex gap-4 p-4 rounded-2xl border border-gray-100 bg-white"
+                            className="flex gap-4 p-4 rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-white/5"
                           >
-                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-gray-500">{idx + 1}</span>
+                            <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0">
+                              <span className="text-xs font-bold text-gray-500 dark:text-white/70">{idx + 1}</span>
                             </div>
                             <div>
-                              <h4 className="text-sm font-semibold text-gray-900 mb-1">{skill.title}</h4>
-                              <p className="text-xs text-gray-500 leading-relaxed">{skill.description}</p>
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{skill.title}</h4>
+                              <p className="text-xs text-gray-500 dark:text-white/60 leading-relaxed">{skill.description}</p>
                             </div>
                           </motion.div>
                         ))}
@@ -521,7 +521,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                         <div className="mb-8">
                       <div className="flex items-center gap-2 mb-4">
                         <BookIcon c="w-4 h-4 text-[#1ed36a]" />
-                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">What You Need</h3>
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">What You Need</h3>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {detail.requirements.map((req, idx) => (
@@ -530,7 +530,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.05 * idx }}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs font-medium text-gray-700 dark:text-white/70"
                           >
                             <CheckIcon c="w-3 h-3 text-[#1ed36a]" />
                             {req}

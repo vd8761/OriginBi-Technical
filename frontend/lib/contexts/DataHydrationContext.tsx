@@ -4,7 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { 
   getActiveEmail, 
   getPurchasedAssessments, 
-  getLatestSubmittedResult, 
+  getLatestSubmittedResult,
+  listAssignments,
   HAS_TECH_API 
 } from "@/lib/api";
 import { EXAMS, type AssessmentId } from "@/lib/exams";
@@ -56,16 +57,26 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
 
     setIsSyncing(true);
     try {
-      // 1. Sync Purchases
-      const { purchased } = await getPurchasedAssessments(email);
+      // 1. Sync Purchases (Tech API + Exam Engine)
+      const [{ purchased }, { assignments }] = await Promise.all([
+        getPurchasedAssessments(email),
+        listAssignments()
+      ]);
       const nextPurchases = new Set(purchased);
+      (assignments ?? []).forEach(a => {
+        if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
+          nextPurchases.add(a.assignmentRef);
+        }
+      });
+
       setPurchases(nextPurchases);
       localStorage.setItem(PAID_KEY, JSON.stringify(Array.from(nextPurchases)));
       window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
 
-      // 2. Sync Results (only for purchased assessments)
-      // This avoids unnecessary 404s for assessments the user hasn't even bought.
-      const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role"];
+      // 2. Sync Results
+      // We fetch results for all core modules to catch trial completions 
+      // and handle cases where purchase sync might be slightly delayed.
+      const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role", "coding"];
       const nextResults: Record<string, AssessmentResult> = { ...results };
       const nextCompletions = new Set(completions);
       let resultsChanged = false;
@@ -73,9 +84,6 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
 
       await Promise.all(
         modules.map(async (module) => {
-          // Optimization: If not purchased, skip result fetch
-          if (!nextPurchases.has(module)) return;
-
           try {
             const submission = await getLatestSubmittedResult(module, email);
             const { mapSubmissionToAssessmentResult } = await import("@/lib/assessmentResultMapper");

@@ -161,14 +161,9 @@ export function useAssessmentResults() {
         console.warn("[useAssessmentResults] No email found; skipping result sync.");
         return;
       }
-      const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role"];
-      const paidRaw = window.localStorage.getItem("originbi:paid-assessments");
-      const paid = new Set<string>(paidRaw ? JSON.parse(paidRaw) : []);
-
+      const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role", "coding"];
+      
       for (const module of modules) {
-        // Optimization: Skip if not purchased to avoid 404 noise
-        if (!paid.has(module)) continue;
-
         try {
           const submission = await getLatestSubmittedResult(module, email);
           if (cancelled) return;
