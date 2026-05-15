@@ -497,7 +497,7 @@ export class AdaptiveBlockService {
     }
 
     const typeFilter = `AND (
-      ( (q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = 'mcq') AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE ) OR
+      ( q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = '' OR q.metadata->>'kind' = 'mcq' ) AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE OR
       ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
       ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE )
     )`;

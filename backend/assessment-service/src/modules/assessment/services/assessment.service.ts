@@ -302,7 +302,7 @@ export class AssessmentService {
       const showTf = enabledTypes.true_false !== false;
 
       const typeFilter = `AND (
-        ( (q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = 'mcq') AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE ) OR
+        ( (q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = '' OR q.metadata->>'kind' = 'mcq') AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE ) OR
         ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
         ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE )
       )`;
@@ -365,6 +365,7 @@ export class AssessmentService {
 
       const fullQuestions = await this.getAttemptQuestionsByConfig(
         attemptId, config, assessment.shuffle_options, shuffleSeed,
+        assessment.enabled_question_types,
       );
 
       return {
@@ -384,11 +385,30 @@ export class AssessmentService {
     }
   }
 
+  /**
+   * Determine the effective question kind for questions that don't have an explicit kind set.
+   * If the assessment has only one question type enabled, use that as the kind.
+   * Otherwise default to 'mcq'.
+   */
+  private inferQuestionKind(enabledTypes?: any): string | null {
+    if (!enabledTypes) return null;
+    const mcq = enabledTypes.mcq !== false;
+    const msq = enabledTypes.msq !== false;
+    const tf = enabledTypes.true_false !== false;
+
+    // If only one type is enabled, infer that as the kind
+    if (msq && !mcq && !tf) return 'msq';
+    if (tf && !mcq && !msq) return 'tf';
+    // If MCQ is the only enabled type or multiple types are enabled, return null (default mcq)
+    return null;
+  }
+
   private async getAttemptQuestionsByConfig(
     attemptId: number,
     config: any,
     shuffleOptions: boolean,
     seed: string,
+    enabledQuestionTypes?: any,
   ) {
     const isAptitude = config.questions === 'tech_aptitude_questions';
     const isGrammar  = config.questions === 'tech_grammar_questions';
@@ -439,13 +459,22 @@ export class AssessmentService {
           : options;
       }
 
+      // Infer question kind for untyped questions based on assessment config
+      let questionMetadata = q.metadata || {};
+      if (!questionMetadata.kind || questionMetadata.kind === '') {
+        const inferredKind = this.inferQuestionKind(enabledQuestionTypes);
+        if (inferredKind) {
+          questionMetadata = { ...questionMetadata, kind: inferredKind };
+        }
+      }
+
       const base: any = {
         id: q.question_id,
         text: q.question_text,
         options: finalOptions,
         marks: q.marks ? Number(q.marks) : undefined,
         negativeMarks: q.negative_marks ? Number(q.negative_marks) : undefined,
-        metadata: q.metadata || {},
+        metadata: questionMetadata,
       };
 
       if (config.hasDifficulty && q.difficulty !== undefined) {
@@ -491,7 +520,7 @@ export class AssessmentService {
       if (!config) throw new BadRequestException(`Unknown module for token: ${token}`);
 
       const attemptRows = await this.dataSource.query(
-        `SELECT a.*, ass.shuffle_options, ass.module_type
+        `SELECT a.*, ass.shuffle_options, ass.module_type, ass.enabled_question_types
          FROM ${config.attempts} a
          JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
          WHERE a.attempt_token = $1`,
@@ -504,6 +533,7 @@ export class AssessmentService {
 
       const questions = await this.getAttemptQuestionsByConfig(
         attemptId, config, attempt.shuffle_options, attempt.shuffle_seed,
+        attempt.enabled_question_types,
       );
 
       return {
