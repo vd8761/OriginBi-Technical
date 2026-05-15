@@ -10,6 +10,7 @@ function CommunicationAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const assessmentCode = searchParams.get("assessmentCode") || "COMMUNICATION_DEFAULT";
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
@@ -67,7 +68,7 @@ function CommunicationAssessmentContent() {
 
     return (
         <div className="min-h-screen w-full">
-            <CommunicationEngine onComplete={handleComplete} mode={mode} />
+            <CommunicationEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
         </div>
     );
 }
