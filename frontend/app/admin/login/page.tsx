@@ -8,6 +8,7 @@ import { configureAmplify } from "@/lib/aws-amplify-config";
 import { setAdminTokens } from "@/lib/api";
 
 configureAmplify();
+import { loginUser } from "@/lib/api";
 
 function getErrorMessage(err: unknown) {
   if (err instanceof Error) return err.message;
@@ -42,32 +43,19 @@ function AdminLoginForm() {
     setIsSubmitting(true);
 
     try {
-      try {
-        await signOut();
-      } catch {
-        // Ignore stale Cognito sessions.
-      }
-
-      const signInResult = await signIn({ username: email, password });
-      if (!signInResult.isSignedIn) {
-        setError("Your account login needs an additional step. Please contact the administrator.");
-        return;
-      }
-
-      const session = await fetchAuthSession();
+      const session = await loginUser(email, password, { group: "ADMIN" });
       const tokens = session.tokens;
-      if (!tokens?.accessToken) {
-        setError("Login session could not be created. Please try again.");
-        return;
-      }
+      const backendUser = session.user || {};
+      const backendRegistration = session.registration;
+      const isAdmin =
+        backendUser.isAdmin === true ||
+        ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(String(backendUser.role || "").toUpperCase());
 
-      const idTokenJwt = tokens.idToken?.toString() || "";
-      const idGroups = (tokens.idToken?.payload["cognito:groups"] as string[]) || [];
-      const accessGroups = (tokens.accessToken?.payload["cognito:groups"] as string[]) || [];
-      const groups = [...new Set([...idGroups, ...accessGroups])];
-
-      if (!groups.includes("ADMIN")) {
-        await signOut();
+      if (!tokens?.accessToken || !tokens.idToken || !isAdmin) {
+        localStorage.removeItem("originbi:admin-session");
+        localStorage.removeItem("originbi:access-token");
+        localStorage.removeItem("originbi:id-token");
+        localStorage.removeItem("originbi:refresh-token");
         setError("You are not allowed to access this portal with these credentials.");
         return;
       }
@@ -121,6 +109,18 @@ function AdminLoginForm() {
         idToken: idTokenJwt,
         refreshToken: refreshTokenJwt || undefined,
       });
+      // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
+      // ID_TOKEN_KEY) and what AdminGuard checks. Previously these were
+      // written under legacy underscore/bare names, so apiFetch sent no
+      // Authorization header → every request 401'd → guard bounced back to
+      // login → loop. Keep the legacy keys around too in case anything else
+      // still reads them, but the colon-dash keys are the source of truth.
+      const accessTokenJwt = tokens.accessToken;
+      const idTokenJwt = tokens.idToken;
+      const refreshTokenJwt = tokens.refreshToken || "";
+      localStorage.setItem("originbi:id-token", idTokenJwt);
+      localStorage.setItem("originbi:access-token", accessTokenJwt);
+      if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
       // Legacy keys — kept for any older code paths that haven't migrated.
       localStorage.setItem("originbi_id_token", idTokenJwt);
       localStorage.setItem("accessToken", accessTokenJwt);
@@ -132,7 +132,7 @@ function AdminLoginForm() {
         "user",
         JSON.stringify({
           id: backendUser.id || 0,
-          name: metadata.fullName || backendUser.email?.split("@")[0] || "Admin",
+          name: backendRegistration?.fullName || backendUser.email?.split("@")[0] || "Admin",
           email: backendUser.email || email,
           role: "ADMIN",
         }),

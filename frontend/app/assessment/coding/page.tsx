@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CodingAssessment from "@/components/assessment/coding/CodingAssessment";
 import { LANG_META } from "@/components/assessment/coding/CodeEditor";
+import { fetchCandidatePluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
 import {
     ApiError,
     listMyLanguages,
@@ -38,6 +39,7 @@ function CodingAssessmentInner() {
     const rawMode = searchParams.get("mode");
     const mode: AssessmentMode = rawMode === "trial" ? "trial" : "main";
     const [snapshot, setSnapshot] = useState<AttemptSnapshot | null>(null);
+    const [plugins, setPlugins] = useState<EnabledPluginConfig[]>([]);
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -59,7 +61,7 @@ function CodingAssessmentInner() {
                 return { languages: [] as MeLanguage[] };
             }),
         ])
-            .then(([snap, ents]) => {
+            .then(async ([snap, ents]) => {
                 if (cancelled) return;
                 const wanted = toPluginSlug(lang);
                 const allowed = new Set(ents.languages.map((l) => l.slug));
@@ -71,6 +73,9 @@ function CodingAssessmentInner() {
                     );
                     return;
                 }
+                const pluginConfig = await fetchCandidatePluginConfig(snap.attempt.id);
+                if (cancelled) return;
+                setPlugins(pluginConfig);
                 setSnapshot(snap);
             })
             .catch((err) => {
@@ -112,7 +117,11 @@ function CodingAssessmentInner() {
         );
     }
 
-    return <CodingAssessment lang={lang} snapshot={snapshot} mode={mode} />;
+    return (
+        <PluginProvider enabled={plugins} attemptId={snapshot?.attempt.id ?? null}>
+            <CodingAssessment lang={lang} snapshot={snapshot} mode={mode} />
+        </PluginProvider>
+    );
 }
 
 export default function CodingAssessmentPage() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -26,47 +26,58 @@ import {
   StatCard,
   StatusDot,
 } from "@/components/admin/ui";
+import {
+  listAdminUsers,
+  type AdminUserRow,
+  type AdminUserCounts,
+  type ListAdminUsersParams,
+} from "@/lib/api";
 
-// NOTE: backend does not yet expose a bulk-user listing endpoint
-// (only /v1/admin/users/:id/entitlements). The roster below is sample
-// data shaped per the design while we wire up the real API.
-type Role = "Student" | "Admin" | "Proctor";
-type Status = "active" | "blocked" | "pending";
+type RoleFilter = "all" | "admin" | "proctor" | "student";
 
-interface UserRow {
-  id: string;
-  obId: string;
-  name: string;
-  email: string;
-  role: Role;
-  institution: string;
-  status: Status;
-  assessments: number;
-  lastSeen: string;
-  joined: string;
-}
-
-const sampleUsers: UserRow[] = [
-  { id: "1", obId: "OB-90431", name: "Priya Iyer", email: "priya.iyer@vit.ac.in", role: "Student", institution: "VIT Vellore", status: "active", assessments: 8, lastSeen: "2 min ago", joined: "Jan 2025" },
-  { id: "2", obId: "OB-77329", name: "Karthik R.", email: "karthik@nitw.in", role: "Admin", institution: "NIT Warangal", status: "active", assessments: 124, lastSeen: "12 min ago", joined: "Sep 2024" },
-  { id: "3", obId: "OB-61204", name: "Mira Shah", email: "mira.shah@bits.ac.in", role: "Proctor", institution: "BITS Pilani", status: "active", assessments: 36, lastSeen: "Just now", joined: "Nov 2024" },
-  { id: "4", obId: "OB-58910", name: "Neha Patel", email: "neha.p@iitg.ac.in", role: "Student", institution: "IIT Guwahati", status: "blocked", assessments: 2, lastSeen: "2 days ago", joined: "Feb 2025" },
-  { id: "5", obId: "OB-55021", name: "Rohan Desai", email: "rohan@srm.edu.in", role: "Student", institution: "SRM Chennai", status: "pending", assessments: 0, lastSeen: "Yesterday", joined: "Mar 2026" },
-  { id: "6", obId: "OB-50338", name: "Anjali Verma", email: "anjali@dtu.ac.in", role: "Student", institution: "DTU Delhi", status: "active", assessments: 14, lastSeen: "8 min ago", joined: "Oct 2024" },
-  { id: "7", obId: "OB-49027", name: "Sahil Khan", email: "sahil@iiitb.ac.in", role: "Student", institution: "IIIT Bangalore", status: "active", assessments: 22, lastSeen: "3h ago", joined: "Aug 2024" },
-];
-
-const roleTones: Record<Role, "blue" | "purple" | "amber"> = {
+const roleTones: Record<AdminUserRow["roleGroup"], "blue" | "purple" | "amber"> = {
   Student: "blue",
   Admin: "purple",
   Proctor: "amber",
 };
 
-const statusTones: Record<Status, "green" | "red" | "amber"> = {
+const statusTones: Record<AdminUserRow["status"], "green" | "red" | "amber"> = {
   active: "green",
   blocked: "red",
   pending: "amber",
 };
+
+function formatObId(id: number): string {
+  return `OB-${id.toString().padStart(5, "0")}`;
+}
+
+function formatRelativeFromIso(iso: string | null): string {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Never";
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return "Just now";
+  const min = Math.floor(diffMs / 60_000);
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min} min ago`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+}
+
+function formatJoined(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+function displayName(u: AdminUserRow): string {
+  return u.fullName?.trim() || u.email.split("@")[0] || `User #${u.id}`;
+}
 
 function UsersInner() {
   const router = useRouter();
@@ -77,28 +88,62 @@ function UsersInner() {
     breadcrumb: [{ label: "Admin Hub", href: "/admin" }, { label: "Users" }],
   });
 
-  const [filter, setFilter] = useState<"all" | "Student" | "Admin" | "Proctor">("all");
+  const [filter, setFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<UserRow | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selected, setSelected] = useState<AdminUserRow | null>(null);
   const [lookupId, setLookupId] = useState("");
   const [lookupError, setLookupError] = useState("");
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return sampleUsers.filter((u) => {
-      if (filter !== "all" && u.role !== filter) return false;
-      if (!term) return true;
-      return [u.name, u.email, u.obId, u.institution].some((field) => field.toLowerCase().includes(term));
-    });
-  }, [filter, search]);
+  const [rows, setRows] = useState<AdminUserRow[]>([]);
+  const [counts, setCounts] = useState<AdminUserCounts>({
+    total: 0,
+    students: 0,
+    admins: 0,
+    proctors: 0,
+    blocked: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const stats = useMemo(() => {
-    const total = sampleUsers.length;
-    const students = sampleUsers.filter((u) => u.role === "Student").length;
-    const staff = sampleUsers.filter((u) => u.role !== "Student").length;
-    const blocked = sampleUsers.filter((u) => u.status === "blocked").length;
-    return { total, students, staff, blocked };
-  }, []);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params: ListAdminUsersParams = { limit: 100 };
+    if (debouncedSearch) params.q = debouncedSearch;
+    if (filter !== "all") params.role = filter;
+    listAdminUsers(params)
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data.users);
+        setCounts(data.counts);
+        setLoadError(null);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadError(err instanceof Error ? err.message : "Failed to load users");
+        setRows([]);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch, filter]);
+
+  const tabs = useMemo(
+    () => [
+      { value: "all" as const, label: "All", count: counts.total },
+      { value: "student" as const, label: "Students", count: counts.students },
+      { value: "admin" as const, label: "Admins", count: counts.admins },
+      { value: "proctor" as const, label: "Proctors", count: counts.proctors },
+    ],
+    [counts],
+  );
 
   const submitLookup = (event: FormEvent) => {
     event.preventDefault();
@@ -115,7 +160,7 @@ function UsersInner() {
       <section className="admin-grid-4">
         <StatCard
           label="Total Users"
-          value={stats.total.toLocaleString()}
+          value={counts.total.toLocaleString()}
           sub="Across all institutions"
           icon={<UsersIcon size={18} />}
           iconBg="rgba(30,211,106,0.16)"
@@ -123,7 +168,7 @@ function UsersInner() {
         />
         <StatCard
           label="Students"
-          value={stats.students.toLocaleString()}
+          value={counts.students.toLocaleString()}
           sub="Candidate accounts"
           icon={<UsersIcon size={18} />}
           iconBg="rgba(74,198,234,0.16)"
@@ -131,7 +176,7 @@ function UsersInner() {
         />
         <StatCard
           label="Admins & Proctors"
-          value={stats.staff.toLocaleString()}
+          value={(counts.admins + counts.proctors).toLocaleString()}
           sub="Staff with elevated access"
           icon={<ShieldCheck size={18} />}
           iconBg="rgba(139,109,240,0.18)"
@@ -139,7 +184,7 @@ function UsersInner() {
         />
         <StatCard
           label="Blocked"
-          value={stats.blocked.toLocaleString()}
+          value={counts.blocked.toLocaleString()}
           sub="Awaiting review"
           icon={<Lock size={18} />}
           iconBg="rgba(237,47,52,0.14)"
@@ -150,22 +195,13 @@ function UsersInner() {
       <Card>
         <div className="admin-control-row" style={{ marginBottom: 16 }}>
           <div className="admin-row" style={{ flexWrap: "wrap", gap: 12 }}>
-            <PillTabs
-              value={filter}
-              onChange={setFilter}
-              tabs={[
-                { value: "all", label: "All", count: sampleUsers.length },
-                { value: "Student", label: "Students", count: stats.students },
-                { value: "Admin", label: "Admins", count: sampleUsers.filter((u) => u.role === "Admin").length },
-                { value: "Proctor", label: "Proctors", count: sampleUsers.filter((u) => u.role === "Proctor").length },
-              ]}
-            />
+            <PillTabs value={filter} onChange={setFilter} tabs={tabs} />
             <label className="admin-search" style={{ width: 280 }}>
               <Search size={14} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search name, email, OB ID..."
+                placeholder="Search name, email..."
               />
             </label>
           </div>
@@ -178,6 +214,12 @@ function UsersInner() {
             </button>
           </div>
         </div>
+
+        {loadError && (
+          <div className="admin-error" style={{ marginBottom: 12 }}>
+            {loadError}
+          </div>
+        )}
 
         <div className="admin-table-wrap">
           <table className="admin-table">
@@ -195,50 +237,67 @@ function UsersInner() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
-                <tr
-                  key={u.id}
-                  onClick={() => setSelected(u)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <td>
-                    <input
-                      type="checkbox"
-                      style={{ accentColor: "var(--admin-green)" }}
-                      onClick={(event) => event.stopPropagation()}
-                    />
-                  </td>
-                  <td>
-                    <div className="admin-row" style={{ gap: 12 }}>
-                      <Avatar name={u.name} email={u.email} />
-                      <div>
-                        <div style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{u.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--admin-fg-3)" }}>{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="admin-mono" style={{ color: "var(--admin-fg-3)" }}>{u.obId}</td>
-                  <td>
-                    <Badge tone={roleTones[u.role]}>{u.role}</Badge>
-                  </td>
-                  <td>{u.institution}</td>
-                  <td>
-                    <Badge tone={statusTones[u.status]} dot>{u.status}</Badge>
-                  </td>
-                  <td className="admin-mono">{u.assessments}</td>
-                  <td style={{ color: "var(--admin-fg-3)" }}>{u.lastSeen}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <button
-                      className="admin-icon-btn"
-                      type="button"
-                      aria-label="More"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <MoreHorizontal size={14} />
-                    </button>
+              {loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                    Loading users…
                   </td>
                 </tr>
-              ))}
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                    No users match the current filters.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((u) => {
+                  const name = displayName(u);
+                  return (
+                    <tr
+                      key={u.id}
+                      onClick={() => setSelected(u)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          style={{ accentColor: "var(--admin-green)" }}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      </td>
+                      <td>
+                        <div className="admin-row" style={{ gap: 12 }}>
+                          <Avatar name={name} email={u.email} />
+                          <div>
+                            <div style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{name}</div>
+                            <div style={{ fontSize: 11, color: "var(--admin-fg-3)" }}>{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="admin-mono" style={{ color: "var(--admin-fg-3)" }}>{formatObId(u.id)}</td>
+                      <td>
+                        <Badge tone={roleTones[u.roleGroup]}>{u.roleGroup}</Badge>
+                      </td>
+                      <td>{u.institutionName || "—"}</td>
+                      <td>
+                        <Badge tone={statusTones[u.status]} dot>{u.status}</Badge>
+                      </td>
+                      <td className="admin-mono">{u.assessments}</td>
+                      <td style={{ color: "var(--admin-fg-3)" }}>{formatRelativeFromIso(u.lastSeenAt)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          className="admin-icon-btn"
+                          type="button"
+                          aria-label="More"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <MoreHorizontal size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -284,22 +343,22 @@ function UsersInner() {
       <Drawer
         open={selected !== null}
         onClose={() => setSelected(null)}
-        title={selected?.name}
+        title={selected ? displayName(selected) : undefined}
         subtitle={selected?.email}
       >
         {selected && (
           <>
             <div className="admin-row" style={{ gap: 16 }}>
-              <Avatar name={selected.name} email={selected.email} size={64} />
+              <Avatar name={displayName(selected)} email={selected.email} size={64} />
               <div style={{ flex: 1 }}>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-fg)" }}>
-                  {selected.name}
+                  {displayName(selected)}
                 </h2>
                 <p style={{ margin: "2px 0 8px", color: "var(--admin-fg-3)", fontSize: 12.5 }}>
                   {selected.email}
                 </p>
                 <div className="admin-row">
-                  <Badge tone={roleTones[selected.role]}>{selected.role}</Badge>
+                  <Badge tone={roleTones[selected.roleGroup]}>{selected.roleGroup}</Badge>
                   <Badge tone={statusTones[selected.status]} dot>{selected.status}</Badge>
                 </div>
               </div>
@@ -309,12 +368,14 @@ function UsersInner() {
               <div>
                 <p className="admin-stat-label">Origin BI ID</p>
                 <p className="admin-mono" style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
-                  {selected.obId}
+                  {formatObId(selected.id)}
                 </p>
               </div>
               <div>
                 <p className="admin-stat-label">Institution</p>
-                <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>{selected.institution}</p>
+                <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                  {selected.institutionName || "—"}
+                </p>
               </div>
               <div>
                 <p className="admin-stat-label">Assessments</p>
@@ -322,7 +383,7 @@ function UsersInner() {
               </div>
               <div>
                 <p className="admin-stat-label">Joined</p>
-                <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>{selected.joined}</p>
+                <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>{formatJoined(selected.createdAt)}</p>
               </div>
             </div>
 
@@ -330,24 +391,17 @@ function UsersInner() {
 
             <div>
               <p className="admin-stat-label" style={{ marginBottom: 12 }}>Last activity</p>
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="admin-row"
-                  style={{ padding: "10px 0", borderBottom: i < 3 ? "1px solid var(--admin-border)" : "none" }}
-                >
-                  <StatusDot tone="green" />
-                  <div style={{ flex: 1 }}>
-                    <strong style={{ fontSize: 12.5, color: "var(--admin-fg)" }}>
-                      Aptitude Round {i}
-                    </strong>
-                    <p className="admin-card-subtitle" style={{ fontSize: 11 }}>
-                      Score 82 · 14 Mar 2026
-                    </p>
-                  </div>
-                  <span className="admin-badge admin-badge-green">Pass</span>
+              <div className="admin-row" style={{ padding: "10px 0" }}>
+                <StatusDot tone={selected.status === "active" ? "green" : selected.status === "blocked" ? "red" : "amber"} />
+                <div style={{ flex: 1 }}>
+                  <strong style={{ fontSize: 12.5, color: "var(--admin-fg)" }}>
+                    Last seen
+                  </strong>
+                  <p className="admin-card-subtitle" style={{ fontSize: 11 }}>
+                    {formatRelativeFromIso(selected.lastSeenAt)}
+                  </p>
                 </div>
-              ))}
+              </div>
             </div>
 
             <hr className="admin-divider" />

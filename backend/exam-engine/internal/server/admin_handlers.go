@@ -49,6 +49,11 @@ type updatePluginStateRequest struct {
 	Config json.RawMessage `json:"config"`
 }
 
+type updatePluginConfigRequest struct {
+	Config json.RawMessage `json:"config"`
+	State  string          `json:"state,omitempty"`
+}
+
 type createPluginRequest struct {
 	Kind             string          `json:"kind"`
 	Slug             string          `json:"slug"`
@@ -253,7 +258,11 @@ func (s *Server) updatePlugin(w http.ResponseWriter, r *http.Request) {
 	if s.plugins != nil {
 		_ = s.plugins.Reload(ctx)
 	}
-	p, _ := s.pluginByID(ctx, pluginID)
+	p, err := s.pluginByID(ctx, pluginID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "plugin lookup failed")
+		return
+	}
 	writeJSON(w, http.StatusOK, p)
 }
 
@@ -317,6 +326,61 @@ func (s *Server) updatePluginState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
+func (s *Server) updatePluginConfig(w http.ResponseWriter, r *http.Request) {
+	principal, ok := s.requireAdminPrincipal(w, r)
+	if !ok {
+		return
+	}
+	var req updatePluginConfigRequest
+	if !decodeJSON(w, r, &req, maxRuntimeBodyBytes) {
+		return
+	}
+	if len(req.Config) == 0 {
+		req.Config = json.RawMessage("{}")
+	}
+	state := strings.TrimSpace(req.State)
+	if state == "" {
+		state = "enabled"
+	}
+	if !validPluginState(state) {
+		writeError(w, http.StatusBadRequest, "invalid plugin state")
+		return
+	}
+
+	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	pluginID, err := s.resolvePluginIdentifier(ctx, chi.URLParam(r, "plugin_id"))
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "plugin not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid plugin_id")
+		return
+	}
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO platform_plugin_entitlements (plugin_id, state, config, updated_by, updated_at)
+		VALUES ($1, $2, $3::jsonb, $4, now())
+		ON CONFLICT (plugin_id) DO UPDATE
+		SET state = EXCLUDED.state,
+		    config = EXCLUDED.config,
+		    updated_by = EXCLUDED.updated_by,
+		    updated_at = now()
+	`, pluginID, state, []byte(req.Config), principal.UserID); err != nil {
+		writeError(w, http.StatusInternalServerError, "plugin config update failed")
+		return
+	}
+	if s.plugins != nil {
+		_ = s.plugins.Reload(ctx)
+	}
+	p, err := s.pluginByID(ctx, pluginID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "plugin lookup failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
 func (s *Server) pluginDependentsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
@@ -377,6 +441,32 @@ func validPluginState(v string) bool {
 	default:
 		return false
 	}
+}
+
+func (s *Server) resolvePluginIdentifier(ctx context.Context, raw string) (uuid.UUID, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return uuid.Nil, errors.New("plugin id is required")
+	}
+	if id, err := uuid.Parse(raw); err == nil {
+		var exists bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugins WHERE id = $1)`, id).Scan(&exists); err != nil {
+			return uuid.Nil, err
+		}
+		if !exists {
+			return uuid.Nil, pgx.ErrNoRows
+		}
+		return id, nil
+	}
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT id
+		FROM plugins
+		WHERE slug = $1
+		ORDER BY version DESC
+		LIMIT 1
+	`, raw).Scan(&id)
+	return id, err
 }
 
 func (s *Server) pluginByID(ctx context.Context, pluginID uuid.UUID) (pluginDTO, error) {

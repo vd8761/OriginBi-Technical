@@ -21,6 +21,7 @@ import (
 	"github.com/originbi/exam-engine/internal/pluginhost"
 	assessmentcoding "github.com/originbi/exam-engine/plugins/assessment-coding"
 	evaluationllm "github.com/originbi/exam-engine/plugins/evaluation-llm"
+	proctoringtabswitch "github.com/originbi/exam-engine/plugins/proctoring-tab-switch"
 )
 
 type Server struct {
@@ -54,6 +55,9 @@ func (s *Server) AttachPluginRegistry(r *pluginhost.Registry) error {
 		return err
 	}
 	if err := evaluationllm.Register(r); err != nil {
+		return err
+	}
+	if err := proctoringtabswitch.Register(r); err != nil {
 		return err
 	}
 	return nil
@@ -112,6 +116,7 @@ func (s *Server) routes() chi.Router {
 		r.Post("/aptitude/attempts/{token}/submit-block-based", s.submitAptitudeBlockBasedAttempt)
 	})
 	r.Route("/v1", func(r chi.Router) {
+		r.Get("/auth/email-availability", s.emailAvailability)
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
 		r.Post("/admin/bootstrap", s.bootstrapAdmin)
@@ -132,6 +137,8 @@ func (s *Server) routes() chi.Router {
 			r.Post("/attempts/{attempt_id}/submit", s.submitAttempt)
 			r.Post("/attempts/{attempt_id}/heartbeat", s.heartbeat)
 			r.Post("/attempts/{attempt_id}/events", s.ingestEvents)
+			r.Get("/attempts/{attempt_id}/commands", s.streamAttemptCommands)
+			r.Get("/me/plugin-config", s.mePluginConfig)
 			r.Get("/admin/questions", s.listAdminQuestions)
 			r.Post("/admin/questions", s.createAdminQuestion)
 			r.Post("/admin/questions/bulk-import", s.bulkImportAdminQuestions)
@@ -147,12 +154,15 @@ func (s *Server) routes() chi.Router {
 			r.Get("/admin/plugins/{plugin_id}", s.getPlugin)
 			r.Put("/admin/plugins/{plugin_id}", s.updatePlugin)
 			r.Put("/admin/plugins/{plugin_id}/state", s.updatePluginState)
+			r.Put("/admin/plugins/{plugin_id}/config", s.updatePluginConfig)
 			r.Get("/admin/plugins/{plugin_id}/dependents", s.pluginDependentsHandler)
 			r.Get("/admin/exam-packages", s.listExamPackages)
 			r.Post("/admin/exam-packages", s.createExamPackage)
 			r.Get("/admin/exam-packages/{pkg_id}", s.getExamPackage)
 			r.Put("/admin/exam-packages/{pkg_id}", s.updateExamPackage)
 			r.Post("/admin/pricing-items", s.createPricingItem)
+			r.Get("/admin/dashboard-summary", s.adminDashboardSummary)
+			r.Get("/admin/users", s.listAdminUsers)
 			r.Get("/admin/users/{user_id}/entitlements", s.adminUserEntitlements)
 			r.Get("/admin/judge0/health", s.judge0Health)
 		})

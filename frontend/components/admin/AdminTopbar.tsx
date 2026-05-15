@@ -9,6 +9,8 @@ import { useAdminPageMeta } from "./AdminPageContext";
 import { BreadcrumbBar, type BreadcrumbSegment } from "./ui";
 import { signOut } from "aws-amplify/auth";
 import { clearAdminSession } from "@/lib/api";
+import { Avatar, BreadcrumbBar, type BreadcrumbSegment } from "./ui";
+import { MountPoint } from "@/plugins";
 
 const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin": { title: "Welcome back", section: "Dashboard" },
@@ -151,6 +153,14 @@ export default function AdminTopbar() {
             ) : (
               <p className="mt-1 text-[11px] font-bold text-brand-green tracking-wide">{eyebrow}</p>
             )}
+            <h1 style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--admin-fg)" }}>
+              {title}
+            </h1>
+            {subtitle ? (
+              <p style={{ margin: "2px 0 0", color: "var(--admin-fg-3)", fontSize: 12.5 }}>{subtitle}</p>
+            ) : eyebrow !== title ? (
+              <p style={{ margin: "2px 0 0", color: "var(--admin-fg-3)", fontSize: 12.5 }}>{eyebrow}</p>
+            ) : null}
           </div>
         </div>
 
@@ -163,6 +173,7 @@ export default function AdminTopbar() {
             </label>
           )}
           {meta.actions}
+          <MountPoint id="topbar.actions" />
           <button type="button" className="admin-icon-btn" aria-label="Notifications">
             <Bell size={16} />
             <span className="admin-notification-dot" />
