@@ -6,7 +6,7 @@ import {
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS, MNC_TOPICS,
   COMM_TASK_LABELS, CommTaskType, RoleQuestionType,
-  DifficultyLevel, QuestionStatus, QuestionKind,
+  DifficultyLevel, QuestionStatus, QuestionKind, QUESTION_KIND_LABELS,
 } from "./types";
 import { generateId } from "./storage";
 import { uploadQuestionAsset } from "./api";
@@ -20,6 +20,7 @@ import CustomSelect from "@/components/ui/CustomSelect";
 interface QuestionEditorProps {
   question: AnyQuestion | null;
   assessmentType: AssessmentType;
+  allowedQuestionKinds?: QuestionKind[];
   categories?: { id: string; name: string }[];
   onSave: (q: AnyQuestion) => void;
   onCancel: () => void;
@@ -27,7 +28,14 @@ interface QuestionEditorProps {
 
 const LABELS = ["A", "B", "C", "D", "E", "F"];
 
-export default function QuestionEditor({ question, assessmentType, categories = [], onSave, onCancel }: QuestionEditorProps) {
+export default function QuestionEditor({
+  question,
+  assessmentType,
+  allowedQuestionKinds = ["mcq", "msq", "tf"],
+  categories = [],
+  onSave,
+  onCancel,
+}: QuestionEditorProps) {
   // Common state
   const [text, setText] = useState("");
   const [options, setOptions] = useState<QuestionOption[]>([
@@ -36,7 +44,7 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   ]);
   const [correctId, setCorrectId] = useState("opt_0");
   const [correctIds, setCorrectIds] = useState<string[]>(["opt_0"]);
-  const [kind, setKind] = useState<QuestionKind>("mcq");
+  const [kind, setKind] = useState<QuestionKind>(allowedQuestionKinds[0] || "mcq");
 
   // Cloudflare R2 Upload States
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -85,6 +93,9 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   const [commSubQuestions, setCommSubQuestions] = useState<{ id: string; text: string; options: QuestionOption[]; correctOptionId: string }[]>([]);
 
   const [errors, setErrors] = useState<string[]>([]);
+  const availableQuestionKinds = allowedQuestionKinds.includes(kind)
+    ? allowedQuestionKinds
+    : [...allowedQuestionKinds, kind];
 
   // Populate from existing question
   useEffect(() => {
@@ -429,12 +440,10 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                       label="Question Format"
                       value={kind}
                       onChange={(v) => handleKindChange(v as QuestionKind)}
-                      options={[
-                        { label: 'Single Choice (MCQ)', value: 'mcq' },
-                        { label: 'Multiple Choice (MSQ)', value: 'msq' },
-                        { label: 'True / False', value: 'tf' },
-                        { label: 'Numerical Input', value: 'numerical' }
-                      ]}
+                      options={availableQuestionKinds.map((questionKind) => ({
+                        label: QUESTION_KIND_LABELS[questionKind],
+                        value: questionKind,
+                      }))}
                     />
                   </div>
 

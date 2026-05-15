@@ -45,29 +45,22 @@ function AdminLoginForm() {
     try {
       const session = await loginUser(email, password, { group: "ADMIN" });
       const tokens = session.tokens;
-      const backendUser = session.user || {};
-      const backendRegistration = session.registration;
-      const isAdmin =
-        backendUser.isAdmin === true ||
-        ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(String(backendUser.role || "").toUpperCase());
-
-      if (!tokens?.accessToken || !tokens.idToken || !isAdmin) {
-        localStorage.removeItem("originbi:admin-session");
-        localStorage.removeItem("originbi:access-token");
-        localStorage.removeItem("originbi:id-token");
-        localStorage.removeItem("originbi:refresh-token");
-        setError("You are not allowed to access this portal with these credentials.");
-        return;
+      
+      if (!tokens?.accessToken || !tokens.idToken) {
+        throw new Error("Auth service did not return a complete token set.");
       }
 
-      // Auth/admin endpoints live on the NestJS assessment-service. Prefer
-      // the legacy ADMIN_API_BASE_URL if someone set it, otherwise fall back
-      // to the documented NEXT_PUBLIC_AUTH_SERVICE_URL.
+      const idTokenJwt = tokens.idToken;
+      const accessTokenJwt = tokens.accessToken;
+      const refreshTokenJwt = tokens.refreshToken || "";
+
+      // Auth/admin endpoints live on the NestJS assessment-service.
       const apiBase = (
         process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ||
         process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
         ""
       ).replace(/\/$/, "");
+      
       if (!apiBase) {
         throw new Error(
           "Auth service URL not configured. Set NEXT_PUBLIC_AUTH_SERVICE_URL in frontend/.env.local.",
@@ -97,11 +90,18 @@ function AdminLoginForm() {
 
       const data = await res.json();
       const backendUser = data.user || {};
-      const metadata = backendUser.metadata || {};
+      const backendRegistration = session.registration;
 
-      const accessTokenJwt = tokens.accessToken?.toString() || idTokenJwt;
-      const refreshTokenJwt =
-        (session.tokens && (session.tokens as { refreshToken?: { toString(): string } }).refreshToken?.toString()) || "";
+      const isAdmin =
+        backendUser.isAdmin === true ||
+        ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(String(backendUser.role || "").toUpperCase());
+
+      if (!isAdmin) {
+        await signOut();
+        setError("You are not allowed to access this portal with these credentials.");
+        return;
+      }
+
       // Keep admin auth in its own namespace so the student SessionProvider
       // on `/` never mistakes an admin login for a candidate session.
       setAdminTokens({
@@ -109,25 +109,22 @@ function AdminLoginForm() {
         idToken: idTokenJwt,
         refreshToken: refreshTokenJwt || undefined,
       });
+
       // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
-      // ID_TOKEN_KEY) and what AdminGuard checks. Previously these were
-      // written under legacy underscore/bare names, so apiFetch sent no
-      // Authorization header → every request 401'd → guard bounced back to
-      // login → loop. Keep the legacy keys around too in case anything else
-      // still reads them, but the colon-dash keys are the source of truth.
-      const accessTokenJwt = tokens.accessToken;
-      const idTokenJwt = tokens.idToken;
-      const refreshTokenJwt = tokens.refreshToken || "";
+      // ID_TOKEN_KEY) and what AdminGuard checks.
       localStorage.setItem("originbi:id-token", idTokenJwt);
       localStorage.setItem("originbi:access-token", accessTokenJwt);
       if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
+      
       // Legacy keys — kept for any older code paths that haven't migrated.
       localStorage.setItem("originbi_id_token", idTokenJwt);
       localStorage.setItem("accessToken", accessTokenJwt);
       sessionStorage.setItem("idToken", idTokenJwt);
       sessionStorage.setItem("accessToken", accessTokenJwt);
+      
       // Cookie used by the older proxy setup.
       document.cookie = `obi.accessToken=${accessTokenJwt}; path=/; samesite=lax; max-age=${60 * 60 * 24 * 7}`;
+      
       localStorage.setItem(
         "user",
         JSON.stringify({

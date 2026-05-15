@@ -47,7 +47,7 @@ interface AssessmentPortalProps {
 
 type AssessmentMode = "trial" | "main";
 
-const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", onLogout, initialView = "dashboard" }) => {
+const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student", onLogout, initialView = "explore" }) => {
   const [showAptitudeModal, setShowAptitudeModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
