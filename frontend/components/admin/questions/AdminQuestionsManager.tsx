@@ -9,7 +9,8 @@ import {
   MNC_TOPICS, COMM_TASK_LABELS, CommTaskType,
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
-  CodingQuestion, CODING_CATEGORIES
+  CodingQuestion, CODING_CATEGORIES,
+  getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
 import {
@@ -342,6 +343,19 @@ export default function AdminQuestionsManager() {
     }
     
     return getFilterCategories(selectedModule) as { key: string; label: string; subcategories?: any[] }[];
+  }, [selectedModule, activeAssessment]);
+
+  const allowedQuestionKinds = useMemo<QuestionKind[]>(() => {
+    if (!selectedModule) return [];
+    const supportedKinds = getSupportedQuestionKinds(selectedModule);
+    if (!activeAssessment) return supportedKinds;
+
+    const enabledMap = parseQuestionKindEnabledMap(selectedModule, activeAssessment.enabled_question_types, {
+      fallbackToSupported: true,
+    });
+
+    const enabledKinds = supportedKinds.filter((kind) => enabledMap[kind]);
+    return enabledKinds.length > 0 ? enabledKinds : supportedKinds;
   }, [selectedModule, activeAssessment]);
 
   const filtered = useMemo(() => {
@@ -718,7 +732,12 @@ export default function AdminQuestionsManager() {
         {/* LIST CONTAINER */}
         <div className="min-h-[600px]">
           {view === "json-import" ? (
-            <JsonImportPanel assessmentType={selectedModule} onImport={handleImport} onCancel={() => setView("list")} />
+            <JsonImportPanel
+              assessmentType={selectedModule}
+              allowedQuestionKinds={allowedQuestionKinds}
+              onImport={handleImport}
+              onCancel={() => setView("list")}
+            />
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2">
@@ -781,6 +800,7 @@ export default function AdminQuestionsManager() {
           <QuestionEditor 
             question={editingQuestion === "new" ? null : editingQuestion} 
             assessmentType={selectedModule} 
+            allowedQuestionKinds={allowedQuestionKinds}
             categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
             onSave={handleSaveQuestion} 
             onCancel={() => setEditingQuestion(null)} 

@@ -26,6 +26,7 @@ import {
 } from "@/lib/payments";
 import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
+import { Loader2 } from "lucide-react";
 
 interface ExploreDetailViewProps {
     exam: ExtendedExam;
@@ -46,6 +47,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const { isCompleted } = useCompletedAssessments();
     const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
     const [assignmentError, setAssignmentError] = useState("");
+    const [isConnecting, setIsConnecting] = useState(false);
 
     const refreshAssignments = useCallback(async () => {
         if (exam.id !== "coding") return;
@@ -123,7 +125,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     };
 
     const handlePrimaryClick = () => {
-        if (!isReady) return;
+        if (!isReady || isConnecting) return;
 
         if (isCoding) {
             setShowLanguageModal(true);
@@ -142,6 +144,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
 
+        setIsConnecting(true);
         setPaymentTarget({
             kind: "exam",
             key: exam.id as PaymentKey,
@@ -164,6 +167,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             setPendingCodingLang(language);
             return;
         }
+        setIsConnecting(true);
         setPaymentTarget({
             kind: "coding",
             key,
@@ -178,6 +182,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const handlePaymentSuccess = async () => {
         if (!paymentTarget) return;
         const isSandboxMode = process.env.NEXT_PUBLIC_RAZORPAY === "false";
+        setIsConnecting(false);
         if (paymentTarget.kind === "coding") {
             try {
                 await demoPurchase(paymentTarget.key);
@@ -237,6 +242,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     );
 
     const primaryLabel = (() => {
+        if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
         if (isCoding) return `Pick Language & Pay`;
         if (examCompleted) return "View Results";
@@ -540,26 +546,26 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <button
-                            type="button"
-                            onClick={handleTrial}
-                            disabled={!isReady}
-                            className={`inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady
-                                    ? "border-[#1ED36A]/40 text-[#1ED36A] hover:bg-[#1ED36A]/10 cursor-pointer"
-                                    : "border-slate-200 dark:border-white/10 text-slate-400 dark:text-gray-500 cursor-not-allowed"
-                                }`}
-                        >
-                            Trial Assessment
-                        </button>
+                        {/* Trial only available after purchase */}
+                        {isReady && (isCoding ? codingSummary.ready > 0 || codingSummary.completed > 0 : examPaid) && (
+                            <button
+                                type="button"
+                                onClick={handleTrial}
+                                className="inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-all border-[#1ED36A]/40 text-[#1ED36A] hover:bg-[#1ED36A]/10 cursor-pointer"
+                            >
+                                Trial Assessment
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handlePrimaryClick}
-                            disabled={!isReady}
-                            className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady
+                            disabled={!isReady || isConnecting}
+                            className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady && !isConnecting
                                     ? "bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-md shadow-[#1ED36A]/30"
                                     : "bg-slate-100 dark:bg-white/[0.04] text-slate-400 dark:text-gray-500 cursor-not-allowed"
                                 }`}
                         >
+                            {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
                             {primaryLabel}
                         </button>
                     </div>
@@ -629,8 +635,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     accent={accent}
                     assessmentId={paymentTarget.assessmentId}
                     assessmentCode={paymentTarget.assessmentCode}
-                    onCancel={() => setPaymentTarget(null)}
+                    onCancel={() => {
+                        setPaymentTarget(null);
+                        setIsConnecting(false);
+                    }}
                     onSuccess={() => {
+                        setIsConnecting(false);
                         return handlePaymentSuccess();
                     }}
                 />

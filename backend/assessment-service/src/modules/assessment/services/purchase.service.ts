@@ -27,63 +27,51 @@ export class PurchaseService {
         currency: string;
         keyId: string;
     }> {
-        // Fallback to standard test keys if not configured in environment
-        const razorpayKeyId =
-            this.configService.get<string>("RAZORPAY_KEY_ID") ||
-            "rzp_test_SgSSZhJCzopoaM";
-        const razorpayKeySecret =
-            this.configService.get<string>("RAZORPAY_KEY_SECRET") ||
-            "sandbox_secret";
+        const razorpayKeyId = this.configService.get<string>("RAZORPAY_KEY_ID");
+        const razorpayKeySecret = this.configService.get<string>("RAZORPAY_KEY_SECRET");
+
+        if (!razorpayKeyId || !razorpayKeySecret) {
+            throw new Error("Payment gateway not configured");
+        }
 
         const amountInPaise = Math.round(amount * 100);
         const currency = "INR";
 
-        try {
-            // Create Razorpay order via API
-            const orderData = {
-                amount: amountInPaise,
-                currency,
-                receipt: `tech_assess_${assessmentCode}_${String(Date.now())}`,
-                notes: { email, plan: "tech_assessment", assessmentId: String(assessmentId), assessmentCode },
-            };
+        // Create Razorpay order via API
+        const orderData = {
+            amount: amountInPaise,
+            currency,
+            receipt: `tech_assess_${assessmentCode}_${String(Date.now())}`,
+            notes: { email, plan: "tech_assessment", assessmentId: String(assessmentId), assessmentCode },
+        };
 
-            const response = await fetch("https://api.razorpay.com/v1/orders", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization:
-                        "Basic " +
-                        Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString(
-                            "base64",
-                        ),
-                },
-                body: JSON.stringify(orderData),
-            });
+        const response = await fetch("https://api.razorpay.com/v1/orders", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization:
+                    "Basic " +
+                    Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString(
+                        "base64",
+                    ),
+            },
+            body: JSON.stringify(orderData),
+        });
 
-            if (!response.ok) {
-                const errText = await response.text();
-                this.logger.error(`Razorpay order creation failed: ${errText}`);
-                throw new Error("Failed to create order on payment gateway");
-            }
-
-            const order = (await response.json()) as { id: string; amount: number; currency: string };
-
-            return {
-                orderId: order.id,
-                amount: order.amount,
-                currency: order.currency,
-                keyId: razorpayKeyId,
-            };
-        } catch (err: any) {
-            this.logger.warn(`Razorpay order creation failed, generating local sandbox order: ${err.message}`);
-            // Fallback: local sandbox order for testing
-            return {
-                orderId: `order_sandbox_${Math.random().toString(36).substring(2, 12)}`,
-                amount: amountInPaise,
-                currency,
-                keyId: razorpayKeyId,
-            };
+        if (!response.ok) {
+            const errText = await response.text();
+            this.logger.error(`Razorpay order creation failed: ${errText}`);
+            throw new Error("Failed to create order on payment gateway");
         }
+
+        const order = (await response.json()) as { id: string; amount: number; currency: string };
+
+        return {
+            orderId: order.id,
+            amount: order.amount,
+            currency: order.currency,
+            keyId: razorpayKeyId,
+        };
     }
 
     /**
@@ -98,24 +86,21 @@ export class PurchaseService {
         assessmentCode: string;
         amount: number;
     }): Promise<{ success: boolean; message: string }> {
-        const razorpayKeySecret =
-            this.configService.get<string>("RAZORPAY_KEY_SECRET") ||
-            "sandbox_secret";
+        const razorpayKeySecret = this.configService.get<string>("RAZORPAY_KEY_SECRET");
 
-        // Bypass verification only for sandbox mock orders
-        const isSandbox = body.razorpay_order_id.startsWith("order_sandbox_") || body.razorpay_signature === "signature_mock";
+        if (!razorpayKeySecret) {
+            throw new Error("Payment gateway not configured");
+        }
 
-        if (!isSandbox) {
-            // Verify signature
-            const expectedSignature = crypto
-                .createHmac("sha256", razorpayKeySecret)
-                .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
-                .digest("hex");
+        // Verify signature
+        const expectedSignature = crypto
+            .createHmac("sha256", razorpayKeySecret)
+            .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
+            .digest("hex");
 
-            if (expectedSignature !== body.razorpay_signature) {
-                this.logger.warn(`Signature verification failed for payment of ${body.email}`);
-                throw new BadRequestException("Payment signature verification failed");
-            }
+        if (expectedSignature !== body.razorpay_signature) {
+            this.logger.warn(`Signature verification failed for payment of ${body.email}`);
+            throw new BadRequestException("Payment signature verification failed");
         }
 
         // Resolve user_id from users table if available
