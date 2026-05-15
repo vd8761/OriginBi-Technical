@@ -703,8 +703,6 @@ export async function getDepartments(): Promise<any[]> {
   });
 }
 
-export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  const res = await apiFetch<any>("/auth/login", {
 interface LoginResponseBody {
   accessToken?: string;
   idToken?: string;

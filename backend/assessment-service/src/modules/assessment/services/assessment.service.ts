@@ -1636,17 +1636,19 @@ export class AssessmentService {
           review.correctAnswerText = optionTextById.get(review.correctOptionId);
         }
 
-        const selectedOptionId = (() => {
-          if (rawSubmittedAnswer === undefined || rawSubmittedAnswer === null) return rawSubmittedAnswer;
-          if (Array.isArray(rawSubmittedAnswer)) return rawSubmittedAnswer;
-          if (typeof rawSubmittedAnswer === 'object') {
-            const candidate = (rawSubmittedAnswer as any).optionId
+        // Extract selected option ID from raw submitted answer
+        let selectedOptionId: any = undefined;
+        if (rawSubmittedAnswer !== undefined && rawSubmittedAnswer !== null) {
+          if (Array.isArray(rawSubmittedAnswer)) {
+            selectedOptionId = rawSubmittedAnswer;
+          } else if (typeof rawSubmittedAnswer === 'object') {
+            selectedOptionId = (rawSubmittedAnswer as any).optionId
               ?? (rawSubmittedAnswer as any).selectedOptionId
               ?? (rawSubmittedAnswer as any).value;
-            return candidate !== undefined ? candidate : null;
+          } else {
+            selectedOptionId = rawSubmittedAnswer;
           }
-          return rawSubmittedAnswer;
-        })();
+        }
 
         if (isCoding) {
           const rawAnswer = rawSubmittedAnswer;

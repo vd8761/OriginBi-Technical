@@ -77,6 +77,67 @@ const generateRandomCode = (length: number) => {
   return out.join("");
 };
 
+/**
+ * Returns a dynamic certificate description tailored to each assessment type.
+ * The description references the specific skills/domain of the assessment.
+ */
+const getCertificateDescription = (
+  examId: string,
+  examTitle: string,
+  grade: string,
+  score: number
+): string => {
+  const gradeSpan = `Grade ${grade}`;
+  const scoreSpan = `${score}%`;
+
+  const base = (text: string) =>
+    `Awarded for successfully completing the ${text} with ${gradeSpan} performance and an overall score of ${scoreSpan}, demonstrating strong analytical ability, professional competency, and performance excellence.`;
+
+  if (examId.startsWith("coding:")) {
+    const lang = examId.slice("coding:".length);
+    const langName =
+      lang === "python"
+        ? "Python"
+        : lang === "java"
+        ? "Java"
+        : lang === "cpp"
+        ? "C++"
+        : lang === "javascript"
+        ? "JavaScript"
+        : lang === "c"
+        ? "C"
+        : lang.toUpperCase();
+    return base(
+      `${examTitle}, validating programming fundamentals, problem decomposition, core syntax, and simulation logic in ${langName}`
+    );
+  }
+
+  switch (examId) {
+    case "aptitude":
+      return base(
+        `${examTitle}, evaluating numerical agility, logical reasoning, data interpretation, and pattern recognition under timed conditions`
+      );
+    case "communication":
+      return base(
+        `${examTitle}, measuring listening comprehension, speaking clarity, reading judgement, and professional writing quality`
+      );
+    case "coding":
+      return base(
+        `${examTitle}, validating programming fundamentals including problem decomposition, core syntax, debugging judgement, and simulation logic`
+      );
+    case "mnc":
+      return base(
+        `${examTitle}, demonstrating mastery of high-frequency interview patterns and professional expectations for top-tier MNC roles`
+      );
+    case "role":
+      return base(
+        `${examTitle}, showcasing role-fit through conceptual MCQs and scenario decisions designed around practical job responsibilities`
+      );
+    default:
+      return base(examTitle);
+  }
+};
+
 // ── Icons ──
 const CloseIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -101,6 +162,46 @@ const CertificateIcon = ({ className }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
   </svg>
 );
+
+/**
+ * Resets all CSS custom properties that use oklch() to plain hex equivalents
+ * so that html2canvas can render the certificate without errors.
+ * These variables are defined in globals.css and inherited by all DOM nodes.
+ */
+const OKLCH_RESET_STYLE: React.CSSProperties = {
+  // Override every oklch variable with a safe hex fallback
+  ["--background" as string]: "#ffffff",
+  ["--foreground" as string]: "#111827",
+  ["--card" as string]: "#ffffff",
+  ["--card-foreground" as string]: "#111827",
+  ["--popover" as string]: "#ffffff",
+  ["--popover-foreground" as string]: "#111827",
+  ["--primary" as string]: "#1f2937",
+  ["--primary-foreground" as string]: "#f9fafb",
+  ["--secondary" as string]: "#f3f4f6",
+  ["--secondary-foreground" as string]: "#1f2937",
+  ["--muted" as string]: "#f3f4f6",
+  ["--muted-foreground" as string]: "#6b7280",
+  ["--accent" as string]: "#f3f4f6",
+  ["--accent-foreground" as string]: "#1f2937",
+  ["--destructive" as string]: "#ef4444",
+  ["--border" as string]: "#e5e7eb",
+  ["--input" as string]: "#e5e7eb",
+  ["--ring" as string]: "#9ca3af",
+  ["--chart-1" as string]: "#d1d5db",
+  ["--chart-2" as string]: "#6b7280",
+  ["--chart-3" as string]: "#4b5563",
+  ["--chart-4" as string]: "#374151",
+  ["--chart-5" as string]: "#1f2937",
+  ["--sidebar" as string]: "#f9fafb",
+  ["--sidebar-foreground" as string]: "#111827",
+  ["--sidebar-primary" as string]: "#1f2937",
+  ["--sidebar-primary-foreground" as string]: "#f9fafb",
+  ["--sidebar-accent" as string]: "#f3f4f6",
+  ["--sidebar-accent-foreground" as string]: "#1f2937",
+  ["--sidebar-border" as string]: "#e5e7eb",
+  ["--sidebar-ring" as string]: "#9ca3af",
+};
 
 const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
   isOpen,
@@ -128,16 +229,20 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     setIsDownloading(true);
 
     try {
-      // html2canvas doesn't support cqw units, so we temporarily
-      // inline computed styles before capturing
       const el = certificateRef.current;
       const containerWidth = el.offsetWidth;
 
       // Convert all cqw-based elements to px before capture
-      const cqwEls = el.querySelectorAll<HTMLElement>('[data-cqw]');
-      const origStyles: { el: HTMLElement; fontSize: string; width: string; height: string; padding: string }[] = [];
+      const cqwEls = el.querySelectorAll<HTMLElement>("[data-cqw]");
+      const origStyles: {
+        el: HTMLElement;
+        fontSize: string;
+        width: string;
+        height: string;
+        padding: string;
+      }[] = [];
       cqwEls.forEach((child) => {
-        const cqwVal = child.getAttribute('data-cqw');
+        const cqwVal = child.getAttribute("data-cqw");
         if (!cqwVal) return;
         origStyles.push({
           el: child,
@@ -146,9 +251,9 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
           height: child.style.height,
           padding: child.style.padding,
         });
-        const vals = cqwVal.split(',');
+        const vals = cqwVal.split(",");
         vals.forEach((v) => {
-          const [prop, cqw] = v.split(':');
+          const [prop, cqw] = v.split(":");
           const px = (parseFloat(cqw) / 100) * containerWidth;
           child.style.setProperty(prop.trim(), `${px}px`);
         });
@@ -159,6 +264,11 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
         useCORS: true,
         allowTaint: true,
         backgroundColor: null,
+        // Ignore elements that may carry oklch-based styles from Tailwind/shadcn
+        ignoreElements: (element) => {
+          // Only capture the certificate itself — skip any stray portals
+          return false;
+        },
       });
 
       // Restore original styles
@@ -170,7 +280,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
       });
 
       const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      
+
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = `OriginBi-${exam.title.replace(/\s+/g, "-")}-Certificate.jpeg`;
@@ -228,7 +338,9 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
   }
 
-  const verificationUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/verify/${serialNumber}`;
+  const verificationUrl = `${
+    typeof window !== "undefined" ? window.location.origin : ""
+  }/verify/${serialNumber}`;
 
   // Helper to determine Grade based on score
   const getGrade = (score: number) => {
@@ -239,6 +351,9 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     return "F";
   };
   const grade = getGrade(result.overallScore);
+
+  // Dynamic description based on assessment type
+  const certDescription = getCertificateDescription(exam.id, exam.title, grade, result.overallScore);
 
   return createPortal(
     <AnimatePresence>
@@ -284,156 +399,163 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 
               {/* ── Certificate Display Area ── */}
               <div className="flex-1 overflow-auto p-3 sm:p-6 flex items-start sm:items-center justify-center bg-[#0f1712]/55">
-                {/* 
-                  We use an aspect ratio container to keep the certificate proportionally correct.
-                  2000x1414 -> aspect ratio ~ 1.414.
-                  cqw (container query width) allows us to size text perfectly relative to the container width.
+                {/*
+                  Outer wrapper resets all oklch CSS variables to plain hex values.
+                  html2canvas reads computed styles and chokes on oklch(); by setting
+                  these variables here they cascade into every child element captured.
                 */}
-                <div
-                  className="relative w-full shadow-2xl bg-white overflow-hidden"
-                  style={{
-                    aspectRatio: "2000 / 1414",
-                    width: "min(92vw, 900px, calc((100vh - 240px) * 1.414))",
-                    containerType: "inline-size",
-                  }}
-                  ref={certificateRef}
-                >
-                  {/* Background Image - Using standard img for html2canvas compatibility */}
-                  <img
-                    src="/certificate-template.jpg"
-                    alt="Certificate Background"
-                    className="absolute inset-0 w-full h-full object-cover z-0"
-                    crossOrigin="anonymous"
-                  />
-
-                  {/* Dynamic Overlay — only dynamic values; all static labels baked into template */}
+                <div style={OKLCH_RESET_STYLE}>
+                  {/*
+                    We use an aspect ratio container to keep the certificate proportionally correct.
+                    2000x1414 -> aspect ratio ~ 1.414.
+                    cqw (container query width) allows us to size text perfectly relative to the container width.
+                  */}
                   <div
-                    className={openSans.className}
-                    style={{ position: "absolute", inset: 0, zIndex: 10 }}
+                    className="relative w-full shadow-2xl bg-white overflow-hidden"
+                    style={{
+                      aspectRatio: "2000 / 1414",
+                      width: "min(92vw, 900px, calc((100vh - 240px) * 1.414))",
+                      containerType: "inline-size",
+                    }}
+                    ref={certificateRef}
                   >
+                    {/* Background Image - Using standard img for html2canvas compatibility */}
+                    <img
+                      src="/certificate-template.jpg"
+                      alt="Certificate Background"
+                      className="absolute inset-0 w-full h-full object-cover z-0"
+                      crossOrigin="anonymous"
+                    />
 
-                    {/* ── Date value ── right-aligned flush with "Issue Date" label */}
+                    {/* Dynamic Overlay — only dynamic values; all static labels baked into template */}
                     <div
-                      style={{
-                        position: "absolute",
-                        right: "4%",
-                        top: "11%",
-                        textAlign: "right",
-                      }}
+                      className={openSans.className}
+                      style={{ position: "absolute", inset: 0, zIndex: 10 }}
                     >
-                      <p
-                        data-cqw="font-size:3"
-                        style={{
-                          fontSize: "3cqw",
-                          fontWeight: 700,
-                          letterSpacing: "0.025em",
-                          color: "#ffffff",
-                          margin: 0,
-                        }}
-                      >
-                        {formattedDate}
-                      </p>
-                    </div>
 
-                    {/* ── Title + Description flow container ── */}
-                    {/* Using normal flow so description always sits below the title,
-                        regardless of how many lines the title wraps to */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: "7%",
-                        top: "27%",
-                        width: "75%",
-                      }}
-                    >
-                      {/* Assessment Title */}
-                      <h1
-                        data-cqw={`font-size:${exam.title.length > 20 ? '5.5' : '7'}`}
-                        style={{
-                          fontSize: exam.title.length > 20 ? "5.5cqw" : "7cqw",
-                          fontWeight: 700,
-                          lineHeight: 1.15,
-                          letterSpacing: "-0.02em",
-                          color: "#ffffff",
-                          margin: 0,
-                          marginBottom: "2cqw",
-                        }}
-                      >
-                        {exam.title}
-                      </h1>
-
-                      {/* Description Paragraph */}
-                      <p
-                        data-cqw="font-size:2.1"
-                        style={{
-                          fontSize: "2.1cqw",
-                          lineHeight: 1.65,
-                          color: "rgba(255, 255, 255, 0.9)",
-                          margin: 0,
-                        }}
-                      >
-                        Awarded for successfully completing the assessment with{" "}
-                        <span style={{ fontWeight: 700, color: "#34d399" }}>
-                          Grade {grade}
-                        </span>{" "}
-                        performance and an overall score of{" "}
-                        <span style={{ fontWeight: 700, color: "#34d399" }}>
-                          {result.overallScore}%
-                        </span>
-                        , demonstrating strong analytical ability, professional
-                        competency, and performance excellence.
-                      </p>
-                    </div>
-
-                    {/* ── Student Name ── below template "Presented to" label */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: "7%",
-                        top: "78%",
-                      }}
-                    >
-                      <h2
-                        className={dmSerif.className}
-                        data-cqw="font-size:8"
-                        style={{
-                          fontSize: "8cqw",
-                          lineHeight: 1,
-                          letterSpacing: "-0.02em",
-                          color: "#111827",
-                          fontStyle: "italic",
-                          margin: 0,
-                        }}
-                      >
-                        {userName}
-                      </h2>
-                    </div>
-
-                    {/* ── QR Code ── below template "Verify Certificate" label */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: "5%",
-                        top: "76%",
-                      }}
-                    >
+                      {/* ── Date value ── moved slightly left and down from top-right */}
                       <div
-                        data-cqw="padding:0.8,width:12,height:12"
                         style={{
-                          padding: "0.8cqw",
-                          backgroundColor: "#ffffff",
+                          position: "absolute",
+                          right: "8.5%",
+                          top: "15%",
+                          textAlign: "right",
                         }}
                       >
-                        <QRCode
-                          value={verificationUrl}
-                          size={256}
-                          data-cqw="width:11,height:11"
-                          style={{ height: "11cqw", width: "11cqw", display: "block" }}
-                          level="M"
-                        />
+                        <p
+                          data-cqw="font-size:2.8"
+                          style={{
+                            fontSize: "2.8cqw",
+                            fontWeight: 700,
+                            letterSpacing: "0.025em",
+                            color: "#ffffff",
+                            margin: 0,
+                          }}
+                        >
+                          {formattedDate}
+                        </p>
                       </div>
-                    </div>
 
+                      {/* ── Title + Description flow container ── */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "7%",
+                          top: "27%",
+                          width: "75%",
+                        }}
+                      >
+                        {/* Assessment Title */}
+                        <h1
+                          data-cqw={`font-size:${exam.title.length > 20 ? "5.5" : "7"}`}
+                          style={{
+                            fontSize: exam.title.length > 20 ? "5.5cqw" : "7cqw",
+                            fontWeight: 700,
+                            lineHeight: 1.15,
+                            letterSpacing: "-0.02em",
+                            color: "#ffffff",
+                            margin: 0,
+                            marginBottom: "2cqw",
+                          }}
+                        >
+                          {exam.title}
+                        </h1>
+
+                        {/* Dynamic Description Paragraph */}
+                        <p
+                          data-cqw="font-size:2.1"
+                          style={{
+                            fontSize: "2.1cqw",
+                            lineHeight: 1.65,
+                            color: "rgba(255, 255, 255, 0.9)",
+                            margin: 0,
+                          }}
+                        >
+                          {/* Split the description to highlight grade and score in green */}
+                          {certDescription
+                            .split(/(Grade [A-F]|\d+%)/)
+                            .map((part, i) =>
+                              /Grade [A-F]|\d+%/.test(part) ? (
+                                <span key={i} style={{ fontWeight: 700, color: "#34d399" }}>
+                                  {part}
+                                </span>
+                              ) : (
+                                part
+                              )
+                            )}
+                        </p>
+                      </div>
+
+                      {/* ── Student Name ── moved up slightly */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "7%",
+                          top: "72%",
+                        }}
+                      >
+                        <h2
+                          className={dmSerif.className}
+                          data-cqw="font-size:8"
+                          style={{
+                            fontSize: "8cqw",
+                            lineHeight: 1,
+                            letterSpacing: "-0.02em",
+                            color: "#111827",
+                            fontStyle: "italic",
+                            margin: 0,
+                          }}
+                        >
+                          {userName}
+                        </h2>
+                      </div>
+
+                      {/* ── QR Code ── moved up slightly */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          right: "5%",
+                          top: "70%",
+                        }}
+                      >
+                        <div
+                          data-cqw="padding:0.8,width:12,height:12"
+                          style={{
+                            padding: "0.8cqw",
+                            backgroundColor: "#ffffff",
+                          }}
+                        >
+                          <QRCode
+                            value={verificationUrl}
+                            size={256}
+                            data-cqw="width:11,height:11"
+                            style={{ height: "11cqw", width: "11cqw", display: "block" }}
+                            level="M"
+                          />
+                        </div>
+                      </div>
+
+                    </div>
                   </div>
                 </div>
               </div>
@@ -502,4 +624,3 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 };
 
 export default CertificatePreviewModal;
-
