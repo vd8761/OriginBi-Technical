@@ -96,7 +96,7 @@ const fetchServerPaidSet = async (): Promise<Set<string>> => {
 };
 
 const useKeyedSet = (storageKey: string, eventName: string) => {
-    const [set, setLocal] = useState<Set<string>>(() => readSet(storageKey));
+    const [set, setLocal] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const id = window.setTimeout(() => setLocal(readSet(storageKey)), 0);
@@ -138,7 +138,7 @@ const useKeyedSet = (storageKey: string, eventName: string) => {
 };
 
 export function usePaidAssessments() {
-    const [set, setLocal] = useState<Set<string>>(() => readSet(PAID_KEY));
+    const [set, setLocal] = useState<Set<string>>(new Set());
 
     const syncFromStorage = useCallback(() => {
         setLocal(readSet(PAID_KEY));
