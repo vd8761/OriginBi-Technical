@@ -232,9 +232,9 @@ export const QUESTION_KIND_STORAGE_KEYS: Record<QuestionKind, string> = {
 export const ASSESSMENT_SUPPORTED_QUESTION_KINDS: Record<AssessmentType, readonly QuestionKind[]> = {
   aptitude: ["mcq", "msq", "tf", "numerical"],
   mnc: ["mcq", "msq", "tf"],
-  communication: ["mcq"],
+  communication: ["mcq", "msq", "tf"],
   role: ["mcq", "msq", "tf"],
-  coding: ["mcq"],
+  coding: ["mcq", "msq", "tf"],
 };
 
 export function getSupportedQuestionKinds(assessmentType: AssessmentType): QuestionKind[] {
