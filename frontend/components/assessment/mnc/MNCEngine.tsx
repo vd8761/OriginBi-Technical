@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
@@ -24,6 +24,10 @@ export interface MncQuestion {
     difficulty?: string;
     marks?: number;
     negativeMarks?: number;
+    metadata?: {
+        kind?: 'mcq' | 'msq' | 'tf';
+        [key: string]: any;
+    };
 }
 
 export interface AttemptSubmitResult {
@@ -78,7 +82,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     mode = 'main'
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(MNC_TOTAL_TIME);
     const [totalTime, setTotalTime] = useState(MNC_TOTAL_TIME);
@@ -177,12 +181,12 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             setQuestions(normalizeQuestions(cachedSession.questions as any[]));
         }
         if (cachedSession.answers) {
-            const restored: Record<string, string> = {};
+            const restored: Record<string, string | string[]> = {};
             for (const [qId, val] of Object.entries(cachedSession.answers)) {
                 if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-                    restored[qId] = val.optionId as string;
-                } else if (typeof val === 'string') {
-                    restored[qId] = val;
+                    restored[qId] = val.optionId as string | string[];
+                } else if (typeof val === 'string' || Array.isArray(val)) {
+                    restored[qId] = val as any;
                 }
             }
             setAnswers(restored);
@@ -216,6 +220,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         difficulty: q.difficulty ?? undefined,
         marks: q.marks !== undefined ? Number(q.marks) : undefined,
         negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
+        metadata: q.metadata ?? {},
     }));
 
     useEffect(() => {
@@ -391,8 +396,26 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
 
     const handleOptionSelect = (optionId: string) => {
         if (!currentQuestion) return;
-        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
-        cacheSaveAnswer(currentQuestion.id, { optionId });
+        const kind = currentQuestion.metadata?.kind || 'mcq';
+
+        let newAnswer: string | string[];
+
+        if (kind === 'msq') {
+            const currentVal = answers[currentQuestion.id];
+            let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
+            
+            if (selectedIds.includes(optionId)) {
+                selectedIds = selectedIds.filter(id => id !== optionId);
+            } else {
+                selectedIds = [...selectedIds, optionId];
+            }
+            newAnswer = selectedIds;
+        } else {
+            newAnswer = optionId;
+        }
+
+        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: newAnswer }));
+        cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
         persistAnswer(currentQuestion.id, { optionId });
     };
 
@@ -554,7 +577,11 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
 
                         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                             {currentQuestion.options.map((option, idx) => {
-                                const isSelected = answers[currentQuestion.id] === option.id;
+                                const kind = currentQuestion.metadata?.kind || 'mcq';
+                                const isSelected = kind === 'msq'
+                                    ? (Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).includes(option.id))
+                                    : answers[currentQuestion.id] === option.id;
+
                                 return (
                                     <button
                                         key={option.id}
@@ -566,7 +593,9 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                                         }`}
                                     >
                                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${isSelected ? "bg-brand-green text-[#0f1712]" : "bg-brand-green/10 text-brand-green"}`}>
-                                            {labels[idx]}
+                                            {kind === 'msq' ? (
+                                                isSelected ? <Check size={18} strokeWidth={3} /> : labels[idx]
+                                            ) : labels[idx]}
                                         </span>
                                         <span className={`text-sm font-semibold leading-6 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
                                             {option.text}

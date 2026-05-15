@@ -40,6 +40,35 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const token = localStorage.getItem("originbi:access-token");
         const storedProfile = localStorage.getItem("originbi:user-profile");
+        const hasAdminSession = localStorage.getItem("originbi:admin-session") === "true";
+        const rawAdminUser = localStorage.getItem("user");
+        const hasLegacyAdminLeak =
+          !storedProfile &&
+          !!rawAdminUser &&
+          (() => {
+            try {
+              const parsed = JSON.parse(rawAdminUser);
+              return parsed?.role === "ADMIN";
+            } catch {
+              return false;
+            }
+          })();
+
+        // Admin auth uses its own token namespace; if the explicit admin gate
+        // is active, never try to restore a student session from this provider.
+        if (hasAdminSession) {
+          return;
+        }
+
+        // Heal older admin logins that wrote into the student token keys.
+        // Those credentials never had a student profile, so attempting
+        // `/auth/session` only produces noisy fetch failures on `/`.
+        if (hasLegacyAdminLeak) {
+          localStorage.removeItem("originbi:access-token");
+          localStorage.removeItem("originbi:id-token");
+          localStorage.removeItem("originbi:refresh-token");
+          return;
+        }
 
         if (token) {
           if (storedProfile) {

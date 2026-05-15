@@ -42,8 +42,8 @@ const USE_IDB = true;
 // ── Types ─────────────────────────────────────────────────────
 
 export interface AnswerValue {
-  // MCQ: the selected option id (string)
-  optionId?: string;
+  // MCQ/MSQ: the selected option id(s) (string or array of strings)
+  optionId?: string | string[];
   // Text-based (writing / speaking)
   text?: string;
   // Audio-based

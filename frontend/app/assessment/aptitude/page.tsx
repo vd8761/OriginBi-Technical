@@ -14,6 +14,7 @@ import {
 function AptitudeAssessmentContent() {
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const assessmentCode = searchParams.get("assessmentCode") || "APTITUDE_DEFAULT";
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = useCallback((result: AttemptSubmitResult) => {
@@ -44,7 +45,7 @@ function AptitudeAssessmentContent() {
 
     return (
         <div className="min-h-screen w-full">
-            <AptitudeEngine onComplete={handleComplete} mode={mode} />
+            <AptitudeEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
         </div>
     );
 }

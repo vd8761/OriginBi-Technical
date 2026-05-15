@@ -16,6 +16,7 @@ function MNCAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const assessmentCode = searchParams.get("assessmentCode") || "MNC_DEFAULT";
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
@@ -43,7 +44,7 @@ function MNCAssessmentContent() {
 
     return (
         <div className="min-h-screen w-full">
-            <MNCEngine onComplete={handleComplete} mode={mode} />
+            <MNCEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
         </div>
     );
 }

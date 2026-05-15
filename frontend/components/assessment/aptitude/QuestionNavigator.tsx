@@ -96,12 +96,12 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                 </div>
                 {!isCollapsed && (
                     <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#17201b]/60 dark:text-white/60">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
                             Overall Progress
                         </p>
                         <p className="mt-0.5 text-2xl font-black text-[#17201b] dark:text-white">
                             {answeredCount}{" "}
-                            <span className="text-base font-bold text-[#17201b]/40 dark:text-white/40">
+                            <span className="text-base font-bold text-[#17201b] dark:text-white">
                                 / {displayTotal}
                             </span>
                         </p>

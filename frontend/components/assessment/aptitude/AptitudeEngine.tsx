@@ -2,12 +2,16 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import { McqQuestion } from "./question-types/McqQuestion";
+import { MsqQuestion } from "./question-types/MsqQuestion";
+import { TfQuestion } from "./question-types/TfQuestion";
+import { NumericalQuestion } from "./question-types/NumericalQuestion";
 
 const APTITUDE_TOTAL_TIME = 3600;
 
@@ -26,6 +30,10 @@ interface Question {
     marks?: number;
     negativeMarks?: number;
     explanation?: string;
+    metadata?: {
+        kind?: 'mcq' | 'msq' | 'tf' | 'numerical';
+        [key: string]: any;
+    };
 }
 
 export interface AttemptSubmitResult {
@@ -79,7 +87,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     mode = 'main',
 }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
     const [timeLeft, setTimeLeft] = useState(APTITUDE_TOTAL_TIME);
     const [totalTime, setTotalTime] = useState(APTITUDE_TOTAL_TIME);
@@ -236,12 +244,12 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 setQuestions(normalizeQuestions(cachedSession.questions as any[]));
             }
             if (cachedSession.answers) {
-                const restored: Record<string, string> = {};
+                const restored: Record<string, string | string[]> = {};
                 for (const [qId, val] of Object.entries(cachedSession.answers)) {
                     if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-                        restored[qId] = val.optionId as string;
-                    } else if (typeof val === 'string') {
-                        restored[qId] = val;
+                        restored[qId] = val.optionId as string | string[];
+                    } else if (typeof val === 'string' || Array.isArray(val)) {
+                        restored[qId] = val as any;
                     }
                 }
                 setAnswers(restored);
@@ -280,6 +288,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         marks: q.marks !== undefined ? Number(q.marks) : undefined,
         negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
         explanation: q.explanation ?? undefined,
+        metadata: q.metadata ?? {},
     }));
 
     const currentQuestion = questions[currentIndex];
@@ -582,10 +591,37 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     });
 
     const handleOptionSelect = (optionId: string) => {
-        const newAnswers = { ...answers, [currentQuestion.id]: optionId };
+        const question = currentQuestion;
+        const kind = question.metadata?.kind || 'mcq';
+
+        let newAnswer: string | string[];
+
+        if (kind === 'msq') {
+            const currentVal = answers[question.id];
+            let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
+            
+            if (selectedIds.includes(optionId)) {
+                selectedIds = selectedIds.filter(id => id !== optionId);
+            } else {
+                selectedIds = [...selectedIds, optionId];
+            }
+            newAnswer = selectedIds;
+        } else {
+            // MCQ or TF
+            newAnswer = optionId;
+        }
+
+        const newAnswers = { ...answers, [currentQuestion.id]: newAnswer };
         setAnswers(newAnswers);
         // Persist to cache immediately
-        cacheSaveAnswer(currentQuestion.id, { optionId });
+        cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
+    };
+
+    const handleNumericalChange = (value: string) => {
+        const newAnswers = { ...answers, [currentQuestion.id]: value };
+        setAnswers(newAnswers);
+        // Persist to cache immediately
+        cacheSaveAnswer(currentQuestion.id, { optionId: value as any });
         persistAnswer(currentQuestion.id, { optionId });
     };
 
@@ -820,38 +856,57 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                             )}
                         </div>
 
-                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                            {currentQuestion.options.map((option, index) => {
-                                const isSelected = answers[currentQuestion.id] === option.id;
+                        {currentQuestion.metadata?.kind === 'numerical' && (
+                            <div className="mt-4 px-1">
+                                <p className="text-[10px] font-bold italic text-[#17201b] dark:text-white">
+                                    * Note: Only exact numerical matches will be considered correct. Space is not allowed.
+                                </p>
+                            </div>
+                        )}
 
-                                return (
-                                    <button
-                                        key={option.id}
-                                        type="button"
-                                        onClick={() => handleOptionSelect(option.id)}
-                                        aria-pressed={isSelected}
-                                        className={`group flex min-h-20 items-center gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
-                                            isSelected
-                                                ? "border-brand-green bg-brand-green/10"
-                                                : "border-brand-green/20 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712] dark:hover:border-brand-green/50"
-                                        }`}
-                                    >
-                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
-                                            isSelected
-                                                ? "bg-brand-green text-[#0f1712]"
-                                                : "bg-brand-green/10 text-brand-green"
-                                        }`}>
-                                            {labelForIndex(index)}
-                                        </span>
-                                        <span className={`text-sm font-semibold leading-6 ${
-                                            isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"
-                                        }`}>
-                                            {option.text}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        {(() => {
+                            const kind = currentQuestion.metadata?.kind || 'mcq';
+                            const currentAnswer = answers[currentQuestion.id];
+
+                            switch (kind) {
+                                case 'numerical':
+                                    return (
+                                        <NumericalQuestion
+                                            questionId={currentQuestion.id}
+                                            value={currentAnswer as string || ""}
+                                            onChange={handleNumericalChange}
+                                        />
+                                    );
+                                case 'msq':
+                                    return (
+                                        <MsqQuestion
+                                            options={currentQuestion.options}
+                                            selectedOptionIds={Array.isArray(currentAnswer) ? currentAnswer : (currentAnswer ? [currentAnswer as string] : [])}
+                                            onToggle={handleOptionSelect}
+                                            labelForIndex={labelForIndex}
+                                        />
+                                    );
+                                case 'tf':
+                                    return (
+                                        <TfQuestion
+                                            options={currentQuestion.options}
+                                            selectedOptionId={currentAnswer as string || null}
+                                            onSelect={handleOptionSelect}
+                                            labelForIndex={labelForIndex}
+                                        />
+                                    );
+                                case 'mcq':
+                                default:
+                                    return (
+                                        <McqQuestion
+                                            options={currentQuestion.options}
+                                            selectedOptionId={currentAnswer as string || null}
+                                            onSelect={handleOptionSelect}
+                                            labelForIndex={labelForIndex}
+                                        />
+                                    );
+                            }
+                        })()}
                     </div>
 
                     <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-3 dark:border-white/10 dark:bg-white/5">
@@ -1031,7 +1086,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                             </div>
                             
                             <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
-                            <p className="mt-2 text-sm text-[#17201b]/60 dark:text-white/60">Review your assessment summary before finalizing your submission.</p>
+                            <p className="mt-2 text-sm text-[#17201b] dark:text-white">Review your assessment summary before finalizing your submission.</p>
 
                             <div className="mt-4 flex items-center gap-2 rounded-full border border-brand-green/10 bg-brand-green/[0.03] px-4 py-1.5 dark:border-white/5 dark:bg-white/5">
                                 <div className="h-2 w-2 rounded-full bg-brand-green" />
@@ -1044,15 +1099,15 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                             <div className="mt-8 grid w-full grid-cols-3 gap-4">
                                 <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
                                     <span className="text-xl font-black text-brand-green">{navigatorQuestions.filter(q => q.isAnswered).length}</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green/60">Answered</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green">Answered</span>
                                 </div>
                                 <div className="flex flex-col items-center rounded-xl bg-amber-400/[0.05] p-4 border border-amber-400/10">
                                     <span className="text-xl font-black text-amber-500">{navigatorQuestions.filter(q => q.isMarked).length}</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500/60">Review</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Review</span>
                                 </div>
                                 <div className="flex flex-col items-center rounded-xl bg-slate-100 p-4 border border-slate-200 dark:bg-white/[0.03] dark:border-white/10">
-                                    <span className="text-xl font-black text-slate-500 dark:text-white/60">{navigatorQuestions.filter(q => !q.isAnswered && !q.isLocked).length}</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500/60 dark:text-white/30">Left</span>
+                                    <span className="text-xl font-black text-[#17201b] dark:text-white">{navigatorQuestions.filter(q => !q.isAnswered && !q.isLocked).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#17201b] dark:text-white">Left</span>
                                 </div>
                             </div>
 
@@ -1061,7 +1116,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                     <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
                                     <div>
                                         <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions</p>
-                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600/70 dark:text-amber-400/70">
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
                                             We recommend attempting all questions before final submission.
                                         </p>
                                     </div>

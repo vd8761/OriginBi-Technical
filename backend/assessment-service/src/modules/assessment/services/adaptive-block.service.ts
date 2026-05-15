@@ -751,6 +751,79 @@ export class AdaptiveBlockService {
       return w;
     };
 
+    // Fetch questions with adaptive category selection
+    let categoryFilter = '';
+    if (previousPerformance && previousPerformance.weakAreas) {
+      const weakCategories = previousPerformance.weakAreas.slice(0, 2);
+      categoryFilter = `AND q.${config.categoryCol} IN (${weakCategories.map(() => '?').join(',')})`;
+    }
+
+    const typeFilter = `AND (
+      ( q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = '' OR q.metadata->>'kind' = 'mcq' ) AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE OR
+      ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
+      ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE ) OR
+      ( q.metadata->>'kind' = 'numerical' AND (ass.enabled_question_types->>'numerical')::boolean IS NOT FALSE )
+    )`;
+
+    const questions = await queryRunner.query(
+      `SELECT q.${config.idCol}, q.question_text, q.difficulty, q.${config.categoryCol}, 
+              q.marks, q.negative_marks, q.image_url, q.metadata,
+              json_agg(
+                json_build_object('option_id', o.option_id, 'option_text', o.option_text)
+                ORDER BY o.option_id
+              ) as options
+       FROM ${config.questions} q
+       LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
+       JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+       WHERE q.assessment_id = $1 AND q.difficulty = $2 AND q.status = 'active' 
+       AND (q.mode = $3 OR q.mode IS NULL)
+       ${categoryFilter} ${typeFilter}
+       GROUP BY q.${config.idCol}, ass.enabled_question_types
+       ORDER BY RANDOM()
+       LIMIT $4`,
+      [assessmentId, difficulty, mode, questionCount]
+    );
+
+    return questions.map((q: any) => ({
+      id: String(q[config.idCol]),
+      text: q.question_text,
+      options: (q.options || []).map((opt: any) => ({
+        id: String(opt.option_id),
+        text: opt.option_text
+      })),
+      difficulty: q.difficulty,
+      category: q[config.categoryCol],
+      marks: Number(q.marks) || 1,
+      negativeMarks: Number(q.negative_marks) || 0,
+      imageUrl: q.image_url,
+      metadata: q.metadata || {}
+    }));
+  }
+
+  private predictNextDifficulty(currentDifficulty: string, performance?: any): string {
+    if (!performance) return currentDifficulty;
+
+    const accuracy = performance.accuracy || 0;
+    
+    if (currentDifficulty === 'easy' && accuracy > 0.8) return 'medium';
+    if (currentDifficulty === 'medium' && accuracy > 0.85) return 'hard';
+    if (currentDifficulty === 'hard' && accuracy < 0.5) return 'medium';
+    if (currentDifficulty === 'medium' && accuracy < 0.4) return 'easy';
+    
+    return currentDifficulty;
+  }
+
+  private calculateNextDifficulty(
+    currentDifficulty: string,
+    accuracy: number,
+    timeTaken: number
+  ): string {
+    const timeEfficiency = timeTaken < 300 ? 1 : 0.8; // Simplified time efficiency
+    
+    if (accuracy > 0.8 && timeEfficiency > 0.8) {
+      return currentDifficulty === 'easy' ? 'medium' : 'hard';
+    } else if (accuracy < 0.4 || timeEfficiency < 0.5) {
+      return currentDifficulty === 'hard' ? 'medium' : 'easy';
     // ── Helper: fetch N questions with optional topic + difficulty filter ──
     const fetchBatch = async (
       diff: string | null,

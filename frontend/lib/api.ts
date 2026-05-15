@@ -18,14 +18,38 @@ export const TECH_API_BASE =
   "";
 
 // ── Cognito token storage (browser only) - Main App Style ──────────────────
+type TokenScope = "user" | "admin";
+
 const ACCESS_TOKEN_KEY = "originbi:access-token";
 const ID_TOKEN_KEY = "originbi:id-token";
 const REFRESH_TOKEN_KEY = "originbi:refresh-token";
+const ADMIN_ACCESS_TOKEN_KEY = "originbi:admin-access-token";
+const ADMIN_ID_TOKEN_KEY = "originbi:admin-id-token";
+const ADMIN_REFRESH_TOKEN_KEY = "originbi:admin-refresh-token";
+const ADMIN_SESSION_FLAG_KEY = "originbi:admin-session";
 const LEGACY_ACCESS_TOKEN_COOKIE = "obi.accessToken";
 
-export function getAccessToken(): string | null {
+function getTokenKeys(scope: TokenScope) {
+  return scope === "admin"
+    ? {
+        access: ADMIN_ACCESS_TOKEN_KEY,
+        id: ADMIN_ID_TOKEN_KEY,
+        refresh: ADMIN_REFRESH_TOKEN_KEY,
+      }
+    : {
+        access: ACCESS_TOKEN_KEY,
+        id: ID_TOKEN_KEY,
+        refresh: REFRESH_TOKEN_KEY,
+      };
+}
+
+function resolveTokenScope(path: string): TokenScope {
+  return path.startsWith("/v1/admin") ? "admin" : "user";
+}
+
+export function getAccessToken(scope: TokenScope = "user"): string | null {
   if (typeof window === "undefined") return null;
-  const ls = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const ls = window.localStorage.getItem(getTokenKeys(scope).access);
   if (ls) return ls;
   // Fallback: legacy cookie may survive a "clear cache" that only wipes localStorage
   const match = document.cookie.match(
@@ -33,35 +57,66 @@ export function getAccessToken(): string | null {
   );
   return match ? decodeURIComponent(match[1]) : null;
 }
+
 function setTokens(t: {
   accessToken: string;
   idToken: string;
   refreshToken?: string;
 }) {
+  setScopedTokens("user", t);
+}
+
+export function setAdminTokens(t: {
+  accessToken: string;
+  idToken: string;
+  refreshToken?: string;
+}) {
+  setScopedTokens("admin", t);
+}
+
+function setScopedTokens(
+  scope: TokenScope,
+  t: {
+    accessToken: string;
+    idToken: string;
+    refreshToken?: string;
+  },
+) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, t.accessToken);
-  window.localStorage.setItem(ID_TOKEN_KEY, t.idToken);
-  if (t.refreshToken) window.localStorage.setItem(REFRESH_TOKEN_KEY, t.refreshToken);
+  const keys = getTokenKeys(scope);
+  window.localStorage.setItem(keys.access, t.accessToken);
+  window.localStorage.setItem(keys.id, t.idToken);
+  if (t.refreshToken) window.localStorage.setItem(keys.refresh, t.refreshToken);
   // Keep the legacy access-token cookie because the older working proxy
   // validates server-side sessions from this exact cookie name.
   const cookieBase = "path=/; samesite=lax;";
   const maxAge = t.refreshToken ? 60 * 60 * 24 * 7 : 60 * 60;
   document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=${t.accessToken}; ${cookieBase} max-age=${maxAge}`;
 }
-function clearTokens() {
+
+function clearTokens(scope: TokenScope = "user") {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  window.localStorage.removeItem(ID_TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-  // Admin gate flag must clear in lockstep with the JWTs, otherwise
-  // AdminGuard sees flag=true, renders the page, and every API call 401s
-  // forever. (See AdminGuard.tsx — it gates purely on this flag.)
-  window.localStorage.removeItem("originbi:admin-session");
+  const keys = getTokenKeys(scope);
+  window.localStorage.removeItem(keys.access);
+  window.localStorage.removeItem(keys.id);
+  window.localStorage.removeItem(keys.refresh);
+  if (scope === "admin") {
+    window.localStorage.removeItem(ADMIN_SESSION_FLAG_KEY);
+    window.localStorage.removeItem("originbi_id_token");
+    window.localStorage.removeItem("accessToken");
+    window.localStorage.removeItem("user");
+    window.sessionStorage.removeItem("idToken");
+    window.sessionStorage.removeItem("accessToken");
+  }
 
   const cookieBase = "path=/; samesite=lax; max-age=0";
   document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=; ${cookieBase}`;
-  document.cookie = `${ACCESS_TOKEN_KEY}=; ${cookieBase}`;
-  document.cookie = `${ID_TOKEN_KEY}=; ${cookieBase}`;
+  document.cookie = `${keys.access}=; ${cookieBase}`;
+  document.cookie = `${keys.id}=; ${cookieBase}`;
+}
+
+export function clearAdminSession() {
+  clearTokens("admin");
 }
 
 export interface ApiUser {
@@ -390,14 +445,17 @@ interface FetchOpts extends RequestInit {
   _retried?: boolean;
 }
 
-// Single in-flight refresh promise so concurrent 401s share one refresh call
-// instead of stampeding Cognito.
-let refreshInFlight: Promise<boolean> | null = null;
+// Single in-flight refresh promise per token scope so concurrent 401s share
+// one refresh call instead of stampeding Cognito.
+const refreshInFlight: Record<TokenScope, Promise<boolean> | null> = {
+  user: null,
+  admin: null,
+};
 
 /** Decode JWT exp and return true if it's already expired (or near expiry). */
-function isAccessTokenExpired(skewSeconds = 30): boolean {
+function isAccessTokenExpired(scope: TokenScope, skewSeconds = 30): boolean {
   if (typeof window === "undefined") return false;
-  const tok = getAccessToken();
+  const tok = getAccessToken(scope);
   if (!tok) return false;
   try {
     const payload = JSON.parse(atob(tok.split(".")[1]));
@@ -410,14 +468,14 @@ function isAccessTokenExpired(skewSeconds = 30): boolean {
 }
 
 /** Use the refresh token to mint a new access/id token. Single-flight. */
-async function refreshAccessToken(): Promise<boolean> {
-  if (refreshInFlight) return refreshInFlight;
-  const refreshToken = typeof window !== "undefined"
-    ? window.localStorage.getItem(REFRESH_TOKEN_KEY)
-    : null;
+async function refreshAccessToken(scope: TokenScope): Promise<boolean> {
+  if (refreshInFlight[scope]) return refreshInFlight[scope];
+  const refreshKey = getTokenKeys(scope).refresh;
+  const refreshToken =
+    typeof window !== "undefined" ? window.localStorage.getItem(refreshKey) : null;
   if (!refreshToken) return false;
 
-  refreshInFlight = (async () => {
+  refreshInFlight[scope] = (async () => {
     try {
       const res = await fetch(`${AUTH_API_BASE}/auth/refresh`, {
         method: "POST",
@@ -427,7 +485,7 @@ async function refreshAccessToken(): Promise<boolean> {
       if (!res.ok) return false;
       const data = await res.json();
       if (!data?.accessToken || !data?.idToken) return false;
-      setTokens({
+      setScopedTokens(scope, {
         accessToken: data.accessToken,
         idToken: data.idToken,
         // Cognito's refresh flow doesn't issue a new refresh token; keep old.
@@ -438,18 +496,21 @@ async function refreshAccessToken(): Promise<boolean> {
       return false;
     } finally {
       // Allow next refresh attempt later
-      setTimeout(() => { refreshInFlight = null; }, 0);
+      setTimeout(() => {
+        refreshInFlight[scope] = null;
+      }, 0);
     }
   })();
-  return refreshInFlight;
+  return refreshInFlight[scope];
 }
 
 async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
   const { baseOverride, auth = true, _retried, ...rest } = init;
+  const tokenScope = resolveTokenScope(path);
   // Proactively refresh if we know the token's expired — avoids a guaranteed
   // 401 round-trip when the page loads after sleeping past the 1h TTL.
-  if (auth && !_retried && isAccessTokenExpired()) {
-    await refreshAccessToken();
+  if (auth && !_retried && isAccessTokenExpired(tokenScope)) {
+    await refreshAccessToken(tokenScope);
   }
   const headers = new Headers(rest.headers);
   if (rest.body && !headers.has("Content-Type")) {
@@ -462,7 +523,10 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
     // token; fall back to the id token only if access isn't stored (e.g.
     // older sessions written before login was fixed).
     const token = typeof window !== "undefined"
-      ? (window.localStorage.getItem(ACCESS_TOKEN_KEY) || window.localStorage.getItem(ID_TOKEN_KEY))
+      ? (
+          window.localStorage.getItem(getTokenKeys(tokenScope).access) ||
+          window.localStorage.getItem(getTokenKeys(tokenScope).id)
+        )
       : null;
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`);
@@ -505,14 +569,14 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
 
   // Reactive refresh: if the server still says 401 despite us having a token,
   // try once to refresh and replay. After that, give up and surface 401.
-  if (res.status === 401 && auth && !_retried && getAccessToken()) {
-    const ok = await refreshAccessToken();
+  if (res.status === 401 && auth && !_retried && getAccessToken(tokenScope)) {
+    const ok = await refreshAccessToken(tokenScope);
     if (ok) {
       return apiFetch<T>(path, { ...init, _retried: true });
     }
     // Refresh failed (token revoked / expired refresh) — drop credentials so
     // the proxy bounces the user to login on the next navigation.
-    clearTokens();
+    clearTokens(tokenScope);
   }
 
   // Final 401 from an admin-API call: the user has no usable session for the
@@ -520,7 +584,7 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
   // of letting the page sit on stale data and re-fire 401s on every refetch.
   // Temporarily disabled while diagnosing why valid tokens still 401.
   if (res.status === 401 && auth && typeof window !== "undefined") {
-    clearTokens();
+    clearTokens(tokenScope);
     if (window.location.pathname.startsWith("/admin") &&
         !window.location.pathname.startsWith("/admin/login")) {
       window.location.replace(
@@ -625,7 +689,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 }
 
 export async function logoutUser(): Promise<void> {
-  const accessToken = getAccessToken();
+  const accessToken = getAccessToken("user");
   if (accessToken) {
     try {
       await apiFetch<{ message: string }>("/auth/logout", {
@@ -638,11 +702,11 @@ export async function logoutUser(): Promise<void> {
       // best-effort; we still clear local tokens below
     }
   }
-  clearTokens();
+  clearTokens("user");
 }
 
 export async function getSession(): Promise<AuthResponse | null> {
-  if (!getAccessToken()) return null;
+  if (!getAccessToken("user")) return null;
   try {
     const res = await apiFetch<Omit<AuthResponse, "tokens">>("/auth/session", {
       baseOverride: AUTH_API_BASE,
@@ -650,7 +714,7 @@ export async function getSession(): Promise<AuthResponse | null> {
     return { ...res, tokens: undefined };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      clearTokens();
+      clearTokens("user");
       return null;
     }
     throw err;

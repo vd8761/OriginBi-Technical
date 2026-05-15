@@ -14,8 +14,8 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
   useEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
-    const idToken = localStorage.getItem("originbi:id-token");
-    const accessToken = localStorage.getItem("originbi:access-token");
+    const idToken = localStorage.getItem("originbi:admin-id-token");
+    const accessToken = localStorage.getItem("originbi:admin-access-token");
     // Both signals must be present: the explicit admin gate AND a usable
     // Cognito token. Otherwise every request will 401 and the user is
     // stuck staring at error states with no way back to login.

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
 import { signIn, fetchAuthSession, signOut } from "aws-amplify/auth";
 import { configureAmplify } from "@/lib/aws-amplify-config";
+import { setAdminTokens } from "@/lib/api";
 
 configureAmplify();
 
@@ -29,7 +30,7 @@ function AdminLoginForm() {
 
   useEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
-    const idToken = localStorage.getItem("originbi:id-token");
+    const idToken = localStorage.getItem("originbi:admin-id-token");
     if (adminSession === "true" && idToken) {
       router.push(safeNext);
     }
@@ -110,18 +111,16 @@ function AdminLoginForm() {
       const backendUser = data.user || {};
       const metadata = backendUser.metadata || {};
 
-      // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
-      // ID_TOKEN_KEY) and what AdminGuard checks. Previously these were
-      // written under legacy underscore/bare names, so apiFetch sent no
-      // Authorization header → every request 401'd → guard bounced back to
-      // login → loop. Keep the legacy keys around too in case anything else
-      // still reads them, but the colon-dash keys are the source of truth.
       const accessTokenJwt = tokens.accessToken?.toString() || idTokenJwt;
       const refreshTokenJwt =
         (session.tokens && (session.tokens as { refreshToken?: { toString(): string } }).refreshToken?.toString()) || "";
-      localStorage.setItem("originbi:id-token", idTokenJwt);
-      localStorage.setItem("originbi:access-token", accessTokenJwt);
-      if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
+      // Keep admin auth in its own namespace so the student SessionProvider
+      // on `/` never mistakes an admin login for a candidate session.
+      setAdminTokens({
+        accessToken: accessTokenJwt,
+        idToken: idTokenJwt,
+        refreshToken: refreshTokenJwt || undefined,
+      });
       // Legacy keys — kept for any older code paths that haven't migrated.
       localStorage.setItem("originbi_id_token", idTokenJwt);
       localStorage.setItem("accessToken", accessTokenJwt);

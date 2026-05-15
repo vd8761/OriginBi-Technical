@@ -16,6 +16,7 @@ function RoleAssessmentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
+    const assessmentCode = searchParams.get("assessmentCode") || "ROLE_DEFAULT";
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
@@ -43,7 +44,7 @@ function RoleAssessmentContent() {
 
     return (
         <div className="min-h-screen w-full">
-            <RoleEngine onComplete={handleComplete} mode={mode} />
+            <RoleEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
         </div>
     );
 }
