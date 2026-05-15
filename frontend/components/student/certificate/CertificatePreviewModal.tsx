@@ -11,6 +11,7 @@ import { DM_Serif_Display, Open_Sans } from "next/font/google";
 
 const dmSerif = DM_Serif_Display({
   weight: "400",
+  style: ["normal", "italic"],
   subsets: ["latin"],
   display: "swap",
 });
@@ -91,7 +92,7 @@ const getCertificateDescription = (
   const scoreSpan = `${score}%`;
 
   const base = (text: string) =>
-    `Awarded for successfully completing the ${text} with ${gradeSpan} performance and an overall score of ${scoreSpan}, demonstrating strong analytical ability, professional competency, and performance excellence.`;
+    `Awarded for successfully completing the ${text} with ${gradeSpan} performance ${scoreSpan}, demonstrating exceptional proficiency and professional competency.`;
 
   if (examId.startsWith("coding:")) {
     const lang = examId.slice("coding:".length);
@@ -108,30 +109,30 @@ const getCertificateDescription = (
         ? "C"
         : lang.toUpperCase();
     return base(
-      `${examTitle}, validating programming fundamentals, problem decomposition, core syntax, and simulation logic in ${langName}`
+      `${examTitle}, validating programming logic and core syntax in ${langName}`
     );
   }
 
   switch (examId) {
     case "aptitude":
       return base(
-        `${examTitle}, evaluating numerical agility, logical reasoning, data interpretation, and pattern recognition under timed conditions`
+        `${examTitle}, evaluating logical reasoning and numerical agility`
       );
     case "communication":
       return base(
-        `${examTitle}, measuring listening comprehension, speaking clarity, reading judgement, and professional writing quality`
+        `${examTitle}, measuring core communication and professional writing skills`
       );
     case "coding":
       return base(
-        `${examTitle}, validating programming fundamentals including problem decomposition, core syntax, debugging judgement, and simulation logic`
+        `${examTitle}, validating fundamental programming and problem-solving skills`
       );
     case "mnc":
       return base(
-        `${examTitle}, demonstrating mastery of high-frequency interview patterns and professional expectations for top-tier MNC roles`
+        `${examTitle}, demonstrating mastery of professional expectations for MNC roles`
       );
     case "role":
       return base(
-        `${examTitle}, showcasing role-fit through conceptual MCQs and scenario decisions designed around practical job responsibilities`
+        `${examTitle}, showcasing role-fit through practical scenario decisions`
       );
     default:
       return base(examTitle);
@@ -433,12 +434,12 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                       style={{ position: "absolute", inset: 0, zIndex: 10 }}
                     >
 
-                      {/* ── Date value ── moved slightly left and down from top-right */}
+                      {/* ── Date value ── */}
                       <div
                         style={{
                           position: "absolute",
-                          right: "8.5%",
-                          top: "15%",
+                          right: "7%",
+                          top: "12%",
                           textAlign: "right",
                         }}
                       >
@@ -506,12 +507,12 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                         </p>
                       </div>
 
-                      {/* ── Student Name ── moved up slightly */}
+                      {/* ── Student Name ── */}
                       <div
                         style={{
                           position: "absolute",
                           left: "7%",
-                          top: "72%",
+                          top: "75%",
                         }}
                       >
                         <h2
@@ -523,19 +524,24 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                             letterSpacing: "-0.02em",
                             color: "#111827",
                             fontStyle: "italic",
+                            fontWeight: 700,
                             margin: 0,
+                            textTransform: "none",
                           }}
                         >
-                          {userName}
+                          {userName
+                            .split(" ")
+                            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                            .join(" ")}
                         </h2>
                       </div>
 
-                      {/* ── QR Code ── moved up slightly */}
+                      {/* ── QR Code ── */}
                       <div
                         style={{
                           position: "absolute",
-                          right: "5%",
-                          top: "70%",
+                          right: "6.2%",
+                          top: "73%",
                         }}
                       >
                         <div

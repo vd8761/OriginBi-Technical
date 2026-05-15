@@ -360,7 +360,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
-            className="lg:col-span-2 rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-6 sm:p-8 flex flex-col"
+            className="lg:col-span-2 rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-6 sm:p-8 flex flex-col"
           >
             <div className="text-center mb-4">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">360° Impact Assessment</h2>
@@ -424,7 +424,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.05 * idx }}
-                className="group relative bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.08] p-5 hover:border-[#1ed36a]/30 transition-all"
+                className="group relative bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-5 hover:border-[#1ed36a]/30 dark:hover:border-[#1ed36a]/30 transition-all"
               >
                 {/* Left accent bar */}
                 <div
@@ -552,7 +552,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-6 sm:p-10"
+          className="rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-6 sm:p-10"
         >
           <div className="flex items-center justify-between gap-4 mb-8">
             <div>
@@ -573,7 +573,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 + idx * 0.1 }}
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="group bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.08] p-6 hover:shadow-lg hover:border-gray-300 dark:border-white/20 transition-all"
+                  className="group bg-white dark:bg-[#243028] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-6 hover:shadow-lg hover:border-gray-300 dark:hover:border-white/25 transition-all"
                 >
                   {/* Top row: Icon + Difficulty */}
                   <div className="flex items-center justify-between mb-4">
@@ -597,25 +597,25 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                   </h3>
 
                   {/* Description */}
-                  <p className="text-sm text-gray-600 dark:text-slate-400 font-medium leading-relaxed mb-4 line-clamp-2">
+                  <p className="text-sm text-gray-600 dark:text-slate-300 font-medium leading-relaxed mb-4 line-clamp-2">
                     {exam.description}
                   </p>
 
                   {/* Stats row */}
-                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 font-semibold mb-4">
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-300 font-semibold mb-4">
                     <span className="flex items-center gap-1">
                       <ClockIcon c="w-3.5 h-3.5" />
                       {exam.duration}
                     </span>
-                    <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-700" />
+                    <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-500" />
                     <span>{exam.questions} Qs</span>
                   </div>
 
                   {/* Outcome preview */}
                   {detail && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/5 mb-4">
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/[0.06] mb-4">
                       <TrendUpIcon c="w-4 h-4 text-[#1ed36a] shrink-0" />
-                      <p className="text-xs text-gray-700 dark:text-slate-300 font-semibold leading-snug">
+                      <p className="text-xs text-gray-700 dark:text-slate-200 font-semibold leading-snug">
                         {detail.outcomes[0]}
                       </p>
                     </div>
@@ -642,7 +642,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-8 sm:p-10"
+          className="rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-8 sm:p-10"
         >
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Certificates</h2>
@@ -665,7 +665,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5 + idx * 0.1 }}
-                    className="group relative bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.08] p-6 hover:shadow-md hover:border-gray-300 dark:border-white/20 transition-all"
+                    className="group relative bg-white dark:bg-[#243028] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-6 hover:shadow-md hover:border-gray-300 dark:hover:border-white/25 transition-all"
                   >
                     {/* Left accent */}
                     <div
@@ -694,7 +694,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                               CERTIFIED
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-slate-300 font-semibold">
+                          <p className="text-sm text-gray-700 dark:text-slate-200 font-semibold">
                             Completed on {dateStr} &middot; {result.timeTaken}
                           </p>
                         </div>
@@ -705,7 +705,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                         {/* Score display */}
                         <div className="text-left sm:text-right">
                           <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
-                          <p className="text-xs text-gray-700 dark:text-slate-300 font-bold">{getSkillLabel(result.overallScore)}</p>
+                          <p className="text-xs text-gray-700 dark:text-slate-200 font-bold">{getSkillLabel(result.overallScore)}</p>
                         </div>
 
                         {/* Action buttons */}

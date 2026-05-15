@@ -8,6 +8,7 @@
     "dev": "nest start --watch",
     "start:dev": "nest start --watch",
     "build": "nest build",
+    "clean": "rmdir /s /q dist 2>nul || true",
     "db:init": "ts-node src/db/init.ts",
     "db:seed": "ts-node src/db/seed.ts"
   },

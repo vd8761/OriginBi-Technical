@@ -155,19 +155,41 @@ const statusLabel = (status?: "correct" | "incorrect" | "unanswered" | "subjecti
 
 // ── Component ──
 const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClose, exam, result, detail }) => {
-  if (!isOpen || !exam || !result) return null;
-
+  // ── ALL hooks must be called unconditionally (Rules of Hooks) ──
   const [activeTab, setActiveTab] = useState<TabKey>("summary");
 
   useEffect(() => {
     if (isOpen) setActiveTab("summary");
   }, [isOpen, exam?.id]);
 
-  const sections = result.sections?.length ? result.sections :
-    detail?.sections.map((s, i) => ({ name: s.name, score: 70 + ((i * 13) % 25), weight: s.weight })) || [];
+  const sections = useMemo(() => {
+    if (!result) return [];
+    return result.sections?.length ? result.sections :
+      detail?.sections.map((s, i) => ({ name: s.name, score: 70 + ((i * 13) % 25), weight: s.weight })) || [];
+  }, [result, detail]);
 
-  const analysis = analyzePerformance(sections);
-  const advice = generateExamSpecificAdvice(exam.id, analysis.needsFocus, analysis.strong);
+  const analysis = useMemo(() => analyzePerformance(sections), [sections]);
+
+  const advice = useMemo(() => {
+    if (!exam) return [];
+    return generateExamSpecificAdvice(exam.id, analysis.needsFocus, analysis.strong);
+  }, [exam, analysis]);
+
+  const reviews = useMemo(() => {
+    const items = result?.questionReviews ?? [];
+    return [...items].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [result?.questionReviews]);
+
+  const previewReviews = useMemo(() => {
+    return reviews.filter((review) => {
+      const selectedOption = Boolean(review.selectedOptionId && review.selectedOptionId.length > 0);
+      const selectedAnswer = Boolean(review.selectedAnswerText && review.selectedAnswerText.length > 0);
+      return selectedOption || selectedAnswer;
+    });
+  }, [reviews]);
+
+  // Guard after all hooks
+  if (!isOpen || !exam || !result) return null;
 
   // Calculate time per question (rough estimate)
   const timeStr = result.timeTaken || "0 min";
@@ -178,20 +200,6 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
   const totalQuestions = result.totalQuestions ?? detail?.questions ?? exam.questions ?? answeredCount;
   const skippedCount = result.skippedCount ?? Math.max(0, totalQuestions - answeredCount);
   const timePerQ = timeMinutes > 0 && totalQuestions > 0 ? (timeMinutes / totalQuestions).toFixed(1) : "-";
-
-  const reviews = useMemo(() => {
-    const items = result.questionReviews ?? [];
-    return [...items].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-  }, [result.questionReviews]);
-
-  const previewReviews = useMemo(() => {
-    const attempted = reviews.filter((review) => {
-      const selectedOption = Boolean(review.selectedOptionId && review.selectedOptionId.length > 0);
-      const selectedAnswer = Boolean(review.selectedAnswerText && review.selectedAnswerText.length > 0);
-      return selectedOption || selectedAnswer;
-    });
-    return attempted;
-  }, [reviews]);
 
   return (
     <AnimatePresence>

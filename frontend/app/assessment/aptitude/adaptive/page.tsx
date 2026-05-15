@@ -44,7 +44,7 @@ function AdaptiveAptitudeContent() {
     localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
     saveAssessmentResultToStorage(assessmentResult);
 
-    router.push("/dashboard");
+    router.push("/dashboard?completed=aptitude");
   };
 
   return (

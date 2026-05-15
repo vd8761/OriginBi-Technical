@@ -107,12 +107,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             if (!orderRes.ok) throw new Error("Gateway failed to issue order.");
             const order = await orderRes.json();
 
-            // Check if Razorpay is explicitly disabled in client environment
-            const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
+            // Check if Razorpay is explicitly disabled in client environment (already declared above)
 
             if (isRazorpayDisabled) {
                 // Directly call backend to verify and record mock sandbox payment
-                const verifyRes = await fetch(`${TECH_API_URL}/api/assessment/purchase/verify-payment`, {
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -157,7 +156,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                         setStage("processing");
                         try {
                             // 3. Verify payment signature on backend
-                            const verifyRes = await fetch(`${TECH_API_URL}/api/assessment/purchase/verify-payment`, {
+                            const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({

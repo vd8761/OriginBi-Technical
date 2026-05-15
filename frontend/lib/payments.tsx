@@ -263,10 +263,14 @@ export function useCompletedAssessments() {
             }
             const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role"];
             const current = readSet(COMPLETED_KEY);
+            const paid = readSet(PAID_KEY); // Get currently known purchases
             let changed = false;
 
             await Promise.all(
                 modules.map(async (module) => {
+                    // Optimization: Skip if not purchased to avoid 404 noise
+                    if (!paid.has(module)) return;
+
                     try {
                         await getLatestSubmittedResult(module, email);
                         if (!current.has(module)) {
