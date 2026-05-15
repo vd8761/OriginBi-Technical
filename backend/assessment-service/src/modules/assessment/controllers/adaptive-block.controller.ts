@@ -13,7 +13,7 @@ import {
 import { AdaptiveBlockService, BlockGenerationRequest, BlockResponse } from '../services/adaptive-block.service';
 import { DataSource } from 'typeorm';
 
-@Controller('api/assessment/adaptive')
+@Controller('assessment/adaptive')
 export class AdaptiveBlockController {
   constructor(
     private readonly adaptiveBlockService: AdaptiveBlockService,

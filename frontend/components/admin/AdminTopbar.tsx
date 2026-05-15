@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import AdminNav from "./AdminNav";
 import { useAdminPageMeta } from "./AdminPageContext";
 import { Avatar, BreadcrumbBar, type BreadcrumbSegment } from "./ui";
+import { MountPoint } from "@/plugins";
 
 const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin": { title: "Welcome back", section: "Dashboard" },
@@ -99,14 +100,14 @@ export default function AdminTopbar() {
           </button>
           <div style={{ minWidth: 0 }}>
             <BreadcrumbBar segments={breadcrumb} />
-            <h1 style={{ margin: "4px 0 0", fontSize: 19, fontWeight: 800, color: "var(--admin-fg)" }}>
+            <h1 style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--admin-fg)" }}>
               {title}
             </h1>
             {subtitle ? (
               <p style={{ margin: "2px 0 0", color: "var(--admin-fg-3)", fontSize: 12.5 }}>{subtitle}</p>
-            ) : (
+            ) : eyebrow !== title ? (
               <p style={{ margin: "2px 0 0", color: "var(--admin-fg-3)", fontSize: 12.5 }}>{eyebrow}</p>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -117,6 +118,7 @@ export default function AdminTopbar() {
             <span className="admin-kbd">⌘K</span>
           </label>
           {meta.actions}
+          <MountPoint id="topbar.actions" />
           <button type="button" className="admin-icon-btn" aria-label="Notifications">
             <Bell size={16} />
             <span className="admin-notification-dot" />

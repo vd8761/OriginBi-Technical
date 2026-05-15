@@ -1,19 +1,39 @@
 "use client";
 
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import AdminTopbar from "@/components/admin/AdminTopbar";
 import EnvWarning from "@/components/admin/EnvWarning";
+import { fetchAdminPluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
 
 /**
  * Wraps admin children with the sidebar+topbar shell — EXCEPT on the login
  * route, where the user isn't authenticated yet and we don't want nav items
  * (Plugins, Settings, etc.) visible until after auth.
  */
-export default function AdminShell({ children }: { children: React.ReactNode }) {
+export default function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
   const isLogin = pathname.startsWith("/admin/login");
+  const [enabledPlugins, setEnabledPlugins] = useState<EnabledPluginConfig[] | null>(null);
+
+  useEffect(() => {
+    if (isLogin) return;
+
+    let cancelled = false;
+    fetchAdminPluginConfig()
+      .then((plugins) => {
+        if (!cancelled) setEnabledPlugins(plugins);
+      })
+      .catch((err) => {
+        console.warn("[plugins] admin plugin config fetch failed", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLogin]);
 
   if (isLogin) {
     // .admin-panel-root gives us the dark theme tokens (--admin-green etc.),
@@ -37,19 +57,21 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="admin-panel-root">
-      <aside className="admin-sidebar">
-        <Link href="/admin" className="admin-brand">
-          <img src="/Origin-BI-white-logo.png" alt="Origin BI" />
-          <span className="admin-brand-badge">Admin</span>
-        </Link>
-        <AdminNav />
-      </aside>
-      <section className="admin-main-shell">
-        <AdminTopbar />
-        <EnvWarning />
-        <main className="admin-content">{children}</main>
-      </section>
-    </div>
+    <PluginProvider enabled={enabledPlugins}>
+      <div className="admin-panel-root">
+        <aside className="admin-sidebar">
+          <Link href="/admin" className="admin-brand">
+            <img src="/Origin-BI-white-logo.png" alt="Origin BI" />
+            <span className="admin-brand-badge">Admin</span>
+          </Link>
+          <AdminNav />
+        </aside>
+        <section className="admin-main-shell">
+          <AdminTopbar />
+          <EnvWarning />
+          <main className="admin-content">{children}</main>
+        </section>
+      </div>
+    </PluginProvider>
   );
 }

@@ -217,6 +217,9 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "commit failed")
 			return
 		}
+		s.publishLifecycleEvent(r.Context(), "attempt.resumed", activeAttemptID, principal.UserID, map[string]any{
+			"assignmentRef": assignmentRef,
+		})
 		s.writeSnapshot(w, r, principal.UserID, activeAttemptID)
 		return
 	}
@@ -264,6 +267,13 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "commit failed")
 		return
 	}
+
+	s.publishLifecycleEvent(r.Context(), "attempt.started", attemptID, principal.UserID, map[string]any{
+		"assignmentRef": assignmentRef,
+		"language":      frozen.Language,
+		"questionCount": len(frozen.Questions),
+		"deadlineAt":    deadline,
+	})
 
 	s.writeSnapshot(w, r, principal.UserID, attemptID)
 }
@@ -455,6 +465,11 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "commit failed")
 		return
 	}
+	s.publishLifecycleEvent(r.Context(), "attempt.submitted", attemptID, principal.UserID, map[string]any{
+		"finalScore":    finalScore,
+		"gradingStatus": gradingStatus,
+		"answerCount":   len(req.Answers),
+	})
 	dto.ID = id.String()
 	dto.AssignmentID = assignmentID.String()
 	dto.ExamVersionID = examVersionID.String()
