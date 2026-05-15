@@ -6,8 +6,9 @@ import { Bell, Menu, Search, X, ChevronDown, LogOut } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import AdminNav from "./AdminNav";
 import { useAdminPageMeta } from "./AdminPageContext";
-import { Avatar, BreadcrumbBar, type BreadcrumbSegment } from "./ui";
+import { BreadcrumbBar, type BreadcrumbSegment } from "./ui";
 import { signOut } from "aws-amplify/auth";
+import { clearAdminSession } from "@/lib/api";
 
 const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin": { title: "Welcome back", section: "Dashboard" },
@@ -86,11 +87,7 @@ export default function AdminTopbar() {
     } catch (err) {
       console.error("Amplify signOut error:", err);
     }
-    localStorage.removeItem("originbi_id_token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("originbi:admin-session");
-    sessionStorage.removeItem("idToken");
-    sessionStorage.removeItem("accessToken");
+    clearAdminSession();
     router.push("/admin/login");
   };
 
