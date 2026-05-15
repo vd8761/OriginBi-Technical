@@ -1,0 +1,71 @@
+{
+  "id": "proctoring.tab-switch",
+  "slug": "proctoring.tab-switch",
+  "name": "Tab Switch Monitor",
+  "version": "1.0.0",
+  "type": "addon",
+  "category": "proctoring",
+  "enabledByDefault": true,
+  "requiresLicense": false,
+  "requires": ["runtime.exam-session"],
+  "extends": ["assessment.coding"],
+  "provides": ["proctoring.constraint.tab-focus"],
+  "emits": [
+    { "kind": "proctoring.tab.switched", "severity": "warn", "payload_schema_ref": "#/schemas/tab_switched" },
+    { "kind": "proctoring.tab.refocused", "severity": "info", "payload_schema_ref": "#/schemas/tab_refocused" }
+  ],
+  "subscribes": ["proctoring.tab.switched", "attempt.submitted"],
+  "client_constraints": [
+    {
+      "id": "tab-focus",
+      "kind": "focus-required",
+      "config_schema": { "$ref": "#/schemas/tab_focus_config" }
+    }
+  ],
+  "admin_ui": [
+    {
+      "mount": "settings.proctoring",
+      "label": "Tab Switching",
+      "schema": "#/schemas/tab_focus_config",
+      "component": "frontend/plugins/proctoring-tab-switch/manifest.tsx"
+    }
+  ],
+  "candidate_ui": [
+    {
+      "mount": "attempt.warning-toast",
+      "label": "Tab switch warnings",
+      "component": "frontend/plugins/proctoring-tab-switch/manifest.tsx"
+    }
+  ],
+  "defaults": {
+    "enabled": true,
+    "threshold": 3,
+    "graceMs": 10000,
+    "warnBeforeTerminate": true
+  },
+  "schemas": {
+    "tab_switched": {
+      "type": "object",
+      "properties": {
+        "reason": { "type": "string" },
+        "visibilityState": { "type": "string" },
+        "count": { "type": "number" }
+      }
+    },
+    "tab_refocused": {
+      "type": "object",
+      "properties": {
+        "durationMs": { "type": "number" }
+      }
+    },
+    "tab_focus_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "threshold": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "graceMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+        "warnBeforeTerminate": { "type": "boolean" }
+      }
+    }
+  }
+}

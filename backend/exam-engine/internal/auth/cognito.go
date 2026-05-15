@@ -24,6 +24,7 @@ type CognitoVerifier struct {
 type CognitoClaims struct {
 	Sub      string
 	Username string
+	Email    string
 	Expiry   time.Time
 }
 
@@ -91,6 +92,9 @@ func (c *CognitoVerifier) Verify(ctx context.Context, token string) (*CognitoCla
 	}
 	if v, ok := tok.Get("username"); ok {
 		claims.Username, _ = v.(string)
+	}
+	if v, ok := tok.Get("email"); ok {
+		claims.Email, _ = v.(string)
 	}
 	if claims.Sub == "" {
 		return nil, fmt.Errorf("cognito: token has no subject")

@@ -11,7 +11,6 @@ import {
   Code2,
   Database,
   MessageSquare,
-  PackageCheck,
   RefreshCw,
   Target,
   Users,
@@ -19,14 +18,21 @@ import {
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import { Badge, Card, StatCard, StatusDot } from "@/components/admin/ui";
-import { listAdminQuestions, listExamPackages, listPlugins } from "@/lib/api";
+import {
+  getAdminDashboardSummary,
+  type AdminDashboardActivityItem,
+  type AdminDashboardLiveAssessment,
+  type AdminDashboardSummary,
+} from "@/lib/api";
+import { MountPoint } from "@/plugins";
 
 interface ModuleTile {
   href: string;
   label: string;
   desc: string;
   icon: typeof Code2;
-  accent: string;
+  accentVar: string;
+  accentBgVar: string;
   trial: number;
   main: number;
   categories: string[];
@@ -34,72 +40,61 @@ interface ModuleTile {
 
 const moduleTiles: ModuleTile[] = [
   {
-    href: "/admin/questions",
-    label: "Aptitude",
-    desc: "Quantitative, logical, and verbal reasoning",
+    href: "/admin/question-banks",
+    label: "Aptitude Assessment",
+    desc: "Quantitative, logical, verbal and abstract reasoning.",
     icon: Brain,
-    accent: "var(--admin-acc-aptitude)",
+    accentVar: "--admin-acc-aptitude",
+    accentBgVar: "rgba(30, 211, 106, 0.14)",
     trial: 18,
     main: 132,
     categories: ["Quant", "Logic", "Verbal", "Abstract"],
   },
   {
-    href: "/admin/questions",
-    label: "MNC Prep",
-    desc: "Company-style problem packs and case studies",
+    href: "/admin/question-banks",
+    label: "MNC Career Prep",
+    desc: "Company-style problem packs and case studies.",
     icon: Banknote,
-    accent: "var(--admin-acc-mnc)",
+    accentVar: "--admin-acc-mnc",
+    accentBgVar: "rgba(139, 109, 240, 0.16)",
     trial: 12,
     main: 86,
-    categories: ["Aptitude", "Coding", "Communication"],
+    categories: ["Aptitude", "Coding", "HR"],
   },
   {
-    href: "/admin/questions",
-    label: "Communication",
-    desc: "Email, comprehension and speaking prompts",
+    href: "/admin/question-banks",
+    label: "Communication Skills",
+    desc: "Email, comprehension and speaking prompts.",
     icon: MessageSquare,
-    accent: "var(--admin-acc-comm)",
+    accentVar: "--admin-acc-comm",
+    accentBgVar: "rgba(6, 182, 212, 0.16)",
     trial: 8,
     main: 64,
     categories: ["Reading", "Writing", "Speaking"],
   },
   {
-    href: "/admin/questions",
-    label: "Role-Based",
-    desc: "Curated bundles per job role and level",
+    href: "/admin/question-banks",
+    label: "Role-Based Technical",
+    desc: "Curated bundles per job role and level.",
     icon: Target,
-    accent: "var(--admin-acc-role)",
+    accentVar: "--admin-acc-role",
+    accentBgVar: "rgba(132, 204, 22, 0.16)",
     trial: 14,
     main: 96,
     categories: ["Frontend", "Backend", "Data", "DevOps"],
   },
   {
     href: "/admin/coding",
-    label: "Coding",
-    desc: "Problems, test cases, languages, judge",
+    label: "Coding Challenges",
+    desc: "Problems, test cases, languages, Judge0.",
     icon: Code2,
-    accent: "var(--admin-acc-coding)",
+    accentVar: "--admin-acc-coding",
+    accentBgVar: "rgba(255, 183, 3, 0.18)",
     trial: 12,
     main: 48,
     categories: ["Arrays", "Graphs", "DP", "Strings"],
   },
 ];
-
-const recentActivity = [
-  { user: "Priya Iyer", action: "published", target: "FAANG Coding Final v3", tone: "green", time: "2m ago" },
-  { user: "System", action: "auto-paused", target: "Session OB-90431 (high motion)", tone: "amber", time: "8m ago" },
-  { user: "Karthik R.", action: "approved", target: "MCQ pack — Aptitude L2", tone: "green", time: "21m ago" },
-  { user: "Mira S.", action: "flagged", target: "Coding submission OB-77329", tone: "red", time: "32m ago" },
-  { user: "Neha P.", action: "invited", target: "12 candidates to Tech Screen", tone: "blue", time: "1h ago" },
-  { user: "System", action: "synced", target: "Plugin: assessment.coding v1.4", tone: "neutral", time: "2h ago" },
-] as const;
-
-const liveAssessments = [
-  { name: "Frontend Engineer Trial", module: "Coding", status: "live", completed: 24, total: 32, duration: 60, updated: "2m" },
-  { name: "Aptitude Round 1 — Cohort A", module: "Aptitude", status: "live", completed: 312, total: 480, duration: 45, updated: "5m" },
-  { name: "Communication Mock — March", module: "Communication", status: "scheduled", completed: 0, total: 120, duration: 30, updated: "1h" },
-  { name: "DSA Hard — Senior bench", module: "Coding", status: "draft", completed: 0, total: 0, duration: 90, updated: "yday" },
-] as const;
 
 function MiniBar({ data, max, accent = "var(--admin-green)" }: { data: number[]; max: number; accent?: string }) {
   return (
@@ -109,7 +104,7 @@ function MiniBar({ data, max, accent = "var(--admin-green)" }: { data: number[];
           key={i}
           style={{
             flex: 1,
-            height: `${Math.max(4, (v / max) * 100)}%`,
+            height: `${Math.max(4, (v / Math.max(1, max)) * 100)}%`,
             background: i === data.length - 1 ? accent : "rgba(30,211,106,0.32)",
             borderRadius: 3,
           }}
@@ -119,9 +114,35 @@ function MiniBar({ data, max, accent = "var(--admin-green)" }: { data: number[];
   );
 }
 
-function ToneDot({ tone }: { tone: "green" | "amber" | "red" | "blue" | "neutral" }) {
+function ToneDot({ tone }: { tone: AdminDashboardActivityItem["tone"] }) {
   if (tone === "neutral") return <StatusDot tone="grey" />;
   return <StatusDot tone={tone} pulse={tone === "green"} />;
+}
+
+function liveAssessmentTone(status: AdminDashboardLiveAssessment["status"]): "green" | "amber" | "neutral" {
+  if (status === "live") return "green";
+  if (status === "scheduled") return "amber";
+  return "neutral";
+}
+
+function relativeFromIso(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return "Just now";
+  const min = Math.floor(diffMs / 60_000);
+  if (min < 1) return "now";
+  if (min < 60) return `${min}m ago`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "yday";
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+}
+
+function humanizeAction(action: string): string {
+  return action.replace(/_/g, " ");
 }
 
 function DashboardInner() {
@@ -132,114 +153,148 @@ function DashboardInner() {
     breadcrumb: [{ label: "Admin Hub" }],
   });
 
-  const [questionCount, setQuestionCount] = useState<number | null>(null);
-  const [pluginCount, setPluginCount] = useState<number | null>(null);
-  const [packageCount, setPackageCount] = useState<number | null>(null);
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
-    listAdminQuestions({ pluginSlug: "assessment.coding" })
-      .then((data) => setQuestionCount(data.questions.length))
-      .catch(() => setQuestionCount(null));
-    listPlugins()
-      .then((data) => setPluginCount(data.plugins.length))
-      .catch(() => setPluginCount(null));
-    listExamPackages()
-      .then((data) => setPackageCount(data.examPackages.length))
-      .catch(() => setPackageCount(null));
-  }, []);
+    let cancelled = false;
+    getAdminDashboardSummary()
+      .then((data) => {
+        if (cancelled) return;
+        setSummary(data);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshNonce]);
 
-  const totalCandidates = useMemo(
-    () => liveAssessments.reduce((a, x) => a + x.total, 0).toLocaleString(),
-    [],
+  const kpis = summary?.kpis;
+  const liveAssessments = summary?.liveAssessments ?? [];
+  const recentActivity = summary?.recentActivity ?? [];
+  const submissionsSeries = useMemo(
+    () => summary?.series.submissionsPerDay ?? [],
+    [summary],
+  );
+  const incidentsSeries = useMemo(
+    () => summary?.series.proctorIncidentsPerDay ?? [],
+    [summary],
+  );
+
+  const submissionsTotal = summary?.series.submissionsWeekTotal ?? 0;
+  const incidentsTotal = summary?.series.proctorIncidentsWeek ?? 0;
+  const avgPassRate = summary?.series.avgPassRateWeek;
+
+  const submissionsMax = useMemo(
+    () => Math.max(1, ...submissionsSeries.map((d) => d.count)),
+    [submissionsSeries],
+  );
+  const incidentsMax = useMemo(
+    () => Math.max(1, ...incidentsSeries.map((d) => d.count)),
+    [incidentsSeries],
   );
 
   return (
     <div className="admin-page">
+      {error && (
+        <div className="admin-error" style={{ marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
+
       <section className="admin-grid-4">
         <StatCard
           label="Active Candidates"
-          value={totalCandidates}
-          delta={{ direction: "up", value: "+12%" }}
-          sub="208 online now"
+          value={(kpis?.activeCandidates ?? 0).toLocaleString()}
+          sub={`${(kpis?.activeCandidatesOnline ?? 0).toLocaleString()} online now`}
           icon={<Users size={18} />}
           iconBg="rgba(30,211,106,0.16)"
           iconColor="var(--admin-green)"
         />
         <StatCard
           label="Question Bank"
-          value={(questionCount ?? 0).toLocaleString()}
-          delta={{ direction: "up", value: "+4%" }}
-          sub={`${pluginCount ?? "-"} plugins linked`}
+          value={(kpis?.questionBankTotal ?? 0).toLocaleString()}
+          sub={`${kpis?.questionBankPluginCount ?? 0} plugins linked`}
           icon={<Database size={18} />}
           iconBg="rgba(139,109,240,0.18)"
           iconColor="var(--admin-purple)"
         />
         <StatCard
           label="Live Sessions"
-          value="92"
-          delta={{ direction: "down", value: "-3%" }}
-          sub="86 monitored"
+          value={(kpis?.liveSessions ?? 0).toLocaleString()}
+          sub={`${kpis?.liveSessionsMonitored ?? 0} monitored`}
           icon={<Activity size={18} />}
           iconBg="rgba(74,198,234,0.16)"
           iconColor="var(--admin-blue)"
         />
         <StatCard
           label="Flagged Today"
-          value="14"
-          delta={{ direction: "up", value: "+28%" }}
-          sub="3 await review"
+          value={(kpis?.flaggedToday ?? 0).toLocaleString()}
+          sub={`${kpis?.flaggedAwaitingReview ?? 0} await review`}
           icon={<AlertTriangle size={18} />}
           iconBg="rgba(255,183,3,0.18)"
           iconColor="var(--admin-amber)"
         />
+        <MountPoint id="dashboard.kpi" />
       </section>
 
       <Card>
         <div className="admin-control-row" style={{ marginBottom: 16 }}>
           <div>
             <h3 className="admin-card-title">Question Banks</h3>
-            <p className="admin-card-subtitle">Tap a module to manage its questions</p>
+            <p className="admin-card-subtitle">Tap a module to manage its questions.</p>
           </div>
-          <Link href="/admin/coding" className="admin-btn admin-btn-secondary">
+          <Link href="/admin/question-banks" className="admin-btn admin-btn-secondary">
             View all <ArrowRight size={14} />
           </Link>
         </div>
-        <div
-          className="admin-grid-3"
-          style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}
-        >
+        <div className="admin-dashboard-modules">
           {moduleTiles.map((m) => {
             const Icon = m.icon;
             return (
               <Link
                 key={m.label}
                 href={m.href}
-                className="admin-module-card"
-                style={{ padding: 16, gap: 12 }}
+                className="admin-module-card admin-dashboard-module-tile"
+                style={
+                  {
+                    "--admin-acc": `var(${m.accentVar})`,
+                    "--admin-acc-bg": m.accentBgVar,
+                  } as React.CSSProperties
+                }
               >
-                <span
-                  className="admin-module-icon"
-                  style={{ background: `color-mix(in srgb, ${m.accent} 18%, transparent)`, color: m.accent, width: 36, height: 36 }}
-                >
-                  <Icon size={17} />
-                </span>
+                <div className="admin-control-row">
+                  <span
+                    className="admin-module-icon"
+                    style={{ background: "var(--admin-acc-bg)", color: "var(--admin-acc)" }}
+                  >
+                    <Icon size={18} />
+                  </span>
+                  <span className="admin-mono" style={{ fontSize: 10.5, color: "var(--admin-fg-4)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    {(m.trial + m.main).toLocaleString()} Qs
+                  </span>
+                </div>
                 <div>
                   <h3 className="admin-card-title" style={{ fontSize: 13.5 }}>{m.label}</h3>
-                  <p className="admin-card-subtitle" style={{ fontSize: 11.5, minHeight: 30 }}>{m.desc}</p>
+                  <p className="admin-card-subtitle" style={{ fontSize: 11.5, marginTop: 4, lineHeight: 1.45 }}>
+                    {m.desc}
+                  </p>
                 </div>
-                <div className="admin-row" style={{ fontSize: 11, color: "var(--admin-fg-3)", gap: 8 }}>
-                  <span>
-                    <b style={{ color: "var(--admin-fg-2)" }}>{m.trial + m.main}</b> Qs
-                  </span>
-                  <span style={{ color: "var(--admin-fg-4)" }}>·</span>
-                  <span>
-                    <b style={{ color: m.accent }}>{m.categories.length}</b> cats
-                  </span>
+                <div className="admin-row admin-dashboard-module-chips">
+                  {m.categories.slice(0, 3).map((c) => (
+                    <span key={c} className="admin-badge admin-badge-neutral" style={{ fontSize: 10 }}>{c}</span>
+                  ))}
                 </div>
               </Link>
             );
           })}
         </div>
+        <MountPoint id="dashboard.tiles" />
       </Card>
 
       <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
@@ -264,38 +319,52 @@ function DashboardInner() {
                 </tr>
               </thead>
               <tbody>
-                {liveAssessments.map((a) => {
-                  const pct = a.total > 0 ? Math.round((a.completed / a.total) * 100) : 0;
-                  const tone = a.status === "live" ? "green" : a.status === "scheduled" ? "amber" : "neutral";
-                  return (
-                    <tr key={a.name}>
-                      <td>
-                        <div style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{a.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--admin-fg-4)", marginTop: 2 }}>
-                          {a.duration} min · updated {a.updated}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="admin-badge admin-badge-neutral" style={{ fontWeight: 700 }}>
-                          {a.module}
-                        </span>
-                      </td>
-                      <td>
-                        <Badge tone={tone} dot>{a.status}</Badge>
-                      </td>
-                      <td>
-                        <div style={{ minWidth: 130 }}>
-                          <div style={{ fontSize: 11.5, color: "var(--admin-fg-2)", fontWeight: 700, marginBottom: 6 }}>
-                            {a.completed} / {a.total}
+                {summary == null ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--admin-fg-3)" }}>
+                      Loading…
+                    </td>
+                  </tr>
+                ) : liveAssessments.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--admin-fg-3)" }}>
+                      No assessments published yet.
+                    </td>
+                  </tr>
+                ) : (
+                  liveAssessments.map((a) => {
+                    const pct = a.total > 0 ? Math.round((a.completed / a.total) * 100) : 0;
+                    const tone = liveAssessmentTone(a.status);
+                    return (
+                      <tr key={a.examVersionId}>
+                        <td>
+                          <div style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{a.name}</div>
+                          <div style={{ fontSize: 11, color: "var(--admin-fg-4)", marginTop: 2 }}>
+                            {a.durationMinutes} min · updated {relativeFromIso(a.updatedAt)}
                           </div>
-                          <div className="admin-progress">
-                            <div className="admin-progress-fill" style={{ width: `${pct}%` }} />
+                        </td>
+                        <td>
+                          <span className="admin-badge admin-badge-neutral" style={{ fontWeight: 700 }}>
+                            {a.module}
+                          </span>
+                        </td>
+                        <td>
+                          <Badge tone={tone} dot>{a.status}</Badge>
+                        </td>
+                        <td>
+                          <div style={{ minWidth: 130 }}>
+                            <div style={{ fontSize: 11.5, color: "var(--admin-fg-2)", fontWeight: 700, marginBottom: 6 }}>
+                              {a.completed} / {a.total}
+                            </div>
+                            <div className="admin-progress">
+                              <div className="admin-progress-fill" style={{ width: `${pct}%` }} />
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -304,31 +373,46 @@ function DashboardInner() {
         <Card>
           <div className="admin-control-row" style={{ marginBottom: 12 }}>
             <h3 className="admin-card-title">Recent Activity</h3>
-            <button className="admin-icon-btn" type="button" aria-label="Refresh">
+            <button
+              className="admin-icon-btn"
+              type="button"
+              aria-label="Refresh"
+              onClick={() => setRefreshNonce((n) => n + 1)}
+            >
               <RefreshCw size={14} />
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {recentActivity.map((row, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 0",
-                  borderBottom: i < recentActivity.length - 1 ? "1px solid var(--admin-border)" : "none",
-                }}
-              >
-                <ToneDot tone={row.tone} />
-                <div style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
-                  <strong style={{ color: "var(--admin-fg)" }}>{row.user}</strong>
-                  <span style={{ color: "var(--admin-fg-3)" }}> {row.action} </span>
-                  <span style={{ color: "var(--admin-fg-2)", fontWeight: 700 }}>{row.target}</span>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--admin-fg-4)", whiteSpace: "nowrap" }}>{row.time}</span>
+            {summary == null ? (
+              <div style={{ padding: "16px 0", color: "var(--admin-fg-3)", fontSize: 12 }}>Loading…</div>
+            ) : recentActivity.length === 0 ? (
+              <div style={{ padding: "16px 0", color: "var(--admin-fg-3)", fontSize: 12 }}>
+                No plugin decisions recorded yet.
               </div>
-            ))}
+            ) : (
+              recentActivity.map((row, i) => (
+                <div
+                  key={row.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "10px 0",
+                    borderBottom: i < recentActivity.length - 1 ? "1px solid var(--admin-border)" : "none",
+                  }}
+                >
+                  <ToneDot tone={row.tone} />
+                  <div style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                    <strong style={{ color: "var(--admin-fg)" }}>{row.actor}</strong>
+                    <span style={{ color: "var(--admin-fg-3)" }}> {humanizeAction(row.action)} </span>
+                    <span style={{ color: "var(--admin-fg-2)", fontWeight: 700 }}>{row.target}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--admin-fg-4)", whiteSpace: "nowrap" }}>
+                    {relativeFromIso(row.createdAt)}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
           <button
             type="button"
@@ -341,31 +425,53 @@ function DashboardInner() {
       </section>
 
       <section className="admin-grid-3">
-        <Card>
+        <Card className="admin-spark-card">
           <div className="admin-control-row">
             <p className="admin-stat-label">Submissions / day</p>
             <Badge tone="green">Last 7d</Badge>
           </div>
-          <p className="admin-kpi-value" style={{ marginTop: 8 }}>1,842</p>
-          <MiniBar data={[120, 180, 142, 210, 196, 248, 322]} max={350} />
+          <p className="admin-kpi-value">{submissionsTotal.toLocaleString()}</p>
+          <MiniBar data={submissionsSeries.map((d) => d.count)} max={submissionsMax} />
+          <div className="admin-spark-foot">
+            {submissionsSeries.map((d) => (
+              <span key={d.day}>{d.day.toUpperCase()}</span>
+            ))}
+          </div>
         </Card>
-        <Card>
+        <Card className="admin-spark-card">
           <div className="admin-control-row">
             <p className="admin-stat-label">Avg pass rate</p>
-            <Badge tone="blue">All modules</Badge>
+            <Badge tone="blue">Last 7d</Badge>
           </div>
-          <p className="admin-kpi-value" style={{ marginTop: 8 }}>68.4%</p>
-          <MiniBar data={[58, 62, 65, 64, 67, 71, 68]} max={80} accent="var(--admin-blue)" />
+          <p className="admin-kpi-value">
+            {avgPassRate == null ? "—" : `${Math.round(avgPassRate * 1000) / 10}%`}
+          </p>
+          <MiniBar
+            data={submissionsSeries.map((d) => d.count)}
+            max={submissionsMax}
+            accent="var(--admin-blue)"
+          />
+          <div className="admin-spark-foot">
+            {submissionsSeries.map((d) => (
+              <span key={d.day}>{d.day.toUpperCase()}</span>
+            ))}
+          </div>
         </Card>
-        <Card>
+        <Card className="admin-spark-card">
           <div className="admin-control-row">
             <p className="admin-stat-label">Proctor incidents</p>
-            <Badge tone="amber">+12% wow</Badge>
+            <Badge tone="amber">Last 7d</Badge>
           </div>
-          <p className="admin-kpi-value" style={{ marginTop: 8 }}>{packageCount === null ? "47" : Math.max(packageCount, 8)}</p>
-          <MiniBar data={[8, 6, 9, 12, 7, 11, 14]} max={20} accent="var(--admin-amber)" />
+          <p className="admin-kpi-value">{incidentsTotal.toLocaleString()}</p>
+          <MiniBar data={incidentsSeries.map((d) => d.count)} max={incidentsMax} accent="var(--admin-amber)" />
+          <div className="admin-spark-foot">
+            {incidentsSeries.map((d) => (
+              <span key={d.day}>{d.day.toUpperCase()}</span>
+            ))}
+          </div>
         </Card>
       </section>
+
     </div>
   );
 }

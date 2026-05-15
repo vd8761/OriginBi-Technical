@@ -99,3 +99,60 @@ func (m *Manifest) DecodeLanguageConfig() (*LanguageConfig, error) {
 	}
 	return &cfg, nil
 }
+
+// EmittedEvent is one entry in the manifest's `emits` array. Plugins declare
+// the event kinds they publish so admin UI can surface them and so the
+// frontend can decide which subscribers to wire.
+type EmittedEvent struct {
+	Kind             string `json:"kind"`
+	Severity         string `json:"severity,omitempty"`
+	PayloadSchemaRef string `json:"payload_schema_ref,omitempty"`
+}
+
+// ClientConstraint declares a candidate-runtime constraint the plugin
+// enforces (e.g. tab-focus, fullscreen, copy-paste-block). The frontend's
+// PluginProvider materialises these into actual DOM/event listeners.
+type ClientConstraint struct {
+	ID           string          `json:"id"`
+	Kind         string          `json:"kind"`
+	ConfigSchema json.RawMessage `json:"config_schema,omitempty"`
+}
+
+// SurfaceMount points at a React mount-point id (see frontend
+// PLUGIN_ARCHITECTURE.md §5.2). `Component` is the path to the React
+// component the plugin contributes.
+type SurfaceMount struct {
+	Mount     string `json:"mount"`
+	Label     string `json:"label,omitempty"`
+	Schema    string `json:"schema,omitempty"`
+	Component string `json:"component,omitempty"`
+}
+
+// ManifestExtensions is the optional view of the v2 schema sub-keys for a
+// plugin. All fields are nil when the manifest does not opt-in to a given
+// section — they live inside the existing `schema` JSONB column rather than
+// new physical columns so v1 manifests keep working untouched.
+type ManifestExtensions struct {
+	Emits             []EmittedEvent     `json:"emits,omitempty"`
+	Subscribes        []string           `json:"subscribes,omitempty"`
+	ClientConstraints []ClientConstraint `json:"client_constraints,omitempty"`
+	AdminUI           []SurfaceMount     `json:"admin_ui,omitempty"`
+	CandidateUI       []SurfaceMount     `json:"candidate_ui,omitempty"`
+}
+
+// DecodeExtensions reads the v2 schema sub-keys (emits / subscribes /
+// client_constraints / admin_ui / candidate_ui) from Manifest.Schema.
+// Returns a zero-value ManifestExtensions if the schema is empty or carries
+// none of the new fields — never an error for a v1 manifest.
+func (m *Manifest) DecodeExtensions() (ManifestExtensions, error) {
+	var ext ManifestExtensions
+	if len(m.Schema) == 0 {
+		return ext, nil
+	}
+	// We deliberately ignore unknown keys so existing language/judge0 schemas
+	// still round-trip without polluting ManifestExtensions.
+	if err := json.Unmarshal(m.Schema, &ext); err != nil {
+		return ext, fmt.Errorf("decode manifest extensions for %s: %w", m.Slug, err)
+	}
+	return ext, nil
+}

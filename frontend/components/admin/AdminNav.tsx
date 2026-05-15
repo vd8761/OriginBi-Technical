@@ -1,22 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   Banknote,
   Blocks,
   Code2,
   Database,
   LayoutDashboard,
+  LogOut,
   PackageCheck,
   Settings,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { listAdminQuestions, listExamPackages, API_BASE } from "@/lib/api";
+import { API_BASE, listAdminQuestions, listExamPackages } from "@/lib/api";
+import { Avatar } from "./ui";
+import { MountPoint, type SurfaceMount } from "@/plugins";
 
 interface NavItem {
   href: string;
@@ -26,19 +28,21 @@ interface NavItem {
   countKey?: "users" | "questions" | "exam-packages";
 }
 
-const sections: { label: string; items: NavItem[] }[] = [
+const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
   {
     label: "Workspace",
+    mount: "sidebar.nav.workspace",
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
-      { href: "/admin/coding", label: "Question Banks", eyebrow: "Coding", icon: Database, countKey: "questions" },
+      { href: "/admin/question-banks", label: "Question Banks", icon: Database, countKey: "questions" },
       { href: "/admin/exam-packages", label: "Assessments", icon: PackageCheck, countKey: "exam-packages" },
       { href: "/admin/questions", label: "MCQ Authoring", eyebrow: "Legacy", icon: Banknote },
     ],
   },
   {
     label: "System",
+    mount: "sidebar.nav.system",
     items: [
       { href: "/admin/plugins", label: "Plugins", icon: Blocks },
       { href: "/admin/plugins/languages", label: "Languages", icon: Code2 },
@@ -110,10 +114,53 @@ function useEngineHealth(): HealthState {
   return state;
 }
 
+interface AdminUserView {
+  name: string;
+  email: string;
+  role: string;
+}
+
+function useAdminUser(): AdminUserView {
+  const [user, setUser] = useState<AdminUserView>({ name: "Admin", email: "", role: "Admin" });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("user");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      setUser({
+        name: parsed?.name || "Admin",
+        email: parsed?.email || "",
+        role: parsed?.role || "Admin",
+      });
+    } catch {
+      // ignore malformed user payload
+    }
+  }, []);
+  return user;
+}
+
+function prettyRole(role: string) {
+  switch (role.toUpperCase()) {
+    case "SUPER_ADMIN":
+      return "Super Admin";
+    case "ADMIN":
+      return "Administrator";
+    case "STAFF":
+      return "Staff";
+    case "PROCTOR":
+      return "Proctor";
+    default:
+      return role;
+  }
+}
+
 export default function AdminNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const counts = useNavCounts();
   const health = useEngineHealth();
+  const user = useAdminUser();
 
   const healthColor =
     health.status === "online"
@@ -121,6 +168,25 @@ export default function AdminNav() {
       : health.status === "checking"
         ? "var(--admin-fg-3)"
         : "var(--admin-amber)";
+
+  const signOut = () => {
+    if (typeof window === "undefined") return;
+    [
+      "originbi:id-token",
+      "originbi:access-token",
+      "originbi:refresh-token",
+      "originbi:admin-session",
+      "originbi_id_token",
+      "accessToken",
+      "user",
+    ].forEach((key) => window.localStorage.removeItem(key));
+    window.sessionStorage.removeItem("idToken");
+    window.sessionStorage.removeItem("accessToken");
+    document.cookie = "obi.accessToken=; path=/; samesite=lax; max-age=0";
+    router.replace("/admin/login");
+  };
+
+  const displayRole = useMemo(() => prettyRole(user.role), [user.role]);
 
   return (
     <nav className="admin-nav">
@@ -160,15 +226,33 @@ export default function AdminNav() {
                 </li>
               );
             })}
+            <MountPoint id={section.mount} />
           </ul>
         </div>
       ))}
-      <div className="admin-nav-health" style={{ color: healthColor }}>
-        <Activity size={15} />
-        <div>
-          <span>Exam engine</span>
-          <strong style={{ color: healthColor }}>{health.label}</strong>
+      <div className="admin-nav-user">
+        <Avatar name={user.name} email={user.email} tone="green" size={36} />
+        <div className="admin-nav-user-meta">
+          <span className="admin-nav-user-name" title={user.email || user.name}>
+            {user.name}
+          </span>
+          <span className="admin-nav-user-role">
+            <span
+              className="admin-dot"
+              style={{ background: healthColor, boxShadow: health.status === "online" ? "0 0 8px var(--admin-green-glow)" : "none" }}
+              title={`Exam engine: ${health.label}`}
+            />
+            {displayRole}
+          </span>
         </div>
+        <button
+          type="button"
+          className="admin-icon-btn"
+          aria-label="Sign out"
+          onClick={signOut}
+        >
+          <LogOut size={15} />
+        </button>
       </div>
     </nav>
   );

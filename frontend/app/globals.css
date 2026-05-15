@@ -1044,7 +1044,23 @@
   --admin-r-lg: 14px;
   --admin-r-xl: 18px;
   --admin-r-2xl: 22px;
+  --admin-r-3xl: 22px;
+  --admin-r-4xl: 24px;
   --admin-r-pill: 999px;
+
+  /* Spacing scale (4-px base) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
 
   /* Shadows */
   --admin-shadow-card: 0 10px 30px rgba(0, 0, 0, 0.25);
@@ -1148,37 +1164,38 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 9px 10px;
+  gap: 12px;
+  min-height: 40px;
+  padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--admin-fg-2);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   text-decoration: none;
   transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 .admin-nav-item:hover {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--admin-fg);
 }
 
 .admin-nav-item.is-active {
-  background: linear-gradient(90deg, var(--admin-green-soft), rgba(30, 211, 106, 0.035));
-  border-color: rgba(30, 211, 106, 0.28);
+  background: var(--admin-green-soft);
   color: var(--admin-green);
 }
 
 .admin-nav-item.is-active::before {
   content: "";
   position: absolute;
-  left: -11px;
+  left: -14px;
+  top: 50%;
   width: 3px;
   height: 20px;
-  border-radius: 999px;
+  transform: translateY(-50%);
+  border-radius: 0 3px 3px 0;
   background: var(--admin-green);
   box-shadow: 0 0 18px rgba(30, 211, 106, 0.55);
 }
@@ -1221,6 +1238,43 @@
   margin-top: auto;
   padding: 12px;
   color: var(--admin-green);
+}
+
+.admin-nav-user {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.admin-nav-user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-nav-user-name {
+  color: var(--admin-fg);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-nav-user-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-fg-3);
+  font-size: 10.5px;
+  font-weight: 600;
 }
 
 .admin-nav-health span,
@@ -1285,9 +1339,9 @@
 .admin-topbar-title h1 {
   margin: 2px 0 0;
   color: var(--admin-fg);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .admin-topbar-actions {
@@ -1759,7 +1813,7 @@
   padding: 22px;
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-r-xl);
-  background: var(--admin-card);
+  background: rgba(255, 255, 255, 0.025);
   color: var(--admin-fg);
   text-align: left;
   text-decoration: none;
@@ -1769,15 +1823,15 @@
 .admin-module-card:hover,
 .admin-problem-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(30, 211, 106, 0.34);
-  background: rgba(30, 211, 106, 0.045);
+  border-color: rgba(30, 211, 106, 0.3);
+  background: rgba(255, 255, 255, 0.045);
   box-shadow: var(--admin-shadow-card);
 }
 
 .admin-module-icon {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border-radius: var(--admin-r-md);
 }
@@ -2394,11 +2448,17 @@
 .admin-kpi-card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 16px;
+  padding: 20px 22px;
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-r-xl);
   background: var(--admin-card);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.admin-kpi-card:hover {
+  border-color: var(--admin-border-strong);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .admin-kpi-top {
@@ -2418,8 +2478,8 @@
 .admin-kpi-value {
   margin: 0;
   color: var(--admin-fg);
-  font-size: 28px;
-  font-weight: 850;
+  font-size: 32px;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.02em;
 }
@@ -2500,4 +2560,450 @@
   outline: 2px solid var(--admin-green);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* ── Admin: Proctoring settings cards ─────────────────────────────── */
+.admin-panel-root .admin-proctor-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-panel-root .admin-proctor-card {
+  padding: 18px 20px 20px;
+}
+
+.admin-panel-root .admin-proctor-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-panel-root .admin-proctor-card-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--admin-fg-2);
+}
+
+.admin-panel-root .admin-proctor-card-body {
+  display: flex;
+  flex-direction: column;
+  padding-top: 6px;
+}
+
+.admin-panel-root .admin-proctor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-panel-root .admin-proctor-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.admin-panel-root .admin-proctor-row-label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--admin-fg);
+}
+.admin-panel-root .admin-proctor-row-hint {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--admin-fg-3);
+  line-height: 1.45;
+}
+
+.admin-panel-root .admin-proctor-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.admin-panel-root .admin-proctor-pills {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--admin-border);
+  gap: 2px;
+}
+.admin-panel-root .admin-proctor-pills button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--admin-fg-3);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.admin-panel-root .admin-proctor-pills button.is-active {
+  background: var(--admin-green-soft);
+  color: var(--admin-green);
+  box-shadow: inset 0 0 0 1px rgba(30, 211, 106, 0.4);
+}
+
+.admin-panel-root .admin-proctor-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-panel-root .admin-proctor-slider input[type="range"] {
+  width: 140px;
+  accent-color: var(--admin-green);
+}
+.admin-panel-root .admin-proctor-slider-readout {
+  min-width: 44px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--admin-fg-2);
+}
+
+.admin-panel-root .admin-proctor-num {
+  width: 72px;
+  height: 32px;
+  text-align: center;
+  font-family: var(--admin-font-mono);
+  font-feature-settings: "calt" 0;
+  font-weight: 700;
+}
+
+.admin-panel-root .admin-proctor-preview {
+  margin-top: 14px;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--admin-r-md);
+  border: 1px solid var(--admin-border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(30, 211, 106, 0.05)),
+    repeating-linear-gradient(45deg, transparent 0 8px, rgba(255, 255, 255, 0.02) 8px 9px);
+  display: grid;
+  place-items: center;
+}
+.admin-panel-root .admin-proctor-preview-q {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--admin-border);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--admin-fg-2);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.admin-panel-root .admin-proctor-cta {
+  display: flex;
+  gap: 8px;
+}
+
+/* When proctor rows live inside the sticky rail, stack the control under the
+   label so narrow widths don't crush the slider's readout. */
+.admin-panel-root .sticky-rail .admin-proctor-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.admin-panel-root .sticky-rail .admin-proctor-row-control {
+  justify-content: flex-start;
+}
+.admin-panel-root .sticky-rail .admin-proctor-slider input[type="range"] {
+  width: 100%;
+  flex: 1;
+}
+.admin-panel-root .sticky-rail .admin-proctor-slider {
+  width: 100%;
+}
+
+/* ── Admin: Dashboard — module preview row ────────────────────────── */
+.admin-panel-root .admin-dashboard-modules {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+@media (max-width: 1280px) {
+  .admin-panel-root .admin-dashboard-modules {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .admin-panel-root .admin-dashboard-modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.admin-panel-root .admin-dashboard-module-tile {
+  padding: 16px;
+  gap: 12px;
+  border-radius: var(--admin-r-lg);
+  min-height: 168px;
+}
+.admin-panel-root .admin-dashboard-module-tile:hover {
+  border-color: color-mix(in srgb, var(--admin-acc) 40%, transparent);
+}
+.admin-panel-root .admin-dashboard-module-tile .admin-module-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.admin-panel-root .admin-dashboard-module-chips {
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+
+/* ── Admin: Dashboard — sparkline cards ───────────────────────────── */
+.admin-panel-root .admin-spark-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin-panel-root .admin-spark-card .admin-kpi-value {
+  font-size: 26px;
+  letter-spacing: -0.015em;
+}
+.admin-panel-root .admin-spark-card .admin-spark-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  font-family: var(--admin-font-mono);
+  font-feature-settings: "calt" 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--admin-fg-4);
+  text-transform: uppercase;
+}
+
+/* ── Admin: Settings (General / Scoring / Notifications / Integrations) ─ */
+.admin-panel-root .admin-settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-panel-root .admin-accent-swatches {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.admin-panel-root .admin-accent-swatch {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--admin-border);
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.admin-panel-root .admin-accent-swatch:hover { transform: scale(1.08); }
+.admin-panel-root .admin-accent-swatch.is-active {
+  border-color: var(--admin-fg);
+  box-shadow: 0 0 0 2px var(--admin-bg), 0 0 0 4px currentColor;
+}
+
+.admin-panel-root .admin-marks-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-r-md);
+  overflow: hidden;
+}
+.admin-panel-root .admin-marks-head,
+.admin-panel-root .admin-marks-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px 100px;
+  gap: var(--space-3);
+  padding: 10px 14px;
+  align-items: center;
+}
+.admin-panel-root .admin-marks-head {
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--admin-fg-3);
+}
+.admin-panel-root .admin-marks-row {
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-panel-root .admin-marks-row:last-child {
+  border-bottom: 0;
+}
+.admin-panel-root .admin-marks-difficulty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--admin-fg);
+}
+.admin-panel-root .admin-marks-input {
+  height: 34px;
+  text-align: center;
+  font-family: var(--admin-font-mono);
+  font-feature-settings: "calt" 0;
+  font-weight: 700;
+}
+
+.admin-panel-root .admin-notifications-table {
+  display: flex;
+  flex-direction: column;
+}
+.admin-panel-root .admin-notifications-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 90px 90px;
+  gap: var(--space-4);
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-panel-root .admin-notifications-row:last-child {
+  border-bottom: 0;
+}
+.admin-panel-root .admin-notifications-head {
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--admin-fg-3);
+}
+.admin-panel-root .admin-notifications-head > span {
+  text-align: center;
+}
+.admin-panel-root .admin-notifications-head > span:first-child {
+  text-align: left;
+}
+.admin-panel-root .admin-notifications-event-name {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--admin-fg);
+}
+.admin-panel-root .admin-notifications-event-hint {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--admin-fg-3);
+  line-height: 1.45;
+}
+.admin-panel-root .admin-notifications-row > :nth-child(n+2) {
+  display: flex;
+  justify-content: center;
+}
+
+.admin-panel-root .admin-integration-tile {
+  display: flex;
+  flex-direction: column;
+}
+.admin-panel-root .admin-integration-tile .admin-row:last-child {
+  margin-top: auto;
+}
+
+/* ── Admin: Question Banks landing ────────────────────────────────── */
+.admin-panel-root .admin-qb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+@media (max-width: 1180px) {
+  .admin-panel-root .admin-qb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .admin-panel-root .admin-qb-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.admin-panel-root .admin-qb-tile {
+  min-height: 280px;
+  border-radius: var(--admin-r-2xl);
+}
+
+.admin-panel-root .admin-qb-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.admin-panel-root .admin-qb-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.admin-panel-root .admin-qb-stat {
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-r-md);
+  background: rgba(255, 255, 255, 0.025);
+}
+.admin-panel-root .admin-qb-stat strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--admin-fg);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.admin-panel-root .admin-qb-new-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(30, 211, 106, 0.16);
+  color: var(--admin-green);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-panel-root .admin-qb-manage-btn {
+  font-weight: 700;
+}
+.admin-panel-root .admin-qb-manage-btn:hover {
+  filter: brightness(1.08);
+}
+
+/* ── Admin: layout split utilities ─────────────────────────────────
+   Use these to compose main + rail layouts inside admin pages.
+   They collapse to a single column under 960px. */
+.admin-panel-root .split-1-aside,
+.admin-panel-root .split-2-1,
+.admin-panel-root .split-50 {
+  display: grid;
+  gap: var(--space-6);
+  align-items: start;
+}
+.admin-panel-root .split-1-aside { grid-template-columns: minmax(0, 1fr) 320px; }
+.admin-panel-root .split-2-1     { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.admin-panel-root .split-50      { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 960px) {
+  .admin-panel-root .split-1-aside,
+  .admin-panel-root .split-2-1,
+  .admin-panel-root .split-50 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.admin-panel-root .sticky-rail {
+  position: sticky;
+  top: var(--space-6);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }

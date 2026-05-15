@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssessmentModule } from './modules/assessment/assessment.module';
+import { AuthModule } from './auth/auth.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -19,7 +21,9 @@ import { AssessmentModule } from './modules/assessment/assessment.module';
       autoLoadEntities: true,
       synchronize: false,
     }),
+    AuthModule,
     AssessmentModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
