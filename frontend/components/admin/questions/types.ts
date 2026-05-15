@@ -204,9 +204,12 @@ export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border:
   scenario: { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", border: "border-orange-500/20" },
 };
 
-// ── Union type for any question ──
-export type AnyQuestion = AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion;
+export type QuestionKind = "mcq" | "msq" | "tf";
 
+// ── Union type for any question ──
+export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion) & { kind?: QuestionKind; correctOptionIds?: string[] };
+
+// ── Sample JSONs ──
 // ── Sample JSONs ──
 export const SAMPLE_JSONS: Record<AssessmentType, string> = {
   aptitude: `[
@@ -218,6 +221,28 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
       { "text": "5% decrease" },
       { "text": "No change" },
       { "text": "5% increase" }
+    ],
+    "correctOptionIndex": 0
+  },
+  {
+    "category": "VA",
+    "kind": "msq",
+    "text": "Identify the synonyms for 'Resilient':",
+    "options": [
+      { "text": "Tough" },
+      { "text": "Fragile" },
+      { "text": "Elastic" },
+      { "text": "Weak" }
+    ],
+    "correctOptionIndices": [0, 2]
+  },
+  {
+    "category": "LR",
+    "kind": "tf",
+    "text": "In a logical sequence, if A implies B and B implies C, then A implies C.",
+    "options": [
+      { "text": "True" },
+      { "text": "False" }
     ],
     "correctOptionIndex": 0
   }
@@ -289,14 +314,15 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
     "questionType": "conceptual",
     "category": "API Design",
     "subCategory": "REST Fundamentals",
-    "text": "Which of the following is NOT a valid HTTP method in RESTful APIs?",
+    "text": "Which of the architectural styles are applicable to REST?",
+    "kind": "msq",
     "options": [
-      { "text": "PATCH" },
-      { "text": "FETCH" },
-      { "text": "OPTIONS" },
-      { "text": "DELETE" }
+      { "text": "Client-Server" },
+      { "text": "Stateless" },
+      { "text": "Synchronous Execution" },
+      { "text": "Cacheable" }
     ],
-    "correctOptionIndex": 1
+    "correctOptionIndices": [0, 1, 3]
   },
   {
     "questionType": "scenario",

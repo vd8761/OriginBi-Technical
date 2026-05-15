@@ -28,6 +28,7 @@ export interface ApiQuestion {
     status: "active" | "inactive";
     mode: "trial" | "main";
     imageUrl: string | null;
+    metadata: any;
     createdAt: string;
     updatedAt: string;
 }
@@ -46,6 +47,7 @@ export interface CreateQuestionPayload {
     status?: "active" | "inactive";
     mode?: "trial" | "main";
     imageUrl?: string | null;
+    metadata?: any;
 }
 
 export interface ApiAssessment {

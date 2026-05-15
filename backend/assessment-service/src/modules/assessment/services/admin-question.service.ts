@@ -124,6 +124,7 @@ export class AdminQuestionService {
       status: row.status,
       mode: row.mode || 'trial',
       imageUrl: row.image_url,
+      metadata: row.metadata || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -265,13 +266,13 @@ export class AdminQuestionService {
         assessmentId = await this.ensureDefaultAssessment(queryRunner, module, resolvedUser);
       }
 
-      const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'image_url', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
-      const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode];
-      let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', 'NULL', '$7', '$8', '$9', '$10'];
+      const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'image_url', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode', 'metadata'];
+      const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode, data.metadata ? JSON.stringify(data.metadata) : null];
+      let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11', '$12'];
 
-      if (config.subcategoryColumn && subcategory) {
+      if (config.subcategoryColumn) {
         columns.push(config.subcategoryColumn);
-        values.push(subcategory);
+        values.push(subcategory || 'General');
         placeholders.push(`$${values.length}`);
       }
 
@@ -351,6 +352,7 @@ export class AdminQuestionService {
       if (status !== undefined) { updates.push(`status = $${pIdx++}`); params.push(status); }
       if (mode !== undefined) { updates.push(`mode = $${pIdx++}`); params.push(mode); }
       if (imageUrl !== undefined) { updates.push(`image_url = $${pIdx++}`); params.push(imageUrl); }
+      if (data.metadata !== undefined) { updates.push(`metadata = $${pIdx++}`); params.push(data.metadata ? JSON.stringify(data.metadata) : null); }
 
       updates.push('updated_at = NOW()');
 

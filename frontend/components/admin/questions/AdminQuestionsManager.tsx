@@ -112,6 +112,8 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     negativeMarks: q.negativeMarks,
     status: q.status,
     imageUrl: q.imageUrl,
+    kind: q.metadata?.kind || "mcq",
+    correctOptionIds: q.metadata?.correctOptionIds || (q.correctOptionId ? [String(q.correctOptionId)] : []),
   };
 
   switch (module) {
@@ -123,6 +125,8 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
       return { ...common, taskType: q.category as CommTaskType, instructions: q.questionText } as unknown as CommQuestion;
     case "role":
       return { ...common, questionType: q.category as RoleQuestionType } as RoleQuestion;
+    case "coding":
+      return { ...common, category: q.category } as unknown as CodingQuestion;
     default:
       return common as any;
   }
@@ -160,6 +164,10 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     status: common.status || "active",
     imageUrl: common.imageUrl,
     assessmentId: common.assessmentId,
+    metadata: {
+      kind: common.kind || "mcq",
+      correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+    }
   };
 }
 
