@@ -590,6 +590,7 @@ export class AdminQuestionService {
     const amount = data.amount;
     const trialAttemptsLimit = data.trialAttemptsLimit !== undefined ? data.trialAttemptsLimit : data.trial_attempts_limit;
     const mainAttemptsLimit = data.mainAttemptsLimit !== undefined ? data.mainAttemptsLimit : data.main_attempts_limit;
+    const enabledQuestionTypes = data.enabledQuestionTypes !== undefined ? data.enabledQuestionTypes : data.enabled_question_types;
     
     try {
       await this.dataSource.query(
@@ -607,8 +608,9 @@ export class AdminQuestionService {
              amount = COALESCE($11, amount),
              trial_attempts_limit = COALESCE($12, trial_attempts_limit),
              main_attempts_limit = COALESCE($13, main_attempts_limit),
+             enabled_question_types = COALESCE($14, enabled_question_types),
              updated_at = NOW()
-         WHERE assessment_id = $14`,
+         WHERE assessment_id = $15`,
         [
           assessmentName !== undefined ? assessmentName : null,
           totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
@@ -623,6 +625,7 @@ export class AdminQuestionService {
           amount !== undefined ? Number(amount) : null,
           trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : null,
           mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : null,
+          enabledQuestionTypes !== undefined ? (typeof enabledQuestionTypes === 'string' ? enabledQuestionTypes : JSON.stringify(enabledQuestionTypes)) : null,
           id
         ]
       );

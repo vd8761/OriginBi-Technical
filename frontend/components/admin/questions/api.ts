@@ -68,6 +68,7 @@ export interface ApiAssessment {
     amount?: number;
     trial_attempts_limit?: number;
     main_attempts_limit?: number;
+    enabled_question_types?: Record<string, boolean> | string;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

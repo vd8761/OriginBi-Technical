@@ -1,11 +1,12 @@
 // ── Assessment Type (top-level module selector) ──
-export type AssessmentType = "aptitude" | "mnc" | "communication" | "role";
+export type AssessmentType = "aptitude" | "mnc" | "communication" | "role" | "coding";
 
 export const ASSESSMENT_TYPE_LABELS: Record<AssessmentType, string> = {
   aptitude: "Aptitude Assessment",
   mnc: "MNC Career Prep",
   communication: "Communication Skills",
   role: "Role-Based Technical",
+  coding: "Coding & Development",
 };
 
 export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
@@ -13,6 +14,7 @@ export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
   mnc: "Technical MCQs focused on Data Structures, Algorithms, and Core CS.",
   communication: "Multi-skill tasks including Audio, Speaking, Reading, and Writing.",
   role: "Context-aware conceptual and scenario-based technical evaluations.",
+  coding: "In-browser IDE assessments for algorithms and problem solving.",
 };
 
 export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
@@ -20,6 +22,7 @@ export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
   mnc: "🏢",
   communication: "💬",
   role: "🎯",
+  coding: "💻",
 };
 
 // ── Shared ──
@@ -157,6 +160,21 @@ export const ROLE_QUESTION_TYPE_LABELS: Record<RoleQuestionType, string> = {
   scenario: "Scenario",
 };
 
+// ── Coding ──
+export interface CodingQuestion {
+  id: string;
+  category: string;
+  text: string;
+  assessmentId?: number;
+  difficulty?: DifficultyLevel;
+  marks?: number;
+  negativeMarks?: number;
+  status?: QuestionStatus;
+  explanation?: string;
+}
+
+export const CODING_CATEGORIES = ["Algorithms", "Data Structures", "Logic", "Backend", "Frontend"] as const;
+
 // ── Category colors (reused) ──
 export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   QA: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-500/20" },
@@ -187,7 +205,7 @@ export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border:
 };
 
 // ── Union type for any question ──
-export type AnyQuestion = AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion;
+export type AnyQuestion = AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion;
 
 // ── Sample JSONs ──
 export const SAMPLE_JSONS: Record<AssessmentType, string> = {
@@ -297,4 +315,5 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
     "correctOptionIndex": 1
   }
 ]`,
+  coding: `[]`,
 };

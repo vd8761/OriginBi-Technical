@@ -105,6 +105,9 @@ export class TechAssessment {
     @Column({ name: "main_attempts_limit", type: "int", default: 2 })
     mainAttemptsLimit!: number;
 
+    @Column({ name: "enabled_question_types", type: "jsonb", nullable: true })
+    enabledQuestionTypes!: any;
+
     @ManyToOne(() => UserEntity, { nullable: false })
     @JoinColumn({ name: "created_by" })
     createdBy!: UserEntity;

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
 import { AssessmentType, ASSESSMENT_TYPE_LABELS } from "./types";
 import { AptitudeIcon, CommunicationIcon, MNCIcon, RoleIcon, ArrowRightWithoutLineIcon } from "@/components/icons";
@@ -10,8 +10,11 @@ import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { Switch } from "@/components/ui/Switch";
 
-type SettingsTab = "general" | "rules_limits" | "categories" | "grading";
+type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading";
+
+// ... (Removed ProperToggle as it's replaced by the new Switch component)
 
 export default function AssessmentSettingsPage() {
   const router = useRouter();
@@ -52,6 +55,11 @@ export default function AssessmentSettingsPage() {
   const [hardMarks, setHardMarks] = useState<number | "">(5);
   const [hardNeg, setHardNeg] = useState<number | "">(0.25);
 
+  // Question Type Settings
+  const [enabledMCQ, setEnabledMCQ] = useState(true);
+  const [enabledMSQ, setEnabledMSQ] = useState(false);
+  const [enabledTF, setEnabledTF] = useState(false);
+
   const handleSave = async () => {
     const a = assessments[activeModule];
     if (!a) return;
@@ -79,6 +87,11 @@ export default function AssessmentSettingsPage() {
         amount: amount === "" ? 0 : Number(amount),
         trialAttemptsLimit: trialAttemptsLimit === "" ? 5 : Number(trialAttemptsLimit),
         mainAttemptsLimit: mainAttemptsLimit === "" ? 2 : Number(mainAttemptsLimit),
+        enabled_question_types: {
+          mcq: enabledMCQ,
+          msq: enabledMSQ,
+          true_false: enabledTF,
+        }
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -157,7 +170,7 @@ export default function AssessmentSettingsPage() {
     const loadAll = async () => {
       setLoading(true);
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
         const results: Record<string, ApiAssessment> = {};
         for (const m of modules) {
           const list = await fetchAssessments(m);
@@ -181,10 +194,20 @@ export default function AssessmentSettingsPage() {
     loadAll();
   }, []);
 
-  const parseMap = (val: any, fb: Record<string, number>) => {
+  // Sync form when module changes
+  useEffect(() => {
+    if (assessments[activeModule]) {
+      populateForm(assessments[activeModule]);
+    }
+  }, [activeModule, assessments]);
+
+  const parseMap = (val: any, fb: Record<string, any>) => {
     if (!val) return fb;
     if (typeof val === "object") return { ...fb, ...val };
-    try { return { ...fb, ...JSON.parse(val) }; } catch { return fb; }
+    try { 
+      const parsed = typeof val === "string" ? JSON.parse(val) : val;
+      return { ...fb, ...parsed }; 
+    } catch { return fb; }
   };
 
   const parseCats = (val: any): Category[] => {
@@ -224,6 +247,13 @@ export default function AssessmentSettingsPage() {
     const n = parseMap(a.difficulty_negative_marks, { easy: 0, medium: 0.25, hard: 0.25 });
     setEasyMarks(Number(m.easy)); setMediumMarks(Number(m.medium)); setHardMarks(Number(m.hard));
     setEasyNeg(Number(n.easy)); setMediumNeg(Number(n.medium)); setHardNeg(Number(n.hard));
+    
+    // Populate Question Types
+    const qTypes = parseMap(a.enabled_question_types, { mcq: true, msq: false, true_false: false });
+    setEnabledMCQ(Boolean(qTypes.mcq));
+    setEnabledMSQ(Boolean(qTypes.msq));
+    setEnabledTF(Boolean(qTypes.true_false));
+
     setHasModifications(false);
   };
 
@@ -285,7 +315,7 @@ export default function AssessmentSettingsPage() {
                 disabled={!hasModifications || saving}
                 className={`group relative flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${
                   hasModifications && !saving 
-                    ? "bg-brand-green text-[#0f1411] shadow-xl shadow-brand-green/20 hover:shadow-brand-green/30 hover:-translate-y-0.5 active:scale-95" 
+                    ? "bg-brand-green text-[#0f1411] hover:-translate-y-0.5 active:scale-95" 
                     : "bg-white/5 text-slate-500 cursor-not-allowed opacity-60 border border-white/5"
                 }`}
               >
@@ -302,7 +332,7 @@ export default function AssessmentSettingsPage() {
           <div className="bg-white/80 dark:bg-[#1C241F]/80 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200 dark:border-white/5 overflow-hidden">
             {/* Tab navigation */}
             <div className="flex border-b border-slate-100 dark:border-white/5 px-8 sm:px-12 pt-8 gap-8 overflow-x-auto no-scrollbar">
-              {([["general", "General", SlidersHorizontal], ["rules_limits", "Rules & Limits", Shield], ["categories", "Dynamic Categories", LayoutGrid], ["grading", "Scoring Matrix", Award]] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
+              {([["general", "General", SlidersHorizontal], ["question_type", "Question Type", ListChecks], ["rules_limits", "Rules & Limits", Shield], ["categories", "Dynamic Categories", LayoutGrid], ["grading", "Scoring Matrix", Award]] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
                 <button 
                   key={key} 
                   onClick={() => setActiveTab(key)}
@@ -315,7 +345,7 @@ export default function AssessmentSettingsPage() {
                   {activeTab === key && (
                     <motion.div 
                       layoutId="activeTab"
-                      className="absolute bottom-0 left-0 right-0 h-1 bg-brand-green rounded-full shadow-[0_0_10px_rgba(30,211,106,0.4)]"
+                      className="absolute bottom-0 left-0 right-0 h-1 bg-brand-green rounded-full"
                     />
                   )}
                 </button>
@@ -353,6 +383,41 @@ export default function AssessmentSettingsPage() {
                     </div>
                   )}
 
+                  {/* Question Type Tab */}
+                  {activeTab === "question_type" && (
+                    <div className="space-y-12">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                        <div className="sm:max-w-md">
+                          <label className={labelCls}>Multiple Choice (MCQ)</label>
+                          <p className={descCls}>Single correct answer from multiple options. The most common format for all modules.</p>
+                        </div>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={enabledMCQ} onCheckedChange={(val) => { setEnabledMCQ(val); markDirty(); }} />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                        <div className="sm:max-w-md">
+                          <label className={labelCls}>Multi-Select MCQ (MSQ)</label>
+                          <p className={descCls}>Allows candidates to select one or more correct options. Good for complex technical or logical scenarios.</p>
+                        </div>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={enabledMSQ} onCheckedChange={(val) => { setEnabledMSQ(val); markDirty(); }} />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                        <div className="sm:max-w-md">
+                          <label className={labelCls}>True or False</label>
+                          <p className={descCls}>Simple binary choice format. Ideal for quick verification of facts or logic statements.</p>
+                        </div>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={enabledTF} onCheckedChange={(val) => { setEnabledTF(val); markDirty(); }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Rules & Limits Tab */}
                   {activeTab === "rules_limits" && (
                     <div className="space-y-12">
@@ -370,24 +435,21 @@ export default function AssessmentSettingsPage() {
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
                         <div className="sm:max-w-md"><label className={labelCls}>Block Copy & Paste</label><p className={descCls}>Prevent candidates from selecting or copying content during the test.</p></div>
-                        <button onClick={() => { setAntiCopyEnabled(!antiCopyEnabled); markDirty(); }}
-                          className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ${antiCopyEnabled ? "bg-brand-green shadow-lg shadow-brand-green/20" : "bg-slate-200 dark:bg-white/10"}`}>
-                          <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-300 ${antiCopyEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                        </button>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={antiCopyEnabled} onCheckedChange={(val) => { setAntiCopyEnabled(val); markDirty(); }} />
+                        </div>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
                         <div className="sm:max-w-md"><label className={labelCls}>Shuffle Questions Order</label><p className={descCls}>Scramble question ordering dynamically per candidate session.</p></div>
-                        <button onClick={() => { setShuffleQuestions(!shuffleQuestions); markDirty(); }}
-                          className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ${shuffleQuestions ? "bg-brand-green shadow-lg shadow-brand-green/20" : "bg-slate-200 dark:bg-white/10"}`}>
-                          <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-300 ${shuffleQuestions ? "translate-x-5" : "translate-x-0"}`} />
-                        </button>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={shuffleQuestions} onCheckedChange={(val) => { setShuffleQuestions(val); markDirty(); }} />
+                        </div>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                         <div className="sm:max-w-md"><label className={labelCls}>Shuffle Question Options</label><p className={descCls}>Randomize option ordering on multiple-choice cards.</p></div>
-                        <button onClick={() => { setShuffleOptions(!shuffleOptions); markDirty(); }}
-                          className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ${shuffleOptions ? "bg-brand-green shadow-lg shadow-brand-green/20" : "bg-slate-200 dark:bg-white/10"}`}>
-                          <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-300 ${shuffleOptions ? "translate-x-5" : "translate-x-0"}`} />
-                        </button>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={shuffleOptions} onCheckedChange={(val) => { setShuffleOptions(val); markDirty(); }} />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -427,7 +489,7 @@ export default function AssessmentSettingsPage() {
                               />
                               <button 
                                 onClick={handleAddCategory}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-brand-green text-white rounded-xl hover:bg-brand-green/90 transition shadow-lg shadow-brand-green/20 active:scale-95 shrink-0"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-black uppercase tracking-widest bg-brand-green text-white rounded-xl hover:bg-brand-green/90 transition active:scale-95 shrink-0"
                               >
                                 <Plus size={16} /> Add
                               </button>
@@ -471,7 +533,7 @@ export default function AssessmentSettingsPage() {
                                 />
                                 <button 
                                   onClick={() => { handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || ""); setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" })); }}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-brand-green text-white shadow-lg shadow-brand-green/10"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-brand-green text-white"
                                 >
                                   <Plus size={14} strokeWidth={3} />
                                 </button>

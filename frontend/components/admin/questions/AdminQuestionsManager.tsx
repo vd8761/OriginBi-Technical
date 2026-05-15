@@ -9,6 +9,7 @@ import {
   MNC_TOPICS, COMM_TASK_LABELS, CommTaskType,
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
+  CodingQuestion, CODING_CATEGORIES
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
 import {
@@ -30,7 +31,7 @@ import JsonImportPanel from "./JsonImportPanel";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  AlertCircle, ArrowLeft, Filter, ChevronDown,
+  AlertCircle, ArrowLeft, Filter, ChevronDown, Code
 } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 import {
@@ -47,6 +48,7 @@ const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }>
   mnc: { color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" },
   communication: { color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)" },
   role: { color: "#84cc16", gradient: "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)" },
+  coding: { color: "#f59e0b", gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" },
 };
 
 const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
@@ -54,6 +56,7 @@ const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
   mnc: <MNCIcon className="w-7 h-7" />,
   communication: <CommunicationIcon className="w-7 h-7" />,
   role: <RoleIcon className="w-7 h-7" />,
+  coding: <Code className="w-7 h-7" />,
 };
 
 const MODULE_TAGS: Record<AssessmentType, string[]> = {
@@ -61,6 +64,7 @@ const MODULE_TAGS: Record<AssessmentType, string[]> = {
   mnc: ["DSA", "System Design", "Culture", "HR Prep"],
   communication: ["Listening", "Speaking", "Reading", "Writing"],
   role: ["Concepts", "Scenarios", "Judgement", "Role fit"],
+  coding: ["Algorithms", "Data Structures", "In-Browser IDE"],
 };
 
 function getCatKey(q: AnyQuestion, t: AssessmentType): string {
@@ -69,6 +73,7 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
+    case "coding": return (q as CodingQuestion).category;
   }
 }
 
@@ -78,6 +83,7 @@ function getFilterCategories(t: AssessmentType): { key: string; label: string; s
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
+    case "coding": return CODING_CATEGORIES.map(c => ({ key: c, label: c }));
   }
 }
 
@@ -87,6 +93,7 @@ function getSearchText(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": { const m = q as MNCQuestion; return `${m.text} ${m.topic}`.toLowerCase(); }
     case "communication": { const c = q as CommQuestion; return `${c.instructions} ${c.prompt || ""} ${c.questions?.map(sq => sq.text).join(" ") || ""}`.toLowerCase(); }
     case "role": { const r = q as RoleQuestion; return `${r.text} ${r.category || ""} ${r.title || ""} ${r.scenarioContext || ""}`.toLowerCase(); }
+    case "coding": { const c = q as CodingQuestion; return `${c.text} ${c.category}`.toLowerCase(); }
   }
 }
 
@@ -137,6 +144,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     case "mnc": category = (q as MNCQuestion).topic; break;
     case "communication": category = (q as CommQuestion).taskType; break;
     case "role": category = (q as RoleQuestion).questionType; break;
+    case "coding": category = (q as CodingQuestion).category; break;
   }
 
   return {
@@ -157,7 +165,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
 
 // All modules except specialized ones are now DB-backed
 const isDbModule = (m: AssessmentType | null): m is AssessmentType => 
-  m === "aptitude" || m === "mnc" || m === "communication" || m === "role";
+  m === "aptitude" || m === "mnc" || m === "communication" || m === "role" || m === "coding";
 
 export default function AdminQuestionsManager() {
   const router = useRouter();
@@ -169,6 +177,7 @@ export default function AdminQuestionsManager() {
     mnc: { trial: 0, main: 0 },
     communication: { trial: 0, main: 0 },
     role: { trial: 0, main: 0 },
+    coding: { trial: 0, main: 0 },
   });
   const [view, setView] = useState<"list" | "json-import">("list");
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
@@ -187,7 +196,7 @@ export default function AdminQuestionsManager() {
   useEffect(() => {
     const loadAllAssessments = async () => {
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
         const results: ApiAssessment[] = [];
         for (const m of modules) {
           const list = await fetchAssessments(m);
