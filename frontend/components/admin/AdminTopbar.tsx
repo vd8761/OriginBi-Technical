@@ -152,14 +152,7 @@ export default function AdminTopbar() {
             ) : (
               <p className="mt-1 text-[11px] font-bold text-brand-green tracking-wide">{eyebrow}</p>
             )}
-            <h1 style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--admin-fg)" }}>
-              {title}
-            </h1>
-            {subtitle ? (
-              <p style={{ margin: "2px 0 0", color: "var(--admin-fg-3)", fontSize: 12.5 }}>{subtitle}</p>
-            ) : eyebrow !== title ? (
-              <p style={{ margin: "2px 0 0", color: "var(--admin-fg-3)", fontSize: 12.5 }}>{eyebrow}</p>
-            ) : null}
+
           </div>
         </div>
 

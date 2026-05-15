@@ -37,7 +37,7 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
       { href: "/admin/question-banks", label: "Question Banks", icon: Database, countKey: "questions" },
       { href: "/admin/exam-packages", label: "Assessments", icon: PackageCheck, countKey: "exam-packages" },
-      { href: "/admin/questions", label: "MCQ Authoring", eyebrow: "Legacy", icon: Banknote },
+      { href: "/admin/questions", label: "MCQ Authoring", icon: Banknote },
     ],
   },
   {
