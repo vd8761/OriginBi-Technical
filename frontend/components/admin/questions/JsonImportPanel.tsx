@@ -26,10 +26,12 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
       case "aptitude":
       case "mnc":
       case "role": {
-        if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
-        if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
+        if (kind !== "numerical") {
+          if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
+          if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
+        }
         
-        const opts = item.options.map((o: { text: string }, j: number) => ({ id: `opt_${j}`, text: o.text }));
+        const opts = (item.options || []).map((o: { text: string }, j: number) => ({ id: `opt_${j}`, text: o.text }));
         
         let correctOptionId = "";
         let correctOptionIds: string[] = [];
@@ -39,6 +41,9 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
           correctOptionIds = indices.map((idx: number) => opts[idx]?.id).filter(Boolean);
           if (correctOptionIds.length === 0) throw new Error(`Q${i + 1}: MSQ needs correctOptionIndices.`);
           correctOptionId = correctOptionIds[0];
+        } else if (kind === "numerical") {
+          correctOptionId = "";
+          correctOptionIds = [];
         } else {
           const idx = item.correctOptionIndex !== undefined ? item.correctOptionIndex : 0;
           if (!opts[idx]) throw new Error(`Q${i + 1}: invalid correctOptionIndex.`);
@@ -49,6 +54,7 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         const q: any = {
           id: baseId, text: item.text, options: opts, 
           correctOptionId, correctOptionIds, kind,
+          correctAnswer: item.correctAnswer || (kind === "numerical" ? (item.explanation || "") : undefined),
           difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
           explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
         };

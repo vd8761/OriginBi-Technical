@@ -204,10 +204,10 @@ export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border:
   scenario: { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", border: "border-orange-500/20" },
 };
 
-export type QuestionKind = "mcq" | "msq" | "tf";
+export type QuestionKind = "mcq" | "msq" | "tf" | "numerical";
 
 // ── Union type for any question ──
-export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion) & { kind?: QuestionKind; correctOptionIds?: string[] };
+export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion) & { kind?: QuestionKind; correctOptionIds?: string[]; correctAnswer?: string };
 
 // ── Sample JSONs ──
 // ── Sample JSONs ──
@@ -245,6 +245,16 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
       { "text": "False" }
     ],
     "correctOptionIndex": 0
+  },
+  {
+    "category": "QA",
+    "kind": "numerical",
+    "text": "What is the square root of 625?",
+    "correctAnswer": "25",
+    "explanation": "The square root of 625 is 25.",
+    "difficulty": "medium",
+    "marks": 2,
+    "negativeMarks": 0
   }
 ]`,
   mnc: `[

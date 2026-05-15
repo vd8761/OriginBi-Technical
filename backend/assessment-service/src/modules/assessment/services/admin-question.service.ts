@@ -521,13 +521,18 @@ export class AdminQuestionService {
           const explanation = q.explanation || null;
           if (!questionText) continue;
 
-          const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
-          const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, null, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'];
-          let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9'];
+          const metadata = q.metadata || {};
+          if (q.kind) metadata.kind = q.kind;
+          if (q.correctAnswer) metadata.correctAnswer = q.correctAnswer;
+          if (q.correctOptionIds) metadata.correctOptionIds = q.correctOptionIds;
 
-          if (config.subcategoryColumn && subcategory) {
+          const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode', 'metadata'];
+          const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial', JSON.stringify(metadata)];
+          let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9', '$10'];
+
+          if (config.subcategoryColumn) {
             columns.push(config.subcategoryColumn);
-            values.push(subcategory);
+            values.push(subcategory || category || 'General');
             placeholders.push(`$${values.length}`);
           }
 
@@ -547,8 +552,10 @@ export class AdminQuestionService {
               insertedOpts.push(oInsert[0]);
             }
             const correctIdx = q.correctOptionIndex ?? q.correctOptionId ?? 0;
-            const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
-            await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+            if (insertedOpts.length > 0) {
+              const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
+              await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+            }
           }
           imported++;
         } catch (e: any) {

@@ -304,7 +304,8 @@ export class AssessmentService {
       const typeFilter = `AND (
         ( (q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = '' OR q.metadata->>'kind' = 'mcq') AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE ) OR
         ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
-        ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE )
+        ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE ) OR
+        ( q.metadata->>'kind' = 'numerical' AND (ass.enabled_question_types->>'numerical')::boolean IS NOT FALSE )
       )`;
 
       if (!config.hasMode) {
@@ -393,12 +394,14 @@ export class AssessmentService {
   private inferQuestionKind(enabledTypes?: any): string | null {
     if (!enabledTypes) return null;
     const mcq = enabledTypes.mcq !== false;
-    const msq = enabledTypes.msq !== false;
-    const tf = enabledTypes.true_false !== false;
+    const msq = enabledTypes.msq === true;
+    const tf = enabledTypes.true_false === true;
+    const num = enabledTypes.numerical === true;
 
     // If only one type is enabled, infer that as the kind
-    if (msq && !mcq && !tf) return 'msq';
-    if (tf && !mcq && !msq) return 'tf';
+    if (msq && !mcq && !tf && !num) return 'msq';
+    if (tf && !mcq && !msq && !num) return 'tf';
+    if (num && !mcq && !msq && !tf) return 'numerical';
     // If MCQ is the only enabled type or multiple types are enabled, return null (default mcq)
     return null;
   }
@@ -752,6 +755,10 @@ export class AssessmentService {
               isCorrectAnswer = studentChoices.length > 0 &&
                                studentChoices.length === correctChoices.length &&
                                studentChoices.every(id => correctChoices.includes(id));
+            } else if (kind === 'numerical') {
+              const studentAnswer = String(selectedOptionId || '').trim().toLowerCase();
+              const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+              isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
             } else {
               // Standard MCQ / TF (single choice)
               isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
@@ -769,15 +776,21 @@ export class AssessmentService {
               sectionMap[category].score -= negativeApplied;
             }
 
+            const metadataUpdate = { 
+              ...(aq.metadata || {}), 
+              submittedAnswer: (kind === 'numerical' || kind === 'msq') ? selectedOptionId : null 
+            };
+
             await queryRunner.query(
               `UPDATE ${config.junction}
-               SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW()
-               WHERE attempt_question_id = $5`,
+               SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW(), metadata = $5
+               WHERE attempt_question_id = $6`,
               [
-                Array.isArray(selectedOptionId) ? null : selectedOptionId, 
+                (kind === 'numerical' || kind === 'msq') ? null : selectedOptionId, 
                 isCorrectAnswer, 
                 scoreAwarded, 
                 negativeApplied, 
+                JSON.stringify(metadataUpdate),
                 aq.attempt_question_id,
               ],
             );

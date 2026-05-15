@@ -59,6 +59,7 @@ export default function AssessmentSettingsPage() {
   const [enabledMCQ, setEnabledMCQ] = useState(true);
   const [enabledMSQ, setEnabledMSQ] = useState(false);
   const [enabledTF, setEnabledTF] = useState(false);
+  const [enabledNumerical, setEnabledNumerical] = useState(false);
 
   const handleSave = async () => {
     const a = assessments[activeModule];
@@ -91,6 +92,7 @@ export default function AssessmentSettingsPage() {
           mcq: enabledMCQ,
           msq: enabledMSQ,
           true_false: enabledTF,
+          numerical: enabledNumerical,
         }
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
@@ -249,10 +251,11 @@ export default function AssessmentSettingsPage() {
     setEasyNeg(Number(n.easy)); setMediumNeg(Number(n.medium)); setHardNeg(Number(n.hard));
     
     // Populate Question Types
-    const qTypes = parseMap(a.enabled_question_types, { mcq: false, msq: false, true_false: false });
+    const qTypes = parseMap(a.enabled_question_types, { mcq: false, msq: false, true_false: false, numerical: false });
     setEnabledMCQ(Boolean(qTypes.mcq));
     setEnabledMSQ(Boolean(qTypes.msq));
     setEnabledTF(Boolean(qTypes.true_false));
+    setEnabledNumerical(Boolean(qTypes.numerical));
 
     setHasModifications(false);
   };
@@ -406,13 +409,23 @@ export default function AssessmentSettingsPage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
                         <div className="sm:max-w-md">
                           <label className={labelCls}>True or False</label>
                           <p className={descCls}>Simple binary choice format. Ideal for quick verification of facts or logic statements.</p>
                         </div>
                         <div className="sm:max-w-[400px] w-full flex justify-end">
                           <Switch checked={enabledTF} onCheckedChange={(val) => { setEnabledTF(val); markDirty(); }} />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                        <div className="sm:max-w-md">
+                          <label className={labelCls}>Numerical Input</label>
+                          <p className={descCls}>Requires candidates to type a specific numerical value. Perfect for math and data-heavy aptitude questions.</p>
+                        </div>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch checked={enabledNumerical} onCheckedChange={(val) => { setEnabledNumerical(val); markDirty(); }} />
                         </div>
                       </div>
                     </div>
