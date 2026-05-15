@@ -1,10 +1,20 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
-import { AssessmentType, ASSESSMENT_TYPE_LABELS } from "./types";
+import {
+  AssessmentType,
+  ASSESSMENT_TYPE_LABELS,
+  getSupportedQuestionKinds,
+  parseQuestionKindEnabledMap,
+  QUESTION_KIND_DESCRIPTIONS,
+  QUESTION_KIND_LABELS,
+  QuestionKind,
+  QuestionKindEnabledMap,
+  serializeQuestionKindEnabledMap,
+} from "./types";
 import { AptitudeIcon, CommunicationIcon, MNCIcon, RoleIcon, ArrowRightWithoutLineIcon } from "@/components/icons";
 import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
@@ -18,8 +28,11 @@ type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" |
 
 export default function AssessmentSettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const moduleParam = searchParams.get("module") as AssessmentType;
+  
   const [assessments, setAssessments] = useState<Record<string, ApiAssessment>>({});
-  const [activeModule, setActiveModule] = useState<AssessmentType>("aptitude");
+  const [activeModule, setActiveModule] = useState<AssessmentType>(moduleParam || "aptitude");
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,11 +68,12 @@ export default function AssessmentSettingsPage() {
   const [hardMarks, setHardMarks] = useState<number | "">(5);
   const [hardNeg, setHardNeg] = useState<number | "">(0.25);
 
-  // Question Type Settings
-  const [enabledMCQ, setEnabledMCQ] = useState(true);
-  const [enabledMSQ, setEnabledMSQ] = useState(false);
-  const [enabledTF, setEnabledTF] = useState(false);
-  const [enabledNumerical, setEnabledNumerical] = useState(false);
+  const [enabledQuestionKinds, setEnabledQuestionKinds] = useState<QuestionKindEnabledMap>({
+    mcq: true,
+    msq: false,
+    tf: false,
+    numerical: false,
+  });
 
   const handleSave = async () => {
     const a = assessments[activeModule];
@@ -88,12 +102,7 @@ export default function AssessmentSettingsPage() {
         amount: amount === "" ? 0 : Number(amount),
         trialAttemptsLimit: trialAttemptsLimit === "" ? 5 : Number(trialAttemptsLimit),
         mainAttemptsLimit: mainAttemptsLimit === "" ? 2 : Number(mainAttemptsLimit),
-        enabled_question_types: {
-          mcq: enabledMCQ,
-          msq: enabledMSQ,
-          true_false: enabledTF,
-          numerical: enabledNumerical,
-        }
+        enabled_question_types: serializeQuestionKindEnabledMap(enabledQuestionKinds)
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -169,6 +178,12 @@ export default function AssessmentSettingsPage() {
   };
 
   useEffect(() => {
+    if (moduleParam && moduleParam !== activeModule) {
+      setActiveModule(moduleParam);
+    }
+  }, [moduleParam, activeModule]);
+
+  useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
       try {
@@ -180,21 +195,12 @@ export default function AssessmentSettingsPage() {
         }
         setAssessments(results);
 
-        let initialMod: AssessmentType = "aptitude";
-        if (typeof window !== "undefined") {
-          const params = new URLSearchParams(window.location.search);
-          const queryMod = params.get("module") as AssessmentType;
-          if (queryMod && modules.includes(queryMod)) {
-            initialMod = queryMod;
-          }
-        }
-        setActiveModule(initialMod);
-        if (results[initialMod]) populateForm(results[initialMod]);
+        if (results[activeModule]) populateForm(results[activeModule]);
       } catch (err) { console.error("Failed to load assessments:", err); }
       finally { setLoading(false); }
     };
     loadAll();
-  }, []);
+  }, [activeModule]);
 
   // Sync form when module changes
   useEffect(() => {
@@ -251,16 +257,18 @@ export default function AssessmentSettingsPage() {
     setEasyNeg(Number(n.easy)); setMediumNeg(Number(n.medium)); setHardNeg(Number(n.hard));
     
     // Populate Question Types
-    const qTypes = parseMap(a.enabled_question_types, { mcq: false, msq: false, true_false: false, numerical: false });
-    setEnabledMCQ(Boolean(qTypes.mcq));
-    setEnabledMSQ(Boolean(qTypes.msq));
-    setEnabledTF(Boolean(qTypes.true_false));
-    setEnabledNumerical(Boolean(qTypes.numerical));
+    setEnabledQuestionKinds(parseQuestionKindEnabledMap(activeModule, a.enabled_question_types));
 
     setHasModifications(false);
   };
 
   const markDirty = () => setHasModifications(true);
+  const visibleQuestionKinds = getSupportedQuestionKinds(activeModule);
+
+  const toggleQuestionKind = (kind: QuestionKind, enabled: boolean) => {
+    setEnabledQuestionKinds(prev => ({ ...prev, [kind]: enabled }));
+    markDirty();
+  };
 
   const inputCls = "block w-full max-w-lg rounded-xl border-0 py-3 px-4 bg-slate-50 dark:bg-white/5 text-black dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-black/30 dark:placeholder:text-white/30 focus:ring-2 focus:ring-inset focus:ring-brand-green sm:text-sm transition-all hover:ring-slate-300 dark:hover:ring-white/20";
   const labelCls = "block text-[15px] font-bold leading-tight text-slate-900 dark:text-white";
@@ -389,45 +397,22 @@ export default function AssessmentSettingsPage() {
                   {/* Question Type Tab */}
                   {activeTab === "question_type" && (
                     <div className="space-y-12">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
-                        <div className="sm:max-w-md">
-                          <label className={labelCls}>Multiple Choice (MCQ)</label>
-                          <p className={descCls}>Single correct answer from multiple options. The most common format for all modules.</p>
+                      {visibleQuestionKinds.map((kind, index) => (
+                        <div
+                          key={kind}
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-6 ${
+                            index < visibleQuestionKinds.length - 1 ? "pb-10 border-b border-slate-50 dark:border-white/[0.02]" : ""
+                          }`}
+                        >
+                          <div className="sm:max-w-md">
+                            <label className={labelCls}>{QUESTION_KIND_LABELS[kind]}</label>
+                            <p className={descCls}>{QUESTION_KIND_DESCRIPTIONS[kind]}</p>
+                          </div>
+                          <div className="sm:max-w-[400px] w-full flex justify-end">
+                            <Switch checked={enabledQuestionKinds[kind]} onCheckedChange={(val) => toggleQuestionKind(kind, val)} />
+                          </div>
                         </div>
-                        <div className="sm:max-w-[400px] w-full flex justify-end">
-                          <Switch checked={enabledMCQ} onCheckedChange={(val) => { setEnabledMCQ(val); markDirty(); }} />
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
-                        <div className="sm:max-w-md">
-                          <label className={labelCls}>Multi-Select MCQ (MSQ)</label>
-                          <p className={descCls}>Allows candidates to select one or more correct options. Good for complex technical or logical scenarios.</p>
-                        </div>
-                        <div className="sm:max-w-[400px] w-full flex justify-end">
-                          <Switch checked={enabledMSQ} onCheckedChange={(val) => { setEnabledMSQ(val); markDirty(); }} />
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
-                        <div className="sm:max-w-md">
-                          <label className={labelCls}>True or False</label>
-                          <p className={descCls}>Simple binary choice format. Ideal for quick verification of facts or logic statements.</p>
-                        </div>
-                        <div className="sm:max-w-[400px] w-full flex justify-end">
-                          <Switch checked={enabledTF} onCheckedChange={(val) => { setEnabledTF(val); markDirty(); }} />
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                        <div className="sm:max-w-md">
-                          <label className={labelCls}>Numerical Input</label>
-                          <p className={descCls}>Requires candidates to type a specific numerical value. Perfect for math and data-heavy aptitude questions.</p>
-                        </div>
-                        <div className="sm:max-w-[400px] w-full flex justify-end">
-                          <Switch checked={enabledNumerical} onCheckedChange={(val) => { setEnabledNumerical(val); markDirty(); }} />
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   )}
 

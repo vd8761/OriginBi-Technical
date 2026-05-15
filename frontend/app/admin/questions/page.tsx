@@ -8,7 +8,6 @@ function MCQAuthoringInner() {
   useRegisterAdminPage({
     eyebrow: "Question Banks",
     title: "MCQ Authoring",
-    subtitle: "Legacy MCQ editor — being migrated to the redesigned coding bank workflow.",
     breadcrumb: [
       { label: "Admin Hub", href: "/admin" },
       { label: "Question Banks", href: "/admin/coding" },

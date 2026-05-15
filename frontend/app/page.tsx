@@ -127,11 +127,9 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal 
-          userName={userName} 
-          onLogout={handleLogout} 
-          initialView={initialView} 
-        />
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+        </div>
       )}
     </>
   );
