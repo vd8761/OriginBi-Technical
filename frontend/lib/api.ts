@@ -6,8 +6,8 @@ const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/
 // Go exam-engine (attempts, code runs, plugins, etc.)
 export const API_BASE = configuredApiBase || "";
 
-// NestJS assessment-service (Cognito auth, etc.)
-export const AUTH_API_BASE = configuredAuthBase || "";
+// OriginBI auth-service from the sibling app (Cognito auth).
+export const AUTH_API_BASE = configuredAuthBase || "http://localhost:4002";
 
 export const STUDENT_API_BASE =
   process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
@@ -109,12 +109,14 @@ export function clearAdminSession() {
 }
 
 export interface ApiUser {
-  id: string;
+  id: string | number;
   email: string;
   role: string | null;
   cognitoSub: string | null;
   emailVerified: boolean;
   isActive: boolean;
+  isAdmin?: boolean;
+  status?: string;
 }
 
 export interface ApiRegistration {
@@ -157,6 +159,7 @@ export interface RegisterRequest {
   currentYear?: string;
   currentRole?: string;
   roleDescription?: string;
+  registrationSource?: string;
 }
 
 export interface Assignment {
@@ -493,7 +496,7 @@ async function refreshAccessToken(scope: TokenScope): Promise<boolean> {
   return refreshInFlight[scope];
 }
 
-async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
+export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
   const { baseOverride, auth = true, _retried, ...rest } = init;
   const tokenScope = resolveTokenScope(path);
   // Proactively refresh if we know the token's expired — avoids a guaranteed
@@ -585,18 +588,21 @@ async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (!res.ok) {
-    const msg =
-      (data && (data.message || data.error)) ??
-      (Array.isArray(data?.message) ? data.message.join(", ") : null) ??
-      res.statusText;
+    const msg = errorMessageFrom(data) ?? res.statusText;
     throw new ApiError(res.status, msg, data?.__raw);
   }
   return data as T;
 }
 
-function safeJson(text: string): any {
+interface ErrorEnvelope {
+  message?: string | string[];
+  error?: string;
+  __raw?: string;
+}
+
+function safeJson(text: string): ErrorEnvelope & Record<string, unknown> {
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as ErrorEnvelope & Record<string, unknown>;
   } catch {
     // Non-JSON body (commonly an HTML error page from a misrouted request).
     // Avoid surfacing the entire payload as the error message — callers
@@ -611,17 +617,40 @@ function safeJson(text: string): any {
   }
 }
 
-// ── Auth (NestJS assessment-service, Cognito-backed) ──────────────────────
+function errorMessageFrom(data: ErrorEnvelope | null): string | null {
+  if (!data) return null;
+  if (Array.isArray(data.message)) return data.message.join(", ");
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.error === "string") return data.error;
+  return null;
+}
+
+// ── Auth (sibling auth-service, Cognito-backed) ───────────────────────────
 
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  const res = await apiFetch<any>("/student/register/tech", {
+  await assertRegistrationEmailAvailable(input.email);
+  const registrationSource = input.registrationSource || "originbi-technical";
+
+  const cognito = await apiFetch<{ sub?: string; email?: string; group?: string }>("/internal/cognito/users", {
     method: "POST",
     body: JSON.stringify({
-      full_name: input.fullName,
       email: input.email,
-      mobile_number: input.mobileNumber,
-      country_code: input.countryCode,
       password: input.password,
+      groupName: input.role === "ADMIN" ? "ADMIN" : "STUDENT",
+    }),
+    baseOverride: AUTH_API_BASE,
+    auth: false,
+  });
+
+  if (!cognito.sub) {
+    throw new ApiError(502, "Auth service did not return a Cognito user id.");
+  }
+
+  return apiFetch<AuthResponse>("/v1/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      name: input.fullName,
       gender: input.gender,
       is_tech_assessment: 1,
       program_code: input.programCode,
@@ -632,18 +661,19 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       current_year: input.currentYear,
       current_role: input.currentRole,
       role_description: input.roleDescription,
+      countryCode: input.countryCode,
+      phone: input.mobileNumber,
+      role: input.role || "STUDENT",
+      registrationSource,
+      cognitoSub: cognito.sub,
+      metadata: {
+        source: registrationSource,
+        cognitoGroup: cognito.group || "STUDENT",
+      },
     }),
-    baseOverride: STUDENT_API_BASE,
+    baseOverride: API_BASE,
     auth: false,
   });
-  
-  // Note: Main Student Service returns { success: true } and triggers emails.
-  // It doesn't return tokens; the user must log in after registration.
-  
-  return {
-    user: { email: input.email } as ApiUser,
-    registration: null,
-  };
 }
 
 export async function getDepartments(): Promise<any[]> {
@@ -656,24 +686,75 @@ export async function getDepartments(): Promise<any[]> {
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
   const res = await apiFetch<any>("/auth/login", {
+interface LoginResponseBody {
+  accessToken?: string;
+  idToken?: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  tokenType?: string;
+}
+
+interface EmailAvailabilityResponse {
+  available: boolean;
+}
+
+interface LoginOptions {
+  group?: string;
+}
+
+async function assertRegistrationEmailAvailable(email: string): Promise<void> {
+  const result = await apiFetch<EmailAvailabilityResponse>(
+    `/v1/auth/email-availability?email=${encodeURIComponent(email)}`,
+    {
+      baseOverride: API_BASE,
+      auth: false,
+    },
+  );
+  if (!result.available) {
+    throw new ApiError(409, "email already registered");
+  }
+}
+
+export async function loginUser(
+  email: string,
+  password: string,
+  options: LoginOptions = {},
+): Promise<AuthResponse> {
+  const res = await apiFetch<LoginResponseBody>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      ...(options.group ? { group: options.group } : {}),
+    }),
     baseOverride: AUTH_API_BASE,
     auth: false,
   });
 
-  const tokens = res.accessToken ? {
+  if (!res.accessToken || !res.idToken) {
+    throw new ApiError(502, "Auth service did not return a complete token set.");
+  }
+
+  const tokens = {
     accessToken: res.accessToken,
     idToken: res.idToken,
     refreshToken: res.refreshToken,
-  } : undefined;
+    expiresIn: res.expiresIn,
+    tokenType: res.tokenType,
+  };
+  setTokens(tokens);
 
-  if (tokens) setTokens(tokens);
+  const session = await getSession();
+  if (!session) {
+    throw new ApiError(
+      401,
+      "Login succeeded in Cognito, but this account is not registered in OriginBI Technical.",
+    );
+  }
 
   return {
-    user: res.user || { email },
-    registration: res.registration || null,
-    tokens
+    ...session,
+    tokens,
   };
 }
 
@@ -697,8 +778,8 @@ export async function logoutUser(): Promise<void> {
 export async function getSession(): Promise<AuthResponse | null> {
   if (!getAccessToken("user")) return null;
   try {
-    const res = await apiFetch<Omit<AuthResponse, "tokens">>("/auth/session", {
-      baseOverride: AUTH_API_BASE,
+    const res = await apiFetch<Omit<AuthResponse, "tokens">>("/v1/auth/session", {
+      baseOverride: API_BASE,
     });
     return { ...res, tokens: undefined };
   } catch (err) {
@@ -861,6 +942,20 @@ export async function updatePluginState(
   });
 }
 
+/** Persists a plugin's admin-facing platform config. Accepts UUIDs or slugs. */
+export async function updatePluginConfig(
+  pluginIdOrSlug: string,
+  input: { config: Record<string, unknown>; state?: Plugin["platformState"] },
+): Promise<Plugin> {
+  return apiFetch<Plugin>(`/v1/admin/plugins/${encodeURIComponent(pluginIdOrSlug)}/config`, {
+    method: "PUT",
+    body: JSON.stringify({
+      config: input.config,
+      ...(input.state ? { state: input.state } : {}),
+    }),
+  });
+}
+
 /** Back-compat shim — old plugins page called updatePlugin(id, { state }). */
 export async function updatePlugin(
   pluginId: string,
@@ -1020,5 +1115,116 @@ export async function getUserEntitlements(
 ): Promise<{ entitlements: AdminUserEntitlement[] }> {
   return apiFetch<{ entitlements: AdminUserEntitlement[] }>(
     `/v1/admin/users/${userId}/entitlements`,
+  );
+}
+
+// ── Admin users roster ────────────────────────────────────────────────────
+
+export interface AdminUserRow {
+  id: number;
+  email: string;
+  fullName: string;
+  role: string;
+  roleGroup: "Admin" | "Proctor" | "Student";
+  status: "active" | "blocked" | "pending";
+  institutionName: string;
+  assessments: number;
+  lastSeenAt: string | null;
+  createdAt: string | null;
+}
+
+export interface AdminUserCounts {
+  total: number;
+  students: number;
+  admins: number;
+  proctors: number;
+  blocked: number;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUserRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  counts: AdminUserCounts;
+}
+
+export interface ListAdminUsersParams {
+  q?: string;
+  role?: "admin" | "proctor" | "student";
+  status?: "active" | "blocked" | "pending";
+  limit?: number;
+  offset?: number;
+}
+
+// ── Admin dashboard summary ───────────────────────────────────────────────
+
+export interface AdminDashboardKPIs {
+  activeCandidates: number;
+  activeCandidatesOnline: number;
+  questionBankTotal: number;
+  questionBankPluginCount: number;
+  liveSessions: number;
+  liveSessionsMonitored: number;
+  flaggedToday: number;
+  flaggedAwaitingReview: number;
+}
+
+export interface AdminDashboardLiveAssessment {
+  examVersionId: string;
+  name: string;
+  module: string;
+  status: "live" | "scheduled" | "draft";
+  completed: number;
+  total: number;
+  durationMinutes: number;
+  updatedAt: string;
+}
+
+export interface AdminDashboardActivityItem {
+  id: string;
+  actor: string;
+  action: string;
+  target: string;
+  tone: "green" | "amber" | "red" | "blue" | "neutral";
+  createdAt: string;
+}
+
+export interface AdminDashboardDayCount {
+  day: string;
+  count: number;
+}
+
+export interface AdminDashboardSeries {
+  submissionsPerDay: AdminDashboardDayCount[];
+  proctorIncidentsPerDay: AdminDashboardDayCount[];
+  submissionsWeekTotal: number;
+  proctorIncidentsWeek: number;
+  avgPassRateWeek: number | null;
+}
+
+export interface AdminDashboardSummary {
+  kpis: AdminDashboardKPIs;
+  liveAssessments: AdminDashboardLiveAssessment[];
+  recentActivity: AdminDashboardActivityItem[];
+  series: AdminDashboardSeries;
+}
+
+export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary> {
+  return apiFetch<AdminDashboardSummary>(`/v1/admin/dashboard-summary`);
+}
+
+export async function listAdminUsers(
+  params: ListAdminUsersParams = {},
+): Promise<AdminUsersResponse> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.role) qs.set("role", params.role);
+  if (params.status) qs.set("status", params.status);
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  const suffix = qs.toString();
+  return apiFetch<AdminUsersResponse>(
+    `/v1/admin/users${suffix ? `?${suffix}` : ""}`,
   );
 }

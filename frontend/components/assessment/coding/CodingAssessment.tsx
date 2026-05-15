@@ -37,6 +37,7 @@ import {
     type SnapshotQuestion,
 } from "@/lib/api";
 import { useTheme } from "@/lib/contexts/ThemeContext";
+import { MountPoint, useCommandStream, usePluginRuntime } from "@/plugins";
 
 const STATUS_KEY = "ob_statuses";
 const CURRENT_Q_KEY = "ob_current_q";
@@ -131,6 +132,13 @@ const formatTime = (secs: number) => {
     const s = safe % 60;
     if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
+const payloadToRecord = (payload: unknown): Record<string, unknown> => {
+    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        return payload as Record<string, unknown>;
+    }
+    return {};
 };
 
 const FlagBadge: React.FC = () => (
@@ -579,6 +587,8 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         [snapshot],
     );
     const backendAttemptId = snapshot?.attempt.id;
+    const pluginRuntime = usePluginRuntime();
+    useCommandStream(backendAttemptId ?? null);
     const examQuestionByLocalId = useMemo(() => {
         const map: Record<number, string> = {};
         snapshot?.questions.forEach((question) => {
@@ -599,6 +609,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     const [submitNextRetryIn, setSubmitNextRetryIn] = useState(0);
     // Mutable refs so async submit loop sees latest state without re-binding.
     const submitTriggerRef = useRef<(() => void) | null>(null);
+    const terminationHandledRef = useRef(false);
     const [saved, setSaved] = useState(true);
     const [splitPct, setSplitPct] = useState(42);
     const [fontSize, setFontSize] = useState(14);
@@ -1180,7 +1191,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
 
                     // If the server explicitly returned 4xx (other than 401 which
                     // the api layer auto-refreshes), it won't get better — bail.
-                    const status = (err as any)?.status as number | undefined;
+                    const status = (err as { status?: number })?.status;
                     const isRetriable =
                         status === undefined || status >= 500 || status === 401 || status === 408;
 
@@ -1271,6 +1282,42 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         traceEvent,
     ]);
 
+    useEffect(() => {
+        terminationHandledRef.current = false;
+    }, [backendAttemptId]);
+
+    useEffect(() => {
+        if (!pluginRuntime || !backendAttemptId || submitted) return;
+        return pluginRuntime.subscribe("attempt.terminate", (payload) => {
+            if (terminationHandledRef.current) return;
+            terminationHandledRef.current = true;
+            const data = payloadToRecord(payload);
+            showViolationToast(
+                String(data.title ?? "Assessment locked"),
+                String(data.message ?? "The tab-switch limit was exceeded. Your attempt is being submitted."),
+            );
+            traceEvent("attempt.auto_terminate_received", 2, {
+                reason: data.reason ?? "tab-switch-limit-exceeded",
+                count: data.count,
+                threshold: data.threshold,
+                decisionId: data.decisionId,
+            });
+            timer.setRunning(false);
+            setShowSubmit(false);
+            window.setTimeout(() => {
+                void handleConfirmSubmit();
+            }, 250);
+        });
+    }, [
+        backendAttemptId,
+        handleConfirmSubmit,
+        pluginRuntime,
+        showViolationToast,
+        submitted,
+        timer,
+        traceEvent,
+    ]);
+
     // Auto-resume an interrupted submission on mount (e.g. user reloaded
     // while the modal was up). Picks up the same buffer that was persisted.
     useEffect(() => {
@@ -1283,7 +1330,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         try {
             const pending = JSON.parse(raw) as {
                 attemptId: string;
-                answers: Array<{ examQuestionId: string; state: string; payload: any }>;
+                answers: Array<{
+                    examQuestionId: string;
+                    state: string;
+                    payload: ReturnType<typeof buildPayloadForQuestion>;
+                }>;
             };
             if (pending.attemptId !== backendAttemptId) return;
             timer.setRunning(false);
@@ -1503,6 +1554,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             className={`coding-exam-root flex h-screen flex-col overflow-hidden ${theme === "light" ? "coding-theme-light" : "coding-theme-dark"}`}
             style={{ fontFamily: "var(--font-jakarta)" }}
         >
+            <MountPoint id="attempt.background" />
             <Header
                 question={q}
                 currentQ={currentQ}
@@ -1540,6 +1592,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 attemptsCount={attemptsCount}
                 attemptsLimit={attemptsLimit}
             />
+            <MountPoint id="attempt.toolbar" />
 
             <div
                 ref={containerRef}
@@ -1638,6 +1691,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 title={lastViolation.title}
                 desc={lastViolation.desc}
             />
+            <MountPoint id="attempt.warning-toast" />
 
             {process.env.NODE_ENV === "development" && <DevControls {...devProps} />}
         </div>

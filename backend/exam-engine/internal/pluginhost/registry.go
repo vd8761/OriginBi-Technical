@@ -31,6 +31,13 @@ type Registry struct {
 	// actions is the registry of plugin action handlers, populated by plugin
 	// packages calling RegisterAction during bootstrap. See dispatcher.go.
 	actions *actionRegistry
+	// events is the in-process publish/subscribe bus shared by all plugins.
+	// Lazy-initialised on first Events() call to keep zero-value Registries
+	// (e.g. ad-hoc test instances) usable without explicit setup.
+	events *EventBus
+	// commands is the engine→client SSE command hub, lazy-initialised on first
+	// access via Commands(). See pluginhost/commands.go.
+	commands *CommandHub
 }
 
 // BootstrapOptions configures the load. Zero value is fine; tests typically
