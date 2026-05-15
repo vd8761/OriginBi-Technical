@@ -206,6 +206,85 @@ export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border:
 
 export type QuestionKind = "mcq" | "msq" | "tf" | "numerical";
 
+export type QuestionKindEnabledMap = Record<QuestionKind, boolean>;
+
+export const QUESTION_KIND_LABELS: Record<QuestionKind, string> = {
+  mcq: "Multiple Choice (MCQ)",
+  msq: "Multiple Choice (MSQ)",
+  tf: "True / False",
+  numerical: "Numerical Input",
+};
+
+export const QUESTION_KIND_DESCRIPTIONS: Record<QuestionKind, string> = {
+  mcq: "Single correct answer from multiple options. The most common format for all modules.",
+  msq: "Allows candidates to select one or more correct options. Good for complex technical or logical scenarios.",
+  tf: "Simple binary choice format. Ideal for quick verification of facts or logic statements.",
+  numerical: "Requires candidates to type a specific numerical value. Perfect for math and data-heavy aptitude questions.",
+};
+
+export const QUESTION_KIND_STORAGE_KEYS: Record<QuestionKind, string> = {
+  mcq: "mcq",
+  msq: "msq",
+  tf: "true_false",
+  numerical: "numerical",
+};
+
+export const ASSESSMENT_SUPPORTED_QUESTION_KINDS: Record<AssessmentType, readonly QuestionKind[]> = {
+  aptitude: ["mcq", "msq", "tf", "numerical"],
+  mnc: ["mcq", "msq", "tf"],
+  communication: ["mcq"],
+  role: ["mcq", "msq", "tf"],
+  coding: ["mcq"],
+};
+
+export function getSupportedQuestionKinds(assessmentType: AssessmentType): QuestionKind[] {
+  return [...ASSESSMENT_SUPPORTED_QUESTION_KINDS[assessmentType]];
+}
+
+export function parseQuestionKindEnabledMap(
+  assessmentType: AssessmentType,
+  raw: unknown,
+  options?: { fallbackToSupported?: boolean }
+): QuestionKindEnabledMap {
+  const fallbackToSupported = options?.fallbackToSupported ?? false;
+  let parsed: Record<string, unknown> = {};
+
+  if (raw && typeof raw === "object") {
+    parsed = raw as Record<string, unknown>;
+  } else if (typeof raw === "string") {
+    try {
+      const json = JSON.parse(raw);
+      if (json && typeof json === "object") {
+        parsed = json as Record<string, unknown>;
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+
+  const enabledMap = (Object.keys(QUESTION_KIND_LABELS) as QuestionKind[]).reduce((acc, kind) => {
+    acc[kind] = false;
+    return acc;
+  }, {} as QuestionKindEnabledMap);
+
+  for (const kind of getSupportedQuestionKinds(assessmentType)) {
+    const storageKey = QUESTION_KIND_STORAGE_KEYS[kind];
+    const storedValue = parsed[storageKey];
+    enabledMap[kind] =
+      typeof storedValue === "boolean"
+        ? storedValue
+        : fallbackToSupported;
+  }
+
+  return enabledMap;
+}
+
+export function serializeQuestionKindEnabledMap(enabledMap: Partial<QuestionKindEnabledMap>): Record<string, boolean> {
+  return (Object.keys(QUESTION_KIND_STORAGE_KEYS) as QuestionKind[]).reduce<Record<string, boolean>>((acc, kind) => {
+    acc[QUESTION_KIND_STORAGE_KEYS[kind]] = Boolean(enabledMap[kind]);
+    return acc;
+  }, {});
+}
 // ── Union type for any question ──
 export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion) & { kind?: QuestionKind; correctOptionIds?: string[]; correctAnswer?: string };
 
