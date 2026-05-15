@@ -6,11 +6,15 @@ import {
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS, MNC_TOPICS,
   COMM_TASK_LABELS, CommTaskType, RoleQuestionType,
-  DifficultyLevel, QuestionStatus,
+  DifficultyLevel, QuestionStatus, QuestionKind,
 } from "./types";
 import { generateId } from "./storage";
 import { uploadQuestionAsset } from "./api";
-import { X, Plus, Trash2, CheckCircle2, Image, Music, UploadCloud } from "lucide-react";
+import { X, Plus, Trash2, CheckCircle2, Image, Music, UploadCloud, CheckSquare, Square } from "lucide-react";
+import { McqEditor } from "./question-types/McqEditor";
+import { MsqEditor } from "./question-types/MsqEditor";
+import { TfEditor } from "./question-types/TfEditor";
+import { NumericalEditor } from "./question-types/NumericalEditor";
 import CustomSelect from "@/components/ui/CustomSelect";
 
 interface QuestionEditorProps {
@@ -31,6 +35,8 @@ export default function QuestionEditor({ question, assessmentType, categories = 
     { id: "opt_2", text: "" }, { id: "opt_3", text: "" },
   ]);
   const [correctId, setCorrectId] = useState("opt_0");
+  const [correctIds, setCorrectIds] = useState<string[]>(["opt_0"]);
+  const [kind, setKind] = useState<QuestionKind>("mcq");
 
   // Cloudflare R2 Upload States
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -148,6 +154,10 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         break;
       }
     }
+
+    if (q.kind) setKind(q.kind);
+    if (q.correctOptionIds) setCorrectIds(q.correctOptionIds);
+    else if (q.correctOptionId) setCorrectIds([q.correctOptionId]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -169,6 +179,44 @@ export default function QuestionEditor({ question, assessmentType, categories = 
   };
   const handleOptionChange = (idx: number, value: string) => {
     const u = [...options]; u[idx] = { ...u[idx], text: value }; setOptions(u);
+  };
+
+  const handleKindChange = (newKind: QuestionKind) => {
+    setKind(newKind);
+    if (newKind === "tf") {
+      const tfOptions = [
+        { id: "opt_true", text: "True" },
+        { id: "opt_false", text: "False" }
+      ];
+      setOptions(tfOptions);
+      setCorrectId("opt_true");
+      setCorrectIds(["opt_true"]);
+    } else if (newKind === "numerical") {
+      setOptions([]);
+      setCorrectId("");
+      setCorrectIds([]);
+    } else if (kind === "tf" || kind === "numerical") {
+      // Revert from TF/Numerical to MCQ/MSQ
+      setOptions([
+        { id: "opt_0", text: "" }, { id: "opt_1", text: "" },
+        { id: "opt_2", text: "" }, { id: "opt_3", text: "" },
+      ]);
+      setCorrectId("opt_0");
+      setCorrectIds(["opt_0"]);
+    }
+  };
+
+  const toggleCorrectId = (id: string) => {
+    if (kind === "msq") {
+      if (correctIds.includes(id)) {
+        if (correctIds.length > 1) setCorrectIds(correctIds.filter(i => i !== id));
+      } else {
+        setCorrectIds([...correctIds, id]);
+      }
+    } else {
+      setCorrectId(id);
+      setCorrectIds([id]);
+    }
   };
 
   // Comm sub-question helpers
@@ -229,9 +277,17 @@ export default function QuestionEditor({ question, assessmentType, categories = 
       if (["mcq", "reading", "audio"].includes(commTaskType) && commSubQuestions.length === 0) errs.push("At least 1 sub-question required.");
     } else {
       if (!text.trim()) errs.push("Question text required.");
-      const filledOptions = options.filter(o => o.text.trim());
-      if (filledOptions.length < 2) errs.push("At least 2 non-empty options required.");
-      if (filledOptions.length > 6) errs.push("Maximum 6 options allowed.");
+      if (kind === "numerical") {
+        if (!explanation.trim()) errs.push("Correct answer (Numerical) required in the explanation or specific field.");
+        // We'll use explanation field for the answer in some contexts, but let's assume we use metadata.correctAnswer
+        if (!(question as any).correctAnswer && !explanation.trim()) errs.push("Numerical answer required.");
+      } else {
+        const filledOptions = options.filter(o => o.text.trim());
+        if (filledOptions.length < 2) errs.push("At least 2 non-empty options required.");
+        if (filledOptions.length > 6) errs.push("Maximum 6 options allowed.");
+        
+        if (kind === "msq" && correctIds.length === 0) errs.push("At least one correct option required.");
+      }
     }
     setErrors(errs);
     return errs.length === 0;
@@ -266,6 +322,9 @@ export default function QuestionEditor({ question, assessmentType, categories = 
         status,
         assessmentId,
         explanation: explanation.trim(),
+        kind,
+        correctOptionIds: kind === "msq" ? correctIds : [correctId],
+        correctAnswer: kind === "numerical" ? explanation.trim() : undefined, // Using explanation for numerical answer as a shortcut if needed, or add a state
       };
 
       switch (assessmentType) {
@@ -363,6 +422,20 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                   <div>
                     <label className={labelCls}>Negative Marks</label>
                     <input type="number" value={0.25} disabled className={`${inputCls} opacity-60 cursor-not-allowed`} />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <CustomSelect
+                      label="Question Format"
+                      value={kind}
+                      onChange={(v) => handleKindChange(v as QuestionKind)}
+                      options={[
+                        { label: 'Single Choice (MCQ)', value: 'mcq' },
+                        { label: 'Multiple Choice (MSQ)', value: 'msq' },
+                        { label: 'True / False', value: 'tf' },
+                        { label: 'Numerical Input', value: 'numerical' }
+                      ]}
+                    />
                   </div>
 
                  {assessmentType === "aptitude" && (
@@ -513,40 +586,66 @@ export default function QuestionEditor({ question, assessmentType, categories = 
                     )}
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className={labelCls}>Options</label>
-                      {options.length < 6 && <button onClick={handleAddOption} className="px-2 py-1 rounded-md bg-brand-green/10 text-[9px] font-black uppercase text-brand-green transition-all hover:bg-brand-green hover:text-white">+ Add</button>}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className={labelCls}>{kind === "numerical" ? "Numerical Answer" : "Options"}</label>
+                        {kind !== "tf" && kind !== "numerical" && options.length < 6 && (
+                          <button 
+                            onClick={handleAddOption} 
+                            className="px-2 py-1 rounded-md bg-brand-green/10 text-[9px] font-black uppercase text-brand-green transition-all hover:bg-brand-green hover:text-white"
+                          >
+                            + Add
+                          </button>
+                        )}
+                      </div>
+                      
+                      {(() => {
+                        switch (kind) {
+                          case "numerical":
+                            return (
+                              <NumericalEditor
+                                value={explanation}
+                                onChange={setExplanation}
+                                inputCls={inputCls}
+                              />
+                            );
+                          case "msq":
+                            return (
+                              <MsqEditor
+                                options={options}
+                                correctIds={correctIds}
+                                onOptionChange={handleOptionChange}
+                                onToggleCorrect={toggleCorrectId}
+                                onRemoveOption={handleRemoveOption}
+                                inputCls={inputCls}
+                                labels={LABELS}
+                              />
+                            );
+                          case "tf":
+                            return (
+                              <TfEditor
+                                options={options}
+                                correctId={correctId}
+                                onToggleCorrect={toggleCorrectId}
+                                inputCls={inputCls}
+                              />
+                            );
+                          case "mcq":
+                          default:
+                            return (
+                              <McqEditor
+                                options={options}
+                                correctId={correctId}
+                                onOptionChange={handleOptionChange}
+                                onToggleCorrect={toggleCorrectId}
+                                onRemoveOption={handleRemoveOption}
+                                inputCls={inputCls}
+                                labels={LABELS}
+                              />
+                            );
+                        }
+                      })()}
                     </div>
-                    <div className="grid gap-3">
-                      {options.map((opt, idx) => {
-                        const isCorrect = correctId === opt.id;
-                        return (
-                          <div key={opt.id} className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setCorrectId(opt.id)}
-                              title="Set as correct answer"
-                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 transition-all ${isCorrect ? "border-brand-green bg-brand-green text-white shadow-md" : "border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-300 dark:text-white/10 hover:border-slate-300 dark:hover:border-white/20"}`}
-                            >
-                              {isCorrect ? <CheckCircle2 size={18} /> : <span className="text-[12px] font-black">{LABELS[idx]}</span>}
-                            </button>
-                            <input
-                              value={opt.text}
-                              onChange={e => handleOptionChange(idx, e.target.value)}
-                              className={inputCls}
-                              placeholder={`Option ${LABELS[idx]}...`}
-                            />
-                            {options.length > 2 && (
-                              <button onClick={() => handleRemoveOption(idx)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">

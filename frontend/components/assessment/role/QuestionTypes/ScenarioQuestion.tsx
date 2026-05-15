@@ -1,9 +1,10 @@
 import React from "react";
 import type { ScenarioQuestion } from "../RoleEngine";
+import { Check } from "lucide-react";
 
 interface ScenarioQuestionProps {
     question: ScenarioQuestion;
-    selectedOptionId?: string;
+    selectedOptionId?: string | string[];
     onSelectOption: (optionId: string) => void;
 }
 
@@ -48,7 +49,10 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {question.options.map((option, index) => {
-                    const isSelected = selectedOptionId === option.id;
+                    const kind = question.metadata?.kind || 'mcq';
+                    const isSelected = kind === 'msq'
+                        ? (Array.isArray(selectedOptionId) && selectedOptionId.includes(option.id))
+                        : selectedOptionId === option.id;
 
                     return (
                         <button
@@ -67,7 +71,9 @@ const ScenarioQuestionComponent: React.FC<ScenarioQuestionProps> = ({
                                     ? "bg-brand-green text-[#0f1712]"
                                     : "bg-brand-green/10 text-brand-green"
                             }`}>
-                                {labels[index]}
+                                {kind === 'msq' ? (
+                                    isSelected ? <Check size={18} strokeWidth={3} /> : labels[index]
+                                ) : labels[index]}
                             </span>
                             <span className={`text-sm font-semibold leading-6 ${isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
 

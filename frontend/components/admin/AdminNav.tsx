@@ -145,7 +145,13 @@ export default function AdminNav() {
                     </span>
                     <span className="admin-nav-text">{item.label}</span>
                     {item.eyebrow && (
-                      <span className="admin-nav-chip">{item.eyebrow}</span>
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
+                        item.eyebrow.toLowerCase() === 'legacy' 
+                          ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
+                          : 'bg-white/5 text-slate-400 border-white/10'
+                      }`}>
+                        {item.eyebrow}
+                      </span>
                     )}
                     {typeof count === "number" && (
                       <span className="admin-nav-count">{count.toLocaleString()}</span>

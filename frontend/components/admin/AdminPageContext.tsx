@@ -9,6 +9,7 @@ interface AdminPageMeta {
   subtitle?: string;
   breadcrumb?: BreadcrumbSegment[];
   actions?: ReactNode;
+  hideSearch?: boolean;
 }
 
 interface AdminPageContextValue {

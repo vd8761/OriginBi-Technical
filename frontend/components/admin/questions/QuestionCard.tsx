@@ -24,6 +24,8 @@ function getTag(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return COMM_TASK_LABELS[(q as CommQuestion).taskType] || (q as CommQuestion).taskType;
     case "role": return ROLE_QUESTION_TYPE_LABELS[(q as RoleQuestion).questionType] || (q as RoleQuestion).questionType;
+    case "coding": return (q as any).category || "Coding";
+    default: return "Question";
   }
 }
 
@@ -33,6 +35,8 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
+    case "coding": return (q as any).category || "coding";
+    default: return "general";
   }
 }
 
@@ -45,6 +49,8 @@ function getText(q: AnyQuestion, t: AssessmentType): string {
       return cq.questions?.[0]?.text || cq.prompt || cq.instructions;
     }
     case "role": return (q as RoleQuestion).text;
+    case "coding": return (q as any).text || "Coding Question";
+    default: return "";
   }
 }
 
@@ -52,11 +58,13 @@ function getSubtext(q: AnyQuestion, t: AssessmentType): string {
   switch (t) {
     case "aptitude": {
       const aq = q as AptitudeQuestion;
-      return `${aq.options.length} options · ${APTITUDE_CATEGORY_LABELS[aq.category] || aq.category}`;
+      const format = q.kind === "msq" ? "MSQ" : (q.kind === "tf" ? "T/F" : "MCQ");
+      return `${format} · ${aq.options.length} options · ${APTITUDE_CATEGORY_LABELS[aq.category] || aq.category}`;
     }
     case "mnc": {
       const mq = q as MNCQuestion;
-      return `${mq.options.length} options · ${mq.topic}`;
+      const format = q.kind === "msq" ? "MSQ" : (q.kind === "tf" ? "T/F" : "MCQ");
+      return `${format} · ${mq.options.length} options · ${mq.topic}`;
     }
     case "communication": {
       const cq = q as CommQuestion;
@@ -67,9 +75,12 @@ function getSubtext(q: AnyQuestion, t: AssessmentType): string {
     }
     case "role": {
       const rq = q as RoleQuestion;
-      if (rq.questionType === "scenario") return `Scenario · ${rq.priority || "—"} · ${rq.ticketId || ""}`;
-      return `${rq.options.length} options · ${rq.category || ""} ${rq.subCategory ? `/ ${rq.subCategory}` : ""}`;
+      const format = q.kind === "msq" ? "MSQ" : (q.kind === "tf" ? "T/F" : "MCQ");
+      if (rq.questionType === "scenario") return `Scenario · ${format} · ${rq.priority || "—"}`;
+      return `${format} · ${rq.options.length} options · ${rq.category || ""}`;
     }
+    case "coding": return "Coding Problem";
+    default: return "";
   }
 }
 
@@ -154,7 +165,8 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
               <div className="grid gap-2 sm:grid-cols-2">
                 {((question as AptitudeQuestion | MNCQuestion | RoleQuestion).options || []).map((opt, oIdx) => {
                   const correctId = (question as AptitudeQuestion).correctOptionId;
-                  const isCorrect = correctId === opt.id;
+                  const correctIds = (question as any).correctOptionIds || (correctId ? [correctId] : []);
+                  const isCorrect = correctIds.includes(opt.id);
                   return (
                     <div key={opt.id} className={`flex items-center gap-3 p-3 rounded-lg transition-all border ${
                       isCorrect 
@@ -164,7 +176,7 @@ export default function QuestionCard({ question, index, assessmentType, onEdit, 
                       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${
                         isCorrect ? "bg-brand-green text-white shadow-sm" : "bg-brand-green/10 text-brand-green"
                       }`}>
-                        {LABELS[oIdx]}
+                        {question.kind === "tf" ? opt.text.charAt(0) : LABELS[oIdx]}
                       </span>
                       <span className={`flex-1 text-[11px] font-bold ${isCorrect ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"}`}>
                         {opt.text}
