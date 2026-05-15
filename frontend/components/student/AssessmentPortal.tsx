@@ -516,7 +516,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
         <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
@@ -536,7 +536,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {/* Next Step Notification Alert */}
       {completionPopup && currentView === "dashboard" && (
-        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
+        <div className="fixed top-24 left-4 right-4 sm:left-auto sm:right-4 z-50 animate-slide-left w-full sm:w-[360px]">
           <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-start gap-4 relative z-10">

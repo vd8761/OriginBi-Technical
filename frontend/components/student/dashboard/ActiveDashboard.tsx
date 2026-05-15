@@ -307,7 +307,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="lg:col-span-3 relative rounded-3xl overflow-hidden min-h-[360px]"
+          className="lg:col-span-3 relative rounded-3xl overflow-hidden min-h-[280px] sm:min-h-[360px]"
         >
           <div className="absolute inset-0">
             <img
@@ -318,7 +318,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           </div>
 
           {/* Content */}
-          <div className="relative p-8 sm:p-10 flex flex-col h-full">
+          <div className="relative p-6 sm:p-10 flex flex-col h-full">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -333,7 +333,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1] mb-4"
+              className="text-3xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1] mb-4"
             >
               {identity.archetype.split(" ").map((word, i) => (
                 <span key={i} className="block">{word}</span>
@@ -369,7 +369,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
             {/* Ring chart */}
             <div className="flex-shrink-0 mx-auto mb-5">
-              <div className="relative w-48 h-48">
+              <div className="relative w-40 h-40 sm:w-48 sm:h-48">
                 <svg viewBox="0 0 160 160" className="w-full h-full -rotate-90">
                   <circle cx="80" cy="80" r="70" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
                   <circle cx="80" cy="80" r="56" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
@@ -406,7 +406,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex flex-wrap items-center gap-2 mb-5">
           <BarChartIcon c="w-5 h-5 text-[#1ed36a]" />
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Results</h2>
           <span className="ml-2 text-sm text-gray-600 dark:text-slate-400 font-semibold">{completedCount} of {purchasedCount} completed</span>
@@ -432,9 +432,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                   style={{ background: exam.accentColor }}
                 />
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pl-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pl-3">
                   {/* Info */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-start sm:items-center gap-4">
                     <div
                       className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
                       style={{ background: `${exam.accentColor}10`, color: exam.accentColor }}
@@ -454,7 +454,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                   </div>
 
                   {/* Right: Score or Action */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
                     {done && result ? (
                       <>
                         {/* Section mini-bars */}
@@ -472,14 +472,14 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                           ))}
                         </div>
 
-                        <div className="text-right mr-3">
+                        <div className="text-left sm:text-right mr-0 sm:mr-3">
                           <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
                           <p className="text-xs text-gray-700 dark:text-slate-300 font-semibold">{getSkillLabel(result.overallScore)}</p>
                         </div>
 
                         <button
                           onClick={() => setSelectedResult({ exam, result })}
-                          className="px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-bold hover:bg-[#17b55a] transition-colors flex items-center gap-2"
+                          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-bold hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-2"
                         >
                           Analysis
                           <ChevronRightIcon c="w-4 h-4" />
@@ -488,7 +488,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                     ) : (
                       <button
                         onClick={() => onStartExam(exam)}
-                        className="px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-black hover:bg-[#17b55a] transition-colors flex items-center gap-2"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-black hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-2"
                       >
                         <PlayIcon c="w-4 h-4" />
                         Start Now
@@ -534,7 +534,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                           {result.sections.filter((s: SectionResult) => s.score < 60).length} Growth Areas
                         </span>
                       )}
-                      <span className="text-xs text-gray-600 dark:text-slate-400 ml-auto">
+                      <span className="text-xs text-gray-600 dark:text-slate-400 w-full sm:w-auto sm:ml-auto sm:text-right">
                         {result.accuracy}% accuracy &middot; {result.timeTaken}
                       </span>
                     </div>
@@ -552,7 +552,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-8 sm:p-10"
+          className="rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-6 sm:p-10"
         >
           <div className="flex items-center justify-between gap-4 mb-8">
             <div>
@@ -673,9 +673,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                       style={{ background: exam.accentColor }}
                     />
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pl-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6 pl-4">
                       {/* Left: Certificate info */}
-                      <div className="flex items-center gap-5">
+                      <div className="flex items-start sm:items-center gap-4 sm:gap-5">
                         {/* Large icon */}
                         <div
                           className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl shrink-0"
@@ -701,15 +701,15 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                       </div>
 
                       {/* Right: Score + Actions */}
-                      <div className="flex items-center gap-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 w-full sm:w-auto">
                         {/* Score display */}
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                           <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
                           <p className="text-xs text-gray-700 dark:text-slate-300 font-bold">{getSkillLabel(result.overallScore)}</p>
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
                           <button
                             onClick={() => {
                               const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`;

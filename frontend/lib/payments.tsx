@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { AssessmentId } from "./exams";
-import { listAssignments } from "./api";
-import { getActiveEmail, getPurchasedAssessments, getLatestSubmittedResult } from "./api";
+import {
+    getActiveEmail,
+    getLatestSubmittedResult,
+    getPurchasedAssessments,
+    listAssignments,
+    HAS_TECH_API,
+} from "./api";
 
 export type PaymentKey = AssessmentId | `coding:${string}`;
 
@@ -16,6 +21,12 @@ const COMPLETED_KEY = "originbi:completed-assessments";
 const COMPLETED_EVENT = "originbi:completed-changed";
 const LEGACY_TECH_API_URL =
     process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") || "http://localhost:5000";
+
+const isNetworkError = (err: any) => {
+    if (err instanceof TypeError) return true;
+    if (typeof err === "string") return /failed to fetch/i.test(err);
+    return /failed to fetch/i.test(String(err?.message ?? err));
+};
 
 const readSet = (storageKey: string): Set<string> => {
     if (typeof window === "undefined") return new Set();
@@ -188,6 +199,7 @@ export function usePaidAssessments() {
     useEffect(() => {
         let cancelled = false;
         const sync = async () => {
+            if (!HAS_TECH_API) return;
             const email = getActiveEmail();
             if (!email) {
                 console.warn("[usePaidAssessments] No email found; skipping purchase sync.");
@@ -209,6 +221,7 @@ export function usePaidAssessments() {
                 }
                 console.log("[usePaidAssessments] Synced purchases:", purchased);
             } catch (err: any) {
+                if (isNetworkError(err)) return;
                 console.error("[usePaidAssessments] Purchase sync failed:", err?.message || err);
             }
         };
@@ -242,6 +255,7 @@ export function useCompletedAssessments() {
     useEffect(() => {
         let cancelled = false;
         const sync = async () => {
+            if (!HAS_TECH_API) return;
             const email = getActiveEmail();
             if (!email) {
                 console.warn("[useCompletedAssessments] No email found; skipping completion sync.");
@@ -260,6 +274,7 @@ export function useCompletedAssessments() {
                             changed = true;
                         }
                     } catch (err: any) {
+                        if (isNetworkError(err)) return;
                         // 404 means no submitted attempt — expected for incomplete assessments
                         if (err?.status !== 404 && err?.status !== 400) {
                             console.error(`[useCompletedAssessments] ${module} sync error:`, err?.message || err);

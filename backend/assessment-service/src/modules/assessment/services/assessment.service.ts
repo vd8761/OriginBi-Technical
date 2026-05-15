@@ -1511,7 +1511,7 @@ export class AssessmentService {
         `SELECT aq.*, ${correctOptCol}, q.question_text, q.marks, q.negative_marks, q.mode,
                 q.${config.catCol} as category, ${difficultyCol},
                 ass.negative_mark_enabled, ass.negative_mark_value, ${taskTypeCol},
-                ass.categories as assessment_categories
+                ${roleTypeCol}, ass.categories as assessment_categories, q.metadata as question_metadata
          FROM ${config.junction} aq
          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
          JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
@@ -1636,13 +1636,30 @@ export class AssessmentService {
           review.correctAnswerText = optionTextById.get(review.correctOptionId);
         }
 
+        const selectedOptionId = (() => {
+          if (rawSubmittedAnswer === undefined || rawSubmittedAnswer === null) return rawSubmittedAnswer;
+          if (Array.isArray(rawSubmittedAnswer)) return rawSubmittedAnswer;
+          if (typeof rawSubmittedAnswer === 'object') {
+            const candidate = (rawSubmittedAnswer as any).optionId
+              ?? (rawSubmittedAnswer as any).selectedOptionId
+              ?? (rawSubmittedAnswer as any).value;
+            return candidate !== undefined ? candidate : null;
+          }
+          return rawSubmittedAnswer;
+        })();
+
         if (isCoding) {
           const rawAnswer = rawSubmittedAnswer;
           if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
             const answerPayload = typeof rawAnswer === 'object' ? rawAnswer : { code: String(rawAnswer) };
             const submittedCode = (answerPayload as any).code ?? (answerPayload as any).submittedCode ?? null;
-            const language      = (answerPayload as any).language ?? (answerPayload as any).lang ?? null;
-            if (submittedCode) {
+            const language = (answerPayload as any).language ?? (answerPayload as any).lang ?? null;
+            if (submittedCode && aq.mode !== 'trial') {
+              answeredCount++;
+              subjectiveAnsweredCount++;
+              sectionMap[category].answeredCount++;
+              review.selectedAnswerText = String(submittedCode);
+              review.status = 'subjective';
               await queryRunner.query(
                 `UPDATE ${config.junction}
                  SET submitted_code = $1, language = COALESCE($2, language), submitted_at = NOW()
@@ -1657,7 +1674,7 @@ export class AssessmentService {
 
         if (isGrammar) {
           const taskType  = String(aq.task_type || '').toLowerCase();
-          const rawAnswer = selectedOptionId;
+          const rawAnswer = rawSubmittedAnswer;
           if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
             answeredCount++;
             sectionMap[category].answeredCount++;
@@ -1688,7 +1705,10 @@ export class AssessmentService {
               const answerText = typeof rawAnswer === 'string'
                 ? rawAnswer
                 : (rawAnswer as any).text ?? (rawAnswer as any).answerText ?? null;
-              if (answerText) {
+              if (answerText && aq.mode !== 'trial') {
+                subjectiveAnsweredCount++;
+                review.selectedAnswerText = String(answerText);
+                review.status = 'subjective';
                 await queryRunner.query(
                   `UPDATE ${config.junction} SET answer_text = $1, answered_at = NOW() WHERE attempt_question_id = $2`,
                   [answerText, aq.attempt_question_id],
@@ -1701,7 +1721,12 @@ export class AssessmentService {
               const answerText = typeof rawAnswer === 'object'
                 ? (rawAnswer as any).text ?? (rawAnswer as any).answerText ?? null
                 : null;
-              if (audioPayload || answerText) {
+              if ((audioPayload || answerText) && aq.mode !== 'trial') {
+                subjectiveAnsweredCount++;
+                review.selectedAnswerText = answerText
+                  ? String(answerText)
+                  : '[Audio response submitted]';
+                review.status = 'subjective';
                 await queryRunner.query(
                   `UPDATE ${config.junction}
                    SET answer_audio_url = $1, answer_text = COALESCE($2, answer_text), answered_at = NOW()
@@ -1713,7 +1738,10 @@ export class AssessmentService {
               const answerText = typeof rawAnswer === 'string'
                 ? rawAnswer
                 : (rawAnswer as any).text ?? (rawAnswer as any).answerText ?? null;
-              if (answerText) {
+              if (answerText && aq.mode !== 'trial') {
+                subjectiveAnsweredCount++;
+                review.selectedAnswerText = String(answerText);
+                review.status = 'subjective';
                 await queryRunner.query(
                   `UPDATE ${config.junction} SET answer_text = $1, answered_at = NOW() WHERE attempt_question_id = $2`,
                   [answerText, aq.attempt_question_id],
@@ -1725,21 +1753,54 @@ export class AssessmentService {
           continue;
         }
 
-        // MCQ modules: aptitude, mnc, role
-        if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
-          sectionMap[category].answeredCount++;
-          const isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
-          const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
-          const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;
+        // Scoring Logic: Support MSQ, TF, and MCQ
+        if (aq.mode !== 'trial' && !isCoding && !isGrammar) {
+          if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
+            sectionMap[category].answeredCount++;
+            
+            const qMetadata = aq.question_metadata || {};
+            const kind = qMetadata.kind || 'mcq';
+            let isCorrectAnswer = false;
 
-          if (isCorrectAnswer) {
-            totalPositive += scoreAwarded;
-            correctCount++;
-            sectionMap[category].score += scoreAwarded;
+            if (kind === 'msq') {
+              const studentChoices: string[] = Array.isArray(selectedOptionId) 
+                ? selectedOptionId.map(String) 
+                : (selectedOptionId ? [String(selectedOptionId)] : []);
+              
+              const correctChoices = Array.isArray(qMetadata.correctOptionIds)
+                ? qMetadata.correctOptionIds.map(String)
+                : [];
+              
+              // All-or-nothing check for MSQ
+              isCorrectAnswer = studentChoices.length > 0 &&
+                               studentChoices.length === correctChoices.length &&
+                               studentChoices.every((id: string) => correctChoices.includes(id));
+            } else if (kind === 'numerical') {
+              const studentAnswer = String(selectedOptionId || '').trim().toLowerCase();
+              const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+              isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
+            } else {
+              // Standard MCQ / TF (single choice)
+              isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
+            }
+
+            const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
+            const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;
+
+            if (isCorrectAnswer) {
+              totalPositive += scoreAwarded;
+              correctCount++;
+              sectionMap[category].score += scoreAwarded;
+              sectionMap[category].correctCount++;
           } else {
-            totalNegative += negativeApplied;
-            sectionMap[category].score -= negativeApplied;
-          }
+              totalNegative += negativeApplied;
+              sectionMap[category].score -= negativeApplied;
+            }
+
+            const metadataUpdate = { 
+              ...(aq.metadata || {}), 
+              submittedAnswer: (kind === 'numerical' || kind === 'msq') ? selectedOptionId : null 
+            };
 
             await queryRunner.query(
               `UPDATE ${config.junction}

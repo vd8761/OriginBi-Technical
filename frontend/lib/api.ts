@@ -17,6 +17,14 @@ export const TECH_API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
   "";
 
+const IS_BROWSER = typeof window !== "undefined";
+const IS_DEV = process.env.NODE_ENV === "development";
+const EXAM_SAME_ORIGIN = IS_BROWSER && API_BASE === window.location.origin;
+const TECH_SAME_ORIGIN = IS_BROWSER && TECH_API_BASE === window.location.origin;
+
+export const HAS_EXAM_API = Boolean(API_BASE) && !(IS_DEV && EXAM_SAME_ORIGIN);
+export const HAS_TECH_API = Boolean(TECH_API_BASE) && !(IS_DEV && TECH_SAME_ORIGIN);
+
 // ── Cognito token storage (browser only) - Main App Style ──────────────────
 type TokenScope = "user" | "admin";
 
@@ -722,6 +730,9 @@ export async function getSession(): Promise<AuthResponse | null> {
 }
 
 export async function listAssignments(): Promise<AssignmentListResponse> {
+  if (!HAS_EXAM_API) {
+    return { assignments: [] };
+  }
   return apiFetch<AssignmentListResponse>("/v1/me/assignments");
 }
 
@@ -1069,6 +1080,9 @@ export function getActiveEmail(): string {
 // ── Purchase + completion sync (backend source of truth) ──────────────────
 
 export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+  if (!HAS_TECH_API) {
+    return { purchased: [] };
+  }
   return apiFetch<{ purchased: string[] }>("/api/assessment/purchase/purchases", {
     method: "POST",
     body: JSON.stringify({ email }),

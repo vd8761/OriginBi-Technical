@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AssessmentId } from "./exams";
-import { getActiveEmail, getLatestSubmittedResult } from "./api";
+import { getActiveEmail, getLatestSubmittedResult, HAS_TECH_API } from "./api";
 
 /* ────────────────────────────
    User Profile (name, etc.)
@@ -53,6 +53,12 @@ export function useUserProfile() {
    ──────────────────────────── */
 
 const RESULTS_KEY = "originbi:assessment-results";
+
+const isNetworkError = (err: any) => {
+  if (err instanceof TypeError) return true;
+  if (typeof err === "string") return /failed to fetch/i.test(err);
+  return /failed to fetch/i.test(String(err?.message ?? err));
+};
 
 export interface SectionResult {
   name: string;
@@ -149,6 +155,7 @@ export function useAssessmentResults() {
   useEffect(() => {
     let cancelled = false;
     const sync = async () => {
+      if (!HAS_TECH_API) return;
       const email = getActiveEmail();
       if (!email) {
         console.warn("[useAssessmentResults] No email found; skipping result sync.");
@@ -173,6 +180,7 @@ export function useAssessmentResults() {
           setResults(next);
           console.log(`[useAssessmentResults] Synced result for ${module}`);
         } catch (err: any) {
+          if (isNetworkError(err)) return;
           // 404 means no submitted attempt — expected for incomplete assessments
           if (err?.status !== 404 && err?.status !== 400) {
             console.error(`[useAssessmentResults] ${module} sync error:`, err?.message || err);
