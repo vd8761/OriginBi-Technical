@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { AssessmentId } from "./exams";
+import { getActiveEmail, getPurchasedAssessments, getLatestSubmittedResult } from "./api";
 
 export type PaymentKey = AssessmentId | `coding:${string}`;
 
@@ -79,11 +80,105 @@ export function usePaidAssessments() {
     const refresh = useCallback(() => {
         window.dispatchEvent(new CustomEvent(PAID_EVENT));
     }, []);
+
+    // Sync purchased assessments from backend on mount so clearing
+    // browser cache does not erase purchase history.
+    useEffect(() => {
+        let cancelled = false;
+        const sync = async () => {
+            const email = getActiveEmail();
+            if (!email) {
+                console.warn("[usePaidAssessments] No email found; skipping purchase sync.");
+                return;
+            }
+            try {
+                const { purchased } = await getPurchasedAssessments(email);
+                if (cancelled) return;
+                const current = readSet(PAID_KEY);
+                let changed = false;
+                for (const code of purchased) {
+                    if (!current.has(code)) {
+                        current.add(code);
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    writeSet(PAID_KEY, PAID_EVENT, current);
+                }
+                console.log("[usePaidAssessments] Synced purchases:", purchased);
+            } catch (err: any) {
+                console.error("[usePaidAssessments] Purchase sync failed:", err?.message || err);
+            }
+        };
+        sync();
+
+        const handleSessionReady = () => {
+            if (!cancelled) sync();
+        };
+        window.addEventListener("originbi:session-ready", handleSessionReady);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener("originbi:session-ready", handleSessionReady);
+        };
+    }, []);
+
     return { isPaid: has, markPaid: add, clearPaid: remove, refreshPurchases: refresh };
 }
 
 export function useCompletedAssessments() {
     const { has, add, remove } = useKeyedSet(COMPLETED_KEY, COMPLETED_EVENT);
+
+    // Sync completed assessments from backend on mount so clearing
+    // browser cache does not erase completion history.
+    useEffect(() => {
+        let cancelled = false;
+        const sync = async () => {
+            const email = getActiveEmail();
+            if (!email) {
+                console.warn("[useCompletedAssessments] No email found; skipping completion sync.");
+                return;
+            }
+            const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role"];
+            const current = readSet(COMPLETED_KEY);
+            let changed = false;
+
+            await Promise.all(
+                modules.map(async (module) => {
+                    try {
+                        await getLatestSubmittedResult(module, email);
+                        if (!current.has(module)) {
+                            current.add(module);
+                            changed = true;
+                        }
+                    } catch (err: any) {
+                        // 404 means no submitted attempt — expected for incomplete assessments
+                        if (err?.status !== 404 && err?.status !== 400) {
+                            console.error(`[useCompletedAssessments] ${module} sync error:`, err?.message || err);
+                        }
+                    }
+                }),
+            );
+
+            if (cancelled) return;
+            if (changed) {
+                writeSet(COMPLETED_KEY, COMPLETED_EVENT, current);
+            }
+            console.log("[useCompletedAssessments] Synced completed:", Array.from(current));
+        };
+        sync();
+
+        const handleSessionReady = () => {
+            if (!cancelled) sync();
+        };
+        window.addEventListener("originbi:session-ready", handleSessionReady);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener("originbi:session-ready", handleSessionReady);
+        };
+    }, []);
+
     return { isCompleted: has, markCompleted: add, clearCompleted: remove };
 }
 

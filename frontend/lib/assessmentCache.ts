@@ -36,6 +36,8 @@ const IDB_STORE      = 'sessions';
 const LS_PREFIX      = 'obi_assess_cache_';
 // Secondary index: assessmentCode → token (so we can find cache before token is known)
 const LS_INDEX_PREFIX = 'obi_assess_idx_';
+// Persistent cache: keep IndexedDB snapshots for larger payloads.
+const USE_IDB = true;
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -167,6 +169,7 @@ function openIDB(): Promise<IDBDatabase> {
 }
 
 async function idbWrite(session: CacheSession) {
+  if (!USE_IDB) return;
   try {
     const db    = await openIDB();
     const tx    = db.transaction(IDB_STORE, 'readwrite');
@@ -180,6 +183,7 @@ async function idbWrite(session: CacheSession) {
 }
 
 async function idbRead(token: string): Promise<CacheSession | null> {
+  if (!USE_IDB) return null;
   try {
     const db    = await openIDB();
     const tx    = db.transaction(IDB_STORE, 'readonly');
@@ -201,6 +205,7 @@ async function idbRead(token: string): Promise<CacheSession | null> {
 }
 
 async function idbClear(token: string) {
+  if (!USE_IDB) return;
   try {
     const db    = await openIDB();
     const tx    = db.transaction(IDB_STORE, 'readwrite');
@@ -303,7 +308,7 @@ export async function loadCache(token: string): Promise<CacheSession | null> {
   const fast = lsRead(token);
 
   // Always attempt IDB for the full session (which has questions)
-  const full = await idbRead(token);
+  const full = USE_IDB ? await idbRead(token) : null;
 
   if (!full && !fast) return null;
 

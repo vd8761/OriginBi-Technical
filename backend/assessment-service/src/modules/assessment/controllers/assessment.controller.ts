@@ -15,6 +15,21 @@ export class AssessmentController {
     return { data };
   }
 
+  @Get('in-progress')
+  async getInProgressAttempts(@Query('userId') userId?: string) {
+    const data = await this.assessmentService.getInProgressAttempts(userId);
+    return { data };
+  }
+
+  @Get(':module/latest-result')
+  async getLatestSubmittedResult(
+    @Param('module') module: string,
+    @Query('userId') userId?: string,
+    @Query('attemptToken') attemptToken?: string,
+  ) {
+    return this.assessmentService.getLatestSubmittedResult(module, userId, attemptToken);
+  }
+
   @Post(':module/attempts')
   async startAttempt(@Param('module') module: string, @Body() body: any) {
     return this.assessmentService.startAttempt(module, body);
@@ -23,6 +38,19 @@ export class AssessmentController {
   @Get(':module/attempts/:token/questions')
   async getAttemptQuestions(@Param('token') token: string) {
     return this.assessmentService.getAttemptQuestions(token);
+  }
+
+  @Patch(':module/attempts/:token/answers')
+  async saveAttemptAnswers(
+    @Param('module') module: string,
+    @Param('token') token: string,
+    @Body() body: { answers?: Record<string, any> },
+  ) {
+    const answers = body?.answers ?? body ?? {};
+    if (!answers || typeof answers !== 'object') {
+      throw new BadRequestException('answers is required');
+    }
+    return this.assessmentService.saveAttemptAnswers(module, token, answers as Record<string, any>);
   }
 
   @Post(':module/attempts/:token/submit')

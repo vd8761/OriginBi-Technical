@@ -12,6 +12,11 @@ export const AUTH_API_BASE = configuredAuthBase || "";
 export const STUDENT_API_BASE =
   process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
 
+export const TECH_API_BASE =
+  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
+
 // ── Cognito token storage (browser only) - Main App Style ──────────────────
 const ACCESS_TOKEN_KEY = "originbi:access-token";
 const ID_TOKEN_KEY = "originbi:id-token";
@@ -20,7 +25,13 @@ const LEGACY_ACCESS_TOKEN_COOKIE = "obi.accessToken";
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const ls = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (ls) return ls;
+  // Fallback: legacy cookie may survive a "clear cache" that only wipes localStorage
+  const match = document.cookie.match(
+    new RegExp("(?:^|; )" + LEGACY_ACCESS_TOKEN_COOKIE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)")
+  );
+  return match ? decodeURIComponent(match[1]) : null;
 }
 function setTokens(t: {
   accessToken: string;
@@ -956,5 +967,58 @@ export async function getUserEntitlements(
 ): Promise<{ entitlements: AdminUserEntitlement[] }> {
   return apiFetch<{ entitlements: AdminUserEntitlement[] }>(
     `/v1/admin/users/${userId}/entitlements`,
+  );
+}
+
+// ── Active email helper ───────────────────────────────────────────────────
+
+export function getActiveEmail(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const userData = window.localStorage.getItem("user");
+    if (userData) {
+      const parsed = JSON.parse(userData);
+      if (parsed?.email) return String(parsed.email);
+    }
+  } catch {}
+  try {
+    const profile = window.localStorage.getItem("originbi:user-profile");
+    if (profile) {
+      const parsed = JSON.parse(profile);
+      if (parsed?.email) return String(parsed.email);
+    }
+  } catch {}
+  // Fallback: decode email from JWT token (cookie or localStorage)
+  try {
+    const tok = getAccessToken();
+    if (tok) {
+      const payload = JSON.parse(atob(tok.split(".")[1]));
+      if (payload?.email) return String(payload.email);
+      if (payload?.username && String(payload.username).includes("@")) {
+        return String(payload.username);
+      }
+    }
+  } catch {}
+  return "";
+}
+
+// ── Purchase + completion sync (backend source of truth) ──────────────────
+
+export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+  return apiFetch<{ purchased: string[] }>("/api/assessment/purchase/purchases", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    baseOverride: TECH_API_BASE,
+    auth: false,
+  });
+}
+
+export async function getLatestSubmittedResult(module: string, userId: string): Promise<any> {
+  return apiFetch<any>(
+    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}`,
+    {
+      baseOverride: TECH_API_BASE,
+      auth: false,
+    },
   );
 }

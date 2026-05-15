@@ -21,11 +21,12 @@ import {
   type ExtendedExam,
   type PricingTier,
 } from "@/lib/exams";
-import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
+import { usePaidAssessments, useCompletedAssessments, type PaymentKey } from "@/lib/payments";
 import { useSession } from "@/lib/contexts/SessionContext";
 import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
 import { listAssignments, type Assignment } from "@/lib/api";
+import { type InProgressAttempt } from "@/lib/assessmentResume";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -60,6 +61,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isPaid } = usePaidAssessments();
+  const { isCompleted } = useCompletedAssessments();
   const { user } = useSession();
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
@@ -96,6 +98,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     limit: number;
     count: number;
   } | null>(null);
+  const [inProgressAttempt, setInProgressAttempt] = useState<InProgressAttempt | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -139,6 +142,53 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     };
 
     fetchStats();
+    return () => {
+      active = false;
+    };
+  }, [currentView, user?.email]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchInProgress = async () => {
+      if (currentView !== "dashboard") return;
+      try {
+        let activeEmail = user?.email || "";
+        if (!activeEmail) {
+          const storedProfile = localStorage.getItem("originbi:user-profile");
+          if (storedProfile) {
+            const parsed = JSON.parse(storedProfile);
+            if (parsed && parsed.email) {
+              activeEmail = parsed.email;
+            }
+          }
+        }
+        if (!activeEmail) {
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            if (parsed && parsed.email) {
+              activeEmail = parsed.email;
+            }
+          }
+        }
+
+        const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+        if (!TECH_API_BASE) return;
+        const response = await fetch(`${TECH_API_BASE}/api/assessment/in-progress${emailParam}`);
+        if (!response.ok) {
+          if (active) setInProgressAttempt(null);
+          return;
+        }
+        const json = await response.json();
+        const data = json.data || json;
+        const attempts = Array.isArray(data) ? data : [];
+        if (active) setInProgressAttempt(attempts[0] ?? null);
+      } catch {
+        if (active) setInProgressAttempt(null);
+      }
+    };
+
+    fetchInProgress();
     return () => {
       active = false;
     };
@@ -393,6 +443,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       return;
     }
 
+    // Prevent re-taking already-completed non-coding assessments
+    if (exam.id !== "coding" && isCompleted(exam.id as AssessmentId)) {
+      router.push("/dashboard");
+      return;
+    }
+
     const dbModule = exam.id === "communication" ? "grammar" : exam.id;
     const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
     const currentCount = mode === "trial" ? stats.trial : stats.main;
@@ -416,6 +472,16 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
     setAssessmentMode(mode);
     launchAssessment(exam.id, mode);
+  };
+
+  const handleResumeAttempt = (attempt: InProgressAttempt) => {
+    const module = attempt.module === "grammar" ? "communication" : attempt.module;
+    const mode = attempt.mode ?? "main";
+    if (module === "aptitude" && attempt.isBlockBased) {
+      router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      return;
+    }
+    router.push(`/assessment/${module}?mode=${mode}`);
   };
 
   const handleCardTrialStart = (exam: Exam) => {
@@ -656,6 +722,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             userName={userName}
             handleSelectExam={handleSelectExam}
             handleStartExam={handleModalStart}
+            inProgressAttempt={inProgressAttempt}
+            onResumeAttempt={handleResumeAttempt}
           />
         ) : currentView === "profile" ? (
           <ProfileView onNavigate={(view) => handleNavigate(view as any)} />

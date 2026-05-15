@@ -11,6 +11,7 @@ import GoogleStyleAnalysisModal from "./GoogleStyleAnalysisModal";
 import AssessmentNotifications from "./AssessmentNotifications";
 import CertificatePreviewModal from "../certificate/CertificatePreviewModal";
 import type { Exam } from "../ExamCarousel";
+import { type InProgressAttempt } from "@/lib/assessmentResume";
 
 // ── Icons ──
 const PlayIcon = ({ c }: { c?: string }) => (
@@ -88,7 +89,13 @@ const BarChartIcon = ({ c }: { c?: string }) => (
 );
 
 // ── Helpers ──
-interface ActiveDashboardProps { userName: string; onSelectExam: (exam: Exam) => void; onStartExam: (exam: Exam) => void; }
+interface ActiveDashboardProps {
+  userName: string;
+  onSelectExam: (exam: Exam) => void;
+  onStartExam: (exam: Exam) => void;
+  inProgressAttempt?: InProgressAttempt | null;
+  onResumeAttempt?: (attempt: InProgressAttempt) => void;
+}
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {
   if (exam.id === "coding") {
@@ -110,6 +117,34 @@ const getSkillLabel = (score: number) => {
   if (score >= 65) return "Proficient";
   if (score >= 50) return "Developing";
   return "Beginner";
+};
+
+const formatTimeLeft = (seconds?: number) => {
+  if (seconds === undefined || seconds === null) return "";
+  const safe = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
+};
+
+const labelForModule = (module: string) => {
+  switch (module) {
+    case "grammar":
+      return "Communication";
+    case "mnc":
+      return "MNC Career";
+    case "role":
+      return "Role Based";
+    case "aptitude":
+      return "Aptitude";
+    case "coding":
+      return "Coding";
+    default:
+      return module;
+  }
 };
 
 const getTraitImage = (archetype: string): string => {
@@ -195,7 +230,13 @@ const Legend: React.FC<{ results: Record<string, AssessmentResult> }> = ({ resul
 };
 
 // ── Component ──
-const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExam, onStartExam }) => {
+const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
+  userName,
+  onSelectExam,
+  onStartExam,
+  inProgressAttempt,
+  onResumeAttempt,
+}) => {
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
   const { results, isCompleted, getResult } = useAssessmentResults();
@@ -220,6 +261,44 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
 
   return (
     <div className="flex flex-col gap-8 pt-2" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+
+      {inProgressAttempt && onResumeAttempt && (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-white/95 p-6 shadow-lg backdrop-blur-xl dark:border-amber-400/20 dark:bg-[#111a15]/90"
+        >
+          <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-amber-400/20 blur-2xl" />
+          <div className="absolute bottom-0 left-0 h-16 w-16 rounded-full bg-amber-200/20 blur-2xl" />
+          <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <ClockIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Incomplete Assessment</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                  Resume {inProgressAttempt.assessmentName || labelForModule(inProgressAttempt.module)}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  {inProgressAttempt.timeLeftSeconds !== undefined
+                    ? `Time left: ${formatTimeLeft(inProgressAttempt.timeLeftSeconds)}`
+                    : "Your previous session is still active."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onResumeAttempt(inProgressAttempt)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-amber-500/30 transition hover:bg-amber-600"
+            >
+              Resume Now
+              <ChevronRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </motion.section>
+      )}
 
       {/* ===== HERO + 360 IMPACT: Side by side grid ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

@@ -5,6 +5,12 @@ import CommunicationEngine, { type AttemptSubmitResult } from '../../../componen
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { useAssessmentTracker } from '../../../lib/assessmentTracker';
+import { EXAM_DETAILS } from '../../../lib/exams';
+import {
+    mapSubmissionToAssessmentResult,
+    saveAssessmentResultToStorage,
+    unlockAssessmentForDashboard,
+} from '../../../lib/assessmentResultMapper';
 
 function CommunicationAssessmentContent() {
     const router = useRouter();
@@ -13,61 +19,19 @@ function CommunicationAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
-        const correctCount = result.correctCount ?? 0;
-        const wrongCount = result.wrongCount ?? 0;
-        const totalQuestions = result.totalQuestions ?? (correctCount + wrongCount);
-        const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
-        const skippedCount = Math.max(0, totalQuestions - answeredCount);
-        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
-        const accuracy = accuracyBase > 0 ? Math.round((correctCount / accuracyBase) * 100) : 0;
-        const overallScore = Math.max(0, Math.round(result.totalScore));
-        const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
-        const sections = [
-            { name: "Overall", score: accuracy, weight: "100%" },
-        ];
-
-        const insights = [
-            { type: "strength" as const, text: "Good comprehension skills demonstrated in reading and listening sections." },
-            { type: "improvement" as const, text: "Practice structured responses for better speaking clarity." },
-            { type: "time" as const, text: "Well-paced responses throughout the assessment." },
-        ];
-
-        const assessmentResult = {
-            assessmentId: "communication" as const,
-            completedAt: new Date().toISOString(),
-            overallScore,
-            accuracy,
-            timeTaken: `${timeTakenMinutes} min`,
-            timeTakenSeconds: result.timeTakenSeconds,
-            totalQuestions,
-            answeredCount,
-            correctCount,
-            wrongCount,
-            skippedCount,
-            positiveScore: result.positiveScore,
-            negativeScore: result.negativeScore,
-            netScore: overallScore,
-            sections,
-            insights,
-        };
-
-        const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
-        existingResults.communication = assessmentResult;
-        localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
-        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
-
-        const paidAssessments = JSON.parse(localStorage.getItem("originbi:paid-assessments") || "[]");
-        if (!paidAssessments.includes("communication")) {
-            paidAssessments.push("communication");
-            localStorage.setItem("originbi:paid-assessments", JSON.stringify(paidAssessments));
-            window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
-        }
+        const assessmentResult = mapSubmissionToAssessmentResult({
+            assessmentId: "communication",
+            submission: result,
+            detail: EXAM_DETAILS.communication,
+        });
+        saveAssessmentResultToStorage(assessmentResult);
+        unlockAssessmentForDashboard("communication");
 
         markAssessmentComplete("communication", {
-            totalScore: overallScore,
-            correctCount: result.correctCount,
-            wrongCount: result.wrongCount,
-            timeTakenSeconds: result.timeTakenSeconds,
+            totalScore: assessmentResult.overallScore,
+            correctCount: assessmentResult.correctCount ?? 0,
+            wrongCount: assessmentResult.wrongCount ?? 0,
+            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
         });
 
         if (mode === 'trial') {

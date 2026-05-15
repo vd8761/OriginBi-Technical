@@ -6,12 +6,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { EXAMS, CODING_LANGUAGES, type AssessmentId, type ExtendedExam } from "@/lib/exams";
 import { usePaidAssessments, codingPaymentKey, type PaymentKey } from "@/lib/payments";
 import ActiveDashboard from "./ActiveDashboard";
+import { type InProgressAttempt } from "@/lib/assessmentResume";
 import type { Exam } from "../ExamCarousel";
 
 interface DashboardContentProps {
   userName: string;
   handleSelectExam: (exam: Exam) => void;
   handleStartExam: (exam: Exam) => void;
+  inProgressAttempt?: InProgressAttempt | null;
+  onResumeAttempt?: (attempt: InProgressAttempt) => void;
 }
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {
@@ -28,6 +31,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   userName,
   handleSelectExam,
   handleStartExam,
+  inProgressAttempt,
+  onResumeAttempt,
 }) => {
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
@@ -66,6 +71,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
           userName={userName}
           onSelectExam={handleSelectExam}
           onStartExam={handleStartExam}
+          inProgressAttempt={inProgressAttempt}
+          onResumeAttempt={onResumeAttempt}
         />
       </motion.div>
     </AnimatePresence>

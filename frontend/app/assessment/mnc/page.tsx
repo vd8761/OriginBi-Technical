@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import MNCEngine, { type AttemptSubmitResult } from '@/components/assessment/mnc/MNCEngine';
 import { Suspense } from 'react';
 import { useAssessmentTracker } from '../../../lib/assessmentTracker';
+import { EXAM_DETAILS } from '../../../lib/exams';
+import {
+    mapSubmissionToAssessmentResult,
+    saveAssessmentResultToStorage,
+    unlockAssessmentForDashboard,
+} from '../../../lib/assessmentResultMapper';
 
 function MNCAssessmentContent() {
     const router = useRouter();
@@ -13,59 +19,19 @@ function MNCAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
-        const correctCount = result.correctCount ?? 0;
-        const wrongCount = result.wrongCount ?? 0;
-        const totalQuestions = result.totalQuestions ?? (correctCount + wrongCount);
-        const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
-        const skippedCount = Math.max(0, totalQuestions - answeredCount);
-        const accuracyBase = totalQuestions > 0 ? totalQuestions : answeredCount;
-        const accuracy = accuracyBase > 0 ? Math.round((correctCount / accuracyBase) * 100) : 0;
-        const overallScore = Math.max(0, Math.round(result.totalScore));
-        const timeTakenMinutes = Math.max(1, Math.round(result.timeTakenSeconds / 60));
-        const sections = [
-            { name: "Overall", score: accuracy, weight: "100%" },
-        ];
-
-        const assessmentResult = {
-            assessmentId: "mnc" as const,
-            completedAt: new Date().toISOString(),
-            overallScore,
-            accuracy,
-            timeTaken: `${timeTakenMinutes} min`,
-            timeTakenSeconds: result.timeTakenSeconds,
-            totalQuestions,
-            answeredCount,
-            correctCount,
-            wrongCount,
-            skippedCount,
-            positiveScore: result.positiveScore,
-            negativeScore: result.negativeScore,
-            netScore: overallScore,
-            sections,
-            insights: [
-                { type: "strength" as const, text: "Strong problem-solving approach in aptitude sections." },
-                { type: "improvement" as const, text: "Practice time management for complex reasoning scenarios." },
-                { type: "time" as const, text: "Completed within allocated time with good accuracy." },
-            ],
-        };
-
-        const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
-        existingResults.mnc = assessmentResult;
-        localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
-        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
-
-        const paidAssessments = JSON.parse(localStorage.getItem("originbi:paid-assessments") || "[]");
-        if (!paidAssessments.includes("mnc")) {
-            paidAssessments.push("mnc");
-            localStorage.setItem("originbi:paid-assessments", JSON.stringify(paidAssessments));
-            window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
-        }
+        const assessmentResult = mapSubmissionToAssessmentResult({
+            assessmentId: "mnc",
+            submission: result,
+            detail: EXAM_DETAILS.mnc,
+        });
+        saveAssessmentResultToStorage(assessmentResult);
+        unlockAssessmentForDashboard("mnc");
 
         markAssessmentComplete("mnc", {
-            totalScore: overallScore,
-            correctCount: result.correctCount,
-            wrongCount: result.wrongCount,
-            timeTakenSeconds: result.timeTakenSeconds,
+            totalScore: assessmentResult.overallScore,
+            correctCount: assessmentResult.correctCount ?? 0,
+            wrongCount: assessmentResult.wrongCount ?? 0,
+            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
         });
 
         if (mode === 'trial') {

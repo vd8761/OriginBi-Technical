@@ -130,6 +130,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
 
+        // If already completed, redirect to dashboard to view results
+        if (examCompleted) {
+            router.push("/dashboard");
+            return;
+        }
+
         if (examPaid) {
             setAssessmentMode("main");
             startNonCodingAssessment();
@@ -208,6 +214,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handleTrial = () => {
         if (!isReady) return;
+        if (examCompleted) {
+            router.push("/dashboard");
+            return;
+        }
         if (isCoding) {
             router.push(`/assessment/coding?mode=trial`);
             return;
@@ -229,6 +239,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const primaryLabel = (() => {
         if (!isReady) return "Coming Soon";
         if (isCoding) return `Pick Language & Pay`;
+        if (examCompleted) return "View Results";
         if (examPaid) return "Start Assessment";
         return `Pay ₹${exam.price}`;
     })();

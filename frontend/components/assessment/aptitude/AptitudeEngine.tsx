@@ -30,13 +30,22 @@ interface Question {
 
 export interface AttemptSubmitResult {
     totalScore: number;
+    overallScorePercent?: number;
+    maxScore?: number;
     positiveScore?: number;
     negativeScore?: number;
     correctCount: number;
     wrongCount: number;
     answeredCount?: number;
+    objectiveAnsweredCount?: number;
+    subjectiveAnsweredCount?: number;
+    skippedCount?: number;
     totalQuestions?: number;
     timeTakenSeconds: number;
+    accuracy?: number;
+    accuracyPct?: number;
+    sections?: Array<Record<string, unknown>>;
+    questionReviews?: Array<Record<string, unknown>>;
     status?: string;
 }
 
@@ -365,6 +374,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 setAttemptToken(token || null);
 
                 let fetchedQuestions = data.questions;
+                let serverAnswers = data.answers;
                 if (!Array.isArray(fetchedQuestions) && token) {
                     const questionsRes = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${token}/questions`);
                     if (!questionsRes.ok) {
@@ -372,12 +382,33 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     }
                     const questionsData = await questionsRes.json();
                     fetchedQuestions = questionsData.questions;
+                    serverAnswers = questionsData.answers ?? serverAnswers;
                 }
 
                 setQuestions(Array.isArray(fetchedQuestions) ? normalizeQuestions(fetchedQuestions) : []);
                 const duration = Number(data.durationSeconds || APTITUDE_TOTAL_TIME);
-                setTimeLeft(duration);
+                const timeLeftSeconds = Number(data.timeLeftSeconds ?? duration);
+                setTimeLeft(timeLeftSeconds);
                 setTotalTime(duration);
+
+                if (serverAnswers && typeof serverAnswers === "object") {
+                    const restored: Record<string, string> = {};
+                    for (const [qId, val] of Object.entries(serverAnswers)) {
+                        if (val && typeof val === "object" && "optionId" in val && (val as any).optionId) {
+                            restored[qId] = String((val as any).optionId);
+                        } else if (typeof val === "string" || typeof val === "number") {
+                            restored[qId] = String(val);
+                        }
+                    }
+                    if (Object.keys(restored).length > 0) {
+                        setAnswers(restored);
+                        Object.entries(restored).forEach(([qId, optId]) => {
+                            cacheSaveAnswer(qId, { optionId: optId });
+                        });
+                        setShowRestoredBanner(true);
+                        setTimeout(() => setShowRestoredBanner(false), 5000);
+                    }
+                }
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -386,12 +417,21 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache, cacheSaveAnswer]);
 
     // Keep a ref to the latest answers so handleSubmitAttempt doesn't need
     // `answers` in its dependency array (which would recreate it on every option select).
     const answersRef = useRef(answers);
     answersRef.current = answers;
+
+    const persistAnswer = useCallback((questionId: string, payload: any) => {
+        if (!attemptToken) return;
+        void fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/answers`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: { [questionId]: payload } }),
+        }).catch(() => {});
+    }, [attemptToken]);
 
     const handleSubmitAttempt = useCallback(async () => {
         console.log("Aptitude: handleSubmitAttempt called. attemptToken:", attemptToken, "submittingRef:", submittingRef.current);
@@ -455,15 +495,38 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             if (isSandboxMode && isNetworkFailure) {
                 // Frontend-only fallback: complete locally so UI/demo flow can continue.
                 const answeredCount = Object.keys(answersRef.current).length;
+                const totalQuestions = questions.length || answeredCount;
+                const localReviews = questions.map((question, index) => {
+                    const selectedOptionId = answersRef.current[question.id] ?? null;
+                    const selectedOption = question.options.find((option) => option.id === selectedOptionId);
+                    return {
+                        questionId: question.id,
+                        displayOrder: index + 1,
+                        category: question.category,
+                        type: "mcq",
+                        questionText: question.text,
+                        options: question.options.map((option) => ({ id: option.id, text: option.text })),
+                        selectedOptionId,
+                        selectedAnswerText: selectedOption?.text ?? null,
+                        correctOptionId: null,
+                        correctAnswerText: null,
+                        isCorrect: null,
+                        status: selectedOptionId ? "subjective" : "unanswered",
+                    };
+                });
                 const fallbackResult: AttemptSubmitResult = {
-                    totalScore: answeredCount,
-                    positiveScore: answeredCount,
+                    totalScore: 0,
+                    overallScorePercent: 0,
+                    positiveScore: 0,
                     negativeScore: 0,
-                    correctCount: answeredCount,
+                    correctCount: 0,
                     wrongCount: 0,
                     answeredCount,
-                    totalQuestions: questions.length || answeredCount,
+                    skippedCount: Math.max(0, totalQuestions - answeredCount),
+                    totalQuestions,
                     timeTakenSeconds: Math.max(1, totalTime - timeLeft),
+                    sections: [{ name: "Overall", score: 0, weight: "0/0", percentage: 0 }],
+                    questionReviews: localReviews,
                     status: "submitted",
                 };
                 await clearSession();
@@ -523,6 +586,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         setAnswers(newAnswers);
         // Persist to cache immediately
         cacheSaveAnswer(currentQuestion.id, { optionId });
+        persistAnswer(currentQuestion.id, { optionId });
     };
 
     const handleClear = () => {
@@ -531,6 +595,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         setAnswers(newAnswers);
         // Remove from cache
         cacheSaveAnswer(currentQuestion.id, {});
+        persistAnswer(currentQuestion.id, null);
     };
 
     const handleMarkReview = () => {

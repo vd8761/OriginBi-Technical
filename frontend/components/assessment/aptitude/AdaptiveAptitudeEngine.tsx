@@ -44,15 +44,23 @@ interface BlockData {
 
 interface BlockAttemptResult {
   totalScore: number;
+  overallScorePercent?: number;
+  maxScore?: number;
   positiveScore?: number;
   negativeScore?: number;
   correctCount: number;
   wrongCount: number;
   answeredCount?: number;
+  objectiveAnsweredCount?: number;
+  subjectiveAnsweredCount?: number;
+  skippedCount?: number;
   totalQuestions?: number;
   timeTakenSeconds: number;
   status?: string;
-  accuracy: number;
+  accuracy?: number;
+  accuracyPct?: number;
+  sections?: Array<Record<string, unknown>>;
+  questionReviews?: Array<Record<string, unknown>>;
 }
 
 export type { BlockAttemptResult as AttemptSubmitResult };
@@ -210,20 +218,38 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         }
 
         const data = await response.json();
+        const blockNumber = Number(data.currentBlockNumber ?? 1);
         setAttemptToken(data.attemptToken);
         setCurrentBlock(data.currentBlock);
-        setCurrentBlockNumber(1);
-        setViewingBlockNumber(1);
+        setCurrentBlockNumber(blockNumber);
+        setViewingBlockNumber(blockNumber);
         setTotalBlocks(data.totalBlocks ?? data.blockConfig?.blocksPerAssessment ?? 4);
         setQuestionsPerBlock(data.questionsPerBlock ?? data.blockConfig?.questionsPerBlock ?? 5);
         setBlockConfig(data.blockConfig);
-        setTimeLeft(data.durationSeconds);
-        setTotalTime(data.durationSeconds);
+        const duration = Number(data.durationSeconds ?? 3600);
+        const timeLeftSeconds = Number(data.timeLeftSeconds ?? duration);
+        setTimeLeft(timeLeftSeconds);
+        setTotalTime(duration);
         
-        // Store block 1 in allBlocks map
+        // Store the current block in allBlocks map
         const blocksMap = new Map<number, BlockData>();
-        blocksMap.set(1, data.currentBlock);
+        blocksMap.set(blockNumber, data.currentBlock);
         setAllBlocks(blocksMap);
+
+        if (Array.isArray(data.currentBlock?.questions)) {
+          const restored = { ...allAnswers };
+          data.currentBlock.questions.forEach((q: any) => {
+            if (q.selectedOptionId) {
+              restored[String(q.id)] = String(q.selectedOptionId);
+            }
+          });
+          if (Object.keys(restored).length > 0) {
+            setAllAnswers(restored);
+            setAnswers(restored);
+            setShowRestoredBanner(true);
+            setTimeout(() => setShowRestoredBanner(false), 5000);
+          }
+        }
       } catch (error) {
         setLoadError((error as Error).message);
       } finally {
@@ -418,17 +444,17 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   // Save answers for a specific block to backend
-  const saveBlockAnswers = async (blockNum: number) => {
+  const saveBlockAnswers = async (blockNum: number, answersOverride?: Record<string, string>) => {
     if (!attemptToken) return;
     
     // Get answers for this block only
     const block = allBlocks.get(blockNum);
     if (!block) return;
-    
+    const source = answersOverride ?? allAnswers;
     const blockAnswers: Record<string, string> = {};
     block.questions.forEach(q => {
-      if (allAnswers[q.id]) {
-        blockAnswers[q.id] = allAnswers[q.id];
+      if (source[q.id]) {
+        blockAnswers[q.id] = source[q.id];
       }
     });
     
@@ -488,6 +514,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     setAllAnswers(newAnswers);
     setAnswers(newAnswers);
     cacheSaveAnswer(currentQuestion.id, { optionId });
+    void saveBlockAnswers(viewingBlockNumber, newAnswers);
   };
 
   const handleClear = () => {
@@ -497,6 +524,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     setAllAnswers(newAnswers);
     setAnswers(newAnswers);
     cacheSaveAnswer(currentQuestion.id, {});
+    void saveBlockAnswers(viewingBlockNumber, newAnswers);
   };
 
   const handleMarkReview = () => {

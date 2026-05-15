@@ -28,13 +28,22 @@ export interface MncQuestion {
 
 export interface AttemptSubmitResult {
     totalScore: number;
+    overallScorePercent?: number;
+    maxScore?: number;
     positiveScore?: number;
     negativeScore?: number;
     correctCount: number;
     wrongCount: number;
     answeredCount?: number;
+    objectiveAnsweredCount?: number;
+    subjectiveAnsweredCount?: number;
+    skippedCount?: number;
     totalQuestions?: number;
     timeTakenSeconds: number;
+    accuracy?: number;
+    accuracyPct?: number;
+    sections?: Array<Record<string, unknown>>;
+    questionReviews?: Array<Record<string, unknown>>;
     status?: string;
 }
 
@@ -56,7 +65,11 @@ const formatTime = (seconds: number) => {
 
 const labels = ["A", "B", "C", "D"];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE =
+    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+    "http://localhost:5000";
 
 const MNCEngine: React.FC<MNCEngineProps> = ({ 
     onComplete,
@@ -256,8 +269,28 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                 setAttemptToken(token || null);
                 setQuestions(Array.isArray(data.questions) ? normalizeQuestions(data.questions) : []);
                 const duration = Number(data.durationSeconds || MNC_TOTAL_TIME);
-                setTimeLeft(duration);
+                const timeLeftSeconds = Number(data.timeLeftSeconds ?? duration);
+                setTimeLeft(timeLeftSeconds);
                 setTotalTime(duration);
+
+                if (data.answers && typeof data.answers === "object") {
+                    const restored: Record<string, string> = {};
+                    for (const [qId, val] of Object.entries(data.answers)) {
+                        if (val && typeof val === "object" && "optionId" in val && (val as any).optionId) {
+                            restored[qId] = String((val as any).optionId);
+                        } else if (typeof val === "string" || typeof val === "number") {
+                            restored[qId] = String(val);
+                        }
+                    }
+                    if (Object.keys(restored).length > 0) {
+                        setAnswers(restored);
+                        Object.entries(restored).forEach(([qId, optId]) => {
+                            cacheSaveAnswer(qId, { optionId: optId });
+                        });
+                        setShowRestoredBanner(true);
+                        setTimeout(() => setShowRestoredBanner(false), 5000);
+                    }
+                }
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -266,7 +299,16 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache, cacheSaveAnswer]);
+
+    const persistAnswer = useCallback((questionId: string, payload: any) => {
+        if (!attemptToken) return;
+        void fetch(`${API_BASE}/api/assessment/mnc/attempts/${attemptToken}/answers`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: { [questionId]: payload } }),
+        }).catch(() => {});
+    }, [attemptToken]);
 
     const currentQuestion = questions[currentIndex];
     const totalQuestions = questions.length;
@@ -298,6 +340,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
         cacheSaveAnswer(currentQuestion.id, {});
+        persistAnswer(currentQuestion.id, null);
     };
 
     const handleMarkReview = () => {
@@ -350,6 +393,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         if (!currentQuestion) return;
         setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
         cacheSaveAnswer(currentQuestion.id, { optionId });
+        persistAnswer(currentQuestion.id, { optionId });
     };
 
     if (isLoading) {
