@@ -305,7 +305,7 @@ export class AdminQuestionService {
 
         // Resolve temp correctOptionIds in metadata
         if (data.metadata?.kind === 'msq' && Array.isArray(data.metadata.correctOptionIds)) {
-          const resolvedIds = data.metadata.correctOptionIds.map(id => {
+          const resolvedIds = data.metadata.correctOptionIds.map((id: any) => {
             if (String(id).startsWith('opt_')) {
               const idx = parseInt(String(id).split('_')[1]);
               return insertedOptions[idx]?.option_id;
@@ -393,7 +393,7 @@ export class AdminQuestionService {
 
         // Resolve temp correctOptionIds in metadata
         if (data.metadata?.kind === 'msq' && Array.isArray(data.metadata.correctOptionIds)) {
-          const resolvedIds = data.metadata.correctOptionIds.map(oid => {
+          const resolvedIds = data.metadata.correctOptionIds.map((oid: any) => {
             if (String(oid).startsWith('opt_')) {
               const idx = parseInt(String(oid).split('_')[1]);
               return insertedOptions[idx]?.option_id;
