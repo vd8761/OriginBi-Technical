@@ -550,7 +550,7 @@ export class AdminQuestionService {
                 a.total_time_minutes, a.total_questions, a.question_limit, a.status, a.created_at,
                 a.categories, a.difficulty_marks, a.difficulty_negative_marks,
                 a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
-                a.amount, a.trial_attempts_limit, a.main_attempts_limit,
+                a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')

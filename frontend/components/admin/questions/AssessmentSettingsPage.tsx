@@ -249,7 +249,7 @@ export default function AssessmentSettingsPage() {
     setEasyNeg(Number(n.easy)); setMediumNeg(Number(n.medium)); setHardNeg(Number(n.hard));
     
     // Populate Question Types
-    const qTypes = parseMap(a.enabled_question_types, { mcq: true, msq: false, true_false: false });
+    const qTypes = parseMap(a.enabled_question_types, { mcq: false, msq: false, true_false: false });
     setEnabledMCQ(Boolean(qTypes.mcq));
     setEnabledMSQ(Boolean(qTypes.msq));
     setEnabledTF(Boolean(qTypes.true_false));
