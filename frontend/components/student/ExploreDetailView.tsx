@@ -176,7 +176,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 await demoPurchase(paymentTarget.key);
                 await refreshAssignments();
                 setShowLanguageModal(false);
-                setPendingCodingLang(paymentTarget.language);
+                // After successful payment, take user to the assessment library
+                router.push("/assessment?view=assessment");
                 setAssignmentError("");
             } catch (err) {
                 const message =
@@ -189,7 +190,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         } else {
             markPaid(paymentTarget.key);
             refreshPurchases?.();
-            startNonCodingAssessment();
+            // After successful payment, take user to the assessment library
+            router.push("/assessment?view=assessment");
         }
         setPaymentTarget(null);
     };
@@ -547,28 +549,28 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             {showAptitudeModal && (
                 <AptitudePreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}`)}
+                    onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowAptitudeModal(false)}
                 />
             )}
             {showCommunicationModal && (
                 <CommunicationPreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/communication?mode=${mode}`)}
+                    onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowCommunicationModal(false)}
                 />
             )}
             {showRoleModal && (
                 <RolePreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/role?mode=${mode}`)}
+                    onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowRoleModal(false)}
                 />
             )}
             {showMncModal && (
                 <MNCPreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}`)}
+                    onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowMncModal(false)}
                 />
             )}

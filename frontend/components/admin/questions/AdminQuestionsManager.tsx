@@ -9,6 +9,7 @@ import {
   MNC_TOPICS, COMM_TASK_LABELS, CommTaskType,
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
+  CodingQuestion, CODING_CATEGORIES
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
 import {
@@ -27,13 +28,11 @@ import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
 import JsonImportPanel from "./JsonImportPanel";
-import Logo from "@/components/ui/Logo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  AlertCircle, ArrowLeft, Filter, LogOut, ChevronDown,
+  AlertCircle, ArrowLeft, Filter, ChevronDown, Code
 } from "lucide-react";
-import { signOut } from "aws-amplify/auth";
 import CustomSelect from "@/components/ui/CustomSelect";
 import {
   AptitudeIcon,
@@ -49,6 +48,7 @@ const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }>
   mnc: { color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" },
   communication: { color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)" },
   role: { color: "#84cc16", gradient: "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)" },
+  coding: { color: "#f59e0b", gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" },
 };
 
 const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
@@ -56,6 +56,7 @@ const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
   mnc: <MNCIcon className="w-7 h-7" />,
   communication: <CommunicationIcon className="w-7 h-7" />,
   role: <RoleIcon className="w-7 h-7" />,
+  coding: <Code className="w-7 h-7" />,
 };
 
 const MODULE_TAGS: Record<AssessmentType, string[]> = {
@@ -63,6 +64,7 @@ const MODULE_TAGS: Record<AssessmentType, string[]> = {
   mnc: ["DSA", "System Design", "Culture", "HR Prep"],
   communication: ["Listening", "Speaking", "Reading", "Writing"],
   role: ["Concepts", "Scenarios", "Judgement", "Role fit"],
+  coding: ["Algorithms", "Data Structures", "In-Browser IDE"],
 };
 
 function getCatKey(q: AnyQuestion, t: AssessmentType): string {
@@ -71,6 +73,7 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
+    case "coding": return (q as CodingQuestion).category;
   }
 }
 
@@ -80,6 +83,7 @@ function getFilterCategories(t: AssessmentType): { key: string; label: string; s
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
+    case "coding": return CODING_CATEGORIES.map(c => ({ key: c, label: c }));
   }
 }
 
@@ -89,6 +93,7 @@ function getSearchText(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": { const m = q as MNCQuestion; return `${m.text} ${m.topic}`.toLowerCase(); }
     case "communication": { const c = q as CommQuestion; return `${c.instructions} ${c.prompt || ""} ${c.questions?.map(sq => sq.text).join(" ") || ""}`.toLowerCase(); }
     case "role": { const r = q as RoleQuestion; return `${r.text} ${r.category || ""} ${r.title || ""} ${r.scenarioContext || ""}`.toLowerCase(); }
+    case "coding": { const c = q as CodingQuestion; return `${c.text} ${c.category}`.toLowerCase(); }
   }
 }
 
@@ -107,6 +112,8 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     negativeMarks: q.negativeMarks,
     status: q.status,
     imageUrl: q.imageUrl,
+    kind: q.metadata?.kind || "mcq",
+    correctOptionIds: q.metadata?.correctOptionIds || (q.correctOptionId ? [String(q.correctOptionId)] : []),
   };
 
   switch (module) {
@@ -118,6 +125,8 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
       return { ...common, taskType: q.category as CommTaskType, instructions: q.questionText } as unknown as CommQuestion;
     case "role":
       return { ...common, questionType: q.category as RoleQuestionType } as RoleQuestion;
+    case "coding":
+      return { ...common, category: q.category } as unknown as CodingQuestion;
     default:
       return common as any;
   }
@@ -139,6 +148,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     case "mnc": category = (q as MNCQuestion).topic; break;
     case "communication": category = (q as CommQuestion).taskType; break;
     case "role": category = (q as RoleQuestion).questionType; break;
+    case "coding": category = (q as CodingQuestion).category; break;
   }
 
   return {
@@ -154,12 +164,16 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     status: common.status || "active",
     imageUrl: common.imageUrl,
     assessmentId: common.assessmentId,
+    metadata: {
+      kind: common.kind || "mcq",
+      correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+    }
   };
 }
 
 // All modules except specialized ones are now DB-backed
 const isDbModule = (m: AssessmentType | null): m is AssessmentType => 
-  m === "aptitude" || m === "mnc" || m === "communication" || m === "role";
+  m === "aptitude" || m === "mnc" || m === "communication" || m === "role" || m === "coding";
 
 export default function AdminQuestionsManager() {
   const router = useRouter();
@@ -171,6 +185,7 @@ export default function AdminQuestionsManager() {
     mnc: { trial: 0, main: 0 },
     communication: { trial: 0, main: 0 },
     role: { trial: 0, main: 0 },
+    coding: { trial: 0, main: 0 },
   });
   const [view, setView] = useState<"list" | "json-import">("list");
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
@@ -183,46 +198,13 @@ export default function AdminQuestionsManager() {
   const [loading, setLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
   const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
-  const [adminUser, setAdminUser] = useState<{ name: string; email: string } | null>(null);
-  const [isProfileOpen, setProfileOpen] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("user");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setAdminUser({
-            name: parsed.name || parsed.fullName || "Admin User",
-            email: parsed.email || "admin@originbi.com"
-          });
-        } catch (e) {
-          setAdminUser({ name: "Admin User", email: "admin@originbi.com" });
-        }
-      } else {
-        setAdminUser({ name: "Admin User", email: "admin@originbi.com" });
-      }
-    }
-  }, []);
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch (err) {
-      console.error("Amplify signOut error:", err);
-    }
-    localStorage.removeItem("originbi_id_token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("originbi:admin-session");
-    sessionStorage.removeItem("idToken");
-    sessionStorage.removeItem("accessToken");
-    router.push("/admin/login");
-  };
 
   useEffect(() => {
     const loadAllAssessments = async () => {
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
         const results: ApiAssessment[] = [];
         for (const m of modules) {
           const list = await fetchAssessments(m);
@@ -504,181 +486,116 @@ export default function AdminQuestionsManager() {
   // ─── LANDING ───
   if (!selectedModule) {
     return (
-      <div className="relative min-h-screen w-full bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500 overflow-hidden">
+      <div className="relative w-full font-sans overflow-hidden">
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
           <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08] assessment-grid" />
         </div>
 
-        <header className="fixed top-0 left-0 right-0 w-full z-50 h-[64px] sm:h-[72px] bg-white/[0.9] dark:bg-[#19211C]/[0.9] backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
-          <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
-            <div className="flex items-center gap-6">
-              <Logo className="h-5" />
-              <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
-            </div>
-            <div className="flex items-center gap-4">
-              <ThemeToggle />
-              
-              {/* User Profile Section */}
-              <div className="relative">
-                <button
-                  onClick={() => setProfileOpen((prev) => !prev)}
-                  className="flex items-center gap-2 focus:outline-none text-left cursor-pointer"
-                >
-                  {!adminUser ? (
-                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0"></div>
-                  ) : (
-                    <img
-                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser.name)}&background=150089&color=fff`}
-                      alt="User Avatar"
-                      className="w-8 h-8 rounded-full border border-gray-200 dark:border-transparent"
-                    />
-                  )}
-                  <div className="hidden xl:block">
-                    {!adminUser ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></span>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-xs leading-tight text-slate-800 dark:text-white">
-                          {adminUser.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 dark:text-brand-text-secondary leading-tight">
-                          {adminUser.email}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {isProfileOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileOpen(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-[#111814] rounded-xl shadow-2xl z-50 border border-slate-200 dark:border-white/10 overflow-hidden animate-slide-down">
-                      <div className="p-1.5">
-                        <button
-                          onClick={handleLogout}
-                          className="w-full flex items-center px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <LogOut className="w-4 h-4 mr-2" />
-                          <span>Logout</span>
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
+        <main className="relative z-10 mx-auto max-w-[1600px] py-2">
           <div className="space-y-6">
-            <div>
-              <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
-                <span className="text-black dark:text-white font-medium">
-                  Admin Hub
-                </span>
-                <span className="mx-2 text-gray-400 dark:text-gray-600">
-                  <ArrowRightWithoutLineIcon className="w-3 h-3 text-black dark:text-white" />
-                </span>
-                <span className="text-brand-green font-semibold">
-                  Question Banks
-                </span>
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mt-2">Assessment Modules</h2>
-              <p className="text-sm text-slate-900 dark:text-white mt-1">Select a module to manage its question library</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at, idx) => {
                 const accent = ACCENT_COLORS[at];
                 const trialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
                 const mainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
 
                 return (
-                  <div
+                  <motion.div
                     key={at}
-                    className="dashboard-glass-card !rounded-3xl p-6 flex flex-col transition-all duration-300 group h-full hover:border-brand-green/30 text-left dark:bg-white/[0.05]"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="group relative flex flex-col h-full rounded-[2rem] bg-white/80 dark:bg-[#1C241F]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 shadow-md transition-all duration-300 overflow-hidden"
                   >
-                    <div className="flex gap-4 mb-4">
-                      <div className="flex items-center justify-center shrink-0 w-14 h-14 rounded-[20px] text-white shadow-md [&_svg]:w-7 [&_svg]:h-7" style={{ background: accent.gradient }}>
-                        {MODULE_ICONS[at]}
-                      </div>
-                      <div className="flex-1 min-w-0 flex items-center">
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-snug">{ASSESSMENT_TYPE_LABELS[at]}</h3>
-                      </div>
-                    </div>
-
-                    <p className="text-[13px] text-slate-900 dark:text-white line-clamp-2 leading-relaxed mb-6 font-medium">{ASSESSMENT_TYPE_DESCRIPTIONS[at]}</p>
-
-                    <div className="flex items-center gap-5 mb-6 bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Trial</span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">{trialCount} Qs</span>
-                      </div>
-                      <div className="flex flex-col border-l border-slate-200 dark:border-white/10 pl-5">
-                        <span className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none mb-1.5">Main</span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">{mainCount} Qs</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 mb-6 mt-auto">
-                      {(() => {
-                        const dbExam = assessmentsList.find(a => {
-                          const dbModule = at === "communication" ? "grammar" : at;
-                          return a.module_type === dbModule || a.assessment_code === at;
-                        });
-                        if (dbExam && dbExam.categories) {
-                          let parsed: any[] = [];
-                          if (Array.isArray(dbExam.categories)) {
-                            parsed = dbExam.categories;
-                          } else if (typeof dbExam.categories === "string") {
-                            try { parsed = JSON.parse(dbExam.categories); } catch { parsed = []; }
-                          }
-                          if (parsed.length > 0) {
-                            return parsed.slice(0, 4).map((cat: any, tIdx: number) => {
-                              const name = typeof cat === "string" ? cat : (cat.name || cat.id || "");
-                              return (
-                                <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{name}</span>
-                              );
-                            });
-                          }
-                        }
-                        return MODULE_TAGS[at].map((tag, tIdx) => (
-                          <span key={tIdx} className="px-2.5 py-1 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{tag}</span>
-                        ));
-                      })()}
-                    </div>
-
-                    <div className="h-px w-full bg-slate-100 dark:bg-white/5 mb-6" />
-
-                    <div className="flex items-center justify-between gap-3">
-                      {isDbModule(at) ? (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/admin/questions/settings?module=${at}`);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-semibold text-slate-700 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm cursor-pointer"
+                    <div className="relative p-8 flex flex-col h-full z-10">
+                      {/* Icon & Title Section */}
+                      <div className="flex items-start justify-between mb-6">
+                        <div 
+                          className="flex items-center justify-center w-16 h-16 rounded-2xl text-white shadow-lg [&_svg]:w-8 [&_svg]:h-8" 
+                          style={{ background: accent.gradient }}
                         >
-                          <Settings size={13} className="text-brand-green" />
-                          <span>Settings</span>
+                          {MODULE_ICONS[at]}
+                        </div>
+                        <div className="px-3 py-1 rounded-full bg-brand-green/10 border border-brand-green/20">
+                          <span className="text-[10px] font-bold text-brand-green tracking-wide">Active</span>
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight transition-colors">
+                          {ASSESSMENT_TYPE_LABELS[at]}
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
+                          {ASSESSMENT_TYPE_DESCRIPTIONS[at]}
+                        </p>
+                      </div>
+
+                      {/* Stats Section */}
+                      <div className="grid grid-cols-2 gap-3 mb-6">
+                        <div className="bg-slate-50 dark:bg-white/[0.03] p-3 rounded-2xl border border-slate-100 dark:border-white/5">
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider block mb-1">Trial Bank</span>
+                          <span className="text-lg font-bold text-slate-900 dark:text-white">{trialCount}</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-white/[0.03] p-3 rounded-2xl border border-slate-100 dark:border-white/5">
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider block mb-1">Main Bank</span>
+                          <span className="text-lg font-bold text-slate-900 dark:text-white">{mainCount}</span>
+                        </div>
+                      </div>
+
+                      {/* Tags Section */}
+                      <div className="flex flex-wrap gap-2 mb-8 mt-auto">
+                        {(() => {
+                          const dbExam = assessmentsList.find(a => {
+                            const dbModule = at === "communication" ? "grammar" : at;
+                            return a.module_type === dbModule || a.assessment_code === at;
+                          });
+                          let tagsToShow = MODULE_TAGS[at];
+                          if (dbExam && dbExam.categories) {
+                            let parsed: any[] = [];
+                            if (Array.isArray(dbExam.categories)) {
+                              parsed = dbExam.categories;
+                            } else if (typeof dbExam.categories === "string") {
+                              try { parsed = JSON.parse(dbExam.categories); } catch { parsed = []; }
+                            }
+                            if (parsed.length > 0) {
+                              tagsToShow = parsed.map(c => typeof c === "string" ? c : (c.name || c.id || ""));
+                            }
+                          }
+                          return tagsToShow.slice(0, 3).map((tag, tIdx) => (
+                            <span 
+                              key={tIdx} 
+                              className="px-2.5 py-1.5 bg-slate-100/50 dark:bg-white/[0.04] border border-slate-200/50 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-600 dark:text-slate-400 tracking-wide transition-colors"
+                            >
+                              {tag}
+                            </span>
+                          ));
+                        })()}
+                      </div>
+
+                      {/* Actions Section */}
+                      <div className="flex items-center gap-3 pt-6 border-t border-slate-100 dark:border-white/5">
+                        {isDbModule(at) && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/admin/questions/settings?module=${at}`);
+                            }}
+                            className="flex items-center justify-center w-11 h-11 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 dark:text-white hover:text-brand-green hover:bg-brand-green/10 hover:border-brand-green/30 transition-all shadow-sm group/btn"
+                            title="Assessment Settings"
+                          >
+                            <Settings size={18} className="group-hover/btn:rotate-90 transition-transform duration-500" />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => { setSelectedModule(at); setView("list"); }}
+                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold rounded-xl bg-brand-green text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 hover:shadow-brand-green/30 transition-all"
+                        >
+                          <span>Manage Bank</span>
+                          <ArrowRightWithoutLineIcon className="w-4 h-4" />
                         </button>
-                      ) : (
-                        <div />
-                      )}
-                      <button 
-                        onClick={() => { setSelectedModule(at); setView("list"); }}
-                        className="px-4 py-2 text-xs font-semibold rounded-lg bg-brand-green text-white shadow-md hover:bg-brand-green/90 transition-all active:scale-95"
-                      >
-                        Manage Questions
-                      </button>
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -696,109 +613,16 @@ export default function AdminQuestionsManager() {
   const accent = ACCENT_COLORS[selectedModule];
 
   return (
-    <div className="relative min-h-screen w-full bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500 overflow-hidden">
+    <div className="relative w-full font-sans overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08] assessment-grid" />
       </div>
 
-      <header className="fixed top-0 left-0 right-0 w-full z-50 h-[64px] sm:h-[72px] bg-white/[0.9] dark:bg-[#19211C]/[0.9] backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
-          <div className="flex items-center gap-6">
-            <Logo className="h-5" />
-            <div className="w-px h-6 bg-gray-200 dark:bg-white/[0.08] hidden sm:block" />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md">
-              <button onClick={() => setMode("trial")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "trial" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Trial</button>
-              <button onClick={() => setMode("main")} className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === "main" ? "bg-brand-green text-white" : "text-slate-900 dark:text-white hover:text-slate-800 dark:hover:text-white"}`}>Main</button>
-            </div>
-            <ThemeToggle />
-
-            {/* User Profile Section */}
-            <div className="relative">
-              <button
-                onClick={() => setProfileOpen((prev) => !prev)}
-                className="flex items-center gap-2 focus:outline-none text-left cursor-pointer"
-              >
-                {!adminUser ? (
-                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0"></div>
-                ) : (
-                  <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser.name)}&background=150089&color=fff`}
-                    alt="User Avatar"
-                    className="w-8 h-8 rounded-full border border-gray-200 dark:border-transparent"
-                  />
-                )}
-                <div className="hidden xl:block">
-                  {!adminUser ? (
-                    <div className="flex flex-col gap-1">
-                      <span className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></span>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="font-semibold text-xs leading-tight text-slate-800 dark:text-white">
-                        {adminUser.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 dark:text-brand-text-secondary leading-tight">
-                        {adminUser.email}
-                      </p>
-                    </>
-                  )}
-                </div>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {isProfileOpen && (
-                <>
-                  <div className="fixed inset-0 z-40 cursor-default" onClick={() => setProfileOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-[#111814] rounded-xl shadow-2xl z-50 border border-slate-200 dark:border-white/10 overflow-hidden animate-slide-down">
-                    <div className="p-1.5">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        <span>Logout</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
-        {/* Header / breadcrumb */}
-        <div className="mb-6">
-          <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
-            <button onClick={() => setSelectedModule(null)} className="hover:underline hover:text-brand-green transition-colors cursor-pointer text-black dark:text-white font-medium">
-              Admin Hub
-            </button>
-            <span className="mx-2 text-gray-400 dark:text-gray-600">
-              <ArrowRightWithoutLineIcon className="w-3 h-3 text-black dark:text-white" />
-            </span>
-            <button onClick={() => setSelectedModule(null)} className="hover:underline hover:text-brand-green transition-colors cursor-pointer text-black dark:text-white font-medium">
-              Question Banks
-            </button>
-            <span className="mx-2 text-gray-400 dark:text-gray-600">
-              <ArrowRightWithoutLineIcon className="w-3 h-3 text-black dark:text-white" />
-            </span>
-            <span className="text-brand-green font-semibold">
-              {ASSESSMENT_TYPE_LABELS[selectedModule]}
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-black dark:text-white mt-1.5">
-            {ASSESSMENT_TYPE_LABELS[selectedModule]}
-          </h1>
-        </div>
+      <main className="relative z-10 py-2">
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
-        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6">
-          {/* Filter Tabs - Now on the left */}
-          <div className="flex items-center gap-3 w-full xl:w-auto">
+        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6 mt-4">
+          {/* Filter Tabs & Mode Toggle */}
+          <div className="flex flex-wrap items-center gap-6 w-full xl:w-auto">
             <div className="w-full sm:w-64">
               <CustomSelect
                 label="Filter by Category"
@@ -812,6 +636,22 @@ export default function AdminQuestionsManager() {
                   }))
                 ]}
               />
+            </div>
+
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
+              {(["trial", "main"] as QuestionMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`px-6 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
+                    mode === m 
+                      ? "bg-brand-green text-[#0f1411] shadow-lg shadow-brand-green/20" 
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {m === "trial" ? "Trial Bank" : "Main Bank"}
+                </button>
+              ))}
             </div>
 
             {selectedModule === "aptitude" && filterCategory !== "all" && (
@@ -834,12 +674,12 @@ export default function AdminQuestionsManager() {
           
           {/* Action Buttons: Export, Clear, Bulk Import, Add New */}
           <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-            <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
+            <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
               <Download size={16} className="text-brand-green" />
-              <span>Export</span>
+              <span>Export JSON</span>
             </button>
 
-            <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
+            <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
               <Trash2 size={16} />
               <span>Clear Bank</span>
             </button>
@@ -883,8 +723,11 @@ export default function AdminQuestionsManager() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2">
                 <div>
-                  <h3 className="text-2xl font-bold text-[#150089] dark:text-white">
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
                     Inventory Overview <span className="text-brand-green">({questions.length})</span>
+                    <span className="ml-3 text-xs font-medium text-slate-500 capitalize px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 inline-block align-middle">
+                      {mode} bank
+                    </span>
                   </h3>
                 </div>
                 

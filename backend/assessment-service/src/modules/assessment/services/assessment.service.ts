@@ -296,22 +296,39 @@ export class AssessmentService {
       let requestedMode = mode === 'trial' ? 'trial' : 'main';
       let questions: any[] = [];
 
+      const enabledTypes = assessment.enabled_question_types || {};
+      const showMcq = enabledTypes.mcq !== false;
+      const showMsq = enabledTypes.msq !== false;
+      const showTf = enabledTypes.true_false !== false;
+
+      const typeFilter = `AND (
+        ( (q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = '' OR q.metadata->>'kind' = 'mcq') AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE ) OR
+        ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
+        ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE ) OR
+        ( q.metadata->>'kind' = 'numerical' AND (ass.enabled_question_types->>'numerical')::boolean IS NOT FALSE )
+      )`;
+
       if (!config.hasMode) {
         // role and coding have no mode column
         questions = await queryRunner.query(
-          `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active'`,
+          `SELECT q.${config.idCol} FROM ${config.questions} q
+           JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${typeFilter}`,
           [assessment.assessment_id],
         );
       } else {
         questions = await queryRunner.query(
-          `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = $2`,
+          `SELECT q.${config.idCol} FROM ${config.questions} q
+           JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+           WHERE q.assessment_id = $1 AND q.status = 'active' AND q.mode = $2 ${typeFilter}`,
           [assessment.assessment_id, requestedMode],
         );
         if (questions.length === 0 && requestedMode === 'trial') {
           this.logger.warn(`No trial questions found for ${module}, falling back to main mode`);
-          requestedMode = 'main';
           questions = await queryRunner.query(
-            `SELECT ${config.idCol} FROM ${config.questions} WHERE assessment_id = $1 AND status = 'active' AND mode = 'main'`,
+            `SELECT q.${config.idCol} FROM ${config.questions} q
+             JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
+             WHERE q.assessment_id = $1 AND q.status = 'active' AND q.mode = 'main' ${typeFilter}`,
             [assessment.assessment_id],
           );
         }
@@ -326,9 +343,15 @@ export class AssessmentService {
         : questions;
 
       let finalQuestions = shuffled;
-      const questionLimit = Number(assessment.question_limit || 0);
-      if (questionLimit > 0 && shuffled.length > questionLimit) {
-        finalQuestions = shuffled.slice(0, questionLimit);
+      if (requestedMode === 'trial') {
+        if (shuffled.length > 5) {
+          finalQuestions = shuffled.slice(0, 5);
+        }
+      } else {
+        const questionLimit = Number(assessment.question_limit || 0);
+        if (questionLimit > 0 && shuffled.length > questionLimit) {
+          finalQuestions = shuffled.slice(0, questionLimit);
+        }
       }
 
       for (let i = 0; i < finalQuestions.length; i++) {
@@ -343,6 +366,7 @@ export class AssessmentService {
 
       const fullQuestions = await this.getAttemptQuestionsByConfig(
         attemptId, config, assessment.shuffle_options, shuffleSeed,
+        assessment.enabled_question_types,
       );
 
       return {
@@ -362,11 +386,32 @@ export class AssessmentService {
     }
   }
 
+  /**
+   * Determine the effective question kind for questions that don't have an explicit kind set.
+   * If the assessment has only one question type enabled, use that as the kind.
+   * Otherwise default to 'mcq'.
+   */
+  private inferQuestionKind(enabledTypes?: any): string | null {
+    if (!enabledTypes) return null;
+    const mcq = enabledTypes.mcq !== false;
+    const msq = enabledTypes.msq === true;
+    const tf = enabledTypes.true_false === true;
+    const num = enabledTypes.numerical === true;
+
+    // If only one type is enabled, infer that as the kind
+    if (msq && !mcq && !tf && !num) return 'msq';
+    if (tf && !mcq && !msq && !num) return 'tf';
+    if (num && !mcq && !msq && !tf) return 'numerical';
+    // If MCQ is the only enabled type or multiple types are enabled, return null (default mcq)
+    return null;
+  }
+
   private async getAttemptQuestionsByConfig(
     attemptId: number,
     config: any,
     shuffleOptions: boolean,
     seed: string,
+    enabledQuestionTypes?: any,
   ) {
     const isAptitude = config.questions === 'tech_aptitude_questions';
     const isGrammar  = config.questions === 'tech_grammar_questions';
@@ -385,6 +430,7 @@ export class AssessmentService {
     } else if (isMnc) {
       extraSelect = ', q.topic_group, q.marks, q.negative_marks';
     }
+    extraSelect += ', q.metadata';
 
     const difficultySelect = config.hasDifficulty ? ', q.difficulty' : '';
     const textColumn = isCoding ? 'q.problem_statement' : 'q.question_text';
@@ -416,12 +462,22 @@ export class AssessmentService {
           : options;
       }
 
+      // Infer question kind for untyped questions based on assessment config
+      let questionMetadata = q.metadata || {};
+      if (!questionMetadata.kind || questionMetadata.kind === '') {
+        const inferredKind = this.inferQuestionKind(enabledQuestionTypes);
+        if (inferredKind) {
+          questionMetadata = { ...questionMetadata, kind: inferredKind };
+        }
+      }
+
       const base: any = {
         id: q.question_id,
         text: q.question_text,
         options: finalOptions,
         marks: q.marks ? Number(q.marks) : undefined,
         negativeMarks: q.negative_marks ? Number(q.negative_marks) : undefined,
+        metadata: questionMetadata,
       };
 
       if (config.hasDifficulty && q.difficulty !== undefined) {
@@ -467,7 +523,7 @@ export class AssessmentService {
       if (!config) throw new BadRequestException(`Unknown module for token: ${token}`);
 
       const attemptRows = await this.dataSource.query(
-        `SELECT a.*, ass.shuffle_options, ass.module_type
+        `SELECT a.*, ass.shuffle_options, ass.module_type, ass.enabled_question_types
          FROM ${config.attempts} a
          JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
          WHERE a.attempt_token = $1`,
@@ -480,6 +536,7 @@ export class AssessmentService {
 
       const questions = await this.getAttemptQuestionsByConfig(
         attemptId, config, attempt.shuffle_options, attempt.shuffle_seed,
+        attempt.enabled_question_types,
       );
 
       return {
@@ -527,10 +584,10 @@ export class AssessmentService {
       const taskTypeCol   = isGrammar ? `q.task_type` : `NULL as task_type`;
 
       const attemptQuestions = await queryRunner.query(
-        `SELECT aq.*, ${correctOptCol}, q.marks, q.negative_marks,
+        `SELECT aq.*, ${correctOptCol}, q.marks, q.negative_marks, q.mode,
                 q.${config.catCol} as category, ${difficultyCol},
                 ass.negative_mark_enabled, ass.negative_mark_value, ${taskTypeCol},
-                ass.categories as assessment_categories
+                ass.categories as assessment_categories, q.metadata as question_metadata
          FROM ${config.junction} aq
          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
          JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
@@ -596,7 +653,7 @@ export class AssessmentService {
             const answerPayload = typeof rawAnswer === 'object' ? rawAnswer : { code: String(rawAnswer) };
             const submittedCode = (answerPayload as any).code ?? (answerPayload as any).submittedCode ?? null;
             const language      = (answerPayload as any).language ?? (answerPayload as any).lang ?? null;
-            if (submittedCode) {
+            if (submittedCode && aq.mode !== 'trial') {
               await queryRunner.query(
                 `UPDATE ${config.junction}
                  SET submitted_code = $1, language = COALESCE($2, language), submitted_at = NOW()
@@ -608,7 +665,7 @@ export class AssessmentService {
           continue;
         }
 
-        if (isGrammar) {
+        if (aq.mode !== 'trial' && isGrammar) {
           const taskType  = String(aq.task_type || '').toLowerCase();
           const rawAnswer = selectedOptionId;
           if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
@@ -619,12 +676,14 @@ export class AssessmentService {
                 : rawAnswer;
               if (optId) {
                 const isCorrect = Number(optId) === Number(aq.correct_option_id);
-                await queryRunner.query(
-                  `UPDATE ${config.junction}
-                   SET selected_option_id = $1, is_correct = $2, answered_at = NOW()
-                   WHERE attempt_question_id = $3`,
-                  [optId, isCorrect, aq.attempt_question_id],
-                );
+                if (aq.mode !== 'trial') {
+                  await queryRunner.query(
+                    `UPDATE ${config.junction}
+                     SET selected_option_id = $1, is_correct = $2, answered_at = NOW()
+                     WHERE attempt_question_id = $3`,
+                    [optId, isCorrect, aq.attempt_question_id],
+                  );
+                }
                 if (isCorrect) {
                   totalPositive += questionMarks;
                   sectionMap[category].score += questionMarks;
@@ -638,7 +697,7 @@ export class AssessmentService {
               const answerText = typeof rawAnswer === 'string'
                 ? rawAnswer
                 : (rawAnswer as any).text ?? (rawAnswer as any).answerText ?? null;
-              if (answerText) {
+              if (answerText && aq.mode !== 'trial') {
                 await queryRunner.query(
                   `UPDATE ${config.junction} SET answer_text = $1, answered_at = NOW() WHERE attempt_question_id = $2`,
                   [answerText, aq.attempt_question_id],
@@ -651,7 +710,7 @@ export class AssessmentService {
               const answerText = typeof rawAnswer === 'object'
                 ? (rawAnswer as any).text ?? (rawAnswer as any).answerText ?? null
                 : null;
-              if (audioPayload || answerText) {
+              if ((audioPayload || answerText) && aq.mode !== 'trial') {
                 await queryRunner.query(
                   `UPDATE ${config.junction}
                    SET answer_audio_url = $1, answer_text = COALESCE($2, answer_text), answered_at = NOW()
@@ -663,7 +722,7 @@ export class AssessmentService {
               const answerText = typeof rawAnswer === 'string'
                 ? rawAnswer
                 : (rawAnswer as any).text ?? (rawAnswer as any).answerText ?? null;
-              if (answerText) {
+              if (answerText && aq.mode !== 'trial') {
                 await queryRunner.query(
                   `UPDATE ${config.junction} SET answer_text = $1, answered_at = NOW() WHERE attempt_question_id = $2`,
                   [answerText, aq.attempt_question_id],
@@ -674,35 +733,75 @@ export class AssessmentService {
           continue;
         }
 
-        // MCQ modules: aptitude, mnc, role
-        if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
-          sectionMap[category].answeredCount++;
-          const isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
-          const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
-          const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;
+        // Scoring Logic: Support MSQ, TF, and MCQ
+        if (aq.mode !== 'trial' && !isCoding && !isGrammar) {
+          if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
+            sectionMap[category].answeredCount++;
+            
+            const qMetadata = aq.question_metadata || {};
+            const kind = qMetadata.kind || 'mcq';
+            let isCorrectAnswer = false;
 
-          if (isCorrectAnswer) {
-            totalPositive += scoreAwarded;
-            correctCount++;
-            sectionMap[category].score += scoreAwarded;
+            if (kind === 'msq') {
+              const studentChoices = Array.isArray(selectedOptionId) 
+                ? selectedOptionId.map(String) 
+                : (selectedOptionId ? [String(selectedOptionId)] : []);
+              
+              const correctChoices = Array.isArray(qMetadata.correctOptionIds)
+                ? qMetadata.correctOptionIds.map(String)
+                : [];
+              
+              // All-or-nothing check for MSQ
+              isCorrectAnswer = studentChoices.length > 0 &&
+                               studentChoices.length === correctChoices.length &&
+                               studentChoices.every(id => correctChoices.includes(id));
+            } else if (kind === 'numerical') {
+              const studentAnswer = String(selectedOptionId || '').trim().toLowerCase();
+              const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+              isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
+            } else {
+              // Standard MCQ / TF (single choice)
+              isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
+            }
+
+            const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
+            const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;
+
+            if (isCorrectAnswer) {
+              totalPositive += scoreAwarded;
+              correctCount++;
+              sectionMap[category].score += scoreAwarded;
+            } else {
+              totalNegative += negativeApplied;
+              sectionMap[category].score -= negativeApplied;
+            }
+
+            const metadataUpdate = { 
+              ...(aq.metadata || {}), 
+              submittedAnswer: (kind === 'numerical' || kind === 'msq') ? selectedOptionId : null 
+            };
+
+            await queryRunner.query(
+              `UPDATE ${config.junction}
+               SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW(), metadata = $5
+               WHERE attempt_question_id = $6`,
+              [
+                (kind === 'numerical' || kind === 'msq') ? null : selectedOptionId, 
+                isCorrectAnswer, 
+                scoreAwarded, 
+                negativeApplied, 
+                JSON.stringify(metadataUpdate),
+                aq.attempt_question_id,
+              ],
+            );
           } else {
-            totalNegative += negativeApplied;
-            sectionMap[category].score -= negativeApplied;
+            await queryRunner.query(
+              `UPDATE ${config.junction}
+               SET selected_option_id = NULL, is_correct = NULL, score_awarded = 0, negative_applied = 0, answered_at = NULL
+               WHERE attempt_question_id = $1`,
+              [aq.attempt_question_id],
+            );
           }
-
-          await queryRunner.query(
-            `UPDATE ${config.junction}
-             SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW()
-             WHERE attempt_question_id = $5`,
-            [selectedOptionId, isCorrectAnswer, scoreAwarded, negativeApplied, aq.attempt_question_id],
-          );
-        } else {
-          await queryRunner.query(
-            `UPDATE ${config.junction}
-             SET selected_option_id = NULL, is_correct = NULL, score_awarded = 0, negative_applied = 0, answered_at = NULL
-             WHERE attempt_question_id = $1`,
-            [aq.attempt_question_id],
-          );
         }
       }
 
@@ -857,10 +956,10 @@ export class AssessmentService {
         mode,
         blockConfig,
         currentBlock: firstBlock,
-        totalBlocks: blockConfig.blocksPerAssessment,
-        questionsPerBlock: blockConfig.questionsPerBlock,
+        totalBlocks: mode === 'trial' ? 1 : blockConfig.blocksPerAssessment,
+        questionsPerBlock: mode === 'trial' ? 5 : blockConfig.questionsPerBlock,
         isBlockBased: true,
-        totalQuestions: firstBlock.questions.length,
+        totalQuestions: mode === 'trial' ? 5 : (blockConfig.blocksPerAssessment * blockConfig.questionsPerBlock)
       };
     } catch (error) {
       if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();

@@ -67,6 +67,7 @@ type QuestionResponse struct {
 	ReferenceAnswer  string           `json:"referenceAnswer,omitempty"`
 	Type             string           `json:"type,omitempty"`
 	Category         string           `json:"category,omitempty"`
+	Subcategory      string           `json:"subcategory,omitempty"`
 	ScenarioContext  string           `json:"scenarioContext,omitempty"`
 	Topic            string           `json:"topic,omitempty"`
 }

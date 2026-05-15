@@ -22,7 +22,7 @@ function AdaptiveAptitudeContent() {
     }
 
     // Get assessment code from URL params or use default
-    const code = searchParams.get("code");
+    const code = searchParams.get("assessmentCode") || searchParams.get("code");
     if (code) {
       setAssessmentCode(code);
     }

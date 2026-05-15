@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import {
   AssessmentType, AnyQuestion, SAMPLE_JSONS,
   CATEGORY_COLORS, AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
-  COMM_TASK_LABELS, ROLE_QUESTION_TYPE_LABELS,
+  COMM_TASK_LABELS, ROLE_QUESTION_TYPE_LABELS, QuestionKind,
 } from "./types";
 import { generateId } from "./storage";
 import { AlertCircle, CheckCircle2, Copy, Upload, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
@@ -16,34 +16,65 @@ interface JsonImportPanelProps {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion[] {
   return raw.map((item, i) => {
     const baseId = generateId() + `_${i}`;
+    const kind: QuestionKind = item.kind || (item.correctOptionIndices ? "msq" : "mcq");
 
     switch (assessmentType) {
-      case "aptitude": {
-        if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
-        if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
-        if (item.correctOptionIndex === undefined) throw new Error(`Q${i + 1}: missing "correctOptionIndex".`);
-        const opts = item.options.map((o: { text: string }, j: number) => ({ id: `opt_${j}`, text: o.text }));
-        return {
-          id: baseId, category: item.category || "QA", text: item.text,
-          options: opts, correctOptionId: opts[item.correctOptionIndex].id,
+      case "aptitude":
+      case "mnc":
+      case "role": {
+        if (kind !== "numerical") {
+          if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
+          if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
+        }
+        
+        const opts = (item.options || []).map((o: { text: string }, j: number) => ({ id: `opt_${j}`, text: o.text }));
+        
+        let correctOptionId = "";
+        let correctOptionIds: string[] = [];
+
+        if (kind === "msq") {
+          const indices = item.correctOptionIndices || [item.correctOptionIndex || 0];
+          correctOptionIds = indices.map((idx: number) => opts[idx]?.id).filter(Boolean);
+          if (correctOptionIds.length === 0) throw new Error(`Q${i + 1}: MSQ needs correctOptionIndices.`);
+          correctOptionId = correctOptionIds[0];
+        } else if (kind === "numerical") {
+          correctOptionId = "";
+          correctOptionIds = [];
+        } else {
+          const idx = item.correctOptionIndex !== undefined ? item.correctOptionIndex : 0;
+          if (!opts[idx]) throw new Error(`Q${i + 1}: invalid correctOptionIndex.`);
+          correctOptionId = opts[idx].id;
+          correctOptionIds = [correctOptionId];
+        }
+
+        const q: any = {
+          id: baseId, text: item.text, options: opts, 
+          correctOptionId, correctOptionIds, kind,
+          correctAnswer: item.correctAnswer || (kind === "numerical" ? (item.explanation || "") : undefined),
           difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
           explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
-        } as AptitudeQuestion;
-      }
-      case "mnc": {
-        if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
-        if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
-        if (item.correctOptionIndex === undefined) throw new Error(`Q${i + 1}: missing "correctOptionIndex".`);
-        const opts = item.options.map((o: { text: string }, j: number) => ({ id: `opt_${j}`, text: o.text }));
-        return {
-          id: baseId, topic: item.topic || "General", text: item.text,
-          options: opts, correctOptionId: opts[item.correctOptionIndex].id,
-          difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
-          explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
-        } as MNCQuestion;
+        };
+
+        if (assessmentType === "aptitude") {
+          q.category = item.category || "QA";
+          q.subcategory = item.subcategory;
+        } else if (assessmentType === "mnc") {
+          q.topic = item.topic || item.category || "General";
+        } else if (assessmentType === "role") {
+          q.questionType = item.questionType || "conceptual";
+          if (item.category) q.category = item.category;
+          if (item.subCategory) q.subCategory = item.subCategory;
+          if (item.title) q.title = item.title;
+          if (item.scenarioContext) q.scenarioContext = item.scenarioContext;
+          if (item.ticketId) q.ticketId = item.ticketId;
+          if (item.priority) q.priority = item.priority;
+          if (item.reportedBy) q.reportedBy = item.reportedBy;
+        }
+        return q;
       }
       case "communication": {
         if (!item.taskType) throw new Error(`Q${i + 1}: missing "taskType".`);
@@ -52,6 +83,7 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
           difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
           status: item.status,
         };
+        (cq as any).kind = kind;
         if (item.questions) {
           cq.questions = item.questions.map((sq: { text: string; options?: { text: string }[]; correctOptionIndex?: number }, si: number) => {
             const sqOpts = (sq.options || []).map((o: { text: string }, j: number) => ({ id: `opt_${si}_${j}`, text: o.text }));
@@ -70,25 +102,12 @@ function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion
         if (item.maxWords) cq.maxWords = item.maxWords;
         return cq;
       }
-      case "role": {
-        if (!item.text) throw new Error(`Q${i + 1}: missing "text".`);
-        if (!item.options || item.options.length < 2) throw new Error(`Q${i + 1}: need ≥2 options.`);
-        if (item.correctOptionIndex === undefined) throw new Error(`Q${i + 1}: missing "correctOptionIndex".`);
-        const opts = item.options.map((o: { text: string }, j: number) => ({ id: `opt_${j}`, text: o.text }));
-        const rq: RoleQuestion = {
-          id: baseId, questionType: item.questionType || "conceptual", text: item.text,
-          options: opts, correctOptionId: opts[item.correctOptionIndex].id,
+      case "coding": {
+        return {
+          id: baseId, category: item.category || "Algorithms", text: item.text,
           difficulty: item.difficulty, marks: item.marks, negativeMarks: item.negativeMarks,
-          explanation: item.explanation, status: item.status, imageUrl: item.imageUrl,
-        };
-        if (item.category) rq.category = item.category;
-        if (item.subCategory) rq.subCategory = item.subCategory;
-        if (item.title) rq.title = item.title;
-        if (item.scenarioContext) rq.scenarioContext = item.scenarioContext;
-        if (item.ticketId) rq.ticketId = item.ticketId;
-        if (item.priority) rq.priority = item.priority;
-        if (item.reportedBy) rq.reportedBy = item.reportedBy;
-        return rq;
+          status: item.status, explanation: item.explanation, kind: "mcq",
+        } as any;
       }
     }
   });
@@ -100,6 +119,8 @@ function getQuestionLabel(q: AnyQuestion, assessmentType: AssessmentType): strin
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return COMM_TASK_LABELS[(q as CommQuestion).taskType] || (q as CommQuestion).taskType;
     case "role": return ROLE_QUESTION_TYPE_LABELS[(q as RoleQuestion).questionType] || (q as RoleQuestion).questionType;
+    case "coding": return (q as any).category || "Coding";
+    default: return "Question";
   }
 }
 
@@ -112,6 +133,8 @@ function getQuestionText(q: AnyQuestion, assessmentType: AssessmentType): string
       return cq.questions?.[0]?.text || cq.prompt || cq.instructions;
     }
     case "role": return (q as RoleQuestion).text;
+    case "coding": return (q as any).text || "Coding Question";
+    default: return "";
   }
 }
 
@@ -121,6 +144,8 @@ function getCategoryKey(q: AnyQuestion, assessmentType: AssessmentType): string 
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
+    case "coding": return (q as any).category || "coding";
+    default: return "general";
   }
 }
 

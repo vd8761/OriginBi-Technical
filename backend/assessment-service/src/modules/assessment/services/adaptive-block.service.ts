@@ -157,7 +157,7 @@ export class AdaptiveBlockService {
         queryRunner,
         request.assessmentId,
         targetDifficulty,
-        blockConfig.questionsPerBlock,
+        request.mode === 'trial' ? 5 : blockConfig.questionsPerBlock,
         request.mode,
         request.previousPerformance
       );
@@ -496,19 +496,27 @@ export class AdaptiveBlockService {
       categoryFilter = `AND q.${config.categoryCol} IN (${weakCategories.map(() => '?').join(',')})`;
     }
 
+    const typeFilter = `AND (
+      ( q.metadata->>'kind' IS NULL OR q.metadata->>'kind' = '' OR q.metadata->>'kind' = 'mcq' ) AND (ass.enabled_question_types->>'mcq')::boolean IS NOT FALSE OR
+      ( q.metadata->>'kind' = 'msq' AND (ass.enabled_question_types->>'msq')::boolean IS NOT FALSE ) OR
+      ( q.metadata->>'kind' = 'tf' AND (ass.enabled_question_types->>'true_false')::boolean IS NOT FALSE ) OR
+      ( q.metadata->>'kind' = 'numerical' AND (ass.enabled_question_types->>'numerical')::boolean IS NOT FALSE )
+    )`;
+
     const questions = await queryRunner.query(
       `SELECT q.${config.idCol}, q.question_text, q.difficulty, q.${config.categoryCol}, 
-              q.marks, q.negative_marks, q.image_url,
+              q.marks, q.negative_marks, q.image_url, q.metadata,
               json_agg(
                 json_build_object('option_id', o.option_id, 'option_text', o.option_text)
                 ORDER BY o.option_id
               ) as options
        FROM ${config.questions} q
        LEFT JOIN ${config.options} o ON o.${config.idCol} = q.${config.idCol}
+       JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
        WHERE q.assessment_id = $1 AND q.difficulty = $2 AND q.status = 'active' 
        AND (q.mode = $3 OR q.mode IS NULL)
-       ${categoryFilter}
-       GROUP BY q.${config.idCol}
+       ${categoryFilter} ${typeFilter}
+       GROUP BY q.${config.idCol}, ass.enabled_question_types
        ORDER BY RANDOM()
        LIMIT $4`,
       [assessmentId, difficulty, mode, questionCount]
@@ -525,7 +533,8 @@ export class AdaptiveBlockService {
       category: q[config.categoryCol],
       marks: Number(q.marks) || 1,
       negativeMarks: Number(q.negative_marks) || 0,
-      imageUrl: q.image_url
+      imageUrl: q.image_url,
+      metadata: q.metadata || {}
     }));
   }
 

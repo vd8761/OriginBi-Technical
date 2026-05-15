@@ -124,6 +124,7 @@ export class AdminQuestionService {
       status: row.status,
       mode: row.mode || 'trial',
       imageUrl: row.image_url,
+      metadata: row.metadata || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -265,13 +266,13 @@ export class AdminQuestionService {
         assessmentId = await this.ensureDefaultAssessment(queryRunner, module, resolvedUser);
       }
 
-      const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'image_url', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
-      const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode];
-      let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', 'NULL', '$7', '$8', '$9', '$10'];
+      const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'image_url', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode', 'metadata'];
+      const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode, data.metadata ? JSON.stringify(data.metadata) : null];
+      let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11', '$12'];
 
-      if (config.subcategoryColumn && subcategory) {
+      if (config.subcategoryColumn) {
         columns.push(config.subcategoryColumn);
-        values.push(subcategory);
+        values.push(subcategory || 'General');
         placeholders.push(`$${values.length}`);
       }
 
@@ -301,6 +302,24 @@ export class AdminQuestionService {
           [correctOptionId, questionId],
         );
         questionRow.correct_option_id = correctOptionId;
+
+        // Resolve temp correctOptionIds in metadata
+        if (data.metadata?.kind === 'msq' && Array.isArray(data.metadata.correctOptionIds)) {
+          const resolvedIds = data.metadata.correctOptionIds.map((id: any) => {
+            if (String(id).startsWith('opt_')) {
+              const idx = parseInt(String(id).split('_')[1]);
+              return insertedOptions[idx]?.option_id;
+            }
+            return id;
+          }).filter(Boolean);
+          
+          const updatedMetadata = { ...data.metadata, correctOptionIds: resolvedIds };
+          await queryRunner.query(
+            `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
+            [JSON.stringify(updatedMetadata), questionId]
+          );
+          questionRow.metadata = updatedMetadata;
+        }
       }
 
       await queryRunner.query(
@@ -351,6 +370,7 @@ export class AdminQuestionService {
       if (status !== undefined) { updates.push(`status = $${pIdx++}`); params.push(status); }
       if (mode !== undefined) { updates.push(`mode = $${pIdx++}`); params.push(mode); }
       if (imageUrl !== undefined) { updates.push(`image_url = $${pIdx++}`); params.push(imageUrl); }
+      if (data.metadata !== undefined) { updates.push(`metadata = $${pIdx++}`); params.push(data.metadata ? JSON.stringify(data.metadata) : null); }
 
       updates.push('updated_at = NOW()');
 
@@ -368,7 +388,25 @@ export class AdminQuestionService {
         }
         const cIdx = typeof correctOptionIndex === 'number' ? correctOptionIndex : 0;
         const safeIdx = Math.min(Math.max(0, cIdx), insertedOptions.length - 1);
-        await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOptions[safeIdx].option_id, id]);
+        const correctOptionId = insertedOptions[safeIdx].option_id;
+        await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [correctOptionId, id]);
+
+        // Resolve temp correctOptionIds in metadata
+        if (data.metadata?.kind === 'msq' && Array.isArray(data.metadata.correctOptionIds)) {
+          const resolvedIds = data.metadata.correctOptionIds.map((oid: any) => {
+            if (String(oid).startsWith('opt_')) {
+              const idx = parseInt(String(oid).split('_')[1]);
+              return insertedOptions[idx]?.option_id;
+            }
+            return oid;
+          }).filter(Boolean);
+          
+          const updatedMetadata = { ...data.metadata, correctOptionIds: resolvedIds };
+          await queryRunner.query(
+            `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
+            [JSON.stringify(updatedMetadata), id]
+          );
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -483,13 +521,18 @@ export class AdminQuestionService {
           const explanation = q.explanation || null;
           if (!questionText) continue;
 
-          const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode'];
-          const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, null, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial'];
-          let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9'];
+          const metadata = q.metadata || {};
+          if (q.kind) metadata.kind = q.kind;
+          if (q.correctAnswer) metadata.correctAnswer = q.correctAnswer;
+          if (q.correctOptionIds) metadata.correctOptionIds = q.correctOptionIds;
 
-          if (config.subcategoryColumn && subcategory) {
+          const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode', 'metadata'];
+          const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial', JSON.stringify(metadata)];
+          let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9', '$10'];
+
+          if (config.subcategoryColumn) {
             columns.push(config.subcategoryColumn);
-            values.push(subcategory);
+            values.push(subcategory || category || 'General');
             placeholders.push(`$${values.length}`);
           }
 
@@ -509,8 +552,10 @@ export class AdminQuestionService {
               insertedOpts.push(oInsert[0]);
             }
             const correctIdx = q.correctOptionIndex ?? q.correctOptionId ?? 0;
-            const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
-            await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+            if (insertedOpts.length > 0) {
+              const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
+              await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+            }
           }
           imported++;
         } catch (e: any) {
@@ -550,7 +595,7 @@ export class AdminQuestionService {
                 a.total_time_minutes, a.total_questions, a.question_limit, a.status, a.created_at,
                 a.categories, a.difficulty_marks, a.difficulty_negative_marks,
                 a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
-                a.amount, a.trial_attempts_limit, a.main_attempts_limit,
+                a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -590,6 +635,7 @@ export class AdminQuestionService {
     const amount = data.amount;
     const trialAttemptsLimit = data.trialAttemptsLimit !== undefined ? data.trialAttemptsLimit : data.trial_attempts_limit;
     const mainAttemptsLimit = data.mainAttemptsLimit !== undefined ? data.mainAttemptsLimit : data.main_attempts_limit;
+    const enabledQuestionTypes = data.enabledQuestionTypes !== undefined ? data.enabledQuestionTypes : data.enabled_question_types;
     
     try {
       await this.dataSource.query(
@@ -607,8 +653,9 @@ export class AdminQuestionService {
              amount = COALESCE($11, amount),
              trial_attempts_limit = COALESCE($12, trial_attempts_limit),
              main_attempts_limit = COALESCE($13, main_attempts_limit),
+             enabled_question_types = COALESCE($14, enabled_question_types),
              updated_at = NOW()
-         WHERE assessment_id = $14`,
+         WHERE assessment_id = $15`,
         [
           assessmentName !== undefined ? assessmentName : null,
           totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
@@ -623,6 +670,7 @@ export class AdminQuestionService {
           amount !== undefined ? Number(amount) : null,
           trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : null,
           mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : null,
+          enabledQuestionTypes !== undefined ? (typeof enabledQuestionTypes === 'string' ? enabledQuestionTypes : JSON.stringify(enabledQuestionTypes)) : null,
           id
         ]
       );

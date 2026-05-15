@@ -23,6 +23,8 @@ export interface BaseTask {
     id: string;
     type: TaskType;
     instructions: string;
+    category?: string;
+    subcategory?: string;
 }
 
 export interface AudioTask extends BaseTask {
@@ -267,12 +269,14 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         const instructions = q.instructions ?? taskCopy[taskType]?.hint ?? "Answer the question.";
         const options = normalizeOptions(q.options);
         const questionText = q.text ?? q.questionText ?? q.question_text ?? "";
+        const category = q.category ?? undefined;
+        const subcategory = q.subcategory ?? q.sub_category ?? undefined;
+
+        const base = { id, type: taskType, instructions, category, subcategory };
 
         if (taskType === "audio") {
             return {
-                id,
-                type: "audio",
-                instructions,
+                ...base,
                 audioUrl: q.audioUrl ?? q.audio_url ?? "",
                 questions: [{ id, text: questionText, options }],
             } as AudioTask;
@@ -280,9 +284,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 
         if (taskType === "reading") {
             return {
-                id,
-                type: "reading",
-                instructions,
+                ...base,
                 passage: q.passage ?? q.passageText ?? q.passage_text ?? "",
                 questions: [{ id, text: questionText, options }],
             } as ReadingTask;
@@ -291,9 +293,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         if (taskType === "speaking") {
             const rubric = q.rubric ?? q.rubric_json ?? {};
             return {
-                id,
-                type: "speaking",
-                instructions,
+                ...base,
                 prompt: q.prompt ?? questionText,
                 prepTimeSeconds: Number(rubric.prepTimeSeconds ?? 30),
                 recordTimeSeconds: Number(rubric.recordTimeSeconds ?? 120),
@@ -303,9 +303,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         if (taskType === "writing") {
             const rubric = q.rubric ?? q.rubric_json ?? {};
             return {
-                id,
-                type: "writing",
-                instructions,
+                ...base,
                 prompt: q.prompt ?? questionText,
                 minWords: rubric.minWords ?? undefined,
                 maxWords: rubric.maxWords ?? undefined,
@@ -313,9 +311,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         }
 
         return {
-            id,
-            type: "mcq",
-            instructions,
+            ...base,
             questions: [{ id, text: questionText, options }],
         } as McqTask;
     });
@@ -687,7 +683,17 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                                 <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
                                     {taskCopy[currentTask.type].label}
                                 </h2>
-                                <div className="mt-0.5 flex items-center gap-2">
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                    {currentTask.category && (
+                                        <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-white/5 dark:text-slate-400 border border-slate-200 dark:border-white/10 uppercase tracking-tight">
+                                            {currentTask.category}
+                                        </span>
+                                    )}
+                                    {currentTask.subcategory && (
+                                        <span className="inline-flex items-center rounded bg-brand-green/5 px-2 py-0.5 text-[9px] font-bold text-brand-green border border-brand-green/10 uppercase tracking-tight">
+                                            {currentTask.subcategory}
+                                        </span>
+                                    )}
                                     {isQuestionMarked && (
                                         <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
                                             <div className="h-1 w-1 rounded-full bg-current" />

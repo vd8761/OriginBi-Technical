@@ -23,7 +23,7 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <div className="w-12 h-12 border-4 border-brand-green border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Loading questions...</p>
+        <p className="text-[11px] font-bold text-slate-900 dark:text-white">Loading questions...</p>
       </div>
     );
   }
@@ -36,6 +36,7 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
             <tr className="text-left">
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Question Details</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-32">Category</th>
+              <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-32">Subcategory</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-24 text-center">Choices</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-28">Difficulty</th>
               <th className="p-4 text-xs font-normal text-[#19211C] dark:text-brand-text-secondary tracking-wider cursor-pointer group hover:bg-black/5 dark:hover:bg-white/5 transition-colors w-24 text-center">Marks</th>
@@ -67,16 +68,21 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
                       {category}
                     </span>
                   </td>
+                  <td className="p-4 text-sm text-brand-text-light-primary dark:text-white align-middle">
+                    <span className="capitalize text-slate-400 dark:text-white/40">
+                      {(q as any).subcategory || (q as any).subCategory || "-"}
+                    </span>
+                  </td>
                   <td className="p-4 text-center text-sm text-brand-text-light-primary dark:text-white align-middle font-bold">
                     {optionsCount > 0 ? (
-                      <span className="text-[10px] text-brand-text-light-primary dark:text-white uppercase tracking-tight font-black">
+                      <span className="text-[10px] text-brand-text-light-primary dark:text-white font-bold">
                         {optionsCount} options
                       </span>
                     ) : "-"}
                   </td>
                   <td className="p-4 text-sm text-brand-text-light-primary dark:text-white align-middle">
                     <div className="flex items-center">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
                         difficulty.toLowerCase() === 'easy' ? 'bg-[#1ED36A]/10 text-[#1ED36A]' :
                         difficulty.toLowerCase() === 'medium' ? 'bg-amber-500/10 text-amber-500' :
                         'bg-red-500/10 text-red-500'

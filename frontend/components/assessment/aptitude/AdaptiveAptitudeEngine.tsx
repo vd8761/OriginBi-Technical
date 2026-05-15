@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw, Lock, Unlock, TrendingUp } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, X, ZoomIn, Search, PanelRightClose, PanelRightOpen, LayoutGrid, RotateCcw, Loader2, RotateCw, Lock, Unlock, TrendingUp, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
@@ -24,6 +24,10 @@ interface Question {
   marks?: number;
   negativeMarks?: number;
   explanation?: string;
+  metadata?: {
+      kind?: 'mcq' | 'msq' | 'tf';
+      [key: string]: any;
+  };
 }
 
 interface BlockConfig {
@@ -84,7 +88,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   mode = 'main',
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
   const [timeLeft, setTimeLeft] = useState(3600);
   const [totalTime, setTotalTime] = useState(3600);
@@ -147,12 +151,12 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       setBlockConfig(cachedSession.blockConfig);
     }
     if (cachedSession.answers) {
-      const restored: Record<string, string> = {};
+      const restored: Record<string, string | string[]> = {};
       for (const [qId, val] of Object.entries(cachedSession.answers)) {
         if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-          restored[qId] = val.optionId as string;
-        } else if (typeof val === 'string') {
-          restored[qId] = val;
+          restored[qId] = val.optionId as string | string[];
+        } else if (typeof val === 'string' || Array.isArray(val)) {
+          restored[qId] = val as any;
         }
       }
       setAnswers(restored);
@@ -347,9 +351,27 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   // Navigation handlers
   const handleOptionSelect = (optionId: string) => {
     if (!currentQuestion) return;
-    const newAnswers = { ...answers, [currentQuestion.id]: optionId };
+    const kind = currentQuestion.metadata?.kind || 'mcq';
+
+    let newAnswer: string | string[];
+
+    if (kind === 'msq') {
+        const currentVal = answers[currentQuestion.id];
+        let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
+        
+        if (selectedIds.includes(optionId)) {
+            selectedIds = selectedIds.filter(id => id !== optionId);
+        } else {
+            selectedIds = [...selectedIds, optionId];
+        }
+        newAnswer = selectedIds;
+    } else {
+        newAnswer = optionId;
+    }
+
+    const newAnswers = { ...answers, [currentQuestion.id]: newAnswer };
     setAnswers(newAnswers);
-    cacheSaveAnswer(currentQuestion.id, { optionId });
+    cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
   };
 
   const handleClear = () => {
@@ -646,7 +668,10 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
 
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {currentQuestion?.options?.map((option, index) => {
-                const isSelected = currentQuestion ? answers[currentQuestion.id] === option.id : false;
+                const kind = currentQuestion.metadata?.kind || 'mcq';
+                const isSelected = kind === 'msq'
+                    ? (Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).includes(option.id))
+                    : answers[currentQuestion.id] === option.id;
 
                 return (
                   <button
@@ -665,7 +690,9 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
                         ? "bg-brand-green text-[#0f1712]"
                         : "bg-brand-green/10 text-brand-green"
                     }`}>
-                      {labelForIndex(index)}
+                        {kind === 'msq' ? (
+                            isSelected ? <Check size={18} strokeWidth={3} /> : labelForIndex(index)
+                        ) : labelForIndex(index)}
                     </span>
                     <span className={`text-sm font-semibold leading-6 ${
                       isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"

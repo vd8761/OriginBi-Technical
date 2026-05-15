@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, Suspense, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
+import { signIn, fetchAuthSession, signOut } from "aws-amplify/auth";
+import { configureAmplify } from "@/lib/aws-amplify-config";
+import { setAdminTokens } from "@/lib/api";
+
+configureAmplify();
 import { loginUser } from "@/lib/api";
 
 function getErrorMessage(err: unknown) {
@@ -10,7 +15,7 @@ function getErrorMessage(err: unknown) {
   return "Invalid administrative credentials. Please verify your entries.";
 }
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
@@ -26,7 +31,7 @@ export default function AdminLoginPage() {
 
   useEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
-    const idToken = localStorage.getItem("originbi:id-token");
+    const idToken = localStorage.getItem("originbi:admin-id-token");
     if (adminSession === "true" && idToken) {
       router.push(safeNext);
     }
@@ -55,6 +60,55 @@ export default function AdminLoginPage() {
         return;
       }
 
+      // Auth/admin endpoints live on the NestJS assessment-service. Prefer
+      // the legacy ADMIN_API_BASE_URL if someone set it, otherwise fall back
+      // to the documented NEXT_PUBLIC_AUTH_SERVICE_URL.
+      const apiBase = (
+        process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ||
+        process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
+        ""
+      ).replace(/\/$/, "");
+      if (!apiBase) {
+        throw new Error(
+          "Auth service URL not configured. Set NEXT_PUBLIC_AUTH_SERVICE_URL in frontend/.env.local.",
+        );
+      }
+
+      const res = await fetch(`${apiBase}/admin/me`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${idTokenJwt}`,
+          "X-User-Context": JSON.stringify({ email }),
+        },
+      });
+
+      if (!res.ok) {
+        let backendMessage = "Unable to verify your administrative access.";
+        try {
+          const data = await res.json();
+          if (data && typeof data.message === "string") backendMessage = data.message;
+        } catch {
+          // Keep fallback message.
+        }
+        await signOut();
+        setError(backendMessage);
+        return;
+      }
+
+      const data = await res.json();
+      const backendUser = data.user || {};
+      const metadata = backendUser.metadata || {};
+
+      const accessTokenJwt = tokens.accessToken?.toString() || idTokenJwt;
+      const refreshTokenJwt =
+        (session.tokens && (session.tokens as { refreshToken?: { toString(): string } }).refreshToken?.toString()) || "";
+      // Keep admin auth in its own namespace so the student SessionProvider
+      // on `/` never mistakes an admin login for a candidate session.
+      setAdminTokens({
+        accessToken: accessTokenJwt,
+        idToken: idTokenJwt,
+        refreshToken: refreshTokenJwt || undefined,
+      });
       // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
       // ID_TOKEN_KEY) and what AdminGuard checks. Previously these were
       // written under legacy underscore/bare names, so apiFetch sent no
@@ -188,5 +242,13 @@ export default function AdminLoginPage() {
         </form>
       </section>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLoginForm />
+    </Suspense>
   );
 }

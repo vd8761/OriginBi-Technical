@@ -30,6 +30,12 @@ export class TechRoleQuestion {
     @Column({ name: "domain", type: "varchar", length: 100 })
     domain!: string;
 
+    @Column({ name: "category", type: "varchar", length: 100, nullable: true })
+    category!: string | null;
+
+    @Column({ name: "subcategory", type: "varchar", length: 100, nullable: true })
+    subcategory!: string | null;
+
     @Column({
         name: "question_type",
         type: "enum",

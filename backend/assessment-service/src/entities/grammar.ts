@@ -20,6 +20,12 @@ export class TechGrammarQuestion {
     @PrimaryGeneratedColumn("increment", { name: "grammar_question_id", type: "bigint" })
     grammarQuestionId!: string;
 
+    @Column({ name: "category", type: "varchar", length: 100, nullable: true })
+    category!: string | null;
+
+    @Column({ name: "subcategory", type: "varchar", length: 100, nullable: true })
+    subcategory!: string | null;
+
     @ManyToOne(() => TechAssessment, { nullable: false })
     @JoinColumn({ name: "assessment_id" })
     assessment!: TechAssessment;

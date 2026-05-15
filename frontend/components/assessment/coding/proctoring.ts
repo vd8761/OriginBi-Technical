@@ -196,15 +196,9 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
         };
         // beforeunload guards against Ctrl+W / window close attempts as a
         // last-resort prompt so the candidate doesn't lose their work.
-        const beforeUnload = (e: BeforeUnloadEvent) => {
-            e.preventDefault();
-            e.returnValue = "";
-        };
         document.addEventListener("keydown", handler, true);
-        window.addEventListener("beforeunload", beforeUnload);
         return () => {
             document.removeEventListener("keydown", handler, true);
-            window.removeEventListener("beforeunload", beforeUnload);
         };
     }, [active, settings.blockBrowserShortcuts, onViolation]);
 

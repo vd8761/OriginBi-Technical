@@ -1,11 +1,12 @@
 // ── Assessment Type (top-level module selector) ──
-export type AssessmentType = "aptitude" | "mnc" | "communication" | "role";
+export type AssessmentType = "aptitude" | "mnc" | "communication" | "role" | "coding";
 
 export const ASSESSMENT_TYPE_LABELS: Record<AssessmentType, string> = {
   aptitude: "Aptitude Assessment",
   mnc: "MNC Career Prep",
   communication: "Communication Skills",
   role: "Role-Based Technical",
+  coding: "Coding & Development",
 };
 
 export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
@@ -13,6 +14,7 @@ export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
   mnc: "Technical MCQs focused on Data Structures, Algorithms, and Core CS.",
   communication: "Multi-skill tasks including Audio, Speaking, Reading, and Writing.",
   role: "Context-aware conceptual and scenario-based technical evaluations.",
+  coding: "In-browser IDE assessments for algorithms and problem solving.",
 };
 
 export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
@@ -20,6 +22,7 @@ export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
   mnc: "🏢",
   communication: "💬",
   role: "🎯",
+  coding: "💻",
 };
 
 // ── Shared ──
@@ -91,6 +94,8 @@ export type CommTaskType = "audio" | "reading" | "speaking" | "writing" | "mcq";
 export interface CommQuestion {
   id: string;
   taskType: CommTaskType;
+  category?: string;
+  subcategory?: string;
   instructions: string;
   // For audio / reading / mcq
   questions?: { id: string; text: string; options: QuestionOption[]; correctOptionId?: string }[];
@@ -155,6 +160,21 @@ export const ROLE_QUESTION_TYPE_LABELS: Record<RoleQuestionType, string> = {
   scenario: "Scenario",
 };
 
+// ── Coding ──
+export interface CodingQuestion {
+  id: string;
+  category: string;
+  text: string;
+  assessmentId?: number;
+  difficulty?: DifficultyLevel;
+  marks?: number;
+  negativeMarks?: number;
+  status?: QuestionStatus;
+  explanation?: string;
+}
+
+export const CODING_CATEGORIES = ["Algorithms", "Data Structures", "Logic", "Backend", "Frontend"] as const;
+
 // ── Category colors (reused) ──
 export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   QA: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-500/20" },
@@ -184,9 +204,12 @@ export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border:
   scenario: { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", border: "border-orange-500/20" },
 };
 
-// ── Union type for any question ──
-export type AnyQuestion = AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion;
+export type QuestionKind = "mcq" | "msq" | "tf" | "numerical";
 
+// ── Union type for any question ──
+export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion) & { kind?: QuestionKind; correctOptionIds?: string[]; correctAnswer?: string };
+
+// ── Sample JSONs ──
 // ── Sample JSONs ──
 export const SAMPLE_JSONS: Record<AssessmentType, string> = {
   aptitude: `[
@@ -200,6 +223,38 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
       { "text": "5% increase" }
     ],
     "correctOptionIndex": 0
+  },
+  {
+    "category": "VA",
+    "kind": "msq",
+    "text": "Identify the synonyms for 'Resilient':",
+    "options": [
+      { "text": "Tough" },
+      { "text": "Fragile" },
+      { "text": "Elastic" },
+      { "text": "Weak" }
+    ],
+    "correctOptionIndices": [0, 2]
+  },
+  {
+    "category": "LR",
+    "kind": "tf",
+    "text": "In a logical sequence, if A implies B and B implies C, then A implies C.",
+    "options": [
+      { "text": "True" },
+      { "text": "False" }
+    ],
+    "correctOptionIndex": 0
+  },
+  {
+    "category": "QA",
+    "kind": "numerical",
+    "text": "What is the square root of 625?",
+    "correctAnswer": "25",
+    "explanation": "The square root of 625 is 25.",
+    "difficulty": "medium",
+    "marks": 2,
+    "negativeMarks": 0
   }
 ]`,
   mnc: `[
@@ -269,14 +324,15 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
     "questionType": "conceptual",
     "category": "API Design",
     "subCategory": "REST Fundamentals",
-    "text": "Which of the following is NOT a valid HTTP method in RESTful APIs?",
+    "text": "Which of the architectural styles are applicable to REST?",
+    "kind": "msq",
     "options": [
-      { "text": "PATCH" },
-      { "text": "FETCH" },
-      { "text": "OPTIONS" },
-      { "text": "DELETE" }
+      { "text": "Client-Server" },
+      { "text": "Stateless" },
+      { "text": "Synchronous Execution" },
+      { "text": "Cacheable" }
     ],
-    "correctOptionIndex": 1
+    "correctOptionIndices": [0, 1, 3]
   },
   {
     "questionType": "scenario",
@@ -295,4 +351,5 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
     "correctOptionIndex": 1
   }
 ]`,
+  coding: `[]`,
 };
