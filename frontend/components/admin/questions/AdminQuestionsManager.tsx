@@ -10,7 +10,7 @@ import {
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   CodingQuestion, CODING_CATEGORIES,
-  getSupportedQuestionKinds, parseQuestionKindEnabledMap
+  getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
 import {
@@ -345,7 +345,7 @@ export default function AdminQuestionsManager() {
     return getFilterCategories(selectedModule) as { key: string; label: string; subcategories?: any[] }[];
   }, [selectedModule, activeAssessment]);
 
-  const allowedQuestionKinds = useMemo(() => {
+  const allowedQuestionKinds = useMemo<QuestionKind[]>(() => {
     if (!selectedModule) return [];
     const supportedKinds = getSupportedQuestionKinds(selectedModule);
     if (!activeAssessment) return supportedKinds;

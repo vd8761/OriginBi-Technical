@@ -6,7 +6,6 @@ import { Bell, Menu, Search, X, ChevronDown, LogOut } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import AdminNav from "./AdminNav";
 import { useAdminPageMeta } from "./AdminPageContext";
-import { BreadcrumbBar, type BreadcrumbSegment } from "./ui";
 import { signOut } from "aws-amplify/auth";
 import { clearAdminSession } from "@/lib/api";
 import { Avatar, BreadcrumbBar, type BreadcrumbSegment } from "./ui";
