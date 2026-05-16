@@ -134,27 +134,9 @@ export default function AdminHeader() {
             {open ? <X size={18} /> : <Menu size={18} />}
           </button>
           <div style={{ minWidth: 0 }}>
-            <BreadcrumbBar segments={breadcrumb} />
-            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight mt-1">
+            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight mt-1">
               {title}
             </h1>
-            {subtitle ? (
-              <p 
-                className={`mt-1 text-[13px] font-medium tracking-wide ${
-                  subtitle.toLowerCase().includes("legacy") 
-                    ? "text-amber-400/90 flex items-center gap-1.5" 
-                    : "text-slate-400"
-                }`}
-              >
-                {subtitle.toLowerCase().includes("legacy") && (
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                )}
-                {subtitle}
-              </p>
-            ) : (
-              <p className="mt-1 text-[11px] font-bold text-brand-green tracking-wide">{eyebrow}</p>
-            )}
-
           </div>
         </div>
 

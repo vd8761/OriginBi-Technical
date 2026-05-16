@@ -1242,6 +1242,7 @@ export interface ListAdminUsersParams {
   q?: string;
   role?: "admin" | "proctor" | "student";
   status?: "active" | "blocked" | "pending";
+  tech?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -1301,7 +1302,9 @@ export interface AdminDashboardSummary {
 }
 
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary> {
-  return apiFetch<AdminDashboardSummary>(`/v1/admin/dashboard-summary`);
+  return apiFetch<AdminDashboardSummary>("/api/admin/dashboard-summary", {
+    baseOverride: TECH_API_BASE,
+  });
 }
 
 export async function listAdminUsers(
@@ -1311,10 +1314,12 @@ export async function listAdminUsers(
   if (params.q) qs.set("q", params.q);
   if (params.role) qs.set("role", params.role);
   if (params.status) qs.set("status", params.status);
+  if (params.tech) qs.set("tech", "true");
   if (params.limit != null) qs.set("limit", String(params.limit));
   if (params.offset != null) qs.set("offset", String(params.offset));
   const suffix = qs.toString();
   return apiFetch<AdminUsersResponse>(
-    `/v1/admin/users${suffix ? `?${suffix}` : ""}`,
+    `/api/admin/users${suffix ? `?${suffix}` : ""}`,
+    { baseOverride: TECH_API_BASE },
   );
 }
