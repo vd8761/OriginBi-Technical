@@ -23,6 +23,11 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
   const { theme } = useTheme();
   const isLogin = pathname.startsWith("/admin/login");
   const [enabledPlugins, setEnabledPlugins] = useState<EnabledPluginConfig[] | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isLogin) return;
@@ -49,7 +54,7 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
     return (
       <div
         className="admin-login-viewport"
-        data-theme={isDark ? "dark" : "light"}
+        data-theme={mounted ? (isDark ? "dark" : "light") : "light"}
       >
         {/* Mobile-only logo (hidden on md+) */}
         <div className="admin-login-mobile-logo">

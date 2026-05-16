@@ -92,6 +92,11 @@ function AdminLoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   /* Auto-redirect if already authenticated */
   useEffect(() => {
@@ -220,7 +225,7 @@ function AdminLoginForm() {
         }
       `}</style>
 
-      <div className="admin-login-card" data-theme={isDark ? "dark" : "light"}>
+      <div className="admin-login-card" data-theme={mounted ? (isDark ? "dark" : "light") : "light"}>
         {/* Left column — Branding (desktop only) */}
         <BrandingPattern isDark={isDark} />
 
