@@ -1,0 +1,197 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - develop
+
+# Cancel any in-progress deployment for this branch when a new push arrives
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_PATH: /home/OriginBi-Technical
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Detect which services changed
+  # ──────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      frontend:           ${{ steps.filter.outputs.frontend }}
+      exam_engine:        ${{ steps.filter.outputs.exam_engine }}
+      tech_engine:        ${{ steps.filter.outputs.tech_engine }}
+      assessment_service: ${{ steps.filter.outputs.assessment_service }}
+      judge0:             ${{ steps.filter.outputs.judge0 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            exam_engine:
+              - 'backend/exam-engine/**'
+            tech_engine:
+              - 'backend/tech-assessment-engine/**'
+            assessment_service:
+              - 'backend/assessment-service/**'
+              - 'backend/shared/**'
+            judge0:
+              - 'backend/judge0/**'
+
+  # ──────────────────────────────────────────────
+  # 2. Pull latest code on the VPS (runs once)
+  # ──────────────────────────────────────────────
+  sync:
+    name: Sync Codebase on VPS
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.frontend == 'true' ||
+      needs.detect-changes.outputs.exam_engine == 'true' ||
+      needs.detect-changes.outputs.tech_engine == 'true' ||
+      needs.detect-changes.outputs.assessment_service == 'true' ||
+      needs.detect-changes.outputs.judge0 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull latest code
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}
+            git fetch origin develop
+            git reset --hard origin/develop
+            echo "✓ Synced to $(git rev-parse --short HEAD)"
+
+  # ──────────────────────────────────────────────
+  # 3a. Deploy Frontend (Next.js → PM2)
+  # ──────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: [detect-changes, sync]
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and reload frontend
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}/frontend
+            npm ci --prefer-offline
+            npm run build
+            pm2 reload frontend --update-env \
+              || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.config.js --only frontend
+            echo "✓ Frontend deployed"
+
+  # ──────────────────────────────────────────────
+  # 3b. Deploy Exam Engine (Go → systemd)
+  # ──────────────────────────────────────────────
+  deploy-exam-engine:
+    name: Deploy Exam Engine
+    needs: [detect-changes, sync]
+    if: needs.detect-changes.outputs.exam_engine == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and restart exam-engine
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}/backend/exam-engine
+            go build -o exam-engine-next ./cmd/server
+            mv -f exam-engine-next exam-engine
+            systemctl restart exam-engine
+            echo "✓ Exam Engine deployed"
+
+  # ──────────────────────────────────────────────
+  # 3c. Deploy Tech Assessment Engine (Go → systemd)
+  # ──────────────────────────────────────────────
+  deploy-tech-engine:
+    name: Deploy Tech Assessment Engine
+    needs: [detect-changes, sync]
+    if: needs.detect-changes.outputs.tech_engine == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and restart tech-assessment-engine
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}/backend/tech-assessment-engine
+            go build -o tech-engine-next ./cmd/api
+            mv -f tech-engine-next tech-engine
+            systemctl restart tech-assessment-engine
+            echo "✓ Tech Assessment Engine deployed"
+
+  # ──────────────────────────────────────────────
+  # 3d. Deploy Assessment Service (NestJS → PM2)
+  # ──────────────────────────────────────────────
+  deploy-assessment-service:
+    name: Deploy Assessment Service
+    needs: [detect-changes, sync]
+    if: needs.detect-changes.outputs.assessment_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and reload assessment-service
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}/backend
+            npm ci --workspaces --if-present
+            npm run build --workspace=shared
+            npm run build --workspace=assessment-service
+            pm2 reload assessment-service --update-env \
+              || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.config.js --only assessment-service
+            echo "✓ Assessment Service deployed"
+
+  # ──────────────────────────────────────────────
+  # 3e. Deploy Judge0 (Docker Compose)
+  # ──────────────────────────────────────────────
+  deploy-judge0:
+    name: Deploy Judge0
+    needs: [detect-changes, sync]
+    if: needs.detect-changes.outputs.judge0 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Judge0 containers
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}/backend/judge0
+            docker compose up -d --remove-orphans
+            docker compose ps
+            echo "✓ Judge0 deployed"

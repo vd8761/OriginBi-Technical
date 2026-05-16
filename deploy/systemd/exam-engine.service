@@ -1,0 +1,18 @@
+[Unit]
+Description=Exam Engine API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/OriginBi-Technical/backend/exam-engine
+EnvironmentFile=/home/OriginBi-Technical/backend/exam-engine/.env.local
+ExecStart=/home/OriginBi-Technical/backend/exam-engine/exam-engine
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=exam-engine
+
+[Install]
+WantedBy=multi-user.target
