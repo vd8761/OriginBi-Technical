@@ -1297,6 +1297,7 @@ export interface AdminDashboardSummary {
   liveAssessments: AdminDashboardLiveAssessment[];
   recentActivity: AdminDashboardActivityItem[];
   series: AdminDashboardSeries;
+  questionBreakdown?: { slug: string; name: string; count: number }[];
 }
 
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary> {

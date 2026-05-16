@@ -52,11 +52,18 @@ type dashboardSeries struct {
 	AvgPassRateWeek        *float64            `json:"avgPassRateWeek"`
 }
 
+type dashboardModuleStats struct {
+	Slug  string `json:"slug"`
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
 type dashboardSummaryResponse struct {
-	KPIs            dashboardKPIs              `json:"kpis"`
-	LiveAssessments []dashboardLiveAssessment  `json:"liveAssessments"`
-	RecentActivity  []dashboardActivityItem    `json:"recentActivity"`
-	Series          dashboardSeries            `json:"series"`
+	KPIs              dashboardKPIs             `json:"kpis"`
+	LiveAssessments   []dashboardLiveAssessment `json:"liveAssessments"`
+	RecentActivity    []dashboardActivityItem   `json:"recentActivity"`
+	Series            dashboardSeries           `json:"series"`
+	QuestionBreakdown []dashboardModuleStats    `json:"questionBreakdown"`
 }
 
 func (s *Server) adminDashboardSummary(w http.ResponseWriter, r *http.Request) {
@@ -307,6 +314,25 @@ func (s *Server) adminDashboardSummary(w http.ResponseWriter, r *http.Request) {
 		  AND a.submitted_at > now() - interval '7 days'
 	`).Scan(&passRate); err == nil {
 		out.Series.AvgPassRateWeek = passRate
+	}
+
+	// ── Question Breakdown by Module ───────────────────────────────────
+	rows, err = s.pool.Query(ctx, `
+		SELECT p.slug, p.name, COUNT(q.id)::bigint
+		FROM plugins p
+		LEFT JOIN questions q ON q.plugin_id = p.id AND q.deleted_at IS NULL
+		WHERE p.category = 'assessment'
+		GROUP BY p.slug, p.name
+		ORDER BY count DESC, p.name ASC
+	`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var stats dashboardModuleStats
+			if err := rows.Scan(&stats.Slug, &stats.Name, &stats.Count); err == nil {
+				out.QuestionBreakdown = append(out.QuestionBreakdown, stats)
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, out)

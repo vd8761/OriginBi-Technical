@@ -155,7 +155,7 @@ function prettyRole(role: string) {
   }
 }
 
-export default function AdminNav() {
+export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const counts = useNavCounts();
@@ -192,7 +192,7 @@ export default function AdminNav() {
     <nav className="admin-nav">
       {sections.map((section) => (
         <div key={section.label} className="admin-nav-section">
-          <p className="admin-nav-label">{section.label}</p>
+          {!isCollapsed && <p className="admin-nav-label">{section.label}</p>}
           <ul className="admin-nav-list">
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -209,17 +209,17 @@ export default function AdminNav() {
                     <span className="admin-nav-icon">
                       <Icon size={16} strokeWidth={2.2} />
                     </span>
-                    <span className="admin-nav-text">{item.label}</span>
+                    {!isCollapsed && <span className="admin-nav-text">{item.label}</span>}
                     {item.eyebrow && (
                       <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
                         item.eyebrow.toLowerCase() === 'legacy' 
                           ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
-                          : 'bg-white/5 text-slate-400 border-white/10'
+                          : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-slate-400 border-black/5 dark:border-white/10'
                       }`}>
                         {item.eyebrow}
                       </span>
                     )}
-                    {typeof count === "number" && (
+                    {typeof count === "number" && !isCollapsed && (
                       <span className="admin-nav-count">{count.toLocaleString()}</span>
                     )}
                   </Link>
@@ -230,30 +230,6 @@ export default function AdminNav() {
           </ul>
         </div>
       ))}
-      <div className="admin-nav-user">
-        <Avatar name={user.name} email={user.email} tone="green" size={36} />
-        <div className="admin-nav-user-meta">
-          <span className="admin-nav-user-name" title={user.email || user.name}>
-            {user.name}
-          </span>
-          <span className="admin-nav-user-role">
-            <span
-              className="admin-dot"
-              style={{ background: healthColor, boxShadow: health.status === "online" ? "0 0 8px var(--admin-green-glow)" : "none" }}
-              title={`Exam engine: ${health.label}`}
-            />
-            {displayRole}
-          </span>
-        </div>
-        <button
-          type="button"
-          className="admin-icon-btn"
-          aria-label="Sign out"
-          onClick={signOut}
-        >
-          <LogOut size={15} />
-        </button>
-      </div>
     </nav>
   );
 }

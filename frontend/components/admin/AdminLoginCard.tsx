@@ -4,8 +4,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
-import AdminTopbar from "@/components/admin/AdminTopbar";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminHeader from "@/components/admin/AdminHeader";
 import EnvWarning from "@/components/admin/EnvWarning";
 import { fetchAdminPluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
 import { useTheme } from "@/lib/contexts/ThemeContext";
@@ -24,6 +25,7 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
   const isLogin = pathname.startsWith("/admin/login");
   const [enabledPlugins, setEnabledPlugins] = useState<EnabledPluginConfig[] | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -71,16 +73,30 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
   /* ── Authenticated shell: sidebar + topbar ── */
   return (
     <PluginProvider enabled={enabledPlugins}>
-      <div className="admin-panel-root">
+      <div 
+        className={`admin-panel-root ${isCollapsed ? "is-sidebar-collapsed" : ""}`}
+        style={{ gridTemplateColumns: isCollapsed ? "80px minmax(0, 1fr)" : "260px minmax(0, 1fr)" }}
+      >
         <aside className="admin-sidebar">
-          <Link href="/admin" className="admin-brand">
-            <img src="/Origin-BI-white-logo.png" alt="Origin BI" />
-            <span className="admin-brand-badge">Admin</span>
-          </Link>
-          <AdminNav />
+          <div className="admin-sidebar-header">
+            <Link href="/admin" className="admin-brand">
+              <img 
+                src={isCollapsed ? "/Origin_Fav_Icon.svg" : (theme === "dark" ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png")} 
+                alt="Origin BI" 
+                style={{ height: isCollapsed ? 32 : 24 }} 
+              />
+            </Link>
+            <button 
+              className="admin-sidebar-collapse-btn" 
+              onClick={() => setIsCollapsed(!isCollapsed)}
+            >
+              {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+            </button>
+          </div>
+          <AdminSidebar isCollapsed={isCollapsed} />
         </aside>
         <section className="admin-main-shell">
-          <AdminTopbar />
+          <AdminHeader />
           <EnvWarning />
           <main className="admin-content">{children}</main>
         </section>
