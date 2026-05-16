@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AssessmentId } from "./exams";
+import { getActiveEmail, getLatestSubmittedResult, HAS_TECH_API } from "./api";
 
 /* ────────────────────────────
    User Profile (name, etc.)
@@ -53,10 +54,43 @@ export function useUserProfile() {
 
 const RESULTS_KEY = "originbi:assessment-results";
 
+const isNetworkError = (err: any) => {
+  if (err instanceof TypeError) return true;
+  if (typeof err === "string") return /failed to fetch/i.test(err);
+  return /failed to fetch/i.test(String(err?.message ?? err));
+};
+
 export interface SectionResult {
   name: string;
   score: number; // 0-100
   weight: string;
+  rawScore?: number;
+  maxScore?: number;
+  answeredCount?: number;
+  totalCount?: number;
+  correctCount?: number;
+  wrongCount?: number;
+  accuracyPct?: number;
+}
+
+export interface QuestionReviewOption {
+  id: string;
+  text: string;
+}
+
+export interface QuestionReviewItem {
+  questionId: string;
+  displayOrder?: number;
+  category?: string;
+  type?: string;
+  questionText: string;
+  options?: QuestionReviewOption[];
+  selectedOptionId?: string | null;
+  selectedAnswerText?: string | null;
+  correctOptionId?: string | null;
+  correctAnswerText?: string | null;
+  isCorrect?: boolean | null;
+  status?: "correct" | "incorrect" | "unanswered" | "subjective";
 }
 
 export interface AssessmentResult {
@@ -65,7 +99,22 @@ export interface AssessmentResult {
   overallScore: number; // 0-100
   accuracy: number;
   timeTaken: string; // e.g. "48 min"
+  timeTakenSeconds?: number;
+  totalQuestions?: number;
+  answeredCount?: number;
+  correctCount?: number;
+  wrongCount?: number;
+  skippedCount?: number;
+  positiveScore?: number;
+  negativeScore?: number;
+  netScore?: number;
+  attemptToken?: string;
+  module?: string;
+  maxScore?: number;
+  objectiveAnsweredCount?: number;
+  subjectiveAnsweredCount?: number;
   sections: SectionResult[];
+  questionReviews?: QuestionReviewItem[];
   insights: { type: "strength" | "improvement" | "time" | "pattern"; text: string }[];
   archetypeSnapshot?: string; // e.g. "Analytical Thinker"
 }
@@ -98,6 +147,57 @@ export function useAssessmentResults() {
     return () => {
       window.removeEventListener("storage", sync);
       window.removeEventListener("originbi:results-changed", sync);
+    };
+  }, []);
+
+  // Sync submitted results from backend on mount so clearing
+  // browser cache does not erase assessment history.
+  useEffect(() => {
+    let cancelled = false;
+    const sync = async () => {
+      if (!HAS_TECH_API) return;
+      const email = getActiveEmail();
+      if (!email) {
+        console.warn("[useAssessmentResults] No email found; skipping result sync.");
+        return;
+      }
+      const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role", "coding"];
+      
+      for (const module of modules) {
+        try {
+          const submission = await getLatestSubmittedResult(module, email);
+          if (cancelled) return;
+
+          const { mapSubmissionToAssessmentResult } = await import("./assessmentResultMapper");
+          const result = mapSubmissionToAssessmentResult({
+            assessmentId: module,
+            submission: submission as any,
+          });
+
+          const next = readResults();
+          next[module] = result;
+          writeResults(next);
+          setResults(next);
+          console.log(`[useAssessmentResults] Synced result for ${module}`);
+        } catch (err: any) {
+          if (isNetworkError(err)) return;
+          // 404 means no submitted attempt — expected for incomplete assessments
+          if (err?.status !== 404 && err?.status !== 400) {
+            console.error(`[useAssessmentResults] ${module} sync error:`, err?.message || err);
+          }
+        }
+      }
+    };
+    sync();
+
+    const handleSessionReady = () => {
+      if (!cancelled) sync();
+    };
+    window.addEventListener("originbi:session-ready", handleSessionReady);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("originbi:session-ready", handleSessionReady);
     };
   }, []);
 

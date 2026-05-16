@@ -154,7 +154,7 @@ const Header: React.FC<HeaderProps> = ({
                     });
                 }
             } catch (e) {
-                console.error("Error background fetching profile in header", e);
+                // Student service is optional — silently ignore if unavailable
             }
         };
 

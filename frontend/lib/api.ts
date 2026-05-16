@@ -12,6 +12,19 @@ export const AUTH_API_BASE = configuredAuthBase || "http://localhost:4002";
 export const STUDENT_API_BASE =
   process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
 
+export const TECH_API_BASE =
+  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
+
+const IS_BROWSER = typeof window !== "undefined";
+const IS_DEV = process.env.NODE_ENV === "development";
+const EXAM_SAME_ORIGIN = IS_BROWSER && API_BASE === window.location.origin;
+const TECH_SAME_ORIGIN = IS_BROWSER && TECH_API_BASE === window.location.origin;
+
+export const HAS_EXAM_API = Boolean(API_BASE) && !(IS_DEV && EXAM_SAME_ORIGIN);
+export const HAS_TECH_API = Boolean(TECH_API_BASE) && !(IS_DEV && TECH_SAME_ORIGIN);
+
 // ── Cognito token storage (browser only) - Main App Style ──────────────────
 type TokenScope = "user" | "admin";
 
@@ -44,7 +57,13 @@ function resolveTokenScope(path: string): TokenScope {
 
 export function getAccessToken(scope: TokenScope = "user"): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(getTokenKeys(scope).access);
+  const ls = window.localStorage.getItem(getTokenKeys(scope).access);
+  if (ls) return ls;
+  // Fallback: legacy cookie may survive a "clear cache" that only wipes localStorage
+  const match = document.cookie.match(
+    new RegExp("(?:^|; )" + LEGACY_ACCESS_TOKEN_COOKIE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)")
+  );
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function setTokens(t: {
@@ -803,6 +822,9 @@ export async function getSession(): Promise<AuthResponse | null> {
 }
 
 export async function listAssignments(): Promise<AssignmentListResponse> {
+  if (!HAS_EXAM_API) {
+    return { assignments: [] };
+  }
   return apiFetch<AssignmentListResponse>("/v1/me/assignments");
 }
 
@@ -1126,6 +1148,62 @@ export async function getUserEntitlements(
 ): Promise<{ entitlements: AdminUserEntitlement[] }> {
   return apiFetch<{ entitlements: AdminUserEntitlement[] }>(
     `/v1/admin/users/${userId}/entitlements`,
+  );
+}
+
+// ── Active email helper ───────────────────────────────────────────────────
+
+export function getActiveEmail(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const userData = window.localStorage.getItem("user");
+    if (userData) {
+      const parsed = JSON.parse(userData);
+      if (parsed?.email) return String(parsed.email);
+    }
+  } catch {}
+  try {
+    const profile = window.localStorage.getItem("originbi:user-profile");
+    if (profile) {
+      const parsed = JSON.parse(profile);
+      if (parsed?.email) return String(parsed.email);
+    }
+  } catch {}
+  // Fallback: decode email from JWT token (cookie or localStorage)
+  try {
+    const tok = getAccessToken();
+    if (tok) {
+      const payload = JSON.parse(atob(tok.split(".")[1]));
+      if (payload?.email) return String(payload.email);
+      if (payload?.username && String(payload.username).includes("@")) {
+        return String(payload.username);
+      }
+    }
+  } catch {}
+  return "";
+}
+
+// ── Purchase + completion sync (backend source of truth) ──────────────────
+
+export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+  if (!HAS_TECH_API) {
+    return { purchased: [] };
+  }
+  return apiFetch<{ purchased: string[] }>("/api/assessment/purchase/purchases", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    baseOverride: TECH_API_BASE,
+    auth: false,
+  });
+}
+
+export async function getLatestSubmittedResult(module: string, userId: string): Promise<any> {
+  return apiFetch<any>(
+    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}`,
+    {
+      baseOverride: TECH_API_BASE,
+      auth: false,
+    },
   );
 }
 

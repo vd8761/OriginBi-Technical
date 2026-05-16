@@ -54,7 +54,10 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                         }
                     }
                 }
-                const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+                const API_BASE =
+                    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+                    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+                    "";
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
                 const json = await response.json();

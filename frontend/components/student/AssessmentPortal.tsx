@@ -21,15 +21,20 @@ import {
   type ExtendedExam,
   type PricingTier,
 } from "@/lib/exams";
-import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
+import { usePaidAssessments, useCompletedAssessments, type PaymentKey } from "@/lib/payments";
 import { useSession } from "@/lib/contexts/SessionContext";
 import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
 import { listAssignments, type Assignment } from "@/lib/api";
+import { type InProgressAttempt } from "@/lib/assessmentResume";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
 const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
+const TECH_API_BASE =
+  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [
   { label: "All", value: "all" },
@@ -56,6 +61,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isPaid } = usePaidAssessments();
+  const { isCompleted } = useCompletedAssessments();
   const { user } = useSession();
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
@@ -92,6 +98,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     limit: number;
     count: number;
   } | null>(null);
+  const [inProgressAttempt, setInProgressAttempt] = useState<InProgressAttempt | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -117,20 +124,71 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           }
         }
 
-        const API_BASE = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
         const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-        const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+        if (!TECH_API_BASE) return;
+        const response = await fetch(`${TECH_API_BASE}/api/assessment/attempts-stats${emailParam}`);
+        if (!response.ok) return;
         const json = await response.json();
         const data = json.data || json;
         if (json && data && active) {
           setAttemptsStats(data);
         }
       } catch (err) {
-        console.error("Failed to load attempt statistics:", err);
+        // Optional dashboard enrichment; backend can be unavailable in UI-only sessions.
+        if (active) {
+          setAttemptsStats({});
+        }
       }
     };
 
     fetchStats();
+    return () => {
+      active = false;
+    };
+  }, [currentView, user?.email]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchInProgress = async () => {
+      if (currentView !== "dashboard") return;
+      try {
+        let activeEmail = user?.email || "";
+        if (!activeEmail) {
+          const storedProfile = localStorage.getItem("originbi:user-profile");
+          if (storedProfile) {
+            const parsed = JSON.parse(storedProfile);
+            if (parsed && parsed.email) {
+              activeEmail = parsed.email;
+            }
+          }
+        }
+        if (!activeEmail) {
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            if (parsed && parsed.email) {
+              activeEmail = parsed.email;
+            }
+          }
+        }
+
+        const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+        if (!TECH_API_BASE) return;
+        const response = await fetch(`${TECH_API_BASE}/api/assessment/in-progress${emailParam}`);
+        if (!response.ok) {
+          if (active) setInProgressAttempt(null);
+          return;
+        }
+        const json = await response.json();
+        const data = json.data || json;
+        const attempts = Array.isArray(data) ? data : [];
+        if (active) setInProgressAttempt(attempts[0] ?? null);
+      } catch {
+        if (active) setInProgressAttempt(null);
+      }
+    };
+
+    fetchInProgress();
     return () => {
       active = false;
     };
@@ -386,6 +444,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       return;
     }
 
+    // Prevent re-taking already-completed non-coding assessments
+    if (exam.id !== "coding" && isCompleted(exam.id as AssessmentId)) {
+      router.push("/dashboard");
+      return;
+    }
+
     const dbModule = exam.id === "communication" ? "grammar" : exam.id;
     const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
     const currentCount = mode === "trial" ? stats.trial : stats.main;
@@ -409,6 +473,16 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
     setAssessmentMode(mode);
     launchAssessment(exam as ExtendedExam, mode);
+  };
+
+  const handleResumeAttempt = (attempt: InProgressAttempt) => {
+    const module = attempt.module === "grammar" ? "communication" : attempt.module;
+    const mode = attempt.mode ?? "main";
+    if (module === "aptitude" && attempt.isBlockBased) {
+      router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      return;
+    }
+    router.push(`/assessment/${module}?mode=${mode}`);
   };
 
   const handleCardTrialStart = (exam: Exam) => {
@@ -442,7 +516,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-brand-light-secondary dark:bg-brand-dark-primary font-sans transition-colors duration-500">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.08] assessment-grid" />
         <div className="absolute inset-0 opacity-[0.08] dark:opacity-[0.12] assessment-scan mix-blend-multiply dark:mix-blend-screen" />
@@ -462,7 +536,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {/* Next Step Notification Alert */}
       {completionPopup && currentView === "dashboard" && (
-        <div className="fixed top-24 right-4 z-50 animate-slide-left w-[360px]">
+        <div className="fixed top-24 left-4 right-4 sm:left-auto sm:right-4 z-50 animate-slide-left w-full sm:w-[360px]">
           <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-white/95 dark:bg-[#111a15]/95 p-5 shadow-2xl backdrop-blur-xl">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-start gap-4 relative z-10">
@@ -649,6 +723,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             userName={userName}
             handleSelectExam={handleSelectExam}
             handleStartExam={handleModalStart}
+            inProgressAttempt={inProgressAttempt}
+            onResumeAttempt={handleResumeAttempt}
           />
         ) : currentView === "profile" ? (
           <ProfileView onNavigate={(view) => handleNavigate(view as any)} />

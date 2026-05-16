@@ -25,6 +25,8 @@ export const metadata: Metadata = {
   description: "Technical assessment platform for candidates.",
 };
 
+import { DataHydrationProvider } from "@/lib/contexts/DataHydrationContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,10 +39,12 @@ export default function RootLayout({
       >
         <SessionProvider>
           <PaymentProvider>
-            <ThemeProvider>
-              <CachePruner />
-              {children}
-            </ThemeProvider>
+            <DataHydrationProvider>
+              <ThemeProvider>
+                <CachePruner />
+                {children}
+              </ThemeProvider>
+            </DataHydrationProvider>
           </PaymentProvider>
         </SessionProvider>
       </body>

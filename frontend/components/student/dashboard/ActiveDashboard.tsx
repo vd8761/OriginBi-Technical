@@ -11,6 +11,7 @@ import GoogleStyleAnalysisModal from "./GoogleStyleAnalysisModal";
 import AssessmentNotifications from "./AssessmentNotifications";
 import CertificatePreviewModal from "../certificate/CertificatePreviewModal";
 import type { Exam } from "../ExamCarousel";
+import { type InProgressAttempt } from "@/lib/assessmentResume";
 
 // ── Icons ──
 const PlayIcon = ({ c }: { c?: string }) => (
@@ -88,7 +89,13 @@ const BarChartIcon = ({ c }: { c?: string }) => (
 );
 
 // ── Helpers ──
-interface ActiveDashboardProps { userName: string; onSelectExam: (exam: Exam) => void; onStartExam: (exam: Exam) => void; }
+interface ActiveDashboardProps {
+  userName: string;
+  onSelectExam: (exam: Exam) => void;
+  onStartExam: (exam: Exam) => void;
+  inProgressAttempt?: InProgressAttempt | null;
+  onResumeAttempt?: (attempt: InProgressAttempt) => void;
+}
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {
   if (exam.id === "coding") {
@@ -110,6 +117,34 @@ const getSkillLabel = (score: number) => {
   if (score >= 65) return "Proficient";
   if (score >= 50) return "Developing";
   return "Beginner";
+};
+
+const formatTimeLeft = (seconds?: number) => {
+  if (seconds === undefined || seconds === null) return "";
+  const safe = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
+};
+
+const labelForModule = (module: string) => {
+  switch (module) {
+    case "grammar":
+      return "Communication";
+    case "mnc":
+      return "MNC Career";
+    case "role":
+      return "Role Based";
+    case "aptitude":
+      return "Aptitude";
+    case "coding":
+      return "Coding";
+    default:
+      return module;
+  }
 };
 
 const getTraitImage = (archetype: string): string => {
@@ -195,7 +230,13 @@ const Legend: React.FC<{ results: Record<string, AssessmentResult> }> = ({ resul
 };
 
 // ── Component ──
-const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExam, onStartExam }) => {
+const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
+  userName,
+  onSelectExam,
+  onStartExam,
+  inProgressAttempt,
+  onResumeAttempt,
+}) => {
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
   const { results, isCompleted, getResult } = useAssessmentResults();
@@ -221,6 +262,44 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
   return (
     <div className="flex flex-col gap-8 pt-2" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
 
+      {inProgressAttempt && onResumeAttempt && (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-white/95 p-6 shadow-lg backdrop-blur-xl dark:border-amber-400/20 dark:bg-[#111a15]/90"
+        >
+          <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-amber-400/20 blur-2xl" />
+          <div className="absolute bottom-0 left-0 h-16 w-16 rounded-full bg-amber-200/20 blur-2xl" />
+          <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <ClockIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Incomplete Assessment</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                  Resume {inProgressAttempt.assessmentName || labelForModule(inProgressAttempt.module)}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  {inProgressAttempt.timeLeftSeconds !== undefined
+                    ? `Time left: ${formatTimeLeft(inProgressAttempt.timeLeftSeconds)}`
+                    : "Your previous session is still active."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onResumeAttempt(inProgressAttempt)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-amber-500/30 transition hover:bg-amber-600"
+            >
+              Resume Now
+              <ChevronRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </motion.section>
+      )}
+
       {/* ===== HERO + 360 IMPACT: Side by side grid ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: Purple personality card with full background image */}
@@ -228,7 +307,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="lg:col-span-3 relative rounded-3xl overflow-hidden min-h-[360px]"
+          className="lg:col-span-3 relative rounded-3xl overflow-hidden min-h-[280px] sm:min-h-[360px]"
         >
           <div className="absolute inset-0">
             <img
@@ -239,7 +318,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
           </div>
 
           {/* Content */}
-          <div className="relative p-8 sm:p-10 flex flex-col h-full">
+          <div className="relative p-6 sm:p-10 flex flex-col h-full">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -254,7 +333,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1] mb-4"
+              className="text-3xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1] mb-4"
             >
               {identity.archetype.split(" ").map((word, i) => (
                 <span key={i} className="block">{word}</span>
@@ -281,7 +360,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
-            className="lg:col-span-2 rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-6 sm:p-8 flex flex-col"
+            className="lg:col-span-2 rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-6 sm:p-8 flex flex-col"
           >
             <div className="text-center mb-4">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">360° Impact Assessment</h2>
@@ -290,7 +369,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
 
             {/* Ring chart */}
             <div className="flex-shrink-0 mx-auto mb-5">
-              <div className="relative w-48 h-48">
+              <div className="relative w-40 h-40 sm:w-48 sm:h-48">
                 <svg viewBox="0 0 160 160" className="w-full h-full -rotate-90">
                   <circle cx="80" cy="80" r="70" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
                   <circle cx="80" cy="80" r="56" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
@@ -327,7 +406,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex flex-wrap items-center gap-2 mb-5">
           <BarChartIcon c="w-5 h-5 text-[#1ed36a]" />
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Results</h2>
           <span className="ml-2 text-sm text-gray-600 dark:text-slate-400 font-semibold">{completedCount} of {purchasedCount} completed</span>
@@ -345,7 +424,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.05 * idx }}
-                className="group relative bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.08] p-5 hover:border-[#1ed36a]/30 transition-all"
+                className="group relative bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-5 hover:border-[#1ed36a]/30 dark:hover:border-[#1ed36a]/30 transition-all"
               >
                 {/* Left accent bar */}
                 <div
@@ -353,9 +432,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                   style={{ background: exam.accentColor }}
                 />
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pl-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pl-3">
                   {/* Info */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-start sm:items-center gap-4">
                     <div
                       className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
                       style={{ background: `${exam.accentColor}10`, color: exam.accentColor }}
@@ -375,7 +454,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                   </div>
 
                   {/* Right: Score or Action */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
                     {done && result ? (
                       <>
                         {/* Section mini-bars */}
@@ -393,14 +472,14 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                           ))}
                         </div>
 
-                        <div className="text-right mr-3">
+                        <div className="text-left sm:text-right mr-0 sm:mr-3">
                           <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
                           <p className="text-xs text-gray-700 dark:text-slate-300 font-semibold">{getSkillLabel(result.overallScore)}</p>
                         </div>
 
                         <button
                           onClick={() => setSelectedResult({ exam, result })}
-                          className="px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-bold hover:bg-[#17b55a] transition-colors flex items-center gap-2"
+                          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-bold hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-2"
                         >
                           Analysis
                           <ChevronRightIcon c="w-4 h-4" />
@@ -409,7 +488,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                     ) : (
                       <button
                         onClick={() => onStartExam(exam)}
-                        className="px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-black hover:bg-[#17b55a] transition-colors flex items-center gap-2"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-black hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-2"
                       >
                         <PlayIcon c="w-4 h-4" />
                         Start Now
@@ -455,7 +534,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                           {result.sections.filter((s: SectionResult) => s.score < 60).length} Growth Areas
                         </span>
                       )}
-                      <span className="text-xs text-gray-600 dark:text-slate-400 ml-auto">
+                      <span className="text-xs text-gray-600 dark:text-slate-400 w-full sm:w-auto sm:ml-auto sm:text-right">
                         {result.accuracy}% accuracy &middot; {result.timeTaken}
                       </span>
                     </div>
@@ -473,7 +552,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-8 sm:p-10"
+          className="rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-6 sm:p-10"
         >
           <div className="flex items-center justify-between gap-4 mb-8">
             <div>
@@ -494,7 +573,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 + idx * 0.1 }}
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="group bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.08] p-6 hover:shadow-lg hover:border-gray-300 dark:border-white/20 transition-all"
+                  className="group bg-white dark:bg-[#243028] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-6 hover:shadow-lg hover:border-gray-300 dark:hover:border-white/25 transition-all"
                 >
                   {/* Top row: Icon + Difficulty */}
                   <div className="flex items-center justify-between mb-4">
@@ -518,25 +597,25 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                   </h3>
 
                   {/* Description */}
-                  <p className="text-sm text-gray-600 dark:text-slate-400 font-medium leading-relaxed mb-4 line-clamp-2">
+                  <p className="text-sm text-gray-600 dark:text-slate-300 font-medium leading-relaxed mb-4 line-clamp-2">
                     {exam.description}
                   </p>
 
                   {/* Stats row */}
-                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 font-semibold mb-4">
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-300 font-semibold mb-4">
                     <span className="flex items-center gap-1">
                       <ClockIcon c="w-3.5 h-3.5" />
                       {exam.duration}
                     </span>
-                    <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-700" />
+                    <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-500" />
                     <span>{exam.questions} Qs</span>
                   </div>
 
                   {/* Outcome preview */}
                   {detail && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/5 mb-4">
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/[0.06] mb-4">
                       <TrendUpIcon c="w-4 h-4 text-[#1ed36a] shrink-0" />
-                      <p className="text-xs text-gray-700 dark:text-slate-300 font-semibold leading-snug">
+                      <p className="text-xs text-gray-700 dark:text-slate-200 font-semibold leading-snug">
                         {detail.outcomes[0]}
                       </p>
                     </div>
@@ -563,7 +642,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="rounded-3xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-gray-200 dark:border-white/[0.08] p-8 sm:p-10"
+          className="rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-8 sm:p-10"
         >
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Certificates</h2>
@@ -586,7 +665,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5 + idx * 0.1 }}
-                    className="group relative bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.08] p-6 hover:shadow-md hover:border-gray-300 dark:border-white/20 transition-all"
+                    className="group relative bg-white dark:bg-[#243028] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-6 hover:shadow-md hover:border-gray-300 dark:hover:border-white/25 transition-all"
                   >
                     {/* Left accent */}
                     <div
@@ -594,9 +673,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                       style={{ background: exam.accentColor }}
                     />
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pl-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6 pl-4">
                       {/* Left: Certificate info */}
-                      <div className="flex items-center gap-5">
+                      <div className="flex items-start sm:items-center gap-4 sm:gap-5">
                         {/* Large icon */}
                         <div
                           className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl shrink-0"
@@ -615,22 +694,22 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({ userName, onSelectExa
                               CERTIFIED
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-slate-300 font-semibold">
+                          <p className="text-sm text-gray-700 dark:text-slate-200 font-semibold">
                             Completed on {dateStr} &middot; {result.timeTaken}
                           </p>
                         </div>
                       </div>
 
                       {/* Right: Score + Actions */}
-                      <div className="flex items-center gap-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 w-full sm:w-auto">
                         {/* Score display */}
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                           <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
-                          <p className="text-xs text-gray-700 dark:text-slate-300 font-bold">{getSkillLabel(result.overallScore)}</p>
+                          <p className="text-xs text-gray-700 dark:text-slate-200 font-bold">{getSkillLabel(result.overallScore)}</p>
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
                           <button
                             onClick={() => {
                               const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`;

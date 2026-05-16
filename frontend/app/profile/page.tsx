@@ -2,9 +2,12 @@
 
 import React, { Suspense } from "react";
 import AssessmentPortal from "@/components/student/AssessmentPortal";
+import { useSession } from "@/lib/contexts/SessionContext";
 
 function ProfilePageContent() {
-  return <AssessmentPortal userName="Student" initialView="profile" />;
+  const { user } = useSession();
+  const userName = user?.name || "Student";
+  return <AssessmentPortal userName={userName} initialView="profile" />;
 }
 
 export default function StudentProfilePage() {

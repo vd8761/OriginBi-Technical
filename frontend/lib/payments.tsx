@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { AssessmentId } from "./exams";
-import { listAssignments } from "./api";
+import {
+    getActiveEmail,
+    getLatestSubmittedResult,
+    getPurchasedAssessments,
+    listAssignments,
+    HAS_TECH_API,
+} from "./api";
 
 export type PaymentKey = AssessmentId | `coding:${string}`;
 
@@ -15,6 +21,12 @@ const COMPLETED_KEY = "originbi:completed-assessments";
 const COMPLETED_EVENT = "originbi:completed-changed";
 const LEGACY_TECH_API_URL =
     process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") || "http://localhost:5000";
+
+const isNetworkError = (err: any) => {
+    if (err instanceof TypeError) return true;
+    if (typeof err === "string") return /failed to fetch/i.test(err);
+    return /failed to fetch/i.test(String(err?.message ?? err));
+};
 
 const readSet = (storageKey: string): Set<string> => {
     if (typeof window === "undefined") return new Set();
@@ -182,6 +194,51 @@ export function usePaidAssessments() {
         setLocal(next);
     }, []);
 
+    // Sync purchased assessments from backend on mount so clearing
+    // browser cache does not erase purchase history.
+    useEffect(() => {
+        let cancelled = false;
+        const sync = async () => {
+            if (!HAS_TECH_API) return;
+            const email = getActiveEmail();
+            if (!email) {
+                console.warn("[usePaidAssessments] No email found; skipping purchase sync.");
+                return;
+            }
+            try {
+                const { purchased } = await getPurchasedAssessments(email);
+                if (cancelled) return;
+                const current = readSet(PAID_KEY);
+                let changed = false;
+                for (const code of purchased) {
+                    if (!current.has(code)) {
+                        current.add(code);
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    writeSet(PAID_KEY, PAID_EVENT, current);
+                }
+                console.log("[usePaidAssessments] Synced purchases:", purchased);
+            } catch (err: any) {
+                if (isNetworkError(err)) return;
+                console.error("[usePaidAssessments] Purchase sync failed:", err?.message || err);
+            }
+        };
+        sync();
+
+        const handleSessionReady = () => {
+            if (!cancelled) sync();
+        };
+        window.addEventListener("originbi:session-ready", handleSessionReady);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener("originbi:session-ready", handleSessionReady);
+        };
+    }, []);
+
+
     return {
         isPaid,
         markPaid,
@@ -192,6 +249,63 @@ export function usePaidAssessments() {
 
 export function useCompletedAssessments() {
     const { has, add, remove } = useKeyedSet(COMPLETED_KEY, COMPLETED_EVENT);
+
+    // Sync completed assessments from backend on mount so clearing
+    // browser cache does not erase completion history.
+    useEffect(() => {
+        let cancelled = false;
+        const sync = async () => {
+            if (!HAS_TECH_API) return;
+            const email = getActiveEmail();
+            if (!email) {
+                console.warn("[useCompletedAssessments] No email found; skipping completion sync.");
+                return;
+            }
+            const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role"];
+            const current = readSet(COMPLETED_KEY);
+            const paid = readSet(PAID_KEY); // Get currently known purchases
+            let changed = false;
+
+            await Promise.all(
+                modules.map(async (module) => {
+                    // Optimization: Skip if not purchased to avoid 404 noise
+                    if (!paid.has(module)) return;
+
+                    try {
+                        await getLatestSubmittedResult(module, email);
+                        if (!current.has(module)) {
+                            current.add(module);
+                            changed = true;
+                        }
+                    } catch (err: any) {
+                        if (isNetworkError(err)) return;
+                        // 404 means no submitted attempt — expected for incomplete assessments
+                        if (err?.status !== 404 && err?.status !== 400) {
+                            console.error(`[useCompletedAssessments] ${module} sync error:`, err?.message || err);
+                        }
+                    }
+                }),
+            );
+
+            if (cancelled) return;
+            if (changed) {
+                writeSet(COMPLETED_KEY, COMPLETED_EVENT, current);
+            }
+            console.log("[useCompletedAssessments] Synced completed:", Array.from(current));
+        };
+        sync();
+
+        const handleSessionReady = () => {
+            if (!cancelled) sync();
+        };
+        window.addEventListener("originbi:session-ready", handleSessionReady);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener("originbi:session-ready", handleSessionReady);
+        };
+    }, []);
+
     return { isCompleted: has, markCompleted: add, clearCompleted: remove };
 }
 

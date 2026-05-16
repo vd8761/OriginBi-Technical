@@ -15,7 +15,11 @@ import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
 
 const COMMUNICATION_TOTAL_TIME = 45 * 60;
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE =
+    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+    "http://localhost:5000";
 
 export type TaskType = "audio" | "speaking" | "reading" | "writing" | "mcq";
 
@@ -64,13 +68,22 @@ export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
 export interface AttemptSubmitResult {
     totalScore: number;
+    overallScorePercent?: number;
+    maxScore?: number;
     positiveScore?: number;
     negativeScore?: number;
     correctCount: number;
     wrongCount: number;
     answeredCount?: number;
+    objectiveAnsweredCount?: number;
+    subjectiveAnsweredCount?: number;
+    skippedCount?: number;
     totalQuestions?: number;
     timeTakenSeconds: number;
+    accuracy?: number;
+    accuracyPct?: number;
+    sections?: Array<Record<string, unknown>>;
+    questionReviews?: Array<Record<string, unknown>>;
     status?: string;
 }
 
@@ -316,6 +329,38 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         } as McqTask;
     });
 
+    const mapServerAnswersToTasks = (items: AssessmentTask[], serverAnswers: Record<string, any>): CommunicationAnswers => {
+        const restored: CommunicationAnswers = {};
+
+        items.forEach((task) => {
+            if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
+                const map: Record<string, string> = {};
+                task.questions.forEach((question) => {
+                    const val = serverAnswers[question.id];
+                    if (val && typeof val === "object" && "optionId" in val && (val as any).optionId) {
+                        map[question.id] = String((val as any).optionId);
+                    } else if (typeof val === "string" || typeof val === "number") {
+                        map[question.id] = String(val);
+                    }
+                });
+                if (Object.keys(map).length > 0) {
+                    restored[task.id] = map;
+                }
+                return;
+            }
+
+            if (task.type === "writing") {
+                const val = serverAnswers[task.id];
+                const text = typeof val === "string" ? val : (val as any)?.text ?? null;
+                if (text) {
+                    restored[task.id] = { text: String(text) };
+                }
+            }
+        });
+
+        return restored;
+    };
+
     const blobUrlToBase64 = async (url: string) => {
         const response = await fetch(url);
         const blob = await response.blob();
@@ -410,10 +455,26 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 const data = await response.json();
                 const token = data.attemptToken || data.token;
                 setAttemptToken(token || null);
-                setTasks(Array.isArray(data.questions) ? normalizeTasks(data.questions) : []);
+                const normalizedTasks = Array.isArray(data.questions)
+                    ? normalizeTasks(data.questions)
+                    : [];
+                setTasks(normalizedTasks);
                 const duration = Number(data.durationSeconds || COMMUNICATION_TOTAL_TIME);
-                setTimeLeft(duration);
+                const timeLeftSeconds = Number(data.timeLeftSeconds ?? duration);
+                setTimeLeft(timeLeftSeconds);
                 setTotalTime(duration);
+
+                if (data.answers && typeof data.answers === "object") {
+                    const restored = mapServerAnswersToTasks(normalizedTasks, data.answers);
+                    if (Object.keys(restored).length > 0) {
+                        setAnswers(restored);
+                        Object.entries(restored).forEach(([taskId, answerValue]) => {
+                            cacheSaveAnswer(taskId, { raw: answerValue });
+                        });
+                        setShowRestoredBanner(true);
+                        setTimeout(() => setShowRestoredBanner(false), 5000);
+                    }
+                }
             } catch (error) {
                 setLoadError((error as Error).message);
             } finally {
@@ -422,7 +483,50 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         };
 
         fetchAttempt();
-    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache, cacheSaveAnswer]);
+
+    const persistTaskAnswers = useCallback((taskId: string, answerData: CommunicationAnswer) => {
+        if (!attemptToken) return;
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        const payload: Record<string, any> = {};
+        if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
+            const map = answerData as Record<string, string>;
+            Object.entries(map || {}).forEach(([questionId, optionId]) => {
+                payload[questionId] = optionId;
+            });
+        } else if (task.type === "writing") {
+            const text = (answerData as any)?.text ?? null;
+            if (text) payload[task.id] = { text };
+        }
+
+        if (Object.keys(payload).length === 0) return;
+
+        void fetch(`${API_BASE}/api/assessment/grammar/attempts/${attemptToken}/answers`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: payload }),
+        }).catch(() => {});
+    }, [attemptToken, tasks]);
+
+    const persistTaskClear = useCallback((task: AssessmentTask) => {
+        if (!attemptToken) return;
+        const payload: Record<string, any> = {};
+        if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
+            task.questions.forEach((question) => {
+                payload[question.id] = null;
+            });
+        } else {
+            payload[task.id] = null;
+        }
+
+        void fetch(`${API_BASE}/api/assessment/grammar/attempts/${attemptToken}/answers`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: payload }),
+        }).catch(() => {});
+    }, [attemptToken]);
 
     const currentTask = tasks[currentIndex];
     const totalTasks = tasks.length;
@@ -513,6 +617,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         }));
         // Persist to cache immediately (wrap in raw so it survives JSON round-trip)
         cacheSaveAnswer(taskId, { raw: answerData });
+        persistTaskAnswers(taskId, answerData);
     };
 
     const handleMarkReview = () => {
@@ -531,6 +636,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
         const newAnswers = { ...answers };
         delete newAnswers[currentTask.id];
         setAnswers(newAnswers);
+        persistTaskClear(currentTask);
     };
 
     const isQuestionMarked = currentTask ? markedForReview.has(currentTask.id) : false;

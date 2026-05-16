@@ -75,6 +75,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
             const parsedProfile = JSON.parse(storedProfile);
             setUser(parsedProfile);
             setIsLoggedIn(true);
+            window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: parsedProfile }));
           } else {
             // If token exists but profile doesn't, fetch it from API
             const { getSession } = await import("@/lib/api");
@@ -87,6 +88,25 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               setUser(profile);
               setIsLoggedIn(true);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+              window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+            }
+          }
+        } else {
+          // localStorage cleared but legacy cookie may still exist
+          const { getAccessToken, getSession } = await import("@/lib/api");
+          const accessToken = getAccessToken();
+          if (accessToken) {
+            const session = await getSession();
+            if (session) {
+              const profile = {
+                name: session.registration?.fullName || session.user.email,
+                email: session.user.email,
+              };
+              setUser(profile);
+              setIsLoggedIn(true);
+              localStorage.setItem("originbi:access-token", accessToken);
+              localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+              window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
             }
           }
         }
@@ -108,6 +128,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
       setUser(profile);
       setIsLoggedIn(true);
+      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
     } catch (error) {
       console.error("Error setting session storage", error);
     }

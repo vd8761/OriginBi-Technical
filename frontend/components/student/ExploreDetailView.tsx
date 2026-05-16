@@ -132,6 +132,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
 
+        // If already completed, redirect to dashboard to view results
+        if (examCompleted) {
+            router.push("/dashboard");
+            return;
+        }
+
         if (examPaid) {
             setAssessmentMode("main");
             startNonCodingAssessment();
@@ -175,6 +181,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handlePaymentSuccess = async () => {
         if (!paymentTarget) return;
+        const isSandboxMode = process.env.NEXT_PUBLIC_RAZORPAY === "false";
         setIsConnecting(false);
         if (paymentTarget.kind === "coding") {
             try {
@@ -185,6 +192,15 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 router.push("/assessment?view=assessment");
                 setAssignmentError("");
             } catch (err) {
+                if (isSandboxMode) {
+                    // Frontend-only fallback when backend assignment APIs are offline.
+                    markPaid(paymentTarget.key);
+                    setShowLanguageModal(false);
+                    setPendingCodingLang(paymentTarget.language);
+                    setAssignmentError("");
+                    setPaymentTarget(null);
+                    return;
+                }
                 const message =
                     err instanceof ApiError
                         ? err.message
@@ -203,6 +219,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handleTrial = () => {
         if (!isReady) return;
+        if (examCompleted) {
+            router.push("/dashboard");
+            return;
+        }
         if (isCoding) {
             router.push(`/assessment/coding?mode=trial`);
             return;
@@ -225,6 +245,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
         if (isCoding) return `Pick Language & Pay`;
+        if (examCompleted) return "View Results";
         if (examPaid) return "Start Assessment";
         return `Pay ₹${exam.price}`;
     })();
