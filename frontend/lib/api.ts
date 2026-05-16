@@ -52,7 +52,9 @@ function getTokenKeys(scope: TokenScope) {
 }
 
 function resolveTokenScope(path: string): TokenScope {
-  return path.startsWith("/v1/admin") ? "admin" : "user";
+  return path.startsWith("/v1/admin") || path.startsWith("/api/admin")
+    ? "admin"
+    : "user";
 }
 
 export function getAccessToken(scope: TokenScope = "user"): string | null {

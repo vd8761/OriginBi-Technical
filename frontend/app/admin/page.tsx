@@ -309,7 +309,7 @@ function DashboardInner() {
         <MountPoint id="dashboard.tiles" />
       </Card>
 
-      <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+      <section className="admin-dashboard-row">
         <Card pad={false}>
           <div className="admin-control-row" style={{ padding: "20px 22px 12px" }}>
             <div>

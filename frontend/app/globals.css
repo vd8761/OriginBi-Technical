@@ -3398,6 +3398,22 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+@media (max-width: 540px) {
+  .admin-panel-root .admin-dashboard-modules {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-dashboard-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 1024px) {
+  .admin-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+}
 
 .admin-panel-root .admin-dashboard-module-tile {
   padding: 16px;

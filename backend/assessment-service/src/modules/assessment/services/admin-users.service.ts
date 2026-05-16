@@ -93,6 +93,8 @@ export class AdminUsersService {
       }
 
       const whereSQL = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+      this.logger.debug(`listAdminUsers whereSQL: ${whereSQL}`);
+      this.logger.debug(`listAdminUsers args: ${JSON.stringify(args)}`);
 
       // 1. Get counts
       const countsResult = await queryRunner.query(`
@@ -107,6 +109,7 @@ export class AdminUsersService {
         WHERE r.is_tech_assessment IN (1, 2)
       `);
       const countsRaw = countsResult[0];
+      this.logger.debug(`listAdminUsers countsRaw: ${JSON.stringify(countsRaw)}`);
       const counts: AdminUserCounts = {
         total: Number(countsRaw.total),
         students: Number(countsRaw.students),
@@ -123,6 +126,7 @@ export class AdminUsersService {
         ${whereSQL}
       `, args);
       const total = Number(totalResult[0]?.total || 0);
+      this.logger.debug(`listAdminUsers total matching: ${total}`);
 
       // 3. Get rows
       const rowsSQL = `
