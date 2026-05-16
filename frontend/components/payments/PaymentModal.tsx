@@ -139,12 +139,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 return;
             }
 
-            // 2. Load Razorpay script dynamically
-            const script = document.createElement("script");
-            script.src = "https://checkout.razorpay.com/v1/checkout.js";
-            script.async = true;
-
-            script.onload = () => {
+            const openGateway = () => {
                 const options = {
                     key: order.keyId,
                     amount: order.amount,
@@ -205,7 +200,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 rzp.open();
             };
 
-            if ((window as any).Razorpay) {
+            // 2. Load Razorpay script dynamically
+            const scriptId = "razorpay-checkout-js";
+            if (!document.getElementById(scriptId)) {
+                const script = document.createElement("script");
+                script.id = scriptId;
+                script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                script.async = true;
+                script.onload = openGateway;
+                document.body.appendChild(script);
+            } else if ((window as any).Razorpay) {
                 openGateway();
             } else {
                 const checkInterval = setInterval(() => {
