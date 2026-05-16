@@ -1481,7 +1481,10 @@
 
   /* Fonts */
   --admin-font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+}
 
+.admin-panel-root {
+  position: relative;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -1559,6 +1562,12 @@
   align-items: center;
   min-height: 42px;
   text-decoration: none;
+  margin-left: 6px;
+  transition: margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.is-sidebar-collapsed .admin-brand {
+  margin-left: 0;
 }
 
 .admin-brand img {
@@ -1567,25 +1576,38 @@
   display: block;
 }
 
-.admin-sidebar-collapse-btn {
+.admin-sidebar-floating-toggle {
+  position: absolute;
+  top: 80px;
+  left: 246px; /* 260px - 14px */
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--admin-fg-3);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-fg-2);
   cursor: pointer;
-  transition: all 120ms ease;
-  margin-left: 8px;
+  z-index: 50;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.admin-sidebar-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+.admin-sidebar-floating-toggle:hover {
+  background: var(--admin-surface-2);
   color: var(--admin-fg);
-  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.admin-sidebar-floating-toggle:active {
+  transform: scale(0.95);
+}
+
+.is-sidebar-collapsed .admin-sidebar-floating-toggle {
+  left: 66px; /* 80px - 14px */
 }
 
 .is-sidebar-collapsed .admin-sidebar {
@@ -1680,7 +1702,6 @@
 .admin-nav-item.is-active {
   background: var(--admin-green);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(30, 211, 106, 0.25);
 }
 
 .admin-nav-item.is-active .admin-nav-icon {
@@ -1702,7 +1723,6 @@
   transform: translateY(-50%);
   border-radius: 0 3px 3px 0;
   background: var(--admin-green);
-  box-shadow: 0 0 18px rgba(30, 211, 106, 0.55);
 }
 
 .admin-nav-icon {

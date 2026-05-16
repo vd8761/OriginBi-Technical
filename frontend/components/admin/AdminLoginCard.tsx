@@ -93,22 +93,21 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
                 />
               </AnimatePresence>
             </Link>
-            <button 
-              className="admin-sidebar-collapse-btn" 
-              onClick={() => setIsCollapsed(!isCollapsed)}
-            >
-              <motion.div
-                key={isCollapsed ? "collapsed" : "expanded"}
-                initial={{ rotate: -180, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-              </motion.div>
-            </button>
           </div>
           <AdminSidebar isCollapsed={isCollapsed} />
         </aside>
+        <button 
+          className="admin-sidebar-floating-toggle" 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <motion.div
+            animate={{ rotate: isCollapsed ? 180 : 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          >
+            <ChevronLeft size={14} />
+          </motion.div>
+        </button>
         <section className="admin-main-shell">
           <AdminHeader />
           <EnvWarning />

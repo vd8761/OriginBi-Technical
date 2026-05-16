@@ -19,7 +19,7 @@ import {
 import { API_BASE, listAdminQuestions, listExamPackages } from "@/lib/api";
 import { Avatar } from "./ui";
 import { MountPoint, type SurfaceMount } from "@/plugins";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 interface NavItem {
   href: string;
@@ -189,22 +189,43 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
 
   const displayRole = useMemo(() => prettyRole(user.role), [user.role]);
 
+  const containerVariants: Variants = {
+    expanded: {
+      transition: {
+        staggerChildren: 0.03,
+        delayChildren: 0.05,
+      },
+    },
+    collapsed: {
+      transition: {
+        staggerChildren: 0.02,
+        staggerDirection: -1,
+      },
+    },
+  };
+
+  const itemVariants: Variants = {
+    expanded: {
+      opacity: 1,
+      x: 0,
+      transition: { type: "spring", stiffness: 300, damping: 30 } as any,
+    },
+    collapsed: {
+      opacity: 0,
+      x: -10,
+      transition: { duration: 0.15 },
+    },
+  };
+
   return (
-    <nav className="admin-nav">
+    <motion.nav 
+      className="admin-nav"
+      initial={isCollapsed ? "collapsed" : "expanded"}
+      animate={isCollapsed ? "collapsed" : "expanded"}
+      variants={containerVariants}
+    >
       {sections.map((section) => (
         <div key={section.label} className="admin-nav-section">
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="admin-nav-label"
-              >
-                {section.label}
-              </motion.p>
-            )}
-          </AnimatePresence>
           <ul className="admin-nav-list">
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -217,41 +238,43 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
                   <Link
                     href={item.href}
                     className={`admin-nav-item${active ? " is-active" : ""}`}
+                    style={{ position: 'relative' }}
                   >
-                    <span className="admin-nav-icon">
+                    <span className="admin-nav-icon relative z-10">
                       <Icon size={16} strokeWidth={2.2} />
                     </span>
-                    <AnimatePresence mode="wait">
+
+                    <AnimatePresence mode="popLayout">
                       {!isCollapsed && (
                         <motion.span
                           key="label"
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="admin-nav-text"
+                          variants={itemVariants}
+                          className="admin-nav-text relative z-10"
                         >
                           {item.label}
                         </motion.span>
                       )}
                     </AnimatePresence>
+
                     {item.eyebrow && !isCollapsed && (
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
-                        item.eyebrow.toLowerCase() === 'legacy' 
-                          ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
-                          : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-slate-400 border-black/5 dark:border-white/10'
-                      }`}>
+                      <motion.span 
+                        variants={itemVariants}
+                        className={`relative z-10 px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
+                          item.eyebrow.toLowerCase() === 'legacy' 
+                            ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
+                            : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-slate-400 border-black/5 dark:border-white/10'
+                        }`}
+                      >
                         {item.eyebrow}
-                      </span>
+                      </motion.span>
                     )}
+
                     <AnimatePresence>
                       {typeof count === "number" && !isCollapsed && (
                         <motion.span
                           key="count"
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.8 }}
-                          className="admin-nav-count"
+                          variants={itemVariants}
+                          className="admin-nav-count relative z-10"
                         >
                           {count.toLocaleString()}
                         </motion.span>
@@ -265,6 +288,6 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
           </ul>
         </div>
       ))}
-    </nav>
+    </motion.nav>
   );
 }
