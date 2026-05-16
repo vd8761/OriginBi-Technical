@@ -48,15 +48,23 @@ interface BlockData {
 
 interface BlockAttemptResult {
   totalScore: number;
+  overallScorePercent?: number;
+  maxScore?: number;
   positiveScore?: number;
   negativeScore?: number;
   correctCount: number;
   wrongCount: number;
   answeredCount?: number;
+  objectiveAnsweredCount?: number;
+  subjectiveAnsweredCount?: number;
+  skippedCount?: number;
   totalQuestions?: number;
   timeTakenSeconds: number;
   status?: string;
-  accuracy: number;
+  accuracy?: number;
+  accuracyPct?: number;
+  sections?: Array<Record<string, unknown>>;
+  questionReviews?: Array<Record<string, unknown>>;
 }
 
 export type { BlockAttemptResult as AttemptSubmitResult };
@@ -77,7 +85,10 @@ const formatTime = (seconds: number) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
 
 const labelForIndex = (index: number) => String.fromCharCode(65 + index);
 
@@ -112,6 +123,12 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   const [blockTransitions, setBlockTransitions] = useState<Record<number, string>>({});
   const [completedBlocks, setCompletedBlocks] = useState<Set<number>>(new Set());
   const [isGeneratingNextBlock, setIsGeneratingNextBlock] = useState(false);
+  
+  // Multi-block navigation state
+  const [allBlocks, setAllBlocks] = useState<Map<number, BlockData>>(new Map());
+  const [allAnswers, setAllAnswers] = useState<Record<string, string>>({});
+  const [viewingBlockNumber, setViewingBlockNumber] = useState(1);
+  const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   
   // Cache ref to prevent double-fetching
   const cacheRestoredRef = useRef(false);
@@ -205,14 +222,38 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         }
 
         const data = await response.json();
+        const blockNumber = Number(data.currentBlockNumber ?? 1);
         setAttemptToken(data.attemptToken);
         setCurrentBlock(data.currentBlock);
-        setCurrentBlockNumber(1);
-        setTotalBlocks(data.totalBlocks);
-        setQuestionsPerBlock(data.questionsPerBlock);
+        setCurrentBlockNumber(blockNumber);
+        setViewingBlockNumber(blockNumber);
+        setTotalBlocks(data.totalBlocks ?? data.blockConfig?.blocksPerAssessment ?? 4);
+        setQuestionsPerBlock(data.questionsPerBlock ?? data.blockConfig?.questionsPerBlock ?? 5);
         setBlockConfig(data.blockConfig);
-        setTimeLeft(data.durationSeconds);
-        setTotalTime(data.durationSeconds);
+        const duration = Number(data.durationSeconds ?? 3600);
+        const timeLeftSeconds = Number(data.timeLeftSeconds ?? duration);
+        setTimeLeft(timeLeftSeconds);
+        setTotalTime(duration);
+        
+        // Store the current block in allBlocks map
+        const blocksMap = new Map<number, BlockData>();
+        blocksMap.set(blockNumber, data.currentBlock);
+        setAllBlocks(blocksMap);
+
+        if (Array.isArray(data.currentBlock?.questions)) {
+          const restored = { ...allAnswers };
+          data.currentBlock.questions.forEach((q: any) => {
+            if (q.selectedOptionId) {
+              restored[String(q.id)] = String(q.selectedOptionId);
+            }
+          });
+          if (Object.keys(restored).length > 0) {
+            setAllAnswers(restored);
+            setAnswers(restored);
+            setShowRestoredBanner(true);
+            setTimeout(() => setShowRestoredBanner(false), 5000);
+          }
+        }
       } catch (error) {
         setLoadError((error as Error).message);
       } finally {
@@ -241,63 +282,105 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
 
   const currentQuestion = currentBlock?.questions[currentIndex];
   const totalQuestions = currentBlock?.questions.length || 0;
-  const answeredCount = Object.keys(answers).length;
-  const safeProgress = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
+
+  // Count answered questions in current viewing block
+  const viewingBlock = allBlocks.get(viewingBlockNumber);
+  const viewingBlockQuestions = viewingBlock?.questions || [];
+  const answeredInViewingBlock = viewingBlockQuestions.filter(q => allAnswers[q.id] !== undefined).length;
+
+  // Count answered questions in the CURRENT (highest unlocked) block — for unlock logic
+  const currentBlockData = allBlocks.get(currentBlockNumber);
+  const currentBlockQuestions = currentBlockData?.questions || [];
+  const answeredInCurrentBlock = currentBlockQuestions.filter(q => allAnswers[q.id] !== undefined).length;
+  const currentBlockTotal = currentBlockQuestions.length;
+
+  // Overall answered across all unlocked blocks
+  const totalUnlockedQuestions = (() => {
+    let count = 0;
+    for (let b = 1; b <= currentBlockNumber; b++) {
+      const blk = allBlocks.get(b);
+      if (blk) count += blk.questions.length;
+    }
+    return count;
+  })();
+  const answeredCount = Object.keys(allAnswers).length;
+
+  // Progress % = answered across ALL unlocked questions
+  const safeProgress = totalUnlockedQuestions > 0
+    ? Math.round((answeredCount / totalUnlockedQuestions) * 100)
+    : 0;
+
   const isLastQuestion = currentIndex === totalQuestions - 1;
   const currentQuestionId = currentQuestion?.id ?? "";
-  const isQuestionAnswered = currentQuestion && answers[currentQuestionId] !== undefined;
+  const isQuestionAnswered = currentQuestion && allAnswers[currentQuestionId] !== undefined;
   const isQuestionMarked = currentQuestion && markedForReview.has(currentQuestionId);
-  const isBlockCompleted = answeredCount === totalQuestions && totalQuestions > 0;
 
-  // Calculate block accuracy
+  // Block is "completable" only when ALL questions in the CURRENT block are answered
+  // AND the user is currently viewing the current block
+  const isCurrentBlockFullyAnswered = currentBlockTotal > 0 && answeredInCurrentBlock === currentBlockTotal;
+  const isViewingCurrentBlock = viewingBlockNumber === currentBlockNumber;
+
+  // Calculate block accuracy — ratio of answered questions in the current block
+  // (backend will compute real correctness; this is just for the adaptive engine hint)
   const calculateBlockAccuracy = () => {
-    if (totalQuestions === 0) return 0;
-    // This would need real correct answers from backend
-    return answeredCount / totalQuestions;
+    if (currentBlockTotal === 0) return 0;
+    return answeredInCurrentBlock / currentBlockTotal;
   };
 
   // Complete current block and get next block
   const completeBlockAndProceed = async () => {
     if (!attemptToken || !currentBlock || isGeneratingNextBlock) return;
+    if (!isCurrentBlockFullyAnswered) return; // guard: all questions must be answered
 
     setIsGeneratingNextBlock(true);
     try {
-      const accuracy = calculateBlockAccuracy();
-      const timeTaken = (totalTime - timeLeft);
+      const timeTaken = totalTime - timeLeft;
 
-      const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${currentBlockNumber}/next`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accuracy,
-          timeTaken,
-          answers
-        }),
+      // Only send answers for the current block
+      const currentBlockAnswers: Record<string, string> = {};
+      currentBlockQuestions.forEach(q => {
+        if (allAnswers[q.id]) currentBlockAnswers[q.id] = allAnswers[q.id];
       });
 
+      const response = await fetch(
+        `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${currentBlockNumber}/next`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timeTaken,
+            answers: currentBlockAnswers,
+          }),
+        }
+      );
+
       if (!response.ok) {
-        throw new Error('Failed to complete block');
+        const errText = await response.text().catch(() => "Unknown error");
+        throw new Error(`Failed to complete block: ${response.status} - ${errText}`);
       }
 
       const result = await response.json();
 
       if (!result.canProceed) {
-        // Assessment completed
+        // All blocks done — submit
         await handleSubmitAttempt();
         return;
       }
 
-      // Load next block
-      setCurrentBlock(result.nextBlock);
-      setCurrentBlockNumber(currentBlockNumber + 1);
-      setCurrentIndex(0);
-      setAnswers({});
-      setMarkedForReview(new Set());
+      // Store next block
+      const nextBlockNum = currentBlockNumber + 1;
+      const updatedBlocks = new Map(allBlocks);
+      updatedBlocks.set(nextBlockNum, result.nextBlock);
+      setAllBlocks(updatedBlocks);
+
+      // Mark current block as completed and advance
       setCompletedBlocks(prev => new Set([...prev, currentBlockNumber]));
-      setBlockTransitions(prev => ({
-        ...prev,
-        [currentBlockNumber]: result.nextBlockDifficulty
-      }));
+      setBlockTransitions(prev => ({ ...prev, [currentBlockNumber]: result.nextBlockDifficulty }));
+
+      setCurrentBlock(result.nextBlock);
+      setCurrentBlockNumber(nextBlockNum);
+      setViewingBlockNumber(nextBlockNum);
+      setCurrentIndex(0);
     } catch (error) {
       setLoadError((error as Error).message);
     } finally {
@@ -305,48 +388,128 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     }
   };
 
-  // Handle block submission
+  // Navigate to a specific block (for viewing/editing previous blocks)
+  const navigateToBlock = async (blockNum: number): Promise<void> => {
+    if (blockNum === viewingBlockNumber) return;
+    if (blockNum > currentBlockNumber) return; // Can't view future blocks
+
+    // Save current block answers to backend before switching
+    await saveBlockAnswers(viewingBlockNumber);
+
+    // Check if block is already loaded
+    if (allBlocks.has(blockNum)) {
+      const block = allBlocks.get(blockNum)!;
+      setCurrentBlock(block);
+      setViewingBlockNumber(blockNum);
+      setCurrentIndex(0);
+      return;
+    }
+
+    // Load block from backend
+    setIsLoadingBlock(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${blockNum}/questions`
+      );
+      if (!response.ok) throw new Error('Failed to load block');
+
+      const data = await response.json();
+      const blockData: BlockData = {
+        blockId: data.blockId || blockNum,
+        blockNumber: data.blockNumber,
+        questions: data.questions,
+        difficulty: data.difficulty,
+        timeLimit: data.timeLimit || 0,
+        isAdaptive: true,
+      };
+
+      // Restore saved answers from backend into allAnswers
+      const restoredAnswers = { ...allAnswers };
+      data.questions.forEach((q: any) => {
+        if (q.selectedOptionId) {
+          restoredAnswers[q.id] = String(q.selectedOptionId);
+        }
+      });
+      setAllAnswers(restoredAnswers);
+      setAnswers(restoredAnswers);
+
+      const updatedBlocks = new Map(allBlocks);
+      updatedBlocks.set(blockNum, blockData);
+      setAllBlocks(updatedBlocks);
+
+      setCurrentBlock(blockData);
+      setViewingBlockNumber(blockNum);
+      setCurrentIndex(0);
+    } catch (error) {
+      setLoadError((error as Error).message);
+    } finally {
+      setIsLoadingBlock(false);
+    }
+  };
+
+  // Save answers for a specific block to backend
+  const saveBlockAnswers = async (blockNum: number, answersOverride?: Record<string, string>) => {
+    if (!attemptToken) return;
+    
+    // Get answers for this block only
+    const block = allBlocks.get(blockNum);
+    if (!block) return;
+    const source = answersOverride ?? allAnswers;
+    const blockAnswers: Record<string, string> = {};
+    block.questions.forEach(q => {
+      if (source[q.id]) {
+        blockAnswers[q.id] = source[q.id];
+      }
+    });
+    
+    if (Object.keys(blockAnswers).length === 0) return;
+    
+    try {
+      await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${blockNum}/answers`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: blockAnswers }),
+      });
+    } catch (error) {
+      console.error('Failed to save block answers:', error);
+    }
+  };
+
+  // Handle block submission — only allowed when viewing the current block
   const handleBlockSubmit = () => {
-    if (isBlockCompleted) {
+    if (isCurrentBlockFullyAnswered && isViewingCurrentBlock) {
       completeBlockAndProceed();
     }
   };
 
   // Handle final submission
   const handleSubmitAttempt = useCallback(async () => {
-    console.log("🚀 Starting final submission...");
     if (!attemptToken || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      console.log("📤 Submitting to backend...");
-      const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit-block-based`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
-      });
+      const response = await fetch(
+        `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit-block-based`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers: allAnswers }),
+        }
+      );
 
-      console.log("📥 Response received:", response.status);
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
         throw new Error(`Submit failed: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log("✅ Submission result:", result);
-      
-      console.log("🧹 Clearing session...");
       await clearSession();
-      
-      console.log("📞 Calling onComplete callback...");
       onComplete(result);
-      console.log("✅ onComplete callback called successfully");
     } catch (error) {
-      console.error("❌ Submission failed:", error);
       setLoadError((error as Error).message);
     } finally {
       setIsSubmitting(false);
     }
-  }, [answers, attemptToken, clearSession, isSubmitting, onComplete]);
+  }, [allAnswers, attemptToken, clearSession, isSubmitting, onComplete]);
 
   // Navigation handlers
   const handleOptionSelect = (optionId: string) => {
@@ -356,7 +519,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     let newAnswer: string | string[];
 
     if (kind === 'msq') {
-        const currentVal = answers[currentQuestion.id];
+        const currentVal = allAnswers[currentQuestion.id];
         let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
         
         if (selectedIds.includes(optionId)) {
@@ -370,16 +533,20 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     }
 
     const newAnswers = { ...answers, [currentQuestion.id]: newAnswer };
+    setAllAnswers(newAnswers);
     setAnswers(newAnswers);
     cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
+    void saveBlockAnswers(viewingBlockNumber, newAnswers);
   };
 
   const handleClear = () => {
     if (!currentQuestion) return;
-    const newAnswers = { ...answers };
+    const newAnswers = { ...allAnswers };
     delete newAnswers[currentQuestion.id];
+    setAllAnswers(newAnswers);
     setAnswers(newAnswers);
     cacheSaveAnswer(currentQuestion.id, {});
+    void saveBlockAnswers(viewingBlockNumber, newAnswers);
   };
 
   const handleMarkReview = () => {
@@ -411,9 +578,14 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   const handleSubmit = () => {
-    if (currentBlockNumber === totalBlocks && isBlockCompleted) {
+    if (!isViewingCurrentBlock) {
+      // If viewing a previous block, return to current block first
+      navigateToBlock(currentBlockNumber);
+      return;
+    }
+    if (currentBlockNumber === totalBlocks && isCurrentBlockFullyAnswered) {
       setShowSubmitModal(true);
-    } else if (isBlockCompleted) {
+    } else if (isCurrentBlockFullyAnswered) {
       handleBlockSubmit();
     }
   };
@@ -423,37 +595,52 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     handleSubmitAttempt();
   };
 
-  // Direct test function to bypass everything and just redirect
-  const testDirectRedirect = () => {
-    console.log("🧪 Testing direct redirect...");
-    const mockResult = {
-      totalScore: 100,
-      correctCount: 5,
-      wrongCount: 0,
-      accuracy: 1.0,
-      timeTakenSeconds: 300
-    };
-    onComplete(mockResult);
-  };
+  // Generate navigator questions for ALL unlocked blocks (with blockNumber tag)
+  const navigatorQuestions: NavigatorQuestion[] = [];
+  let globalIndex = 0;
 
-  // Generate navigator questions for current block
-  const navigatorQuestions: NavigatorQuestion[] = (currentBlock?.questions || []).map((question, index) => {
-    const isAnswered = !!answers[question.id];
-    const isMarked = markedForReview.has(question.id);
+  // Build a lookup: globalIndex → { blockNum, localIndex }
+  const globalIndexMap: Array<{ blockNum: number; localIndex: number }> = [];
 
-    let state: QuestionState = "unanswered";
-    if (isAnswered) state = "answered";
-    if (isMarked) state = "marked";
+  for (let blockNum = 1; blockNum <= currentBlockNumber; blockNum++) {
+    const block = allBlocks.get(blockNum);
+    if (!block) continue;
 
-    return {
-      id: question.id,
-      number: index + 1,
-      state,
-      category: question.category,
-      isAnswered,
-      isMarked,
-    };
-  });
+    block.questions.forEach((question, localIndex) => {
+      const isAnswered = !!allAnswers[question.id];
+      const isMarked = markedForReview.has(question.id);
+
+      let state: QuestionState = "unanswered";
+      if (isAnswered) state = "answered";
+      if (isMarked) state = "marked";
+
+      navigatorQuestions.push({
+        id: question.id,
+        number: globalIndex + 1,
+        state,
+        category: question.category,
+        isAnswered,
+        isMarked,
+        isLocked: false,
+        blockNumber: blockNum,
+      });
+
+      globalIndexMap.push({ blockNum, localIndex });
+      globalIndex++;
+    });
+  }
+
+  // Compute the global index of the currently active question
+  // (viewing block offset + local currentIndex)
+  const viewingBlockStartGlobal = (() => {
+    let offset = 0;
+    for (let b = 1; b < viewingBlockNumber; b++) {
+      const blk = allBlocks.get(b);
+      if (blk) offset += blk.questions.length;
+    }
+    return offset;
+  })();
+  const globalCurrentIndex = viewingBlockStartGlobal + currentIndex;
 
   if (isLoading) {
     return (
@@ -549,14 +736,14 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         </div>
       </header>
 
-      {/* Block Progress Bar */}
+      {/* Block Progress Bar with Navigation */}
       <div className="sticky top-[72px] z-40 bg-white/95 dark:bg-[#0f1712]/95 backdrop-blur-md border-b border-brand-green/10 dark:border-white/10">
         <div className="px-4 py-3 md:px-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Block Progress</span>
             <span className="text-xs font-semibold text-brand-green">{currentBlockNumber}/{totalBlocks}</span>
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 mb-3">
             {Array.from({ length: totalBlocks }, (_, i) => i + 1).map((blockNum) => (
               <div
                 key={blockNum}
@@ -570,17 +757,79 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               />
             ))}
           </div>
+          
+          {/* Block Navigation Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            {Array.from({ length: currentBlockNumber }, (_, i) => i + 1).map((blockNum) => {
+              const block = allBlocks.get(blockNum);
+              const isActive = viewingBlockNumber === blockNum;
+              const isCompleted = completedBlocks.has(blockNum);
+              const isCurrent = blockNum === currentBlockNumber;
+              
+              return (
+                <button
+                  key={blockNum}
+                  onClick={() => navigateToBlock(blockNum)}
+                  disabled={isLoadingBlock}
+                  className={`flex-shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                    isActive
+                      ? 'bg-brand-green text-white shadow-md'
+                      : isCompleted
+                      ? 'bg-brand-green/20 text-brand-green hover:bg-brand-green/30 dark:bg-brand-green/10 dark:hover:bg-brand-green/20'
+                      : isCurrent
+                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>Block {blockNum}</span>
+                    {isCompleted && <CheckCircle2 className="h-3 w-3" />}
+                    {isCurrent && !isCompleted && <span className="h-2 w-2 rounded-full bg-current animate-pulse" />}
+                    {block && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                        block.difficulty === 'easy' ? 'bg-green-500/20 text-green-700 dark:text-green-300' :
+                        block.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300' :
+                        'bg-red-500/20 text-red-700 dark:text-red-300'
+                      }`}>
+                        {block.difficulty[0].toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          
+          {/* Viewing indicator if not on current block */}
+          {!isViewingCurrentBlock && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+              <AlertCircle className="h-3 w-3" />
+              <span>Viewing Block {viewingBlockNumber} — You can edit answers here</span>
+              <button
+                onClick={() => navigateToBlock(currentBlockNumber)}
+                className="ml-auto px-2 py-1 rounded bg-brand-green/20 hover:bg-brand-green/30 text-brand-green font-semibold"
+              >
+                Return to Block {currentBlockNumber}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px-60px)] lg:overflow-hidden lg:px-6">
         {/* Question Area */}
         <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
-          {/* Top Progress Bar */}
+          {/* Top Progress Bar — shows current block progress */}
           <div className="h-1 w-full bg-brand-green/5">
-            <div 
-              className="h-full bg-brand-green transition-all duration-700 ease-out" 
-              style={{ width: `${safeProgress}%` }}
+            <div
+              className="h-full bg-brand-green transition-all duration-700 ease-out"
+              style={{
+                width: `${
+                  totalQuestions > 0
+                    ? Math.round((answeredInViewingBlock / totalQuestions) * 100)
+                    : 0
+                }%`,
+              }}
             />
           </div>
           
@@ -590,6 +839,9 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
                 <div>
                   <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
                     {currentQuestion?.category || 'Assessment'} Module
+                    <span className="ml-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 normal-case">
+                      Block {viewingBlockNumber} · Q{currentIndex + 1}/{totalQuestions}
+                    </span>
                   </h2>
                   <div className="mt-0.5 flex items-center gap-2">
                     {isQuestionMarked && (
@@ -602,6 +854,17 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
                       <span className="flex items-center gap-1 text-[10px] font-bold text-brand-green uppercase">
                         <div className="h-1 w-1 rounded-full bg-current" />
                         Saved
+                      </span>
+                    )}
+                    {/* Block completion status */}
+                    {isViewingCurrentBlock && (
+                      <span className={`flex items-center gap-1 text-[10px] font-bold uppercase ${
+                        isCurrentBlockFullyAnswered
+                          ? 'text-brand-green'
+                          : 'text-slate-400 dark:text-slate-500'
+                      }`}>
+                        <div className="h-1 w-1 rounded-full bg-current" />
+                        {answeredInCurrentBlock}/{currentBlockTotal} answered
                       </span>
                     )}
                   </div>
@@ -637,6 +900,42 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
           </div>
 
           <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
+            {/* Block complete banner — shown when all questions in current block are answered */}
+            {isViewingCurrentBlock && isCurrentBlockFullyAnswered && currentBlockNumber < totalBlocks && (
+              <div className="mb-4 flex items-center gap-3 rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-3">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-green" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-brand-green">
+                    Block {currentBlockNumber} complete!
+                  </p>
+                  <p className="text-xs text-brand-green/70">
+                    All {currentBlockTotal} questions answered. Click &quot;Complete Block {currentBlockNumber}&quot; to unlock Block {currentBlockNumber + 1}.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Viewing previous block notice */}
+            {!isViewingCurrentBlock && (
+              <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3">
+                <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                    Reviewing Block {viewingBlockNumber}
+                  </p>
+                  <p className="text-xs text-amber-600/80 dark:text-amber-400/70">
+                    You can change answers here. Return to Block {currentBlockNumber} to continue.
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigateToBlock(currentBlockNumber)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 transition"
+                >
+                  Go to Block {currentBlockNumber}
+                </button>
+              </div>
+            )}
+
             <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5 sm:p-5">
               <h2 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white sm:text-base">
                 <span className="mr-3 font-semibold">{currentIndex + 1}.</span>
@@ -671,7 +970,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
                 const kind = currentQuestion.metadata?.kind || 'mcq';
                 const isSelected = kind === 'msq'
                     ? (Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).includes(option.id))
-                    : answers[currentQuestion.id] === option.id;
+                    : allAnswers[currentQuestion.id] === option.id;
 
                 return (
                   <button
@@ -719,18 +1018,20 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={!isBlockCompleted || isGeneratingNextBlock}
-                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!isCurrentBlockFullyAnswered || isGeneratingNextBlock || isSubmitting}
+                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isGeneratingNextBlock ? (
+                  {isGeneratingNextBlock || isSubmitting ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Generating Next Block...
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {isSubmitting ? 'Submitting...' : 'Unlocking next block...'}
                     </>
+                  ) : !isViewingCurrentBlock ? (
+                    `Return to Block ${currentBlockNumber}`
                   ) : currentBlockNumber === totalBlocks ? (
                     'Submit Assessment'
                   ) : (
-                    'Complete Block'
+                    `Complete Block ${currentBlockNumber}`
                   )}
                 </button>
               ) : (
@@ -756,12 +1057,26 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
           <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
             <QuestionNavigator
               questions={navigatorQuestions}
-              currentIndex={currentIndex}
-              onSelect={(idx) => {
-                setCurrentIndex(idx);
+              currentIndex={globalCurrentIndex}
+              onSelect={async (globalIdx) => {
+                // Map global index back to the correct block + local index
+                const mapping = globalIndexMap[globalIdx];
+                if (!mapping) return;
+                const { blockNum, localIndex } = mapping;
+                if (blockNum !== viewingBlockNumber) {
+                  // Navigate to that block first, then set local index
+                  await navigateToBlock(blockNum);
+                  setCurrentIndex(localIndex);
+                } else {
+                  setCurrentIndex(localIndex);
+                }
               }}
               progressPercent={safeProgress}
               isCollapsed={!isDesktopSidebarOpen}
+              totalQuestions={totalBlocks * questionsPerBlock}
+              questionsPerBlock={questionsPerBlock}
+              currentBlockNumber={currentBlockNumber}
+              totalBlocks={totalBlocks}
             />
           </div>
         </motion.aside>

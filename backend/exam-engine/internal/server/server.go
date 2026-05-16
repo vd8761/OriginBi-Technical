@@ -110,6 +110,11 @@ func (s *Server) routes() chi.Router {
 
 	// Authenticated runtime API. The two highest-throughput endpoints are
 	// heartbeat and events ingest, designed first per the schema plan.
+	r.Route("/api/assessment", func(r chi.Router) {
+		r.Post("/aptitude/attempts/block-based", s.startAptitudeBlockBasedAttempt)
+		r.Post("/aptitude/attempts/{token}/blocks/{blockNumber}/next", s.nextAptitudeBlock)
+		r.Post("/aptitude/attempts/{token}/submit-block-based", s.submitAptitudeBlockBasedAttempt)
+	})
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/auth/email-availability", s.emailAvailability)
 		r.Post("/auth/register", s.register)

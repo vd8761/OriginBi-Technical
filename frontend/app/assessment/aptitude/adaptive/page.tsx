@@ -4,6 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AdaptiveAptitudeEngine from "@/components/assessment/aptitude/AdaptiveAptitudeEngine";
 import { AttemptSubmitResult } from "@/components/assessment/aptitude/AdaptiveAptitudeEngine";
+import { EXAM_DETAILS } from "@/lib/exams";
+import {
+  mapSubmissionToAssessmentResult,
+  saveAssessmentResultToStorage,
+} from "@/lib/assessmentResultMapper";
 
 import { Suspense } from "react";
 
@@ -29,71 +34,21 @@ function AdaptiveAptitudeContent() {
   }, [searchParams]);
 
   const handleComplete = (result: AttemptSubmitResult) => {
-    alert("🎯 ASSESSMENT COMPLETED! Redirecting to dashboard...");
     console.log("Adaptive assessment completed:", result);
-    
-    // Store results for later use
-    localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
-    
-    console.log("🔄 Redirecting to dashboard in 2 seconds...");
-    
-    // Force redirect with timeout to ensure it happens
-    setTimeout(() => {
-      console.log("⚡ Executing redirect now...");
-      window.location.href = "/dashboard";
-    }, 2000);
-    
-    // Also try immediate redirect
-    window.location.href = "/dashboard";
-    
-    // Final fallback
-    setTimeout(() => {
-      if (window.location.pathname !== "/dashboard") {
-        console.log("🚨 Redirect failed, trying replace method...");
-        window.location.replace("/dashboard");
-      }
-    }, 3000);
-  };
+    const assessmentResult = mapSubmissionToAssessmentResult({
+      assessmentId: "aptitude",
+      submission: result,
+      detail: EXAM_DETAILS.aptitude,
+    });
 
-  // Test redirect function (for debugging)
-  const testRedirect = () => {
-    console.log("🧪 Testing redirect to dashboard...");
-    router.push("/dashboard");
+    localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
+    saveAssessmentResultToStorage(assessmentResult);
+
+    router.push("/dashboard?completed=aptitude");
   };
 
   return (
     <div className="min-h-screen w-full">
-      {/* Debug test buttons - remove in production */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        <button
-          onClick={testRedirect}
-          className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 block"
-        >
-          Test Router Redirect
-        </button>
-        <button
-          onClick={() => {
-            const mockResult = {
-              totalScore: 100,
-              correctCount: 5,
-              wrongCount: 0,
-              accuracy: 1.0,
-              timeTakenSeconds: 300
-            };
-            handleComplete(mockResult);
-          }}
-          className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 block"
-        >
-          Test Complete Flow
-        </button>
-        <button
-          onClick={() => window.location.href = "/dashboard"}
-          className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 block"
-        >
-          Direct Dashboard
-        </button>
-      </div>
-      
       <AdaptiveAptitudeEngine
         onComplete={handleComplete}
         assessmentCode={assessmentCode}

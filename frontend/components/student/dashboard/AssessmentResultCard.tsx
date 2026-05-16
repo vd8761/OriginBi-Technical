@@ -42,6 +42,11 @@ const INSIGHT_CONFIG = {
 const AssessmentResultCard: React.FC<AssessmentResultCardProps> = ({ exam, result, detail }) => {
   const fallbackSections = detail?.sections.map((s, i) => ({ name: s.name, score: 70 + ((i * 13) % 25), weight: s.weight })) ?? [];
   const sections = result.sections.length ? result.sections : fallbackSections;
+  const correctCount = result.correctCount ?? 0;
+  const wrongCount = result.wrongCount ?? 0;
+  const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
+  const totalQuestions = result.totalQuestions ?? detail?.questions ?? exam.questions ?? answeredCount;
+  const skippedCount = result.skippedCount ?? Math.max(0, totalQuestions - answeredCount);
   const fallbackInsights: typeof result.insights = [
     { type: "strength", text: `Excellent performance in ${sections[0]?.name || "core concepts"}. Strong foundational understanding demonstrated.` },
     { type: "improvement", text: `Focus on ${sections[sections.length - 1]?.name || "advanced topics"} to reach the next proficiency tier.` },
@@ -82,12 +87,14 @@ const AssessmentResultCard: React.FC<AssessmentResultCardProps> = ({ exam, resul
             <p className="text-sm text-brand-text-light-secondary dark:text-white/50 max-w-xl mb-5 leading-relaxed">
               Completed on {new Date(result.completedAt).toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}. Scored {result.overallScore}% with {result.accuracy}% accuracy over {result.timeTaken}.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
-                { label: "Accuracy", value: `${result.accuracy}%`, accent: true },
+                { label: "Answered", value: `${answeredCount}` },
+                { label: "Correct", value: `${correctCount}`, accent: true },
+                { label: "Wrong", value: `${wrongCount}` },
+                { label: "Skipped", value: `${skippedCount}` },
                 { label: "Time Taken", value: result.timeTaken },
-                { label: "Sections", value: `${sections.length}` },
-                { label: "Status", value: "Certified", accent: true },
+                { label: "Total Qs", value: `${totalQuestions}`, accent: true },
               ].map((stat) => (
                 <div key={stat.label} className="bg-brand-light-secondary/40 dark:bg-white/[0.04] p-3.5 rounded-2xl border border-brand-light-tertiary/50 dark:border-white/[0.08]">
                   <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-white/40 mb-1">{stat.label}</p>
