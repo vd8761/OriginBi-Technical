@@ -11,9 +11,12 @@ import { fetchAdminPluginConfig, PluginProvider, type EnabledPluginConfig } from
 import { useTheme } from "@/lib/contexts/ThemeContext";
 
 /**
- * Wraps admin children with the sidebar+topbar shell — EXCEPT on the login
- * route, where the user isn't authenticated yet and we don't want nav items
- * (Plugins, Settings, etc.) visible until after auth.
+ * AdminLoginCard
+ *
+ * Shell wrapper for all `/admin` routes.
+ * - Login route (`/admin/login`): renders a centered, full-viewport container
+ *   without sidebar or topbar (user is unauthenticated).
+ * - All other routes: renders the standard sidebar + topbar admin shell.
  */
 export default function AdminLoginCard({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
@@ -38,53 +41,29 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
     };
   }, [isLogin]);
 
+  /* ── Login route: full-viewport centered layout ── */
   if (isLogin) {
     const isDark = theme === "dark";
-    
-    // Background style mirroring the main OriginBI portal background
-    const gridStyle = isDark 
-      ? {
-          backgroundColor: "#19211c",
-          backgroundImage: `
-            linear-gradient(to right, rgba(30, 211, 106, 0.04) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(30, 211, 106, 0.04) 1px, transparent 1px),
-            radial-gradient(circle at 50% 50%, rgba(30, 211, 106, 0.03) 0%, transparent 50%)
-          `,
-          backgroundSize: "52px 52px, 52px 52px, 100% 100%",
-        }
-      : {
-          backgroundColor: "#f8faf9",
-          backgroundImage: `
-            linear-gradient(to right, rgba(30, 211, 106, 0.08) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(30, 211, 106, 0.06) 1px, transparent 1px)
-          `,
-          backgroundSize: "52px 52px, 52px 52px",
-        };
+    const logoSrc = isDark ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png";
 
     return (
       <div
-        className="admin-panel-root min-h-[100dvh] flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden"
-        style={{
-          gridTemplateColumns: "none",
-          ...gridStyle
-        }}
+        className="admin-login-viewport"
+        data-theme={isDark ? "dark" : "light"}
       >
-        <div className="md:hidden mb-6 flex justify-center w-full">
-          <Image 
-            src={isDark ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png"} 
-            alt="OriginBI" 
-            width={140} 
-            height={46} 
-            priority
-          />
+        {/* Mobile-only logo (hidden on md+) */}
+        <div className="admin-login-mobile-logo">
+          <Image src={logoSrc} alt="OriginBI" width={140} height={46} priority />
         </div>
-        <div className="w-full flex justify-center">
+
+        <div className="admin-login-card-wrapper">
           {children}
         </div>
       </div>
     );
   }
 
+  /* ── Authenticated shell: sidebar + topbar ── */
   return (
     <PluginProvider enabled={enabledPlugins}>
       <div className="admin-panel-root">

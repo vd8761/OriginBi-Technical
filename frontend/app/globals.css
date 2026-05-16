@@ -1000,6 +1000,409 @@
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
+/* ── Admin Login Page ── */
+
+.admin-login-viewport {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-x: hidden;
+}
+
+.admin-login-viewport[data-theme="dark"] {
+  background-color: #19211c;
+  background-image:
+    linear-gradient(to right, rgba(30, 211, 106, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 211, 106, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, rgba(30, 211, 106, 0.03) 0%, transparent 50%);
+  background-size: 52px 52px, 52px 52px, 100% 100%;
+}
+
+.admin-login-viewport[data-theme="light"] {
+  background-color: #f8faf9;
+  background-image:
+    linear-gradient(to right, rgba(30, 211, 106, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 211, 106, 0.06) 1px, transparent 1px);
+  background-size: 52px 52px, 52px 52px;
+}
+
+.admin-login-mobile-logo {
+  display: none;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.admin-login-card-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* ─ Card container ─ */
+
+.admin-login-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 480px;
+  overflow: hidden;
+  border-radius: 32px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 4px;
+}
+
+.admin-login-card[data-theme="dark"] {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.admin-login-card[data-theme="light"] {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+}
+
+/* ─ Branding panel (left column on desktop) ─ */
+
+.admin-login-branding {
+  display: none;
+  flex-direction: column;
+  justify-content: flex-start;
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 32px;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-branding {
+  background: #0a0c0b;
+}
+
+.admin-login-card[data-theme="light"] .admin-login-branding {
+  background: #f1f5f3;
+}
+
+.admin-login-pattern {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 1px;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-pattern {
+  opacity: 0.8;
+}
+
+.admin-login-card[data-theme="light"] .admin-login-pattern {
+  opacity: 0.65;
+}
+
+.admin-login-pattern-bar {
+  flex: 1;
+  height: 100%;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-pattern-bar {
+  border-right: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.admin-login-card[data-theme="light"] .admin-login-pattern-bar {
+  border-right: 1px solid rgba(30, 211, 106, 0.12);
+}
+
+.admin-login-branding-logo {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-login-branding-tagline {
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+  padding-top: 40px;
+}
+
+.admin-login-branding-tagline h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-branding-tagline h2 {
+  color: white;
+}
+
+.admin-login-card[data-theme="light"] .admin-login-branding-tagline h2 {
+  color: var(--foreground);
+}
+
+.admin-login-branding-tagline p {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-branding-tagline p {
+  color: white;
+}
+
+.admin-login-card[data-theme="light"] .admin-login-branding-tagline p {
+  color: var(--foreground);
+}
+
+.admin-login-branding-glow {
+  position: absolute;
+  bottom: -20%;
+  left: 0;
+  right: 0;
+  height: 40%;
+  z-index: 1;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-branding-glow {
+  background: radial-gradient(ellipse at center, rgba(30, 211, 106, 0.15) 0%, transparent 70%);
+}
+
+.admin-login-card[data-theme="light"] .admin-login-branding-glow {
+  background: radial-gradient(ellipse at center, rgba(30, 211, 106, 0.1) 0%, transparent 70%);
+}
+
+/* ─ Form column ─ */
+
+.admin-login-form-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  padding: 24px;
+  background: var(--card);
+}
+
+.admin-login-theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 10;
+}
+
+.admin-login-header {
+  margin-bottom: 36px;
+}
+
+.admin-login-header h1 {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--foreground);
+  margin-bottom: 8px;
+  letter-spacing: -0.03em;
+}
+
+.admin-login-header p {
+  color: var(--foreground);
+  font-size: 15px;
+}
+
+/* ─ Form ─ */
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-login-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-login-input-group {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  transition: border-color 0.15s ease;
+}
+
+.admin-login-card[data-theme="dark"] .admin-login-input-group {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-login-card[data-theme="light"] .admin-login-input-group {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.admin-login-input-group:focus-within {
+  border-color: rgba(30, 211, 106, 0.45);
+}
+
+.admin-login-input-group input {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--foreground);
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.admin-login-input-group input::placeholder {
+  color: var(--foreground);
+  opacity: 0.4;
+}
+
+.admin-login-eye-btn {
+  padding: 6px;
+  color: var(--admin-green, #1ed36a);
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ─ Error message ─ */
+
+.admin-login-error {
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(237, 47, 52, 0.1);
+  color: #ed2f34;
+  border: 1px solid rgba(237, 47, 52, 0.2);
+}
+
+.admin-login-error svg {
+  flex-shrink: 0;
+}
+
+/* ─ Submit button ─ */
+
+.admin-login-submit {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--admin-green, #1ed36a);
+  color: white;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+}
+
+.admin-login-submit:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.admin-login-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.admin-login-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ─ Responsive: tablet+ ─ */
+
+@media (min-width: 768px) {
+  .admin-login-viewport {
+    padding: 32px;
+  }
+
+  .admin-login-card {
+    flex-direction: row;
+    max-width: 920px;
+    min-height: 540px;
+    padding: 12px;
+  }
+
+  .admin-login-branding {
+    display: flex;
+    flex: 1;
+    padding: 40px;
+  }
+
+  .admin-login-form-column {
+    width: 460px;
+    flex: none;
+    padding: 40px 28px 40px 40px;
+  }
+
+  .admin-login-header h1 {
+    font-size: 40px;
+  }
+
+  .admin-login-header {
+    margin-bottom: 48px;
+  }
+
+  .admin-login-form {
+    gap: 24px;
+  }
+
+  .admin-login-input-group {
+    min-height: 56px;
+  }
+
+  .admin-login-submit {
+    min-height: 56px;
+    margin-top: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-login-branding {
+    padding: 50px;
+  }
+
+  .admin-login-form-column {
+    width: 480px;
+    padding: 48px 32px 48px 48px;
+  }
+}
+
+/* ─ Mobile: show mobile logo, hide branding ─ */
+
+@media (max-width: 767px) {
+  .admin-login-mobile-logo {
+    display: flex;
+  }
+
+  .admin-login-header h1 {
+    font-size: 32px;
+  }
+}
+
 /* Origin BI redesigned admin panel */
 .admin-panel-root {
   /* Brand */
