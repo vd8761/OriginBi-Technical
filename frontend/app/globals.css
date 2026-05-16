@@ -407,7 +407,7 @@
   --admin-bg: #0f1411;
   --admin-bg-soft: #141a17;
   --admin-sidebar: #0b100d;
-  --admin-sidebar-bg: linear-gradient(180deg, rgba(11, 16, 13, 0.98), rgba(13, 19, 15, 0.94));
+  --admin-sidebar-bg: rgba(15, 20, 17, 0.95);
   --admin-surface: #19211c;
   --admin-surface-2: #1f2723;
   --admin-card: rgba(255, 255, 255, 0.04);
@@ -1485,11 +1485,16 @@
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
+  transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--admin-bg);
   background-size: auto;
   color: var(--admin-fg);
   font-family: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "cv11", "ss01";
+}
+
+.admin-panel-root.is-sidebar-collapsed {
+  grid-template-columns: 80px minmax(0, 1fr);
 }
 
 .admin-panel-root *,
@@ -1518,7 +1523,9 @@
   padding: 22px 18px;
   border-right: 1px solid var(--admin-border);
   background: var(--admin-sidebar-bg);
-  transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   z-index: 40;
 }

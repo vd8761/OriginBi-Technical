@@ -53,14 +53,24 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
   const refresh = useCallback(async () => {
     if (!HAS_TECH_API) return;
     const email = getActiveEmail();
-    if (!email) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("originbi:access-token") : null;
+    if (!email || !token) {
+      setIsInitialized(true);
+      return;
+    }
 
     setIsSyncing(true);
     try {
       // 1. Sync Purchases (Tech API + Exam Engine)
       const [{ purchased }, { assignments }] = await Promise.all([
-        getPurchasedAssessments(email),
-        listAssignments()
+        getPurchasedAssessments(email).catch(err => {
+          if (err?.status === 401) return { purchased: [] };
+          throw err;
+        }),
+        listAssignments().catch(err => {
+          if (err?.status === 401) return { assignments: [] };
+          throw err;
+        })
       ]);
       const nextPurchases = new Set(purchased);
       (assignments ?? []).forEach(a => {

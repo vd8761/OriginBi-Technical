@@ -10,6 +10,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import EnvWarning from "@/components/admin/EnvWarning";
 import { fetchAdminPluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
 import { useTheme } from "@/lib/contexts/ThemeContext";
+import { motion, AnimatePresence } from "framer-motion";
 
 /**
  * AdminLoginCard
@@ -50,7 +51,7 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
 
   /* ── Login route: full-viewport centered layout ── */
   if (isLogin) {
-    const isDark = theme === "dark";
+    const isDark = mounted ? theme === "dark" : false;
     const logoSrc = isDark ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png";
 
     return (
@@ -75,22 +76,35 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
     <PluginProvider enabled={enabledPlugins}>
       <div 
         className={`admin-panel-root ${isCollapsed ? "is-sidebar-collapsed" : ""}`}
-        style={{ gridTemplateColumns: isCollapsed ? "80px minmax(0, 1fr)" : "260px minmax(0, 1fr)" }}
       >
         <aside className="admin-sidebar">
           <div className="admin-sidebar-header">
             <Link href="/admin" className="admin-brand">
-              <img 
-                src={isCollapsed ? "/Origin_Fav_Icon.svg" : (theme === "dark" ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png")} 
-                alt="Origin BI" 
-                style={{ height: isCollapsed ? 32 : 24 }} 
-              />
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={isCollapsed ? "compact" : "full"}
+                  src={isCollapsed ? "/Origin_Fav_Icon.svg" : (mounted && theme === "dark" ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png")}
+                  alt="Origin BI"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ height: isCollapsed ? 32 : 24 }}
+                />
+              </AnimatePresence>
             </Link>
             <button 
               className="admin-sidebar-collapse-btn" 
               onClick={() => setIsCollapsed(!isCollapsed)}
             >
-              {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              <motion.div
+                key={isCollapsed ? "collapsed" : "expanded"}
+                initial={{ rotate: -180, opacity: 0 }}
+                animate={{ rotate: 0, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              </motion.div>
             </button>
           </div>
           <AdminSidebar isCollapsed={isCollapsed} />

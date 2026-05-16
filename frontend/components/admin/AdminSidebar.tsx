@@ -19,6 +19,7 @@ import {
 import { API_BASE, listAdminQuestions, listExamPackages } from "@/lib/api";
 import { Avatar } from "./ui";
 import { MountPoint, type SurfaceMount } from "@/plugins";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface NavItem {
   href: string;
@@ -192,7 +193,18 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
     <nav className="admin-nav">
       {sections.map((section) => (
         <div key={section.label} className="admin-nav-section">
-          {!isCollapsed && <p className="admin-nav-label">{section.label}</p>}
+          <AnimatePresence>
+            {!isCollapsed && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="admin-nav-label"
+              >
+                {section.label}
+              </motion.p>
+            )}
+          </AnimatePresence>
           <ul className="admin-nav-list">
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -209,8 +221,21 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
                     <span className="admin-nav-icon">
                       <Icon size={16} strokeWidth={2.2} />
                     </span>
-                    {!isCollapsed && <span className="admin-nav-text">{item.label}</span>}
-                    {item.eyebrow && (
+                    <AnimatePresence mode="wait">
+                      {!isCollapsed && (
+                        <motion.span
+                          key="label"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="admin-nav-text"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                    {item.eyebrow && !isCollapsed && (
                       <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
                         item.eyebrow.toLowerCase() === 'legacy' 
                           ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
@@ -219,9 +244,19 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
                         {item.eyebrow}
                       </span>
                     )}
-                    {typeof count === "number" && !isCollapsed && (
-                      <span className="admin-nav-count">{count.toLocaleString()}</span>
-                    )}
+                    <AnimatePresence>
+                      {typeof count === "number" && !isCollapsed && (
+                        <motion.span
+                          key="count"
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          className="admin-nav-count"
+                        >
+                          {count.toLocaleString()}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </Link>
                 </li>
               );

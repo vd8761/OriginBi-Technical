@@ -80,11 +80,16 @@ function BrandingPattern({ isDark }: { isDark: boolean }) {
 /* ── Login Form ── */
 
 function AdminLoginForm() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const router = useRouter();
   const { theme } = useTheme();
   const searchParams = useSearchParams();
   const safeNext = getSafeRedirect(searchParams.get("next"));
-  const isDark = theme === "dark";
+  const isDark = mounted ? theme === "dark" : false;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -92,11 +97,6 @@ function AdminLoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   /* Auto-redirect if already authenticated */
   useEffect(() => {
