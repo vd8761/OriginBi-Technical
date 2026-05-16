@@ -2,19 +2,22 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import AdminTopbar from "@/components/admin/AdminTopbar";
 import EnvWarning from "@/components/admin/EnvWarning";
 import { fetchAdminPluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
+import { useTheme } from "@/lib/contexts/ThemeContext";
 
 /**
  * Wraps admin children with the sidebar+topbar shell — EXCEPT on the login
  * route, where the user isn't authenticated yet and we don't want nav items
  * (Plugins, Settings, etc.) visible until after auth.
  */
-export default function AdminShell({ children }: { children: ReactNode }) {
+export default function AdminLoginCard({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
+  const { theme } = useTheme();
   const isLogin = pathname.startsWith("/admin/login");
   const [enabledPlugins, setEnabledPlugins] = useState<EnabledPluginConfig[] | null>(null);
 
@@ -36,22 +39,48 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }, [isLogin]);
 
   if (isLogin) {
-    // .admin-panel-root gives us the dark theme tokens (--admin-green etc.),
-    // but its 260px+1fr grid is wrong for a centered card. Override both
-    // display and grid-template-columns inline so the login page is a
-    // single full-width centered column.
+    const isDark = theme === "dark";
+    
+    // Background style mirroring the main OriginBI portal background
+    const gridStyle = isDark 
+      ? {
+          backgroundColor: "#19211c",
+          backgroundImage: `
+            linear-gradient(to right, rgba(30, 211, 106, 0.04) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(30, 211, 106, 0.04) 1px, transparent 1px),
+            radial-gradient(circle at 50% 50%, rgba(30, 211, 106, 0.03) 0%, transparent 50%)
+          `,
+          backgroundSize: "52px 52px, 52px 52px, 100% 100%",
+        }
+      : {
+          backgroundColor: "#f8faf9",
+          backgroundImage: `
+            linear-gradient(to right, rgba(30, 211, 106, 0.08) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(30, 211, 106, 0.06) 1px, transparent 1px)
+          `,
+          backgroundSize: "52px 52px, 52px 52px",
+        };
+
     return (
       <div
-        className="admin-panel-root"
+        className="admin-panel-root min-h-[100dvh] flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden"
         style={{
-          minHeight: "100vh",
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          placeItems: "center",
-          padding: "32px 18px",
+          gridTemplateColumns: "none",
+          ...gridStyle
         }}
       >
-        <div style={{ width: "min(100%, 1080px)" }}>{children}</div>
+        <div className="md:hidden mb-6 flex justify-center w-full">
+          <Image 
+            src={isDark ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png"} 
+            alt="OriginBI" 
+            width={140} 
+            height={46} 
+            priority
+          />
+        </div>
+        <div className="w-full flex justify-center">
+          {children}
+        </div>
       </div>
     );
   }

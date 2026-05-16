@@ -1,10 +1,10 @@
 import { AdminPageProvider } from "@/components/admin/AdminPageContext";
-import AdminShell from "@/components/admin/AdminShell";
+import AdminLoginCard from "@/components/admin/AdminLoginCard";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <AdminPageProvider>
-      <AdminShell>{children}</AdminShell>
+      <AdminLoginCard>{children}</AdminLoginCard>
     </AdminPageProvider>
   );
 }
