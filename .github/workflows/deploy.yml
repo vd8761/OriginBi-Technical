@@ -144,10 +144,14 @@ jobs:
         working-directory: ./backend/tech-assessment-engine
         run: go vet ./...
 
+      # tech-engine targets Go 1.26 (newer than the prebuilt golangci-lint
+      # binary supports), so compile golangci-lint from source using the
+      # toolchain provisioned by setup-go.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          install-mode: goinstall
           working-directory: backend/tech-assessment-engine
           args: --timeout=5m
 

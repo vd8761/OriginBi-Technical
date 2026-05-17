@@ -935,9 +935,7 @@ func categoryOrderForBlock(ctx context.Context, tx pgx.Tx, attemptID int64, cate
 	}
 	stats := loadCategoryStats(ctx, tx, attemptID)
 	order := make([]string, 0, len(categories))
-	for _, c := range categories {
-		order = append(order, c)
-	}
+	order = append(order, categories...)
 	sort.SliceStable(order, func(i, j int) bool {
 		ai := stats[order[i]]
 		aj := stats[order[j]]

@@ -109,7 +109,7 @@ func (s *Server) createExamPackage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db unavailable")
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	examID := uuid.New()
 	versionID := uuid.New()
 	if _, err := tx.Exec(ctx, `

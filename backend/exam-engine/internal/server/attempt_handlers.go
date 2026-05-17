@@ -131,8 +131,8 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 	var assignmentRef string
 	var totalSeconds int
 	if req.AssignmentID != "" {
-		parsedID, err := uuid.Parse(req.AssignmentID)
-		if err != nil {
+		parsedID, parseErr := uuid.Parse(req.AssignmentID)
+		if parseErr != nil {
 			writeError(w, http.StatusBadRequest, "invalid assignmentId")
 			return
 		}
@@ -866,42 +866,6 @@ func stringValue(v any) string {
 		return s
 	}
 	return ""
-}
-
-func (s *Server) resolveAssignment(ctx context.Context, userID int64, req startAttemptRequest) (uuid.UUID, error) {
-	if req.AssignmentID != "" {
-		assignmentID, err := uuid.Parse(req.AssignmentID)
-		if err != nil {
-			return uuid.Nil, errors.New("invalid assignmentId")
-		}
-		var found uuid.UUID
-		err = s.pool.QueryRow(ctx, `
-			SELECT id
-			FROM exam_assignments
-			WHERE id = $1
-			  AND candidate_user_id = $2
-			  AND status = 'active'
-			  AND now() >= COALESCE(available_from, '-infinity'::timestamptz)
-			  AND (available_until IS NULL OR now() <= available_until)
-		`, assignmentID, userID).Scan(&found)
-		return found, err
-	}
-	if req.AssignmentRef == "" {
-		return uuid.Nil, errors.New("assignmentId or assignmentRef is required")
-	}
-	var found uuid.UUID
-	err := s.pool.QueryRow(ctx, `
-		SELECT id
-		FROM exam_assignments
-		WHERE candidate_user_id = $1
-		  AND assignment_ref = $2
-		  AND status = 'active'
-		  AND now() >= COALESCE(available_from, '-infinity'::timestamptz)
-		  AND (available_until IS NULL OR now() <= available_until)
-		ORDER BY created_at DESC
-		LIMIT 1
-	`, userID, req.AssignmentRef).Scan(&found)
-	return found, err
 }
 
 func (s *Server) saveAnswerTx(
