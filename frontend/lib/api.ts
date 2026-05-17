@@ -648,7 +648,8 @@ function errorMessageFrom(data: ErrorEnvelope | null): string | null {
 // ── Auth (sibling auth-service, Cognito-backed) ───────────────────────────
 
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  // await assertRegistrationEmailAvailable(input.email);
+  await assertRegistrationEmailAvailable(input.email);
+  await assertRegistrationPhoneAvailable(input.mobileNumber);
   const registrationSource = input.registrationSource || "originbi-technical";
 
   const cognito = await apiFetch<{ sub?: string; email?: string; group?: string }>("/internal/cognito/users", {
@@ -729,6 +730,23 @@ async function assertRegistrationEmailAvailable(email: string): Promise<void> {
   );
   if (!result.available) {
     throw new ApiError(409, "email already registered");
+  }
+}
+
+interface PhoneAvailabilityResponse {
+  available: boolean;
+}
+
+async function assertRegistrationPhoneAvailable(phone: string): Promise<void> {
+  const result = await apiFetch<PhoneAvailabilityResponse>(
+    `/v1/auth/phone-availability?phone=${encodeURIComponent(phone)}`,
+    {
+      baseOverride: API_BASE,
+      auth: false,
+    },
+  );
+  if (!result.available) {
+    throw new ApiError(409, "mobile number already registered");
   }
 }
 
