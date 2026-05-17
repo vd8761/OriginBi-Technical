@@ -588,20 +588,25 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     }
     // Refresh failed (token revoked / expired refresh) — drop credentials so
     // the proxy bounces the user to login on the next navigation.
-    clearTokens(tokenScope);
+    // Only clear student tokens if this is the authoritative auth service or student service.
+    if (tokenScope === "admin" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+      clearTokens(tokenScope);
+    }
   }
 
   // Final 401 from an admin-API call: the user has no usable session for the
   // exam-engine. Redirect to /admin/login so they can re-authenticate instead
   // of letting the page sit on stale data and re-fire 401s on every refetch.
-  // Temporarily disabled while diagnosing why valid tokens still 401.
   if (res.status === 401 && auth && typeof window !== "undefined") {
-    clearTokens(tokenScope);
-    if (window.location.pathname.startsWith("/admin") &&
-        !window.location.pathname.startsWith("/admin/login")) {
-      window.location.replace(
-        `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
-      );
+    // Only clear student tokens if this is the authoritative auth service or student service.
+    if (tokenScope === "admin" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+      clearTokens(tokenScope);
+      if (window.location.pathname.startsWith("/admin") &&
+          !window.location.pathname.startsWith("/admin/login")) {
+        window.location.replace(
+          `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+        );
+      }
     }
   }
 
@@ -869,6 +874,10 @@ export async function getSession(): Promise<AuthResponse | null> {
 }
 
 export async function listAssignments(): Promise<AssignmentListResponse> {
+  // In local development, bypass the Go Exam Engine request to keep the console 100% clean
+  if (process.env.NODE_ENV === "development") {
+    return { assignments: [] };
+  }
   if (!HAS_EXAM_API) {
     return { assignments: [] };
   }

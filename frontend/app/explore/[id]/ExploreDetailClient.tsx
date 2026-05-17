@@ -19,19 +19,16 @@ export default function ExploreDetailClient({ id }: { id: string }) {
     useEffect(() => {
         let active = true;
         const fetchAll = async () => {
-            if (!LEGACY_TECH_API_URL) {
-                if (active) setIsLoading(false);
-                return;
-            }
             try {
-                const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`);
+                const apiBase = LEGACY_TECH_API_URL || "";
+                const response = await fetch(`${apiBase}/api/assessment/admin/assessments`);
                 if (!response.ok) return;
                 const json = await response.json();
                 if (json && json.data && active) {
                     setAssessmentsList(json.data);
                 }
-            } catch {
-                // The Nest assessment admin API is optional for this frontend shell.
+            } catch (err) {
+                console.warn("Failed to fetch database assessments in explore detail view:", err);
             } finally {
                 if (active) {
                     setIsLoading(false);

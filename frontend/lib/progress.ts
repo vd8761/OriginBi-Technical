@@ -167,6 +167,7 @@ export function useAssessmentResults() {
         try {
           const submission = await getLatestSubmittedResult(module, email);
           if (cancelled) return;
+          if (!submission) continue;
 
           const { mapSubmissionToAssessmentResult } = await import("./assessmentResultMapper");
           const result = mapSubmissionToAssessmentResult({

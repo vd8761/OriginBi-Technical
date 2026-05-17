@@ -96,6 +96,11 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
         modules.map(async (module) => {
           try {
             const submission = await getLatestSubmittedResult(module, email);
+            if (!submission) {
+              // No submission history yet, skip mapping
+              return;
+            }
+
             const { mapSubmissionToAssessmentResult } = await import("@/lib/assessmentResultMapper");
             const result = mapSubmissionToAssessmentResult({
               assessmentId: module,
