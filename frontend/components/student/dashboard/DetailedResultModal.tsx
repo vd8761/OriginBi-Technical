@@ -197,7 +197,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
   const correctCount = result.correctCount ?? 0;
   const wrongCount = result.wrongCount ?? 0;
   const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
-  const totalQuestions = result.totalQuestions ?? detail?.questions ?? exam.questions ?? answeredCount;
+  const totalQuestions = result.totalQuestions ?? exam.questions ?? answeredCount;
   const skippedCount = result.skippedCount ?? Math.max(0, totalQuestions - answeredCount);
   const timePerQ = timeMinutes > 0 && totalQuestions > 0 ? (timeMinutes / totalQuestions).toFixed(1) : "-";
 

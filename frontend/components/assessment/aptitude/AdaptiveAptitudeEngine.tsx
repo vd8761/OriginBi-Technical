@@ -126,7 +126,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   
   // Multi-block navigation state
   const [allBlocks, setAllBlocks] = useState<Map<number, BlockData>>(new Map());
-  const [allAnswers, setAllAnswers] = useState<Record<string, string>>({});
+  const [allAnswers, setAllAnswers] = useState<Record<string, string | string[]>>({});
   const [viewingBlockNumber, setViewingBlockNumber] = useState(1);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   
@@ -337,7 +337,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       const timeTaken = totalTime - timeLeft;
 
       // Only send answers for the current block
-      const currentBlockAnswers: Record<string, string> = {};
+      const currentBlockAnswers: Record<string, string | string[]> = {};
       currentBlockQuestions.forEach(q => {
         if (allAnswers[q.id]) currentBlockAnswers[q.id] = allAnswers[q.id];
       });
@@ -448,14 +448,14 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   // Save answers for a specific block to backend
-  const saveBlockAnswers = async (blockNum: number, answersOverride?: Record<string, string>) => {
+  const saveBlockAnswers = async (blockNum: number, answersOverride?: Record<string, string | string[]>) => {
     if (!attemptToken) return;
     
     // Get answers for this block only
     const block = allBlocks.get(blockNum);
     if (!block) return;
     const source = answersOverride ?? allAnswers;
-    const blockAnswers: Record<string, string> = {};
+    const blockAnswers: Record<string, string | string[]> = {};
     block.questions.forEach(q => {
       if (source[q.id]) {
         blockAnswers[q.id] = source[q.id];

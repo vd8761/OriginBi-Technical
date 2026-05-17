@@ -45,7 +45,7 @@ const AssessmentResultCard: React.FC<AssessmentResultCardProps> = ({ exam, resul
   const correctCount = result.correctCount ?? 0;
   const wrongCount = result.wrongCount ?? 0;
   const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
-  const totalQuestions = result.totalQuestions ?? detail?.questions ?? exam.questions ?? answeredCount;
+  const totalQuestions = result.totalQuestions ?? exam.questions ?? answeredCount;
   const skippedCount = result.skippedCount ?? Math.max(0, totalQuestions - answeredCount);
   const fallbackInsights: typeof result.insights = [
     { type: "strength", text: `Excellent performance in ${sections[0]?.name || "core concepts"}. Strong foundational understanding demonstrated.` },

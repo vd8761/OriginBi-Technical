@@ -274,7 +274,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                <ClockIcon className="h-5 w-5" />
+                <ClockIcon c="h-5 w-5" />
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Incomplete Assessment</p>
@@ -294,7 +294,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-amber-500/30 transition hover:bg-amber-600"
             >
               Resume Now
-              <ChevronRightIcon className="h-4 w-4" />
+              <ChevronRightIcon c="h-4 w-4" />
             </button>
           </div>
         </motion.section>

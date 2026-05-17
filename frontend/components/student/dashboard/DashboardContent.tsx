@@ -44,11 +44,14 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   // Redirect new users to explore page instead of showing empty dashboard.
   // Only redirect after we've confirmed the paid set is loaded AND there's no
   // in-flight completion result to display.
-  const hasContent = useMemo(() => {
-    const hasPurchases = EXAMS.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
-    const hasCompletions = completions.size > 0;
-    return hasPurchases || hasCompletions;
-  }, [isPaid, completions]);
+  const hasPurchases = useMemo(
+    () => EXAMS.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none"),
+    [isPaid],
+  );
+  const hasContent = useMemo(
+    () => hasPurchases || completions.size > 0,
+    [hasPurchases, completions],
+  );
 
   const justCompleted = searchParams.get("completed");
 
