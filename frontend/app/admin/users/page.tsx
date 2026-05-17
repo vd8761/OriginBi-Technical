@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Lock,
   Mail,
@@ -82,10 +84,7 @@ function displayName(u: AdminUserRow): string {
 function UsersInner() {
   const router = useRouter();
   useRegisterAdminPage({
-    eyebrow: "Workspace",
     title: "User Management",
-    subtitle: "Students, admins, and proctors across all institutions.",
-    breadcrumb: [{ label: "Admin Hub", href: "/admin" }, { label: "Users" }],
   });
 
   const [filter, setFilter] = useState<RoleFilter>("all");
@@ -106,6 +105,14 @@ function UsersInner() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const limit = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, filter]);
+
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => window.clearTimeout(id);
@@ -113,13 +120,19 @@ function UsersInner() {
 
   useEffect(() => {
     let cancelled = false;
-    const params: ListAdminUsersParams = { limit: 100 };
+    setLoading(true);
+    const params: ListAdminUsersParams = {
+      limit,
+      offset: (currentPage - 1) * limit,
+      tech: true,
+    };
     if (debouncedSearch) params.q = debouncedSearch;
     if (filter !== "all") params.role = filter;
     listAdminUsers(params)
       .then((data) => {
         if (cancelled) return;
         setRows(data.users);
+        setTotalRows(data.total);
         setCounts(data.counts);
         setLoadError(null);
         setLoading(false);
@@ -133,7 +146,7 @@ function UsersInner() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, filter]);
+  }, [debouncedSearch, filter, currentPage]);
 
   const tabs = useMemo(
     () => [
@@ -301,6 +314,46 @@ function UsersInner() {
             </tbody>
           </table>
         </div>
+
+        {totalRows > limit && (
+          <div className="admin-pagination-row">
+            <div className="admin-pagination-info">
+              Showing <strong>{Math.min((currentPage - 1) * limit + 1, totalRows)}</strong> to{" "}
+              <strong>{Math.min(currentPage * limit, totalRows)}</strong> of{" "}
+              <strong>{totalRows.toLocaleString()}</strong> users
+            </div>
+            <div className="admin-pagination-actions">
+              <button
+                className="admin-pagination-btn"
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <div className="admin-pagination-pages">
+                {Array.from({ length: Math.min(5, Math.ceil(totalRows / limit)) }, (_, i) => {
+                  const pageNum = i + 1; // Simple logic for now
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`admin-pagination-page ${currentPage === pageNum ? "active" : ""}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                className="admin-pagination-btn"
+                disabled={currentPage >= Math.ceil(totalRows / limit) || loading}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card>

@@ -19,6 +19,7 @@ import {
 import { API_BASE, listAdminQuestions, listExamPackages } from "@/lib/api";
 import { Avatar } from "./ui";
 import { MountPoint, type SurfaceMount } from "@/plugins";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 interface NavItem {
   href: string;
@@ -155,7 +156,7 @@ function prettyRole(role: string) {
   }
 }
 
-export default function AdminNav() {
+export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const counts = useNavCounts();
@@ -188,11 +189,43 @@ export default function AdminNav() {
 
   const displayRole = useMemo(() => prettyRole(user.role), [user.role]);
 
+  const containerVariants: Variants = {
+    expanded: {
+      transition: {
+        staggerChildren: 0.03,
+        delayChildren: 0.05,
+      },
+    },
+    collapsed: {
+      transition: {
+        staggerChildren: 0.02,
+        staggerDirection: -1,
+      },
+    },
+  };
+
+  const itemVariants: Variants = {
+    expanded: {
+      opacity: 1,
+      x: 0,
+      transition: { type: "spring", stiffness: 300, damping: 30 } as any,
+    },
+    collapsed: {
+      opacity: 0,
+      x: -10,
+      transition: { duration: 0.15 },
+    },
+  };
+
   return (
-    <nav className="admin-nav">
+    <motion.nav 
+      className="admin-nav"
+      initial={isCollapsed ? "collapsed" : "expanded"}
+      animate={isCollapsed ? "collapsed" : "expanded"}
+      variants={containerVariants}
+    >
       {sections.map((section) => (
         <div key={section.label} className="admin-nav-section">
-          <p className="admin-nav-label">{section.label}</p>
           <ul className="admin-nav-list">
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -205,23 +238,48 @@ export default function AdminNav() {
                   <Link
                     href={item.href}
                     className={`admin-nav-item${active ? " is-active" : ""}`}
+                    style={{ position: 'relative' }}
                   >
-                    <span className="admin-nav-icon">
+                    <span className="admin-nav-icon relative z-10">
                       <Icon size={16} strokeWidth={2.2} />
                     </span>
-                    <span className="admin-nav-text">{item.label}</span>
-                    {item.eyebrow && (
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
-                        item.eyebrow.toLowerCase() === 'legacy' 
-                          ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
-                          : 'bg-white/5 text-slate-400 border-white/10'
-                      }`}>
+
+                    <AnimatePresence mode="popLayout">
+                      {!isCollapsed && (
+                        <motion.span
+                          key="label"
+                          variants={itemVariants}
+                          className="admin-nav-text relative z-10"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+
+                    {item.eyebrow && !isCollapsed && (
+                      <motion.span 
+                        variants={itemVariants}
+                        className={`relative z-10 px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
+                          item.eyebrow.toLowerCase() === 'legacy' 
+                            ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
+                            : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-slate-400 border-black/5 dark:border-white/10'
+                        }`}
+                      >
                         {item.eyebrow}
-                      </span>
+                      </motion.span>
                     )}
-                    {typeof count === "number" && (
-                      <span className="admin-nav-count">{count.toLocaleString()}</span>
-                    )}
+
+                    <AnimatePresence>
+                      {typeof count === "number" && !isCollapsed && (
+                        <motion.span
+                          key="count"
+                          variants={itemVariants}
+                          className="admin-nav-count relative z-10"
+                        >
+                          {count.toLocaleString()}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </Link>
                 </li>
               );
@@ -230,30 +288,6 @@ export default function AdminNav() {
           </ul>
         </div>
       ))}
-      <div className="admin-nav-user">
-        <Avatar name={user.name} email={user.email} tone="green" size={36} />
-        <div className="admin-nav-user-meta">
-          <span className="admin-nav-user-name" title={user.email || user.name}>
-            {user.name}
-          </span>
-          <span className="admin-nav-user-role">
-            <span
-              className="admin-dot"
-              style={{ background: healthColor, boxShadow: health.status === "online" ? "0 0 8px var(--admin-green-glow)" : "none" }}
-              title={`Exam engine: ${health.label}`}
-            />
-            {displayRole}
-          </span>
-        </div>
-        <button
-          type="button"
-          className="admin-icon-btn"
-          aria-label="Sign out"
-          onClick={signOut}
-        >
-          <LogOut size={15} />
-        </button>
-      </div>
-    </nav>
+    </motion.nav>
   );
 }
