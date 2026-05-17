@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import BulkUploadRegistration from "@/components/admin/BulkUploadRegistration";
 import {
   Avatar,
   Badge,
@@ -87,6 +88,7 @@ function UsersInner() {
     title: "User Management",
   });
 
+  const [view, setView] = useState<"list" | "bulk">("list");
   const [filter, setFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -170,6 +172,13 @@ function UsersInner() {
 
   return (
     <div className="admin-page">
+      {view === "bulk" ? (
+        <BulkUploadRegistration onCancel={() => {
+          setView("list");
+          setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
+        }} />
+      ) : (
+      <>
       <section className="admin-grid-4">
         <StatCard
           label="Total Users"
@@ -219,8 +228,8 @@ function UsersInner() {
             </label>
           </div>
           <div className="admin-row">
-            <button type="button" className="admin-btn admin-btn-secondary">
-              <Download size={14} /> Export CSV
+            <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setView('bulk')}>
+              <Download size={14} /> Bulk Upload
             </button>
             <button type="button" className="admin-btn admin-btn-primary">
               <UserPlus size={14} /> Invite User
@@ -469,6 +478,8 @@ function UsersInner() {
           </>
         )}
       </Drawer>
+      </>
+      )}
     </div>
   );
 }

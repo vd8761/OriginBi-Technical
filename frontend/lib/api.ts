@@ -525,7 +525,8 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     await refreshAccessToken(tokenScope);
   }
   const headers = new Headers(rest.headers);
-  if (rest.body && !headers.has("Content-Type")) {
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
+  if (rest.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (auth) {
@@ -1378,4 +1379,36 @@ export async function listAdminUsers(
     `/api/admin/users${suffix ? `?${suffix}` : ""}`,
     { baseOverride: TECH_API_BASE },
   );
+}
+
+export async function bulkAdminUsersPreview(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<any>("/api/admin/users/bulk/preview", {
+    method: "POST",
+    body: formData,
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function bulkAdminUsersExecute(importId: string, overrides?: any[]) {
+  return apiFetch<any>("/api/admin/users/bulk/execute", {
+    method: "POST",
+    body: JSON.stringify({ import_id: importId, overrides }),
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function getBulkAdminUsersJobStatus(importId: string) {
+  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}`, {
+    method: "GET",
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function getBulkAdminUsersJobRows(importId: string) {
+  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
+    method: "GET",
+    baseOverride: TECH_API_BASE,
+  });
 }

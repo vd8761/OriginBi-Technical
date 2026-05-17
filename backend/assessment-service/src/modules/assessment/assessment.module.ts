@@ -15,6 +15,7 @@ import { AdaptiveFallbackService } from './services/adaptive-fallback.service';
 import { CodeExecutionService } from './services/code-execution.service';
 import { EvaluationService } from './services/evaluation.service';
 import { PurchaseService } from './services/purchase.service';
+import { BulkAdminUsersService } from './services/bulk-admin-users.service';
 import * as Entities from '../../entities';
 
 import { R2Module } from '../r2/r2.module';
@@ -44,6 +45,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     CodeExecutionService,
     EvaluationService,
     PurchaseService,
+    BulkAdminUsersService,
   ],
   exports: [
     AdminQuestionService,
@@ -53,6 +55,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     CodeExecutionService,
     EvaluationService,
     PurchaseService,
+    BulkAdminUsersService,
   ],
 })
 export class AssessmentModule {}
