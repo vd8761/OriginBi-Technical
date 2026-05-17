@@ -720,7 +720,7 @@ interface LoginOptions {
   group?: string;
 }
 
-async function assertRegistrationEmailAvailable(email: string): Promise<void> {
+export async function assertRegistrationEmailAvailable(email: string): Promise<void> {
   const result = await apiFetch<EmailAvailabilityResponse>(
     `/v1/auth/email-availability?email=${encodeURIComponent(email)}`,
     {
@@ -737,7 +737,7 @@ interface PhoneAvailabilityResponse {
   available: boolean;
 }
 
-async function assertRegistrationPhoneAvailable(phone: string): Promise<void> {
+export async function assertRegistrationPhoneAvailable(phone: string): Promise<void> {
   const result = await apiFetch<PhoneAvailabilityResponse>(
     `/v1/auth/phone-availability?phone=${encodeURIComponent(phone)}`,
     {
