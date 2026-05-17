@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -12,7 +15,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
   const pathname = usePathname();
   const [isAuthorized, setIsAuthorized] = useState(false);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
     const idToken = localStorage.getItem("originbi:admin-id-token");
     const accessToken = localStorage.getItem("originbi:admin-access-token");
@@ -20,7 +23,6 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     // Cognito token. Otherwise every request will 401 and the user is
     // stuck staring at error states with no way back to login.
     if (adminSession === "true" && (idToken || accessToken)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsAuthorized(true);
     } else {
       // Drop the stale flag so other gates (e.g. AdminNav data fetches)

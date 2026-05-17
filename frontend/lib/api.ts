@@ -1,8 +1,8 @@
 "use client";
 
 // Go exam-engine (attempts, code runs, plugins, etc.)
-// Leave empty so it resolves same-origin to /v1 (proxied via next.config.ts)
-export const API_BASE = "";
+// If process.env.NEXT_PUBLIC_API_BASE is set, use it; otherwise, leave empty so it resolves same-origin to /v1 (proxied via next.config.ts)
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 // OriginBI auth-service (Cognito auth).
 // Proxied same-origin via /auth-api to prevent CORS blocks

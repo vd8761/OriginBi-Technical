@@ -238,7 +238,6 @@ function UsersInner() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}></th>
                 <th>User</th>
                 <th>OB ID</th>
                 <th>Role</th>
@@ -252,13 +251,13 @@ function UsersInner() {
             <tbody>
               {loading && rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
                     Loading users…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
                     No users match the current filters.
                   </td>
                 </tr>
@@ -271,13 +270,6 @@ function UsersInner() {
                       onClick={() => setSelected(u)}
                       style={{ cursor: "pointer" }}
                     >
-                      <td>
-                        <input
-                          type="checkbox"
-                          style={{ accentColor: "var(--admin-green)" }}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
                       <td>
                         <div className="admin-row" style={{ gap: 12 }}>
                           <Avatar name={name} email={u.email} />
