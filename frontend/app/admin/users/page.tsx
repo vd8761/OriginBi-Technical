@@ -20,6 +20,7 @@ import {
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import BulkUploadRegistration from "@/components/admin/BulkUploadRegistration";
+import AddRegistrationForm from "@/components/admin/AddRegistrationForm";
 import {
   Avatar,
   Badge,
@@ -88,7 +89,7 @@ function UsersInner() {
     title: "User Management",
   });
 
-  const [view, setView] = useState<"list" | "bulk">("list");
+  const [view, setView] = useState<"list" | "bulk" | "add">("list");
   const [filter, setFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -172,7 +173,17 @@ function UsersInner() {
 
   return (
     <div className="admin-page">
-      {view === "bulk" ? (
+      {view === "add" ? (
+        <AddRegistrationForm
+          onCancel={() => {
+            setView("list");
+          }}
+          onRegister={() => {
+            setView("list");
+            setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
+          }}
+        />
+      ) : view === "bulk" ? (
         <BulkUploadRegistration onCancel={() => {
           setView("list");
           setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
@@ -231,8 +242,8 @@ function UsersInner() {
             <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setView('bulk')}>
               <Download size={14} /> Bulk Upload
             </button>
-            <button type="button" className="admin-btn admin-btn-primary">
-              <UserPlus size={14} /> Invite User
+            <button type="button" className="admin-btn admin-btn-primary" onClick={() => setView('add')}>
+              <UserPlus size={14} /> Add User
             </button>
           </div>
         </div>
