@@ -135,6 +135,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.removeItem("originbi:admin-access-token");
       localStorage.removeItem("originbi:admin-id-token");
       localStorage.removeItem("originbi:admin-refresh-token");
+      localStorage.removeItem("user");
 
       setUser(profile);
       setIsLoggedIn(true);
@@ -153,6 +154,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.removeItem("originbi:assessment-results");
       localStorage.removeItem("originbi:paid-assessments");
       localStorage.removeItem("originbi:completed-assessments");
+      localStorage.removeItem("user");
       
       // Clear any legacy userEmail keys if present
       localStorage.removeItem("userEmail");

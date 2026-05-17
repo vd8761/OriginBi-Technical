@@ -1212,16 +1212,16 @@ export async function getUserEntitlements(
 export function getActiveEmail(): string {
   if (typeof window === "undefined") return "";
   try {
-    const userData = window.localStorage.getItem("user");
-    if (userData) {
-      const parsed = JSON.parse(userData);
+    const profile = window.localStorage.getItem("originbi:user-profile");
+    if (profile) {
+      const parsed = JSON.parse(profile);
       if (parsed?.email) return String(parsed.email);
     }
   } catch {}
   try {
-    const profile = window.localStorage.getItem("originbi:user-profile");
-    if (profile) {
-      const parsed = JSON.parse(profile);
+    const userData = window.localStorage.getItem("user");
+    if (userData) {
+      const parsed = JSON.parse(userData);
       if (parsed?.email) return String(parsed.email);
     }
   } catch {}
