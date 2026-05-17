@@ -1,0 +1,18 @@
+[Unit]
+Description=Tech Assessment Engine API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/OriginBi-Technical/backend/tech-assessment-engine
+EnvironmentFile=/home/OriginBi-Technical/backend/tech-assessment-engine/.env.local
+ExecStart=/home/OriginBi-Technical/backend/tech-assessment-engine/tech-engine
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tech-assessment-engine
+
+[Install]
+WantedBy=multi-user.target
