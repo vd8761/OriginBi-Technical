@@ -622,7 +622,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         setAnswers(newAnswers);
         // Persist to cache immediately
         cacheSaveAnswer(currentQuestion.id, { optionId: value as any });
-        persistAnswer(currentQuestion.id, { optionId });
+        persistAnswer(currentQuestion.id, { optionId: value });
     };
 
     const handleClear = () => {

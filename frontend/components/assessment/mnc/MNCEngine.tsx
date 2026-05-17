@@ -100,6 +100,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
 
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+    const [isBlocked, setIsBlocked] = useState(false);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -144,6 +145,26 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
+                        
+                        let eqt = found.enabled_question_types;
+                        if (eqt) {
+                            if (typeof eqt === "string") {
+                                try {
+                                    eqt = JSON.parse(eqt);
+                                } catch {
+                                    eqt = null;
+                                }
+                            }
+                            if (eqt && typeof eqt === "object") {
+                                const keys = Object.keys(eqt);
+                                if (keys.length > 0) {
+                                    const hasAnyTrue = Object.values(eqt).some((val) => val === true || val === "true");
+                                    if (!hasAnyTrue) {
+                                        setIsBlocked(true);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } catch (err) {
@@ -418,6 +439,10 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
         persistAnswer(currentQuestion.id, { optionId });
     };
+
+    if (isBlocked) {
+        return null;
+    }
 
     if (isLoading) {
         return (

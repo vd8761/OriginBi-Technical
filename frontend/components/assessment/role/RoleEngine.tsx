@@ -119,6 +119,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
 
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+    const [isBlocked, setIsBlocked] = useState(false);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -163,6 +164,26 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
+                        
+                        let eqt = found.enabled_question_types;
+                        if (eqt) {
+                            if (typeof eqt === "string") {
+                                try {
+                                    eqt = JSON.parse(eqt);
+                                } catch {
+                                    eqt = null;
+                                }
+                            }
+                            if (eqt && typeof eqt === "object") {
+                                const keys = Object.keys(eqt);
+                                if (keys.length > 0) {
+                                    const hasAnyTrue = Object.values(eqt).some((val) => val === true || val === "true");
+                                    if (!hasAnyTrue) {
+                                        setIsBlocked(true);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } catch (err) {
@@ -523,6 +544,10 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             />
         );
     };
+
+    if (isBlocked) {
+        return null;
+    }
 
     if (isLoading) {
         return (

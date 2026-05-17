@@ -33,7 +33,7 @@ export default function ExplorePage() {
   }, []);
 
   const dynamicExams = useMemo(() => {
-    return EXAMS.map((exam) => {
+    const mapped = EXAMS.map((exam) => {
       const dbModule = exam.id === "communication" ? "grammar" : exam.id;
       const dbExam = assessmentsList.find(
         (a) => a.module_type === dbModule || a.assessment_code === exam.id
@@ -72,10 +72,13 @@ export default function ExplorePage() {
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
           tags: tags,
+          enabledQuestionTypes: dbExam.enabled_question_types,
         };
       }
       return exam;
     });
+
+    return mapped;
   }, [assessmentsList]);
 
   const handleNavigateToDetails = (exam: any) => {
