@@ -1,29 +1,28 @@
 "use client";
 
-const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
-const configuredAuthBase = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "");
-
 // Go exam-engine (attempts, code runs, plugins, etc.)
-export const API_BASE = configuredApiBase || "";
+// Leave empty so it resolves same-origin to /v1 (proxied via next.config.ts)
+export const API_BASE = "";
 
-// OriginBI auth-service from the sibling app (Cognito auth).
-export const AUTH_API_BASE = configuredAuthBase || "http://localhost:4002";
+// OriginBI auth-service (Cognito auth).
+// Proxied same-origin via /auth-api to prevent CORS blocks
+export const AUTH_API_BASE = "/auth-api";
 
-export const STUDENT_API_BASE =
-  process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL?.replace(/\/$/, "") || "";
+// Student Service.
+// Proxied same-origin via /student-api to prevent CORS blocks
+export const STUDENT_API_BASE = "/student-api";
 
-export const TECH_API_BASE =
-  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
-  "";
+// NestJS Assessment Service.
+// Leave empty so it resolves same-origin to /api (proxied via next.config.ts)
+export const TECH_API_BASE = "";
 
 const IS_BROWSER = typeof window !== "undefined";
 const IS_DEV = process.env.NODE_ENV === "development";
-const EXAM_SAME_ORIGIN = IS_BROWSER && API_BASE === window.location.origin;
-const TECH_SAME_ORIGIN = IS_BROWSER && TECH_API_BASE === window.location.origin;
+const EXAM_SAME_ORIGIN = true;
+const TECH_SAME_ORIGIN = true;
 
-export const HAS_EXAM_API = Boolean(API_BASE) && !(IS_DEV && EXAM_SAME_ORIGIN);
-export const HAS_TECH_API = Boolean(TECH_API_BASE) && !(IS_DEV && TECH_SAME_ORIGIN);
+export const HAS_EXAM_API = true;
+export const HAS_TECH_API = true;
 
 // ── Cognito token storage (browser only) - Main App Style ──────────────────
 type TokenScope = "user" | "admin";
