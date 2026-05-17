@@ -787,11 +787,39 @@ export async function loginUser(
   }
 
   if (!session) {
-    // Fallback: If the backend doesn't support /auth/session, mock a session
-    // using the login email so the user can still access the dashboard.
+    // Fallback: Fetch actual database profile and role from student-service
+    let dbUser: any = null;
+    try {
+      dbUser = await apiFetch<any>("/student/profile", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+        baseOverride: STUDENT_API_BASE,
+        auth: false,
+      });
+    } catch (err) {
+      console.warn("Failed to fetch student profile for role validation:", err);
+    }
+
+    const fallbackRole = dbUser?.role || (options.group === "ADMIN" ? "ADMIN" : "STUDENT");
+
     return {
-      user: { email, role: "STUDENT" } as any,
-      registration: null,
+      user: {
+        id: dbUser?.id || 0,
+        email,
+        role: fallbackRole,
+        cognitoSub: dbUser?.metadata?.cognitoSub || null,
+        emailVerified: true,
+        isActive: true,
+      } as any,
+      registration: dbUser ? {
+        id: dbUser.id,
+        fullName: dbUser.fullName,
+        gender: dbUser.gender,
+        countryCode: dbUser.metadata?.countryCode || "+91",
+        mobileNumber: dbUser.mobileNumber,
+        status: dbUser.status || "ACTIVE",
+        isTechAssessment: dbUser.isTechAssessment || 0,
+      } as any : null,
       tokens,
     };
   }
