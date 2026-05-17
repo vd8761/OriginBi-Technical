@@ -271,7 +271,7 @@ export const mapSubmissionToAssessmentResult = ({
     new Date().toISOString(),
   );
   const attemptToken = asString(submission.attemptToken ?? submission.token, "");
-  const module = asString(submission.module, "");
+  const submissionModule = asString(submission.module, "");
 
   const rawTotalScore = toNumber(
     submission.totalScore,
@@ -371,7 +371,7 @@ export const mapSubmissionToAssessmentResult = ({
     negativeScore: toNumber(submission.negativeScore, 0),
     netScore: rawTotalScore,
     attemptToken: attemptToken || undefined,
-    module: module || undefined,
+    module: submissionModule || undefined,
     maxScore: Number.isFinite(maxScore) ? maxScore : undefined,
     objectiveAnsweredCount,
     subjectiveAnsweredCount,

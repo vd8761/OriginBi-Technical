@@ -777,7 +777,7 @@ export default function AdminQuestionsManager() {
                     <AlertCircle size={32} className="text-slate-400" />
                   </div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">No Questions Found</h3>
-                  <p className="mt-2 text-sm text-slate-900 dark:text-white max-w-xs leading-relaxed">We couldn't find any questions matching your search. Try adjusting your filters or search terms.</p>
+                  <p className="mt-2 text-sm text-slate-900 dark:text-white max-w-xs leading-relaxed">We couldn&apos;t find any questions matching your search. Try adjusting your filters or search terms.</p>
                   <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Clear Filters</button>
                 </div>
               ) : (

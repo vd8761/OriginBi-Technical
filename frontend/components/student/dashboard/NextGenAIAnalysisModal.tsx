@@ -589,7 +589,7 @@ const NextGenAIAnalysisModal: React.FC<NextGenAIAnalysisModalProps> = ({
                             Exceptional Performance
                           </p>
                           <p className="text-gray-400">
-                            You're in the top 8% of all candidates who took this assessment
+                            You&apos;re in the top 8% of all candidates who took this assessment
                           </p>
                         </motion.div>
                       </div>
