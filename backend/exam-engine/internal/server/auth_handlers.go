@@ -140,6 +140,37 @@ func (s *Server) emailAvailability(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, emailAvailabilityResponse{Available: !exists})
 }
 
+type phoneAvailabilityResponse struct {
+	Available bool `json:"available"`
+}
+
+func (s *Server) phoneAvailability(w http.ResponseWriter, r *http.Request) {
+	if !s.limiter.allow(rateKey(r, "phone-availability"), 30, time.Minute) {
+		writeError(w, http.StatusTooManyRequests, tooManyRequestsMessage(30, time.Minute))
+		return
+	}
+	phone := strings.TrimSpace(r.URL.Query().Get("phone"))
+	if phone == "" {
+		writeError(w, http.StatusBadRequest, "phone number is required")
+		return
+	}
+
+	ctx, cancel := contextWithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	var exists bool
+	if err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM registrations
+			WHERE mobile_number = $1
+		)
+	`, phone).Scan(&exists); err != nil {
+		writeError(w, http.StatusInternalServerError, "phone lookup failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, phoneAvailabilityResponse{Available: !exists})
+}
+
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if !s.limiter.allow(rateKey(r, "register"), 8, time.Minute) {
 		writeError(w, http.StatusTooManyRequests, tooManyRequestsMessage(8, time.Minute))
@@ -723,16 +754,6 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func nullableDate(v string) any {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	t, err := time.Parse("2006-01-02", v)
-	if err != nil {
-		return nil
-	}
-	return t
-}
 
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {

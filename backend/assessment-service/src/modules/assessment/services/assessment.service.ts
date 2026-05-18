@@ -860,7 +860,7 @@ export class AssessmentService {
       }
 
       const attempt = attemptRows[0];
-      if (!attempt) throw new NotFoundException('No submitted attempt found');
+      if (!attempt) return null;
 
       const snapshot = await this.evaluateAttemptFromStoredAnswers(
         queryRunner,
@@ -871,11 +871,7 @@ export class AssessmentService {
 
       return snapshot;
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        this.logger.debug(`getLatestSubmittedResult (${module}): No submitted attempt found`);
-      } else {
-        this.logger.error(`getLatestSubmittedResult (${module}) error:`, error);
-      }
+      this.logger.error(`getLatestSubmittedResult (${module}) error:`, error);
       throw error;
     } finally {
       await queryRunner.release();

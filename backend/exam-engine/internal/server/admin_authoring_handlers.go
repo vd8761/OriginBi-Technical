@@ -392,7 +392,7 @@ func (s *Server) createQuestion(ctxParent context.Context, userID int64, req adm
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	questionID := uuid.New()
 	versionID := uuid.New()
 	if _, err := tx.Exec(ctx, `
@@ -433,7 +433,7 @@ func (s *Server) publishQuestionVersion(ctxParent context.Context, userID int64,
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var versionNumber int
 	if err := tx.QueryRow(ctx, `
 		SELECT COALESCE(MAX(version_number), 0) + 1

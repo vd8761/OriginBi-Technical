@@ -1,0 +1,8 @@
+# Per-service golangci-lint config for tech-assessment-engine.
+#
+# Report every violation rather than truncating after the first 3, so a
+# single CI run shows the whole backlog instead of dripping it out one
+# batch per push.
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0

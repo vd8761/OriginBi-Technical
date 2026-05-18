@@ -38,6 +38,15 @@ interface ModuleTile {
   categories: string[];
 }
 
+const moduleConfig: Record<string, { icon: any; accentVar: string; accentBgVar: string; href: string }> = {
+  "mcq.aptitude": { icon: Brain, accentVar: "--admin-acc-aptitude", accentBgVar: "rgba(30, 211, 106, 0.14)", href: "/admin/questions" },
+  "mcq.verbal": { icon: MessageSquare, accentVar: "--admin-acc-comm", accentBgVar: "rgba(6, 182, 212, 0.16)", href: "/admin/questions" },
+  "mcq.technical": { icon: Target, accentVar: "--admin-acc-role", accentBgVar: "rgba(132, 204, 22, 0.16)", href: "/admin/questions" },
+  "assessment.coding": { icon: Code2, accentVar: "--admin-acc-coding", accentBgVar: "rgba(255, 183, 3, 0.18)", href: "/admin/coding" },
+  "essay": { icon: Banknote, accentVar: "--admin-acc-mnc", accentBgVar: "rgba(139, 109, 240, 0.16)", href: "/admin/questions" },
+  "default": { icon: Database, accentVar: "--admin-acc-role", accentBgVar: "rgba(132, 204, 22, 0.16)", href: "/admin/questions" },
+};
+
 const moduleTiles: ModuleTile[] = [
   {
     href: "/admin/question-banks",
@@ -254,17 +263,20 @@ function DashboardInner() {
           </Link>
         </div>
         <div className="admin-dashboard-modules">
-          {moduleTiles.map((m) => {
-            const Icon = m.icon;
+          {(summary?.questionBreakdown || moduleTiles).map((m: any) => {
+            const isDynamic = !!summary?.questionBreakdown;
+            const config = isDynamic ? (moduleConfig[m.slug] || moduleConfig.default) : m;
+            const Icon = config.icon;
+            
             return (
               <Link
-                key={m.label}
-                href={m.href}
+                key={isDynamic ? m.slug : m.label}
+                href={config.href}
                 className="admin-module-card admin-dashboard-module-tile"
                 style={
                   {
-                    "--admin-acc": `var(${m.accentVar})`,
-                    "--admin-acc-bg": m.accentBgVar,
+                    "--admin-acc": `var(${config.accentVar})`,
+                    "--admin-acc-bg": config.accentBgVar,
                   } as React.CSSProperties
                 }
               >
@@ -276,17 +288,17 @@ function DashboardInner() {
                     <Icon size={18} />
                   </span>
                   <span className="admin-mono" style={{ fontSize: 10.5, color: "var(--admin-fg-4)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                    {(m.trial + m.main).toLocaleString()} Qs
+                    {isDynamic ? m.count : (m.trial + m.main)} Qs
                   </span>
                 </div>
                 <div>
-                  <h3 className="admin-card-title" style={{ fontSize: 13.5 }}>{m.label}</h3>
+                  <h3 className="admin-card-title" style={{ fontSize: 13.5 }}>{isDynamic ? m.name : m.label}</h3>
                   <p className="admin-card-subtitle" style={{ fontSize: 11.5, marginTop: 4, lineHeight: 1.45 }}>
-                    {m.desc}
+                    {isDynamic ? `Manage ${m.name} assessment content.` : m.desc}
                   </p>
                 </div>
                 <div className="admin-row admin-dashboard-module-chips">
-                  {m.categories.slice(0, 3).map((c) => (
+                  {(isDynamic ? ["Assessment"] : m.categories.slice(0, 3)).map((c: string) => (
                     <span key={c} className="admin-badge admin-badge-neutral" style={{ fontSize: 10 }}>{c}</span>
                   ))}
                 </div>
@@ -297,7 +309,7 @@ function DashboardInner() {
         <MountPoint id="dashboard.tiles" />
       </Card>
 
-      <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+      <section className="admin-dashboard-row">
         <Card pad={false}>
           <div className="admin-control-row" style={{ padding: "20px 22px 12px" }}>
             <div>

@@ -140,8 +140,7 @@ const Header: React.FC<HeaderProps> = ({
             if (!user?.email) return;
 
             try {
-                const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
-                const res = await fetch(`${studentServiceUrl}/student/profile`, {
+                const res = await fetch(`/student-api/student/profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: user.email }),
@@ -422,19 +421,12 @@ const Header: React.FC<HeaderProps> = ({
  
                                     <div className="p-2">
                                         <button
-                                            onClick={() => handleNavClick("profile")}
-                                            className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 rounded-[10px] hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all font-medium cursor-pointer"
-                                        >
-                                            <SettingsIcon className="w-4 h-4 mr-3" />
-                                            Settings
-                                        </button>
-                                        <button
                                             onClick={() => {
                                                 logout();
                                                 if (onLogout) onLogout();
                                                 router.push("/");
                                             }}
-                                            className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 rounded-[10px] hover:bg-red-50 dark:hover:bg-red-900/[0.08] transition-all font-medium mt-1 cursor-pointer"
+                                            className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 rounded-[10px] hover:bg-red-50 dark:hover:bg-red-900/[0.08] transition-all font-medium cursor-pointer"
                                         >
                                             <LogoutIcon className="w-4 h-4 mr-3" />
                                             Logout

@@ -78,6 +78,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
         const storedProfile = localStorage.getItem("originbi:user-profile");
         const hasAdminSession = localStorage.getItem("originbi:admin-session") === "true";
         const rawAdminUser = localStorage.getItem("user");
+        const isClient = typeof window !== "undefined";
+        const isAdminPath = isClient && window.location.pathname.startsWith("/admin");
+
         const hasLegacyAdminLeak =
           !storedProfile &&
           !!rawAdminUser &&
@@ -92,14 +95,15 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
         // Admin auth uses its own token namespace; if the explicit admin gate
         // is active, never try to restore a student session from this provider.
-        if (hasAdminSession) {
+        if (hasAdminSession && isAdminPath) {
           return;
         }
 
         // Heal older admin logins that wrote into the student token keys.
         // Those credentials never had a student profile, so attempting
         // `/auth/session` only produces noisy fetch failures on `/`.
-        if (hasLegacyAdminLeak) {
+        // Only run this cleanup on admin routes to prevent accidental wiping of student sessions.
+        if (hasLegacyAdminLeak && isAdminPath) {
           localStorage.removeItem("originbi:access-token");
           localStorage.removeItem("originbi:id-token");
           localStorage.removeItem("originbi:refresh-token");
@@ -160,7 +164,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
       } catch (error) {
-        console.error("Failed to restore session from localStorage", error);
+        console.error("[SessionContext] Failed to restore session from localStorage:", error);
         // On error, logout to ensure clean state
         logout();
       } finally {
@@ -181,6 +185,50 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [logout]);
+  }, []);
+
+  const login = (accessToken: string, idToken: string, profile: UserProfile) => {
+    try {
+      localStorage.setItem("originbi:access-token", accessToken);
+      localStorage.setItem("originbi:id-token", idToken);
+      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+
+      // Clear admin session flag and tokens to avoid cross-session contamination
+      localStorage.removeItem("originbi:admin-session");
+      localStorage.removeItem("originbi:admin-access-token");
+      localStorage.removeItem("originbi:admin-id-token");
+      localStorage.removeItem("originbi:admin-refresh-token");
+      localStorage.removeItem("user");
+
+      setUser(profile);
+      setIsLoggedIn(true);
+      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+    } catch (error) {
+      console.error("Error setting session storage", error);
+    }
+  };
+
+  const logout = () => {
+    try {
+      // Clear all originbi keys to avoid state leakage
+      localStorage.removeItem("originbi:access-token");
+      localStorage.removeItem("originbi:id-token");
+      localStorage.removeItem("originbi:user-profile");
+      localStorage.removeItem("originbi:assessment-results");
+      localStorage.removeItem("originbi:paid-assessments");
+      localStorage.removeItem("originbi:completed-assessments");
+      localStorage.removeItem("user");
+      
+      // Clear any legacy userEmail keys if present
+      localStorage.removeItem("userEmail");
+      sessionStorage.removeItem("userEmail");
+
+      setUser(null);
+      setIsLoggedIn(false);
+    } catch (error) {
+      console.error("Error clearing session storage", error);
+    }
+  };
 
   const updateProfile = (profileUpdates: Partial<UserProfile>) => {
     try {

@@ -11,7 +11,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync"
 	"tech-assessment-engine/internal/models"
 	"tech-assessment-engine/internal/repository"
 	"time"
@@ -20,10 +19,6 @@ import (
 )
 
 type AssessmentService struct{}
-
-var (
-	columnExistsCache sync.Map
-)
 
 func NewAssessmentService() *AssessmentService {
 	return &AssessmentService{}
@@ -213,6 +208,9 @@ func (s *AssessmentService) StartAttempt(module string, req models.StartAttemptR
 		var err error
 		if req.AssessmentID != nil {
 			err = tx.Raw("SELECT * FROM tech_assessments WHERE assessment_id = ? AND module_type = ?", *req.AssessmentID, dbModule).Scan(&assessment).Error
+			if err != nil || assessment.AssessmentID == 0 {
+				assessment = s.getFallbackAssessment(tx, dbModule, config)
+			}
 		} else if req.AssessmentCode != "" {
 			err = tx.Raw("SELECT * FROM tech_assessments WHERE assessment_code = ? AND module_type = ?", req.AssessmentCode, dbModule).Scan(&assessment).Error
 			if err == nil && assessment.AssessmentID > 0 {

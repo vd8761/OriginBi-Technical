@@ -16,7 +16,7 @@ interface JsonImportPanelProps {
   onCancel: () => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseQuestions(raw: any[], assessmentType: AssessmentType): AnyQuestion[] {
   return raw.map((item, i) => {

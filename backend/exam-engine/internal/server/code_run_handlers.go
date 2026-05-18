@@ -68,7 +68,6 @@ type dbTestCase struct {
 }
 
 type judge0Status = runnerjudge0.Status
-type judge0RawResult = runnerjudge0.RawResult
 type judge0Result = runnerjudge0.Result
 
 const (
@@ -372,7 +371,7 @@ func codeRunErrResponse(err error) (int, json.RawMessage) {
 		return http.StatusUnprocessableEntity, body
 	}
 	status := http.StatusInternalServerError
-	msg := "code run failed"
+	var msg string
 	switch {
 	case errors.Is(err, errLanguageNotEntitled):
 		status = http.StatusForbidden

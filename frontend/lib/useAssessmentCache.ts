@@ -42,7 +42,9 @@ export function useAssessmentCache(opts: UseAssessmentCacheOptions): UseAssessme
   const [isRestoredFromCache, setIsRestoredFromCache] = useState(false);
 
   const optsRef = useRef(opts);
-  optsRef.current = opts;
+  useEffect(() => {
+    optsRef.current = opts;
+  });
 
   // Track whether the session has been cleared (submitted) to prevent
   // the beforeunload/visibilitychange flush from re-creating zombie cache entries.
@@ -64,7 +66,7 @@ export function useAssessmentCache(opts: UseAssessmentCacheOptions): UseAssessme
     })();
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [opts.assessmentCode]);
 
   // ── Step 2: Init cache once token + questions arrive (fresh attempt) ──
@@ -83,7 +85,7 @@ export function useAssessmentCache(opts: UseAssessmentCacheOptions): UseAssessme
       markedForReview: [],
       currentIndex:    0,
     }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [opts.questions.length, opts.token, isRestoredFromCache]);
 
   // ── Step 3: Flush on tab hide / page unload ──

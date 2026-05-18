@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Lock,
   Mail,
@@ -14,9 +16,12 @@ import {
   UserSearch,
   Users as UsersIcon,
   X,
+  Plus,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import BulkUploadRegistration from "@/components/admin/BulkUploadRegistration";
+import AddRegistrationForm from "@/components/admin/AddRegistrationForm";
 import {
   Avatar,
   Badge,
@@ -82,12 +87,10 @@ function displayName(u: AdminUserRow): string {
 function UsersInner() {
   const router = useRouter();
   useRegisterAdminPage({
-    eyebrow: "Workspace",
     title: "User Management",
-    subtitle: "Students, admins, and proctors across all institutions.",
-    breadcrumb: [{ label: "Admin Hub", href: "/admin" }, { label: "Users" }],
   });
 
+  const [view, setView] = useState<"list" | "bulk" | "add">("list");
   const [filter, setFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -106,6 +109,14 @@ function UsersInner() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const limit = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, filter]);
+
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => window.clearTimeout(id);
@@ -113,13 +124,19 @@ function UsersInner() {
 
   useEffect(() => {
     let cancelled = false;
-    const params: ListAdminUsersParams = { limit: 100 };
+    setLoading(true);
+    const params: ListAdminUsersParams = {
+      limit,
+      offset: (currentPage - 1) * limit,
+      tech: true,
+    };
     if (debouncedSearch) params.q = debouncedSearch;
     if (filter !== "all") params.role = filter;
     listAdminUsers(params)
       .then((data) => {
         if (cancelled) return;
         setRows(data.users);
+        setTotalRows(data.total);
         setCounts(data.counts);
         setLoadError(null);
         setLoading(false);
@@ -133,7 +150,7 @@ function UsersInner() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, filter]);
+  }, [debouncedSearch, filter, currentPage]);
 
   const tabs = useMemo(
     () => [
@@ -157,6 +174,23 @@ function UsersInner() {
 
   return (
     <div className="admin-page">
+      {view === "add" ? (
+        <AddRegistrationForm
+          onCancel={() => {
+            setView("list");
+          }}
+          onRegister={() => {
+            setView("list");
+            setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
+          }}
+        />
+      ) : view === "bulk" ? (
+        <BulkUploadRegistration onCancel={() => {
+          setView("list");
+          setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
+        }} />
+      ) : (
+      <>
       <section className="admin-grid-4">
         <StatCard
           label="Total Users"
@@ -202,15 +236,26 @@ function UsersInner() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search name, email..."
+                style={{ outline: "none", boxShadow: "none" }}
               />
             </label>
           </div>
           <div className="admin-row">
-            <button type="button" className="admin-btn admin-btn-secondary">
-              <Download size={14} /> Export CSV
+            <button 
+              type="button" 
+              onClick={() => setView('bulk')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#FFFFFF1F] border border-gray-200 dark:border-[#FFFFFF1F] rounded-lg text-sm font-medium text-brand-text-light-primary dark:text-white hover:bg-gray-50 dark:hover:bg-white/30 transition-all shadow-sm cursor-pointer"
+            >
+              <span>Bulk Upload</span>
+              <Download size={16} />
             </button>
-            <button type="button" className="admin-btn admin-btn-primary">
-              <UserPlus size={14} /> Invite User
+            <button
+              type="button"
+              onClick={() => setView('add')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green border border-transparent rounded-lg text-sm font-medium text-white hover:bg-brand-green/90 transition-all shadow-lg shadow-brand-green/20 cursor-pointer"
+            >
+              <span>Add New</span>
+              <Plus size={16} className="text-white" />
             </button>
           </div>
         </div>
@@ -225,7 +270,6 @@ function UsersInner() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}></th>
                 <th>User</th>
                 <th>OB ID</th>
                 <th>Role</th>
@@ -239,13 +283,13 @@ function UsersInner() {
             <tbody>
               {loading && rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
                     Loading users…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
                     No users match the current filters.
                   </td>
                 </tr>
@@ -258,13 +302,6 @@ function UsersInner() {
                       onClick={() => setSelected(u)}
                       style={{ cursor: "pointer" }}
                     >
-                      <td>
-                        <input
-                          type="checkbox"
-                          style={{ accentColor: "var(--admin-green)" }}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </td>
                       <td>
                         <div className="admin-row" style={{ gap: 12 }}>
                           <Avatar name={name} email={u.email} />
@@ -301,6 +338,46 @@ function UsersInner() {
             </tbody>
           </table>
         </div>
+
+        {totalRows > limit && (
+          <div className="admin-pagination-row">
+            <div className="admin-pagination-info">
+              Showing <strong>{Math.min((currentPage - 1) * limit + 1, totalRows)}</strong> to{" "}
+              <strong>{Math.min(currentPage * limit, totalRows)}</strong> of{" "}
+              <strong>{totalRows.toLocaleString()}</strong> users
+            </div>
+            <div className="admin-pagination-actions">
+              <button
+                className="admin-pagination-btn"
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <div className="admin-pagination-pages">
+                {Array.from({ length: Math.min(5, Math.ceil(totalRows / limit)) }, (_, i) => {
+                  const pageNum = i + 1; // Simple logic for now
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`admin-pagination-page ${currentPage === pageNum ? "active" : ""}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                className="admin-pagination-btn"
+                disabled={currentPage >= Math.ceil(totalRows / limit) || loading}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card>
@@ -424,6 +501,8 @@ function UsersInner() {
           </>
         )}
       </Drawer>
+      </>
+      )}
     </div>
   );
 }

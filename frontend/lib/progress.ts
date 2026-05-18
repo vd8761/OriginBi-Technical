@@ -163,27 +163,28 @@ export function useAssessmentResults() {
       }
       const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role", "coding"];
       
-      for (const module of modules) {
+      for (const assessment of modules) {
         try {
-          const submission = await getLatestSubmittedResult(module, email);
+          const submission = await getLatestSubmittedResult(assessment, email);
           if (cancelled) return;
+          if (!submission) continue;
 
           const { mapSubmissionToAssessmentResult } = await import("./assessmentResultMapper");
           const result = mapSubmissionToAssessmentResult({
-            assessmentId: module,
+            assessmentId: assessment,
             submission: submission as any,
           });
 
           const next = readResults();
-          next[module] = result;
+          next[assessment] = result;
           writeResults(next);
           setResults(next);
-          console.log(`[useAssessmentResults] Synced result for ${module}`);
+          console.log(`[useAssessmentResults] Synced result for ${assessment}`);
         } catch (err: any) {
           if (isNetworkError(err)) return;
           // 404 means no submitted attempt — expected for incomplete assessments
           if (err?.status !== 404 && err?.status !== 400) {
-            console.error(`[useAssessmentResults] ${module} sync error:`, err?.message || err);
+            console.error(`[useAssessmentResults] ${assessment} sync error:`, err?.message || err);
           }
         }
       }

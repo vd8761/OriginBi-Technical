@@ -1,11 +1,20 @@
 name: Deploy to VPS
 
+# Triggers:
+#   - pull_request → run only the verify-* gate jobs. These are the
+#     required status checks that branch protection blocks merges on.
+#   - push (after merge) → run verify-* + sync + deploy-* on the VPS.
 on:
   push:
     branches:
       - develop
+  pull_request:
+    branches:
+      - develop
 
-# Cancel any in-progress deployment for this branch when a new push arrives
+# Cancel any in-progress run for the same ref when a new event arrives.
+# PR refs (refs/pull/N/merge) and the develop branch ref are distinct,
+# so push deploys are never cancelled by PR validation runs.
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -44,21 +53,200 @@ jobs:
             assessment_service:
               - 'backend/assessment-service/**'
               - 'backend/shared/**'
+              - 'backend/package.json'
+              - 'backend/package-lock.json'
             judge0:
               - 'backend/judge0/**'
 
   # ──────────────────────────────────────────────
-  # 2. Pull latest code on the VPS (runs once)
+  # 2a. VERIFY: Frontend (lint + typecheck + tests + production build)
+  # ──────────────────────────────────────────────
+  verify-frontend:
+    name: Verify Frontend
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Lint (zero warnings allowed)
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Type-check (tsc --noEmit)
+        working-directory: ./frontend
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: ./frontend
+        run: npm run test
+
+      - name: Production build
+        working-directory: ./frontend
+        run: npm run build
+
+  # ──────────────────────────────────────────────
+  # 2b. VERIFY: Exam Engine (Go)
+  # ──────────────────────────────────────────────
+  verify-exam-engine:
+    name: Verify Exam Engine
+    needs: detect-changes
+    if: needs.detect-changes.outputs.exam_engine == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/exam-engine/go.mod
+          cache-dependency-path: backend/exam-engine/go.sum
+
+      - name: go vet
+        working-directory: ./backend/exam-engine
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend/exam-engine
+          args: --timeout=5m
+
+      - name: go test
+        working-directory: ./backend/exam-engine
+        run: go test ./... -race -count=1
+
+      - name: go build (production)
+        working-directory: ./backend/exam-engine
+        run: go build -o /tmp/exam-engine-verify ./cmd/server
+
+  # ──────────────────────────────────────────────
+  # 2c. VERIFY: Tech Assessment Engine (Go)
+  # ──────────────────────────────────────────────
+  verify-tech-engine:
+    name: Verify Tech Assessment Engine
+    needs: detect-changes
+    if: needs.detect-changes.outputs.tech_engine == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/tech-assessment-engine/go.mod
+          cache-dependency-path: backend/tech-assessment-engine/go.sum
+
+      - name: go vet
+        working-directory: ./backend/tech-assessment-engine
+        run: go vet ./...
+
+      # tech-engine targets Go 1.26 (newer than the prebuilt golangci-lint
+      # binary supports), so compile golangci-lint from source using the
+      # toolchain provisioned by setup-go.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          install-mode: goinstall
+          working-directory: backend/tech-assessment-engine
+          args: --timeout=5m
+
+      - name: go test
+        working-directory: ./backend/tech-assessment-engine
+        run: go test ./... -race -count=1
+
+      - name: go build (production)
+        working-directory: ./backend/tech-assessment-engine
+        run: go build -o /tmp/tech-engine-verify ./cmd/api
+
+  # ──────────────────────────────────────────────
+  # 2d. VERIFY: Assessment Service (NestJS)
+  # ──────────────────────────────────────────────
+  verify-assessment-service:
+    name: Verify Assessment Service
+    needs: detect-changes
+    if: needs.detect-changes.outputs.assessment_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "backend/package-lock.json"
+
+      - name: Install workspace dependencies
+        working-directory: ./backend
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Build shared workspace
+        working-directory: ./backend
+        run: npm run build --workspace=shared --if-present
+
+      - name: Strict type-check (tsc --noEmit)
+        working-directory: ./backend/assessment-service
+        run: npx tsc --noEmit
+
+      - name: Production build (nest build)
+        working-directory: ./backend
+        run: npm run build --workspace=assessment-service
+
+  # ──────────────────────────────────────────────
+  # 2e. VERIFY: Judge0 (compose config)
+  # ──────────────────────────────────────────────
+  verify-judge0:
+    name: Verify Judge0
+    needs: detect-changes
+    if: needs.detect-changes.outputs.judge0 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker compose config
+        working-directory: ./backend/judge0
+        run: docker compose config -q
+
+  # ──────────────────────────────────────────────
+  # 3. Sync code on VPS (ONLY if every required verify passed)
   # ──────────────────────────────────────────────
   sync:
     name: Sync Codebase on VPS
-    needs: detect-changes
+    needs:
+      - detect-changes
+      - verify-frontend
+      - verify-exam-engine
+      - verify-tech-engine
+      - verify-assessment-service
+      - verify-judge0
+    # Run only on push events (i.e. after merge to develop), and only when at
+    # least one service changed AND no required verify failed. Skipped verify
+    # jobs (untouched services) count as success; failed ones block sync.
     if: >-
-      needs.detect-changes.outputs.frontend == 'true' ||
-      needs.detect-changes.outputs.exam_engine == 'true' ||
-      needs.detect-changes.outputs.tech_engine == 'true' ||
-      needs.detect-changes.outputs.assessment_service == 'true' ||
-      needs.detect-changes.outputs.judge0 == 'true'
+      github.event_name == 'push' &&
+      !cancelled() &&
+      !failure() &&
+      (
+        needs.detect-changes.outputs.frontend == 'true' ||
+        needs.detect-changes.outputs.exam_engine == 'true' ||
+        needs.detect-changes.outputs.tech_engine == 'true' ||
+        needs.detect-changes.outputs.assessment_service == 'true' ||
+        needs.detect-changes.outputs.judge0 == 'true'
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Pull latest code
@@ -75,12 +263,12 @@ jobs:
             echo "✓ Synced to $(git rev-parse --short HEAD)"
 
   # ──────────────────────────────────────────────
-  # 3a. Deploy Frontend (Next.js → PM2)
+  # 4a. Deploy Frontend (Next.js → PM2)
   # ──────────────────────────────────────────────
   deploy-frontend:
     name: Deploy Frontend
-    needs: [detect-changes, sync]
-    if: needs.detect-changes.outputs.frontend == 'true'
+    needs: [detect-changes, verify-frontend, sync]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload frontend
@@ -100,12 +288,12 @@ jobs:
             echo "✓ Frontend deployed"
 
   # ──────────────────────────────────────────────
-  # 3b. Deploy Exam Engine (Go → systemd)
+  # 4b. Deploy Exam Engine (Go → systemd)
   # ──────────────────────────────────────────────
   deploy-exam-engine:
     name: Deploy Exam Engine
-    needs: [detect-changes, sync]
-    if: needs.detect-changes.outputs.exam_engine == 'true'
+    needs: [detect-changes, verify-exam-engine, sync]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.exam_engine == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart exam-engine
@@ -124,12 +312,12 @@ jobs:
             echo "✓ Exam Engine deployed"
 
   # ──────────────────────────────────────────────
-  # 3c. Deploy Tech Assessment Engine (Go → systemd)
+  # 4c. Deploy Tech Assessment Engine (Go → systemd)
   # ──────────────────────────────────────────────
   deploy-tech-engine:
     name: Deploy Tech Assessment Engine
-    needs: [detect-changes, sync]
-    if: needs.detect-changes.outputs.tech_engine == 'true'
+    needs: [detect-changes, verify-tech-engine, sync]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.tech_engine == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart tech-assessment-engine
@@ -148,12 +336,12 @@ jobs:
             echo "✓ Tech Assessment Engine deployed"
 
   # ──────────────────────────────────────────────
-  # 3d. Deploy Assessment Service (NestJS → PM2)
+  # 4d. Deploy Assessment Service (NestJS → PM2)
   # ──────────────────────────────────────────────
   deploy-assessment-service:
     name: Deploy Assessment Service
-    needs: [detect-changes, sync]
-    if: needs.detect-changes.outputs.assessment_service == 'true'
+    needs: [detect-changes, verify-assessment-service, sync]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.assessment_service == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload assessment-service
@@ -174,12 +362,12 @@ jobs:
             echo "✓ Assessment Service deployed"
 
   # ──────────────────────────────────────────────
-  # 3e. Deploy Judge0 (Docker Compose)
+  # 4e. Deploy Judge0 (Docker Compose)
   # ──────────────────────────────────────────────
   deploy-judge0:
     name: Deploy Judge0
-    needs: [detect-changes, sync]
-    if: needs.detect-changes.outputs.judge0 == 'true'
+    needs: [detect-changes, verify-judge0, sync]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.judge0 == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Update Judge0 containers
