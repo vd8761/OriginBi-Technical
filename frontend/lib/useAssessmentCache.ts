@@ -42,7 +42,9 @@ export function useAssessmentCache(opts: UseAssessmentCacheOptions): UseAssessme
   const [isRestoredFromCache, setIsRestoredFromCache] = useState(false);
 
   const optsRef = useRef(opts);
-  optsRef.current = opts;
+  useEffect(() => {
+    optsRef.current = opts;
+  });
 
   // Track whether the session has been cleared (submitted) to prevent
   // the beforeunload/visibilitychange flush from re-creating zombie cache entries.
