@@ -179,6 +179,7 @@ export interface RegisterRequest {
   currentYear?: string;
   currentRole?: string;
   roleDescription?: string;
+  groupCode?: string;
   sendEmail?: boolean;
 }
 
@@ -675,6 +676,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       currentYear: input.currentYear,
       currentRole: input.currentRole,
       roleDescription: input.roleDescription,
+      groupCode: input.groupCode,
     }),
     baseOverride: TECH_API_BASE,
     auth: false,
