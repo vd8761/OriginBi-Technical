@@ -9,6 +9,7 @@ import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
 import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
 import {
     DEFAULT_PROCTORING,
     resolveProctoringForPackage,
@@ -702,13 +703,18 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     }
 
     return (
+        <AssessmentPluginHost packageSlug="aptitude">
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
 
-            {/* Per-package proctoring: rules driven by the assessment row
-                (tab_switch_limit, anti_copy_enabled). The host mounts the
-                shared useProctoring() rule-set and renders its own toast. */}
+            {/* Hand-rolled rules (right-click, copy-paste, browser-shortcuts,
+                fullscreen, mouse-leave). The settings are derived from the
+                package's tab_switch_limit / anti_copy_enabled columns.
+                Tab-switch itself is owned by the `proctoring.tab-switch`
+                plugin mounted through AssessmentPluginHost above; this hook
+                no longer duplicates that concern. As more rules graduate to
+                plugins, this host shrinks. */}
             <ProctoringHost
                 settings={proctoringSettings}
                 active={!isLoading && !isSubmitting && questions.length > 0}
@@ -1223,6 +1229,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 </div>
             )}
         </div>
+        </AssessmentPluginHost>
     );
 };
 

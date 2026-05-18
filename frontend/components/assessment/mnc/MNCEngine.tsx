@@ -9,6 +9,7 @@ import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
 import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
 import {
     DEFAULT_PROCTORING,
     resolveProctoringForPackage,
@@ -469,12 +470,14 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     }
 
     return (
+        <AssessmentPluginHost packageSlug="mnc">
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
 
-            {/* Per-package proctoring (tab_switch_limit, anti_copy_enabled). */}
+            {/* Hand-rolled proctoring rules (right-click, copy-paste, etc.).
+                Tab-switch is plugin-driven via AssessmentPluginHost. */}
             <ProctoringHost
                 settings={proctoringSettings}
                 active={!isLoading && !isSubmitting && !isBlocked}
@@ -720,6 +723,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                 </div>
             )}
         </div>
+        </AssessmentPluginHost>
     );
 };
 
