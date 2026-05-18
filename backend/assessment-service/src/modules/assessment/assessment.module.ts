@@ -15,6 +15,9 @@ import { AdaptiveFallbackService } from './services/adaptive-fallback.service';
 import { CodeExecutionService } from './services/code-execution.service';
 import { EvaluationService } from './services/evaluation.service';
 import { PurchaseService } from './services/purchase.service';
+import { BulkAdminUsersService } from './services/bulk-admin-users.service';
+import { RegistrationController } from './controllers/registration.controller';
+import { RegistrationService } from './services/registration.service';
 import * as Entities from '../../entities';
 
 import { R2Module } from '../r2/r2.module';
@@ -33,6 +36,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     AssessmentController,
     AdaptiveBlockController,
     PurchaseController,
+    RegistrationController,
   ],
   providers: [
     AdminQuestionService,
@@ -44,6 +48,8 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     CodeExecutionService,
     EvaluationService,
     PurchaseService,
+    BulkAdminUsersService,
+    RegistrationService,
   ],
   exports: [
     AdminQuestionService,
@@ -53,6 +59,8 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     CodeExecutionService,
     EvaluationService,
     PurchaseService,
+    BulkAdminUsersService,
+    RegistrationService,
   ],
 })
 export class AssessmentModule {}

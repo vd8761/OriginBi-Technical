@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
-import { ApiError, registerUser, getDepartments } from "@/lib/api";
+import { ApiError, registerUser, getDepartments, assertRegistrationEmailAvailable, assertRegistrationPhoneAvailable } from "@/lib/api";
 import { COUNTRY_CODES } from "@/lib/countryCodes";
 import { 
   PROGRAM_OPTIONS, 
@@ -26,12 +26,14 @@ function MobileInput({
   onCountryChange,
   onPhoneChange,
   error,
+  onBlur,
 }: {
   countryCode: string;
   phoneNumber: string;
   onCountryChange: (code: string) => void;
   onPhoneChange: (num: string) => void;
   error?: string;
+  onBlur?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -79,6 +81,7 @@ function MobileInput({
             const val = e.target.value.replace(/\D/g, "");
             if (val.length <= (selectedCountry?.maxLength || 15)) onPhoneChange(val);
           }}
+          onBlur={onBlur}
           placeholder="Enter mobile number"
           className={`flex-1 h-12 px-5 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${error ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-r-full text-sm font-normal text-black dark:text-white outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
         />
@@ -251,6 +254,36 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
     setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
+  const handleEmailBlur = async () => {
+    const email = formData.email.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return;
+    }
+    try {
+      await assertRegistrationEmailAvailable(email);
+      setFormErrors((prev) => ({ ...prev, email: "" }));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setFormErrors((prev) => ({ ...prev, email: "This email is already registered." }));
+      }
+    }
+  };
+
+  const handlePhoneBlur = async () => {
+    const phone = formData.phone.trim();
+    if (!phone || phone.length < 8) {
+      return;
+    }
+    try {
+      await assertRegistrationPhoneAvailable(phone);
+      setFormErrors((prev) => ({ ...prev, phone: "" }));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setFormErrors((prev) => ({ ...prev, phone: "This mobile number is already registered." }));
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors: Record<string, string> = {};
@@ -305,11 +338,17 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
       });
       onSignupSuccess?.(session.registration?.fullName || session.user.email);
     } catch (err) {
-      setGeneralError(
-        err instanceof ApiError
-          ? err.message
-          : "Unable to create account. Please try again.",
-      );
+      if (err instanceof ApiError) {
+        if (err.message.includes("email")) {
+          setFormErrors((prev) => ({ ...prev, email: "This email is already registered." }));
+        } else if (err.message.includes("mobile") || err.message.includes("phone")) {
+          setFormErrors((prev) => ({ ...prev, phone: "This mobile number is already registered." }));
+        } else {
+          setGeneralError(err.message);
+        }
+      } else {
+        setGeneralError("Unable to create account. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -382,6 +421,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
           name="email"
           value={formData.email}
           onChange={handleChange}
+          onBlur={handleEmailBlur}
           placeholder="name@example.com"
           className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${formErrors.email ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-full px-5 text-sm font-normal text-black dark:text-white placeholder:text-black dark:placeholder:text-white outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
           disabled={isSubmitting}
@@ -396,6 +436,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
         onCountryChange={(code) => setFormData((prev) => ({ ...prev, countryCode: code, phone: "" }))}
         onPhoneChange={(num) => setFormData((prev) => ({ ...prev, phone: num }))}
         error={formErrors.phone}
+        onBlur={handlePhoneBlur}
       />
 
       {/* Password */}

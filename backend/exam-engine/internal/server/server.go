@@ -117,6 +117,7 @@ func (s *Server) routes() chi.Router {
 	})
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/auth/email-availability", s.emailAvailability)
+		r.Get("/auth/phone-availability", s.phoneAvailability)
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
 		r.Post("/admin/bootstrap", s.bootstrapAdmin)

@@ -272,8 +272,8 @@ export function useCompletedAssessments() {
                     if (!paid.has(module)) return;
 
                     try {
-                        await getLatestSubmittedResult(module, email);
-                        if (!current.has(module)) {
+                        const submission = await getLatestSubmittedResult(module, email);
+                        if (submission && !current.has(module)) {
                             current.add(module);
                             changed = true;
                         }

@@ -232,10 +232,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     return () => {
       active = false;
     };
-  }, []);
-
-  const dynamicExams = useMemo(() => {
-    return EXAMS.map((exam) => {
+  }, []);  const dynamicExams = useMemo(() => {
+    const mapped = EXAMS.map((exam) => {
       const dbModule = exam.id === "communication" ? "grammar" : exam.id;
       const dbExam = assessmentsList.find(
         (a) => a.module_type === dbModule || a.assessment_code === exam.id
@@ -260,6 +258,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             }).filter(Boolean);
           }
         }
+
         return {
           ...exam,
           assessmentId: dbExam.assessment_id,
@@ -274,10 +273,13 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
           tags: tags,
+          enabledQuestionTypes: dbExam.enabled_question_types,
         };
       }
       return exam;
     });
+
+    return mapped;
   }, [assessmentsList]);
 
   // Read view from URL and sync with currentView
@@ -606,7 +608,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={EXAMS}
+            assessments={dynamicExams as any}
             examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
@@ -725,6 +727,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             handleStartExam={handleModalStart}
             inProgressAttempt={inProgressAttempt}
             onResumeAttempt={handleResumeAttempt}
+            dynamicExams={dynamicExams}
           />
         ) : currentView === "profile" ? (
           <ProfileView onNavigate={(view) => handleNavigate(view as any)} />

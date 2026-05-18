@@ -21,7 +21,17 @@ configureAmplify();
 /* ── Helpers ── */
 
 function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    const msg = err.message;
+    if (
+      msg.includes("not part of group 'ADMIN'") ||
+      msg.includes("Access denied. User is not part of group") ||
+      msg.includes("Access denied. You do not have permission")
+    ) {
+      return "Access denied. You do not have permission to access the admin portal.";
+    }
+    return msg;
+  }
   return "Invalid administrative credentials. Please verify your entries.";
 }
 

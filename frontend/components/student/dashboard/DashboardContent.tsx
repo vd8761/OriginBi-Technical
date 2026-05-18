@@ -15,6 +15,7 @@ interface DashboardContentProps {
   handleStartExam: (exam: Exam) => void;
   inProgressAttempt?: InProgressAttempt | null;
   onResumeAttempt?: (attempt: InProgressAttempt) => void;
+  dynamicExams?: Exam[];
 }
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {
@@ -35,6 +36,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   handleStartExam,
   inProgressAttempt,
   onResumeAttempt,
+  dynamicExams,
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,14 +46,15 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   // Redirect new users to explore page instead of showing empty dashboard.
   // Only redirect after we've confirmed the paid set is loaded AND there's no
   // in-flight completion result to display.
-  const hasPurchases = useMemo(
-    () => EXAMS.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none"),
-    [isPaid],
-  );
-  const hasContent = useMemo(
-    () => hasPurchases || completions.size > 0,
-    [hasPurchases, completions],
-  );
+  const hasPurchases = useMemo(() => {
+    const list = dynamicExams || EXAMS;
+    return list.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
+  }, [dynamicExams, isPaid]);
+
+  const hasContent = useMemo(() => {
+    const hasCompletions = completions.size > 0;
+    return hasPurchases || hasCompletions;
+  }, [hasPurchases, completions]);
 
   const justCompleted = searchParams.get("completed");
 
@@ -101,6 +104,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
             onStartExam={handleStartExam}
             inProgressAttempt={inProgressAttempt}
             onResumeAttempt={onResumeAttempt}
+            dynamicExams={dynamicExams}
           />
         </motion.div>
       </AnimatePresence>

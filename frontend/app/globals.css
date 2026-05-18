@@ -1578,7 +1578,7 @@
 }
 
 .admin-sidebar-floating-toggle {
-  position: absolute;
+  position: fixed;
   top: 80px;
   left: 246px; /* 260px - 14px */
   width: 28px;
@@ -2121,13 +2121,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 38px;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 8px 16px;
   color: var(--admin-fg-2);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1;
   text-decoration: none;
   transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
@@ -2139,7 +2139,7 @@
 
 .admin-btn-primary {
   background: var(--admin-green);
-  color: #07110b;
+  color: #ffffff !important;
 }
 
 .admin-btn-secondary {
@@ -2514,9 +2514,9 @@
 }
 
 .admin-pagination-page.active {
-  background: var(--admin-green-soft);
-  border-color: rgba(30, 211, 106, 0.3);
-  color: var(--admin-green);
+  background: var(--admin-green) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
 }
 
 .admin-state-card h3 {
@@ -2660,11 +2660,16 @@
 
 @media (max-width: 1024px) {
   .admin-panel-root {
-    display: block;
-    grid-template-columns: 1fr;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+  .admin-main-shell {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
   }
   .admin-sidebar {
-    display: none;
+    display: none !important;
   }
   .admin-mobile-menu {
     display: flex;
@@ -2692,6 +2697,16 @@
   }
   .admin-content {
     padding: 20px 16px 40px;
+  }
+  .admin-table-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    min-width: 0 !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-table {
+    min-width: 600px !important;
   }
   .admin-page-header {
     align-items: flex-start;
@@ -2908,9 +2923,9 @@
 }
 
 .admin-pill-tabs button.is-active {
-  background: var(--admin-green-soft);
-  color: var(--admin-green);
-  box-shadow: 0 0 0 1px rgba(30, 211, 106, 0.32) inset;
+  background: var(--admin-green) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
 }
 
 .admin-pill-tabs button .admin-pill-tab-count {
@@ -2929,8 +2944,8 @@
 }
 
 .admin-pill-tabs button.is-active .admin-pill-tab-count {
-  background: rgba(30, 211, 106, 0.18);
-  color: var(--admin-green);
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
 }
 
 /* ── Admin: toggle switch ─────────────────────────────────────────── */
@@ -3411,7 +3426,9 @@
 }
 @media (max-width: 1024px) {
   .admin-dashboard-row {
-    grid-template-columns: 1fr;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
   }
 }
 

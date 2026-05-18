@@ -95,6 +95,7 @@ interface ActiveDashboardProps {
   onStartExam: (exam: Exam) => void;
   inProgressAttempt?: InProgressAttempt | null;
   onResumeAttempt?: (attempt: InProgressAttempt) => void;
+  dynamicExams?: Exam[];
 }
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {
@@ -236,6 +237,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   onStartExam,
   inProgressAttempt,
   onResumeAttempt,
+  dynamicExams,
 }) => {
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
@@ -248,8 +250,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
-  const purchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
-  const unpurchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
+  const baseExamsList = dynamicExams || EXAMS;
+  const purchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
+  const unpurchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
   const completedIds = Object.keys(results) as AssessmentId[];
   const identity = deriveCareerIdentity(completedIds);
 

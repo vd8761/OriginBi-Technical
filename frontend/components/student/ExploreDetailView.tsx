@@ -275,7 +275,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <button
                     type="button"
                     onClick={() => router.push("/explore")}
-                    className="inline-flex items-center gap-2 self-start rounded-full bg-white/70 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-gray-300 transition-all hover:border-[#1ED36A]/40 hover:text-slate-900 dark:hover:text-white"
+                    className="inline-flex items-center gap-2 self-start rounded-full bg-white/70 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 px-4 py-2 text-[12px] font-semibold text-black dark:text-white transition-all hover:border-[#1ED36A]/40 hover:text-black dark:hover:text-white"
                 >
                     <ArrowLeftIcon className="w-3.5 h-3.5" />
                     Back to Explore
@@ -307,16 +307,16 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         Ready
                                     </span>
                                 ) : (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                         <LockIcon className="w-3 h-3" />
                                         Coming Soon
                                     </span>
                                 )}
-                                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                                <span className="text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
                                     {exam.difficulty}
                                 </span>
                                 {!isCoding && examCompleted && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                         Completed
                                     </span>
                                 )}
@@ -329,10 +329,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                     </span>
                                 )}
                             </div>
-                            <h1 className="text-[clamp(28px,3.4vw,42px)] font-bold text-slate-900 dark:text-white tracking-tight leading-[1.05]">
+                            <h1 className="text-[clamp(28px,3.4vw,42px)] font-bold text-black dark:text-white tracking-tight leading-[1.05]">
                                 {exam.title}
                             </h1>
-                            <p className="text-[15px] leading-relaxed text-slate-600 dark:text-gray-300 max-w-2xl">
+                            <p className="text-[15px] leading-relaxed text-black dark:text-white max-w-2xl">
                                 {detail.focus}
                             </p>
                         </div>
@@ -360,7 +360,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             }}
                         >
                             <span className="font-bold uppercase tracking-wider">Note:</span>{" "}
-                            <span className="text-slate-600 dark:text-gray-300">
+                            <span className="text-black dark:text-white">
                                 Coding is paid per language. Each language unlocks separately &mdash; you can come back and pay for another language any time.
                             </span>
                         </div>
@@ -379,7 +379,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                                 {codingSummary.ready} ready
                             </span>
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                 {codingSummary.completed} completed
                             </span>
                             <span
@@ -413,14 +413,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
                 {/* What this exam is about */}
                 <Section eyebrow="About" title="What this assessment is about">
-                    <p className="text-[14px] leading-relaxed text-slate-600 dark:text-gray-300 max-w-3xl">
+                    <p className="text-[14px] leading-relaxed text-black dark:text-white max-w-3xl">
                         {exam.description}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-5">
                         {exam.tags.map((tag) => (
                             <span
                                 key={tag}
-                                className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-gray-300"
+                                className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-black dark:text-white"
                             >
                                 {tag}
                             </span>
@@ -436,10 +436,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                 key={skill.title}
                                 className="rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-5 transition-all hover:border-[#1ED36A]/30"
                             >
-                                <h4 className="text-[14px] font-bold text-slate-900 dark:text-white mb-1.5">
+                                <h4 className="text-[14px] font-bold text-black dark:text-white mb-1.5">
                                     {skill.title}
                                 </h4>
-                                <p className="text-[13px] leading-relaxed text-slate-500 dark:text-gray-400">
+                                <p className="text-[13px] leading-relaxed text-black dark:text-white">
                                     {skill.description}
                                 </p>
                             </div>
@@ -462,10 +462,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                     {index + 1}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h4 className="text-[14px] font-bold text-slate-900 dark:text-white">
+                                    <h4 className="text-[14px] font-bold text-black dark:text-white">
                                         {section.name}
                                     </h4>
-                                    <p className="text-[12.5px] text-slate-500 dark:text-gray-400 leading-relaxed">
+                                    <p className="text-[12.5px] text-black dark:text-white leading-relaxed">
                                         {section.detail}
                                     </p>
                                 </div>
@@ -499,7 +499,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
                                 </div>
-                                <span className="text-[13.5px] text-slate-600 dark:text-gray-300 leading-relaxed">
+                                <span className="text-[13.5px] text-black dark:text-white leading-relaxed">
                                     {outcome}
                                 </span>
                             </div>
@@ -511,7 +511,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <Section eyebrow="Before You Start" title="What you'll need">
                     <ul className="flex flex-col gap-2.5">
                         {detail.requirements.map((req) => (
-                            <li key={req} className="flex items-start gap-3 text-[13.5px] text-slate-600 dark:text-gray-300 leading-relaxed">
+                            <li key={req} className="flex items-start gap-3 text-[13.5px] text-black dark:text-white leading-relaxed">
                                 <span
                                     className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full"
                                     style={{ background: accent }}
@@ -533,12 +533,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             {exam.icon}
                         </div>
                         <div>
-                            <p className="text-[12px] font-medium text-slate-500 dark:text-gray-400">
+                            <p className="text-[12px] font-medium text-black dark:text-white">
                                 {exam.shortTitle} &middot; {exam.duration} &middot; {exam.questions} Questions
                             </p>
-                            <p className="text-[18px] font-bold text-slate-900 dark:text-white">
+                            <p className="text-[18px] font-bold text-black dark:text-white">
                                 ₹{exam.price}
-                                <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-gray-500">
+                                <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
                                     {isCoding ? "per language" : examPaid ? "paid" : "fixed price"}
                                 </span>
                             </p>
@@ -562,7 +562,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             disabled={!isReady || isConnecting}
                             className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady && !isConnecting
                                     ? "bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-md shadow-[#1ED36A]/30"
-                                    : "bg-slate-100 dark:bg-white/[0.04] text-slate-400 dark:text-gray-500 cursor-not-allowed"
+                                    : "bg-slate-100 dark:bg-white/[0.04] text-black dark:text-white cursor-not-allowed"
                                 }`}
                         >
                             {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -658,7 +658,7 @@ interface CodingLanguageRowProps {
 const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, price, onAction }) => {
     const statusBadge =
         status === "completed" ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                 Completed
             </span>
         ) : status === "ready" ? (
@@ -693,10 +693,10 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
             </div>
             <div className="flex flex-1 flex-col min-w-0">
                 <div className="flex items-center gap-2">
-                    <p className="text-[14px] font-bold text-slate-900 dark:text-white">{lang.name}</p>
+                    <p className="text-[14px] font-bold text-black dark:text-white">{lang.name}</p>
                     {statusBadge}
                 </div>
-                <p className="text-[11.5px] text-slate-500 dark:text-gray-400 truncate">
+                <p className="text-[11.5px] text-black dark:text-white truncate">
                     {lang.description}
                 </p>
             </div>
@@ -718,11 +718,11 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
 
 const Stat: React.FC<{ label: string; value: string; accent?: string }> = ({ label, value, accent }) => (
     <div className="rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
-        <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-gray-500 mb-1.5">
+        <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-black dark:text-white mb-1.5">
             {label}
         </p>
         <p
-            className="text-[18px] font-bold text-slate-900 dark:text-white"
+            className="text-[18px] font-bold text-black dark:text-white"
             style={accent ? { color: accent } : undefined}
         >
             {value}
@@ -736,7 +736,7 @@ const Section: React.FC<{ eyebrow: string; title: string; children: React.ReactN
             <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">
                 {eyebrow}
             </span>
-            <h2 className="text-[22px] font-bold text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-[22px] font-bold text-black dark:text-white tracking-tight">
                 {title}
             </h2>
         </div>

@@ -1,8 +1,8 @@
 "use client";
 
 // Go exam-engine (attempts, code runs, plugins, etc.)
-// Leave empty so it resolves same-origin to /v1 (proxied via next.config.ts)
-export const API_BASE = "";
+// If process.env.NEXT_PUBLIC_API_BASE is set, use it; otherwise, leave empty so it resolves same-origin to /v1 (proxied via next.config.ts)
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 // OriginBI auth-service (Cognito auth).
 // Proxied same-origin via /auth-api to prevent CORS blocks
@@ -179,7 +179,7 @@ export interface RegisterRequest {
   currentYear?: string;
   currentRole?: string;
   roleDescription?: string;
-  registrationSource?: string;
+  sendEmail?: boolean;
 }
 
 export interface Assignment {
@@ -525,7 +525,8 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     await refreshAccessToken(tokenScope);
   }
   const headers = new Headers(rest.headers);
-  if (rest.body && !headers.has("Content-Type")) {
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
+  if (rest.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (auth) {
@@ -588,20 +589,25 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     }
     // Refresh failed (token revoked / expired refresh) — drop credentials so
     // the proxy bounces the user to login on the next navigation.
-    clearTokens(tokenScope);
+    // Only clear student tokens if this is the authoritative auth service or student service.
+    if (tokenScope === "admin" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+      clearTokens(tokenScope);
+    }
   }
 
   // Final 401 from an admin-API call: the user has no usable session for the
   // exam-engine. Redirect to /admin/login so they can re-authenticate instead
   // of letting the page sit on stale data and re-fire 401s on every refetch.
-  // Temporarily disabled while diagnosing why valid tokens still 401.
   if (res.status === 401 && auth && typeof window !== "undefined") {
-    clearTokens(tokenScope);
-    if (window.location.pathname.startsWith("/admin") &&
-        !window.location.pathname.startsWith("/admin/login")) {
-      window.location.replace(
-        `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
-      );
+    // Only clear student tokens if this is the authoritative auth service or student service.
+    if (tokenScope === "admin" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+      clearTokens(tokenScope);
+      if (window.location.pathname.startsWith("/admin") &&
+          !window.location.pathname.startsWith("/admin/login")) {
+        window.location.replace(
+          `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+        );
+      }
     }
   }
 
@@ -648,47 +654,32 @@ function errorMessageFrom(data: ErrorEnvelope | null): string | null {
 // ── Auth (sibling auth-service, Cognito-backed) ───────────────────────────
 
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
-  // await assertRegistrationEmailAvailable(input.email);
-  const registrationSource = input.registrationSource || "originbi-technical";
+  await assertRegistrationEmailAvailable(input.email);
+  await assertRegistrationPhoneAvailable(input.mobileNumber);
 
-  const cognito = await apiFetch<{ sub?: string; email?: string; group?: string }>("/internal/cognito/users", {
+  await apiFetch<any>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email: input.email,
       password: input.password,
-      groupName: input.role === "ADMIN" ? "ADMIN" : "STUDENT",
+      fullName: input.fullName,
+      gender: input.gender || "MALE",
+      mobileNumber: input.mobileNumber,
+      countryCode: input.countryCode || "+91",
+      sendEmail: input.sendEmail !== false,
+      programCode: input.programCode,
+      schoolLevel: input.schoolLevel,
+      schoolStream: input.schoolStream,
+      studentBoard: input.studentBoard,
+      departmentDegreeId: input.departmentDegreeId,
+      currentYear: input.currentYear,
+      currentRole: input.currentRole,
+      roleDescription: input.roleDescription,
     }),
-    baseOverride: AUTH_API_BASE,
+    baseOverride: TECH_API_BASE,
     auth: false,
   });
 
-  if (!cognito.sub) {
-    throw new ApiError(502, "Auth service did not return a Cognito user id.");
-  }
-
-  await apiFetch<any>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify({
-      email: input.email,
-      name: input.fullName,
-      gender: input.gender,
-      is_tech_assessment: 1,
-      program_code: input.programCode,
-      school_level: input.schoolLevel,
-      school_stream: input.schoolStream,
-      student_board: input.studentBoard,
-      department_degree_id: input.departmentDegreeId,
-      current_year: input.currentYear,
-      current_role: input.currentRole,
-      role_description: input.roleDescription,
-    }),
-    baseOverride: STUDENT_API_BASE,
-    auth: false,
-  });
-  
-  // Note: Main Student Service returns { success: true } and triggers emails.
-  // It doesn't return tokens; the user must log in after registration.
-  
   return {
     user: { email: input.email } as any,
     registration: null,
@@ -719,7 +710,7 @@ interface LoginOptions {
   group?: string;
 }
 
-async function assertRegistrationEmailAvailable(email: string): Promise<void> {
+export async function assertRegistrationEmailAvailable(email: string): Promise<void> {
   const result = await apiFetch<EmailAvailabilityResponse>(
     `/v1/auth/email-availability?email=${encodeURIComponent(email)}`,
     {
@@ -729,6 +720,23 @@ async function assertRegistrationEmailAvailable(email: string): Promise<void> {
   );
   if (!result.available) {
     throw new ApiError(409, "email already registered");
+  }
+}
+
+interface PhoneAvailabilityResponse {
+  available: boolean;
+}
+
+export async function assertRegistrationPhoneAvailable(phone: string): Promise<void> {
+  const result = await apiFetch<PhoneAvailabilityResponse>(
+    `/v1/auth/phone-availability?phone=${encodeURIComponent(phone)}`,
+    {
+      baseOverride: API_BASE,
+      auth: false,
+    },
+  );
+  if (!result.available) {
+    throw new ApiError(409, "mobile number already registered");
   }
 }
 
@@ -769,11 +777,39 @@ export async function loginUser(
   }
 
   if (!session) {
-    // Fallback: If the backend doesn't support /auth/session, mock a session
-    // using the login email so the user can still access the dashboard.
+    // Fallback: Fetch actual database profile and role from student-service
+    let dbUser: any = null;
+    try {
+      dbUser = await apiFetch<any>("/student/profile", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+        baseOverride: STUDENT_API_BASE,
+        auth: false,
+      });
+    } catch (err) {
+      console.warn("Failed to fetch student profile for role validation:", err);
+    }
+
+    const fallbackRole = dbUser?.role || (options.group === "ADMIN" ? "ADMIN" : "STUDENT");
+
     return {
-      user: { email, role: "STUDENT" } as any,
-      registration: null,
+      user: {
+        id: dbUser?.id || 0,
+        email,
+        role: fallbackRole,
+        cognitoSub: dbUser?.metadata?.cognitoSub || null,
+        emailVerified: true,
+        isActive: true,
+      } as any,
+      registration: dbUser ? {
+        id: dbUser.id,
+        fullName: dbUser.fullName,
+        gender: dbUser.gender,
+        countryCode: dbUser.metadata?.countryCode || "+91",
+        mobileNumber: dbUser.mobileNumber,
+        status: dbUser.status || "ACTIVE",
+        isTechAssessment: dbUser.isTechAssessment || 0,
+      } as any : null,
       tokens,
     };
   }
@@ -823,6 +859,10 @@ export async function getSession(): Promise<AuthResponse | null> {
 }
 
 export async function listAssignments(): Promise<AssignmentListResponse> {
+  // In local development, bypass the Go Exam Engine request to keep the console 100% clean
+  if (process.env.NODE_ENV === "development") {
+    return { assignments: [] };
+  }
   if (!HAS_EXAM_API) {
     return { assignments: [] };
   }
@@ -1157,16 +1197,16 @@ export async function getUserEntitlements(
 export function getActiveEmail(): string {
   if (typeof window === "undefined") return "";
   try {
-    const userData = window.localStorage.getItem("user");
-    if (userData) {
-      const parsed = JSON.parse(userData);
+    const profile = window.localStorage.getItem("originbi:user-profile");
+    if (profile) {
+      const parsed = JSON.parse(profile);
       if (parsed?.email) return String(parsed.email);
     }
   } catch {}
   try {
-    const profile = window.localStorage.getItem("originbi:user-profile");
-    if (profile) {
-      const parsed = JSON.parse(profile);
+    const userData = window.localStorage.getItem("user");
+    if (userData) {
+      const parsed = JSON.parse(userData);
       if (parsed?.email) return String(parsed.email);
     }
   } catch {}
@@ -1323,4 +1363,36 @@ export async function listAdminUsers(
     `/api/admin/users${suffix ? `?${suffix}` : ""}`,
     { baseOverride: TECH_API_BASE },
   );
+}
+
+export async function bulkAdminUsersPreview(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<any>("/api/admin/users/bulk/preview", {
+    method: "POST",
+    body: formData,
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function bulkAdminUsersExecute(importId: string, overrides?: any[]) {
+  return apiFetch<any>("/api/admin/users/bulk/execute", {
+    method: "POST",
+    body: JSON.stringify({ import_id: importId, overrides }),
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function getBulkAdminUsersJobStatus(importId: string) {
+  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}`, {
+    method: "GET",
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function getBulkAdminUsersJobRows(importId: string) {
+  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
+    method: "GET",
+    baseOverride: TECH_API_BASE,
+  });
 }
