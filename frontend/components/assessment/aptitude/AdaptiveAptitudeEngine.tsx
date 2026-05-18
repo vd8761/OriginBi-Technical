@@ -86,7 +86,7 @@ const formatTime = (seconds: number) => {
 };
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
   "";
 

@@ -25,7 +25,9 @@ export class RegistrationService {
   private readonly studentServiceUrl: string;
 
   constructor() {
-    this.studentServiceUrl = process.env.STUDENT_SERVICE_URL || 'http://localhost:4004';
+    this.studentServiceUrl =
+      process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL ||
+      'http://localhost:4004';
   }
 
   async registerUser(dto: RegisterUserDto) {

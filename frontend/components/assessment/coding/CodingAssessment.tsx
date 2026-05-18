@@ -43,7 +43,7 @@ const STATUS_KEY = "ob_statuses";
 const CURRENT_Q_KEY = "ob_current_q";
 const PENDING_SUBMIT_KEY = "ob_pending_submission";
 const MAX_SUBMIT_ATTEMPTS = 8;
-const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
+const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, ""));
 type AssessmentMode = "trial" | "main";
 type LegacyAssessmentConfig = {
     module_type?: string;
