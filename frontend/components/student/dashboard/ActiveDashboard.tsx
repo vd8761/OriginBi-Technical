@@ -7,9 +7,11 @@ import { EXAMS, EXAM_DETAILS, CODING_LANGUAGES, type AssessmentId, type Extended
 import { usePaidAssessments, codingPaymentKey, type PaymentKey } from "@/lib/payments";
 import { useAssessmentResults, deriveCareerIdentity, type AssessmentResult, type SectionResult } from "@/lib/progress";
 import { useAssessmentTracker } from "@/lib/assessmentTracker";
-import GoogleStyleAnalysisModal from "./GoogleStyleAnalysisModal";
+import dynamic from "next/dynamic";
 import AssessmentNotifications from "./AssessmentNotifications";
-import CertificatePreviewModal from "../certificate/CertificatePreviewModal";
+
+const GoogleStyleAnalysisModal = dynamic(() => import("./GoogleStyleAnalysisModal"), { ssr: false });
+const CertificatePreviewModal = dynamic(() => import("../certificate/CertificatePreviewModal"), { ssr: false });
 import type { Exam } from "../ExamCarousel";
 import { type InProgressAttempt } from "@/lib/assessmentResume";
 

@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { AdaptiveBlockService } from './adaptive-block.service';
+import { EmailService } from './email.service';
 
 interface ModuleConfig {
   attempts: string;
@@ -22,6 +23,7 @@ export class AssessmentService {
   constructor(
     private dataSource: DataSource,
     private adaptiveBlockService: AdaptiveBlockService,
+    private emailService: EmailService,
   ) {}
 
   async getAttemptsStats(userIdParam?: any) {
@@ -827,10 +829,11 @@ export class AssessmentService {
     const config = tableMap[dbModule];
     if (!config) throw new BadRequestException(`Module ${module} not supported`);
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-
+    let queryRunner: any;
     try {
+      queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+
       const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
       if (!resolvedUserId) throw new BadRequestException('No users found.');
 
@@ -874,7 +877,9 @@ export class AssessmentService {
       this.logger.error(`getLatestSubmittedResult (${module}) error:`, error);
       throw error;
     } finally {
-      await queryRunner.release();
+      if (queryRunner) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -1886,7 +1891,7 @@ export class AssessmentService {
         return orderA - orderB;
       });
 
-      return {
+      const result = {
         success: true,
         token,
         attemptToken: token,
@@ -1912,6 +1917,19 @@ export class AssessmentService {
         questionReviews,
         status: 'completed',
       };
+
+      // Fire certificate email asynchronously (non-blocking)
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          attempt.user_id,
+          attempt.assessment_id,
+          module,
+          overallScorePercent,
+          now.toISOString(),
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
+
+      return result;
     } catch (error) {
       if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
       this.logger.error(`submitAttempt (${module}) error:`, error);
@@ -2437,6 +2455,17 @@ export class AssessmentService {
         ).catch(e => this.logger.error('Analytics write failed (non-fatal):', e));
       });
 
+      // Fire certificate email asynchronously (non-blocking)
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          attempt.user_id,
+          attempt.assessment_id,
+          module,
+          overallScorePercent,
+          now.toISOString(),
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
+
       return {
         success: true,
         token,
@@ -2472,6 +2501,119 @@ export class AssessmentService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // ─── Email helper ────────────────────────────────────────────────────────────
+
+  /**
+   * Looks up the user's email + name from the DB and fires a certificate email.
+   * Called asynchronously after both submitAttempt and submitBlockBasedAttempt.
+   */
+  private async sendCertificateEmailForAttempt(
+    userId: number,
+    assessmentId: number,
+    module: string,
+    overallScorePercent: number,
+    completedAt: string,
+  ): Promise<void> {
+    try {
+      // Fetch user details
+      const userRows = await this.dataSource.query(
+        `SELECT email, first_name, last_name, full_name FROM users WHERE id = $1`,
+        [userId],
+      );
+      if (!userRows.length) {
+        this.logger.warn(`sendCertificateEmailForAttempt: user ${userId} not found`);
+        return;
+      }
+      const user = userRows[0];
+      const toEmail: string = user.email;
+      const userName: string =
+        user.full_name ||
+        [user.first_name, user.last_name].filter(Boolean).join(' ') ||
+        'Candidate';
+
+      // Fetch assessment title
+      const assessmentRows = await this.dataSource.query(
+        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1`,
+        [assessmentId],
+      );
+      const assessmentTitle: string =
+        assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(module);
+
+      // Derive grade
+      const grade = this.getGradeFromScore(overallScorePercent);
+
+      // Build a stable certificate ID
+      const dateCode = this.getYyMm(new Date(completedAt));
+      const assessmentCode = this.assessmentCodeForEmail(module);
+      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
+
+      await this.emailService.sendCertificateEmail({
+        toEmail,
+        userName,
+        assessmentTitle,
+        assessmentModule: module,
+        overallScorePercent,
+        grade,
+        certificateId,
+        completedAt,
+      });
+    } catch (err: any) {
+      this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`);
+    }
+  }
+
+  private getGradeFromScore(score: number): string {
+    if (score >= 90) return 'A+';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B+';
+    if (score >= 60) return 'B';
+    if (score >= 50) return 'C';
+    if (score >= 40) return 'D';
+    return 'F';
+  }
+
+  private getModuleLabelForEmail(module: string): string {
+    const map: Record<string, string> = {
+      aptitude: 'Technical Aptitude Assessment',
+      grammar: 'Communication Skills Assessment',
+      communication: 'Communication Skills Assessment',
+      mnc: 'MNC Readiness Assessment',
+      role: 'Role-Based Assessment',
+      coding: 'Coding Assessment',
+    };
+    return map[module] || `${module} Assessment`;
+  }
+
+  private assessmentCodeForEmail(module: string): string {
+    if (module.startsWith('coding:')) {
+      const lang = module.slice('coding:'.length).toLowerCase();
+      if (lang === 'python') return 'PYT';
+      if (lang === 'java') return 'JAV';
+      return 'COD';
+    }
+    const map: Record<string, string> = {
+      aptitude: 'APT',
+      grammar: 'COM',
+      communication: 'COM',
+      mnc: 'MNC',
+      role: 'RBA',
+      coding: 'COD',
+    };
+    return map[module] || module.slice(0, 3).toUpperCase();
+  }
+
+  private getYyMm(d: Date): string {
+    const yy = String(d.getFullYear() % 100).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yy}${mm}`;
+  }
+
+  private randomCode(length: number): string {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const buf = crypto.randomBytes(length);
+    return Array.from(buf).map(b => charset[b % charset.length]).join('');
   }
 
   /** Safe column-existence check (used inside transactions) */
