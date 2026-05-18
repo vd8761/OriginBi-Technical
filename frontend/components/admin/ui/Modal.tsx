@@ -31,7 +31,13 @@ export function Modal({ open, onClose, title, eyebrow, footer, wide = false, chi
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="admin-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+    <div
+      className="admin-panel-root admin-modal-overlay"
+      style={{ gridTemplateColumns: "1fr", minHeight: "auto" }}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <div
         className={`admin-modal${wide ? " admin-modal-wide" : ""}`}
         onClick={(event) => event.stopPropagation()}

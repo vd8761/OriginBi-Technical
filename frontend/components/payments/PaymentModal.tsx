@@ -104,6 +104,35 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             if (!orderRes.ok) throw new Error("Gateway failed to issue order.");
             const order = await orderRes.json();
 
+            if (order.isFree || order.amount === 0) {
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId: assessmentId || 1,
+                        assessmentCode: assessmentCode || "general",
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+
+                if (!verifyRes.ok) {
+                    throw new Error("Free entitlement activation failed on server.");
+                }
+
+                await onSuccess();
+                successHandledRef.current = true;
+                if (mountedRef.current) {
+                    setRefId(`FREE-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                    setPaidAt(new Date());
+                    setStage("success");
+                }
+                return;
+            }
+
             // Check if Razorpay is explicitly disabled in client environment (already declared above)
 
             if (isRazorpayDisabled) {

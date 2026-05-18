@@ -39,7 +39,7 @@ export function ToggleSwitch({ checked, onChange, disabled, label, hint }: Props
           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--admin-fg)" }}>{label}</p>
         )}
         {hint && (
-          <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "var(--admin-fg-3)", lineHeight: 1.45 }}>
+          <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "var(--admin-fg)", opacity: 0.9, lineHeight: 1.45 }}>
             {hint}
           </p>
         )}

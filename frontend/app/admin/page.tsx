@@ -316,7 +316,7 @@ function DashboardInner() {
               <h3 className="admin-card-title">Live Assessments</h3>
               <p className="admin-card-subtitle">Currently active or scheduled</p>
             </div>
-            <Link href="/admin/exam-packages" className="admin-btn admin-btn-ghost" style={{ fontSize: 12 }}>
+            <Link href="/admin/groups" className="admin-btn admin-btn-ghost" style={{ fontSize: 12 }}>
               See all <ArrowRight size={13} />
             </Link>
           </div>

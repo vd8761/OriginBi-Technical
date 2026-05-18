@@ -34,7 +34,16 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
     const [summary, setSummary] = useState({ total: 0, success: 0, skipped: 0 });
 
     useEffect(() => {
-        // Mock groups since tech assessments typically don't map to dynamic groups in bulk (yet)
+        const stored = localStorage.getItem("originbi:groups");
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                setGroups(parsed.map((g: any) => ({ id: g.id || g.code, name: g.name })));
+                return;
+            } catch (e) {
+                console.error("Failed to parse stored groups in BulkUploadRegistration", e);
+            }
+        }
         setGroups([{ id: 1, name: 'Default Tech Group' }]);
     }, []);
 

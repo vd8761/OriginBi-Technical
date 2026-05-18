@@ -1411,3 +1411,32 @@ export async function getBulkAdminUsersJobRows(importId: string) {
     baseOverride: TECH_API_BASE,
   });
 }
+
+// ── Admin Groups & Cohorts Database-backed CRUD ─────────────────────────────
+export async function getAdminGroups(): Promise<any[]> {
+  return apiFetch<any[]>("/admin-api/admin/groups");
+}
+
+export async function createAdminGroup(body: any): Promise<any> {
+  return apiFetch<any>("/admin-api/admin/groups", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateAdminGroup(id: number | string, body: any): Promise<any> {
+  return apiFetch<any>(`/admin-api/admin/groups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteAdminGroup(id: number | string): Promise<any> {
+  return apiFetch<any>(`/admin-api/admin/groups/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getAdminPrograms(): Promise<any> {
+  return apiFetch<any>("/admin-api/admin/programs?limit=100");
+}

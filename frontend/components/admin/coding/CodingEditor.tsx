@@ -1046,10 +1046,10 @@ function SettingsTab({
       </div>
 
       <div className="text-xs text-slate-500 leading-relaxed">
-        Proctoring toggles (full-screen lock, tab-switch detection, webcam capture) are configured at the exam
-        package level, not per question. Visit{" "}
-        <Link href="/admin/exam-packages" className="text-emerald-600 hover:underline">
-          Exam Packages
+        Proctoring toggles (full-screen lock, tab-switch detection, webcam capture) are configured at the group
+        level, not per question. Visit{" "}
+        <Link href="/admin/groups" className="text-emerald-600 hover:underline">
+          Groups Management
         </Link>{" "}
         to wire them.
       </div>

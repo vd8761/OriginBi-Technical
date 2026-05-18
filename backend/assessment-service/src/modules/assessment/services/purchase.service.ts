@@ -26,7 +26,45 @@ export class PurchaseService {
         amount: number;
         currency: string;
         keyId: string;
+        isFree?: boolean;
     }> {
+        // Check for Group-Based pricing overrides
+        let isFree = false;
+        let finalAmount = amount;
+
+        try {
+            const overrideRows = await this.dataSource.query(
+                `SELECT ga.metadata 
+                 FROM registrations r 
+                 JOIN users u ON r.user_id = u.id 
+                 JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
+                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                 LIMIT 1`,
+                [email]
+            );
+
+            if (overrideRows && overrideRows.length > 0) {
+                const metadata = overrideRows[0].metadata || {};
+                if (metadata.isFree === true || metadata.is_free === true) {
+                    isFree = true;
+                    finalAmount = 0;
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`Failed to resolve group-based pricing override for ${email}: ${err.message}`);
+        }
+
+        if (isFree || finalAmount === 0) {
+            this.logger.log(`[PricingOverride] Free tier assessment assigned for ${email}`);
+            return {
+                orderId: "free_bypass",
+                amount: 0,
+                currency: "INR",
+                keyId: "",
+                isFree: true,
+            };
+        }
+
         const razorpayKeyId = this.configService.get<string>("RAZORPAY_KEY_ID");
         const razorpayKeySecret = this.configService.get<string>("RAZORPAY_KEY_SECRET");
 
@@ -34,7 +72,7 @@ export class PurchaseService {
             throw new Error("Payment gateway not configured");
         }
 
-        const amountInPaise = Math.round(amount * 100);
+        const amountInPaise = Math.round(finalAmount * 100);
         const currency = "INR";
 
         // Create Razorpay order via API
@@ -71,6 +109,7 @@ export class PurchaseService {
             amount: order.amount,
             currency: order.currency,
             keyId: razorpayKeyId,
+            isFree: false,
         };
     }
 
@@ -92,15 +131,38 @@ export class PurchaseService {
             throw new Error("Payment gateway not configured");
         }
 
-        // Verify signature
-        const expectedSignature = crypto
-            .createHmac("sha256", razorpayKeySecret)
-            .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
-            .digest("hex");
+        // Verify signature (with secure fallback for free-tier bypasses)
+        if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
+            const overrideRows = await this.dataSource.query(
+                `SELECT ga.metadata 
+                 FROM registrations r 
+                 JOIN users u ON r.user_id = u.id 
+                 JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
+                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                 LIMIT 1`,
+                [body.email]
+            );
+            let hasFreeOverride = false;
+            if (overrideRows && overrideRows.length > 0) {
+                const metadata = overrideRows[0].metadata || {};
+                if (metadata.isFree === true || metadata.is_free === true) {
+                    hasFreeOverride = true;
+                }
+            }
+            if (!hasFreeOverride) {
+                throw new BadRequestException("User does not qualify for free tier assessment");
+            }
+            this.logger.log(`[PricingOverride] Bypassed Razorpay verification for free tier purchase of ${body.email}`);
+        } else {
+            const expectedSignature = crypto
+                .createHmac("sha256", razorpayKeySecret)
+                .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
+                .digest("hex");
 
-        if (expectedSignature !== body.razorpay_signature) {
-            this.logger.warn(`Signature verification failed for payment of ${body.email}`);
-            throw new BadRequestException("Payment signature verification failed");
+            if (expectedSignature !== body.razorpay_signature) {
+                this.logger.warn(`Signature verification failed for payment of ${body.email}`);
+                throw new BadRequestException("Payment signature verification failed");
+            }
         }
 
         // Resolve user_id from users table if available
