@@ -62,11 +62,13 @@ export class GroupsService implements OnModuleInit {
   }
 
   async createGroup(body: any): Promise<any> {
-    const code = body.code?.trim().toUpperCase() || null;
     const name = body.name?.trim();
     if (!name) {
       throw new Error('Group name is required');
     }
+
+    // Auto-generate code: strip all non-alphanumeric characters to make a single clean uppercase word
+    const code = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'GROUP';
 
     const isFree = body.pricing?.isFree === true || body.isFree === true;
     const assessments = body.assessments || [];
@@ -100,7 +102,7 @@ export class GroupsService implements OnModuleInit {
       throw new NotFoundException('Group not found');
     }
 
-    if (body.code !== undefined) group.code = body.code?.trim().toUpperCase() || null;
+    // Explicitly do not allow updating group.code to keep it immutable
     if (body.name !== undefined) group.name = body.name?.trim();
 
     const currentMeta = group.metadata || {};

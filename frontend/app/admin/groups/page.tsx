@@ -386,19 +386,13 @@ function GroupsInner() {
   // Handles adding new group
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim() || !newGroupCode.trim()) return;
-
-    const codeExists = groups.some(
-      (g) => g.code.toLowerCase() === newGroupCode.trim().toLowerCase()
-    );
-    if (codeExists) {
-      alert("Group code already exists! Please use a unique code.");
-      return;
-    }
+    if (!newGroupName.trim()) return;
 
     try {
+      const codeWord = newGroupName.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
       const body = {
-        code: newGroupCode.trim().toUpperCase(),
+        code: codeWord || "AUTO",
         name: newGroupName.trim(),
         description: "",
         status: "active" as const,
@@ -743,20 +737,26 @@ function GroupsInner() {
               <span className="text-xs font-bold text-black dark:text-white tracking-wider">Group Name</span>
               <input
                 value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNewGroupName(val);
+                  const cleanWord = val.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+                  setNewGroupCode(cleanWord);
+                }}
                 placeholder="e.g. B.Tech CSE Batch 2026"
                 className="admin-field text-black dark:text-white"
                 required
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-bold text-black dark:text-white tracking-wider">Group Code</span>
+              <span className="text-xs font-bold text-black dark:text-white tracking-wider">
+                Group Code <span className="text-[10px] text-brand-green font-normal lowercase">(Auto-generated)</span>
+              </span>
               <input
-                value={newGroupCode}
-                onChange={(e) => setNewGroupCode(e.target.value)}
-                placeholder="e.g. CSE-2026"
-                className="admin-field font-mono text-black dark:text-white"
-                required
+                value={newGroupCode || "Awaiting name..."}
+                readOnly
+                disabled
+                className="admin-field font-mono text-black/70 dark:text-white/70 bg-black/[0.03] dark:bg-white/[0.03] cursor-not-allowed opacity-75"
               />
             </label>
           </div>
@@ -975,8 +975,60 @@ function GroupsInner() {
             {/* TAB CONTENT: SETTINGS & PROCTORING */}
             {drawerTab === "settings" && (
               <div className="flex-1 flex flex-col gap-5 overflow-y-auto pr-1">
-                {/* Assigned Assessments Section */}
+                {/* Cohort Identity Section */}
                 <div className="flex flex-col gap-3">
+                  <h4 className="text-[10.5px] font-extrabold tracking-wider text-black dark:text-white">
+                    Cohort Identity
+                  </h4>
+                  <p className="text-[11px] text-black dark:text-white leading-normal">
+                    Update the group display name. The immutable group code is fixed and cannot be changed.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[9.5px] font-bold text-black/60 dark:text-white/60 uppercase tracking-wider">Group Name</span>
+                      <input
+                        value={selectedGroup.name}
+                        onChange={(e) => {
+                          setSelectedGroup({
+                            ...selectedGroup,
+                            name: e.target.value,
+                          });
+                        }}
+                        onBlur={async () => {
+                          if (!selectedGroup.name.trim()) return;
+                          try {
+                            const body = { name: selectedGroup.name.trim() };
+                            const updated = await updateAdminGroup(selectedGroup.id, body);
+                            await loadLatestGroups();
+                            setSelectedGroup(mapBackendGroup(updated));
+                          } catch (err) {
+                            console.error("Failed to update name:", err);
+                          }
+                        }}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        className="admin-field text-xs text-black dark:text-white px-3 py-2"
+                        placeholder="Cohort Group Name"
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[9.5px] font-bold text-black/60 dark:text-white/60 uppercase tracking-wider">Group Code (Immutable)</span>
+                      <input
+                        value={selectedGroup.code}
+                        readOnly
+                        disabled
+                        className="admin-field font-mono text-xs text-black/70 dark:text-white/70 bg-black/[0.03] dark:bg-white/[0.03] cursor-not-allowed opacity-75 px-3 py-2"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Assigned Assessments Section */}
+                <div className="flex flex-col gap-3 border-t border-gray-100 dark:border-white/10 pt-4 mt-2">
                   <h4 className="text-[10.5px] font-extrabold tracking-wider text-black dark:text-white">
                     Assigned Assessments
                   </h4>
