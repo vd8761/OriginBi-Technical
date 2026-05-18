@@ -117,6 +117,27 @@ export class AdaptiveBlockService {
     return order[idx];
   }
 
+  private normalizeQuestionKind(rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' {
+    const kind = String(rawKind || 'mcq').toLowerCase();
+    if (kind === 'true_false') return 'tf';
+    if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+    return 'mcq';
+  }
+
+  private asObject(value: any): Record<string, any> {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+
   // ── Initialize blocks ──────────────────────────────────────────────────────
 
   async initializeAdaptiveBlocks(
@@ -305,7 +326,9 @@ export class AdaptiveBlockService {
       // 2. Load this block's questions with correct answers + marks
       const bqs = await qr.query(
         `SELECT aq.attempt_question_id, aq.aptitude_question_id,
+                aq.metadata as attempt_metadata,
                 q.correct_option_id, q.marks, q.negative_marks,
+                q.metadata as question_metadata,
                 q.subcategory AS category,
                 ass.negative_mark_enabled, ass.negative_mark_value
          FROM tech_aptitude_attempt_questions aq
@@ -321,37 +344,73 @@ export class AdaptiveBlockService {
       const categoryMap: Record<string, { correct: number; total: number }> = {};
 
       // 3. Save draft answers + compute accuracy for adaptive engine.
-      //    selected_option_id is saved so the UI can restore answers when user navigates back.
-      //    is_correct / score_awarded are also saved here as a preview — they will be
-      //    re-computed from scratch at final submit to reflect any changes the user made.
+      //    is_correct / score_awarded are preview values and are re-computed at final submit.
       for (const aq of bqs) {
         const cat = aq.category ?? 'General';
         if (!categoryMap[cat]) categoryMap[cat] = { correct: 0, total: 0 };
         categoryMap[cat].total++;
 
         const qIdStr = String(aq.aptitude_question_id);
-        const sel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const rawSel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const sel = (typeof rawSel === 'object' && rawSel !== null && !Array.isArray(rawSel))
+          ? ((rawSel as any).optionId ?? (rawSel as any).selectedOptionId ?? (rawSel as any).value ?? null)
+          : rawSel;
+        const questionMetadata = this.asObject(aq.question_metadata);
+        const attemptMetadata = this.asObject(aq.attempt_metadata);
+        const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
         const qMarks = Number(aq.marks || 1);
         const negMarks = aq.negative_mark_enabled
           ? Number(aq.negative_marks || aq.negative_mark_value || 0)
           : 0;
 
-        if (sel !== undefined && sel !== null && sel !== '') {
-          const isCorrect = String(sel) === String(aq.correct_option_id);
+        const hasAnswer = Array.isArray(sel)
+          ? sel.length > 0
+          : !(sel === undefined || sel === null || sel === '');
+
+        if (hasAnswer) {
+          let isCorrect = false;
+          if (kind === 'msq') {
+            const studentChoices: string[] = Array.isArray(sel)
+              ? sel.map((id: any) => String(id))
+              : (sel ? [String(sel)] : []);
+            const correctChoices = Array.isArray((questionMetadata as any).correctOptionIds)
+              ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+              : [];
+            isCorrect = studentChoices.length > 0 &&
+              studentChoices.length === correctChoices.length &&
+              studentChoices.every((id: string) => correctChoices.includes(id));
+          } else if (kind === 'numerical') {
+            const studentAnswer = String(sel ?? '').trim().toLowerCase();
+            const correctAnswer = String((questionMetadata as any).correctAnswer ?? '').trim().toLowerCase();
+            isCorrect = studentAnswer !== '' && studentAnswer === correctAnswer;
+          } else {
+            isCorrect = String(sel) === String(aq.correct_option_id);
+          }
+
           if (isCorrect) { correctCount++; categoryMap[cat].correct++; }
           // Save draft answer — NOT final, will be re-evaluated at submit
           await qr.query(
             `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=$1, is_correct=$2,
-                 score_awarded=$3, negative_applied=$4, answered_at=NOW()
-             WHERE attempt_question_id=$5`,
-            [sel, isCorrect, isCorrect ? qMarks : 0, isCorrect ? 0 : negMarks, aq.attempt_question_id],
+             SET selected_option_id=$1, metadata=$2, is_correct=$3,
+                 score_awarded=$4, negative_applied=$5, answered_at=NOW()
+             WHERE attempt_question_id=$6`,
+            [
+              (kind === 'numerical' || kind === 'msq') ? null : sel,
+              JSON.stringify({
+                ...(attemptMetadata || {}),
+                submittedAnswer: (kind === 'numerical' || kind === 'msq') ? sel : null,
+              }),
+              isCorrect,
+              isCorrect ? qMarks : 0,
+              isCorrect ? 0 : negMarks,
+              aq.attempt_question_id,
+            ],
           );
         } else {
           // User left this question unanswered — clear any previous draft
           await qr.query(
             `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=NULL, is_correct=NULL,
+             SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
                  score_awarded=0, negative_applied=0, answered_at=NULL
              WHERE attempt_question_id=$1`,
             [aq.attempt_question_id],
@@ -438,7 +497,7 @@ export class AdaptiveBlockService {
   async saveBlockAnswers(
     attemptToken: string,
     blockNumber: number,
-    answers: Record<string, string>,
+    answers: Record<string, any>,
   ): Promise<{ saved: number }> {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
@@ -463,8 +522,9 @@ export class AdaptiveBlockService {
 
       // Load the questions for this block
       const bqs = await qr.query(
-        `SELECT aq.attempt_question_id, aq.aptitude_question_id
+        `SELECT aq.attempt_question_id, aq.aptitude_question_id, aq.metadata as attempt_metadata, q.metadata as question_metadata
          FROM tech_aptitude_attempt_questions aq
+         JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
          WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2`,
         [attemptId, blockNumber],
       );
@@ -472,21 +532,37 @@ export class AdaptiveBlockService {
       let saved = 0;
       for (const aq of bqs) {
         const qIdStr = String(aq.aptitude_question_id);
-        const sel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const rawSel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const sel = (typeof rawSel === 'object' && rawSel !== null && !Array.isArray(rawSel))
+          ? ((rawSel as any).optionId ?? (rawSel as any).selectedOptionId ?? (rawSel as any).value ?? null)
+          : rawSel;
+        const questionMetadata = this.asObject(aq.question_metadata);
+        const attemptMetadata = this.asObject(aq.attempt_metadata);
+        const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+        const hasAnswer = Array.isArray(sel)
+          ? sel.length > 0
+          : !(sel === undefined || sel === null || sel === '');
 
-        if (sel !== undefined && sel !== null && sel !== '') {
+        if (hasAnswer) {
           await qr.query(
             `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=$1, answered_at=NOW()
-             WHERE attempt_question_id=$2`,
-            [sel, aq.attempt_question_id],
+             SET selected_option_id=$1, metadata=$2, answered_at=NOW()
+             WHERE attempt_question_id=$3`,
+            [
+              (kind === 'numerical' || kind === 'msq') ? null : sel,
+              JSON.stringify({
+                ...(attemptMetadata || {}),
+                submittedAnswer: (kind === 'numerical' || kind === 'msq') ? sel : null,
+              }),
+              aq.attempt_question_id,
+            ],
           );
           saved++;
         } else {
           // Explicitly cleared
           await qr.query(
             `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=NULL, answered_at=NULL
+             SET selected_option_id=NULL, metadata=NULL, answered_at=NULL
              WHERE attempt_question_id=$1`,
             [aq.attempt_question_id],
           );
@@ -512,7 +588,7 @@ export class AdaptiveBlockService {
     blockNumber: number;
     difficulty: string;
     status: string;
-    questions: Array<BlockQuestion & { selectedOptionId: string | null; answeredAt: string | null }>;
+    questions: Array<BlockQuestion & { selectedOptionId: string | string[] | null; answeredAt: string | null }>;
   }> {
     // Verify block exists
     const baRow = await this.dataSource.query(
@@ -535,9 +611,9 @@ export class AdaptiveBlockService {
 
     const rows = await this.dataSource.query(
       `SELECT aq.attempt_question_id, aq.aptitude_question_id,
-              aq.selected_option_id, aq.answered_at,
+              aq.selected_option_id, aq.metadata as attempt_metadata, aq.answered_at,
               aq.block_sequence_order, aq.display_order,
-              q.question_text, q.difficulty, q.subcategory AS category,
+              q.question_text, q.difficulty, q.subcategory AS category, q.metadata as question_metadata,
               q.marks, q.negative_marks, q.image_url
        FROM tech_aptitude_attempt_questions aq
        JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
@@ -553,6 +629,14 @@ export class AdaptiveBlockService {
          FROM tech_aptitude_options WHERE aptitude_question_id=$1 ORDER BY option_id`,
         [r.aptitude_question_id],
       );
+      const questionMetadata = this.asObject(r.question_metadata);
+      const attemptMetadata = this.asObject(r.attempt_metadata);
+      const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+      const selectedValue =
+        (kind === 'msq' || kind === 'numerical')
+          ? ((attemptMetadata as any).submittedAnswer ?? null)
+          : (r.selected_option_id ? String(r.selected_option_id) : null);
+
       questions.push({
         id: String(r.aptitude_question_id),
         text: r.question_text,
@@ -565,7 +649,7 @@ export class AdaptiveBlockService {
         blockSequenceOrder: r.block_sequence_order,
         displayOrder: r.display_order,
         // Restore previously saved answer
-        selectedOptionId: r.selected_option_id ? String(r.selected_option_id) : null,
+        selectedOptionId: selectedValue,
         answeredAt: r.answered_at,
       });
     }
