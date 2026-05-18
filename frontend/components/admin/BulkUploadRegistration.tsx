@@ -127,56 +127,78 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
     };
 
     return (
-        <div className="p-6 bg-brand-light-primary dark:bg-[#0B0D0F] min-h-screen">
-            <div className="mb-8">
-                <nav className="text-sm text-gray-500 dark:text-gray-500 mb-2">
-                    Dashboard &gt; <button onClick={onCancel} className="hover:text-gray-900 dark:hover:text-white transition-colors">Users</button> &gt; <span className="text-[#1ED36A]">Bulk Upload</span>
-                    {view === 'review' && " > Review Bulk Upload"}
-                </nav>
-                <h1 className="text-3xl font-bold text-[#150089] dark:text-white mb-2">Bulk Upload Registration {view === 'review' ? '– Review & Confirm' : ''}</h1>
+        <div className="w-full font-sans animate-fade-in pb-12">
+            {/* Header & Breadcrumbs */}
+            <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-8">
+                <div>
+                    <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
+                        <span>Dashboard</span>
+                        <span className="mx-2 text-gray-400 dark:text-gray-600">&gt;</span>
+                        <button onClick={onCancel} className="hover:text-brand-text-light-primary dark:hover:text-white hover:underline cursor-pointer">
+                            Users
+                        </button>
+                        <span className="mx-2 text-gray-400 dark:text-gray-600">&gt;</span>
+                        <span className="text-brand-green font-semibold">Bulk Upload</span>
+                        {view === 'review' && (
+                            <>
+                                <span className="mx-2 text-gray-400 dark:text-gray-600">&gt;</span>
+                                <span className="text-brand-green font-semibold">Review</span>
+                            </>
+                        )}
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-semibold text-brand-text-light-primary dark:text-white tracking-tight">
+                        Bulk Upload Registration {view === 'review' ? '– Review & Confirm' : ''}
+                    </h1>
+                </div>
             </div>
 
-            {view === 'upload' && (
-                <BulkUploadDropzone
-                    onFileSelected={handleFileSelected}
-                    onReviewClick={handleReviewClick}
-                    isUploading={isUploading}
-                    uploadProgress={uploadProgress}
-                    uploadComplete={uploadComplete}
-                    fileName={fileName}
-                    error={error}
-                    onReset={handleReset}
-                />
-            )}
+            {/* Main Form Card Container - matching manual user add card */}
+            <div 
+                style={{ backgroundColor: "var(--admin-card-solid, #ffffff)" }}
+                className="w-full border border-gray-200 dark:border-white/10 rounded-3xl p-6 sm:p-10 shadow-sm dark:shadow-xl transition-colors duration-300 relative"
+            >
+                {view === 'upload' && (
+                    <BulkUploadDropzone
+                        onFileSelected={handleFileSelected}
+                        onReviewClick={handleReviewClick}
+                        isUploading={isUploading}
+                        uploadProgress={uploadProgress}
+                        uploadComplete={uploadComplete}
+                        fileName={fileName}
+                        error={error}
+                        onReset={handleReset}
+                    />
+                )}
 
-            {view === 'review' && (
-                <BulkReviewTable
-                    validRows={validRows}
-                    invalidRows={invalidRows}
-                    onConfirm={handleConfirm}
-                    onCancel={handleReset}
-                    groups={groups}
-                    isSubmitting={isConfirming}
-                />
-            )}
+                {view === 'review' && (
+                    <BulkReviewTable
+                        validRows={validRows}
+                        invalidRows={invalidRows}
+                        onConfirm={handleConfirm}
+                        onCancel={handleReset}
+                        groups={groups}
+                        isSubmitting={isConfirming}
+                    />
+                )}
 
-            {view === 'processing' && (
-                <div className="flex flex-col items-center justify-center p-12 h-[400px]">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#1ED36A] mb-4"></div>
-                    <h3 className="text-xl font-medium text-gray-900 dark:text-white">Processing Registrations...</h3>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">This may take a few moments.</p>
-                </div>
-            )}
+                {view === 'processing' && (
+                    <div className="flex flex-col items-center justify-center p-12 h-[400px]">
+                        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#1ED36A] mb-4"></div>
+                        <h3 className="text-xl font-medium text-gray-900 dark:text-white">Processing Registrations...</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-2">This may take a few moments.</p>
+                    </div>
+                )}
 
-            {view === 'success' && (
-                <BulkSuccessSummary
-                    total={summary.total}
-                    success={summary.success}
-                    skipped={summary.skipped}
-                    onUploadAgain={handleReset}
-                    onViewAll={onCancel}
-                />
-            )}
+                {view === 'success' && (
+                    <BulkSuccessSummary
+                        total={summary.total}
+                        success={summary.success}
+                        skipped={summary.skipped}
+                        onUploadAgain={handleReset}
+                        onViewAll={onCancel}
+                    />
+                )}
+            </div>
         </div>
     );
 };

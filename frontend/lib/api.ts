@@ -180,6 +180,8 @@ export interface RegisterRequest {
   currentRole?: string;
   roleDescription?: string;
   registrationSource?: string;
+  groupCode?: string;
+  sendEmail?: boolean;
 }
 
 export interface Assignment {
@@ -689,6 +691,10 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       current_year: input.currentYear,
       current_role: input.currentRole,
       role_description: input.roleDescription,
+      group_code: input.groupCode,
+      metadata: {
+        sendEmail: input.sendEmail !== false,
+      },
     }),
     baseOverride: STUDENT_API_BASE,
     auth: false,

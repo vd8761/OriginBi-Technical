@@ -3,8 +3,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { Eye, EyeOff, ArrowRight } from "lucide-react";
-import { registerUser, RegisterRequest } from "../../lib/api";
+import { registerUser, RegisterRequest, getDepartments } from "../../lib/api";
 import { COUNTRY_CODES } from "../../lib/countryCodes";
+import { 
+  PROGRAM_OPTIONS, 
+  BOARD_OPTIONS, 
+  SCHOOL_LEVELS, 
+  SCHOOL_STREAMS 
+} from "../../lib/constants";
 
 interface AddRegistrationFormProps {
   onCancel: () => void;
@@ -18,7 +24,7 @@ const ChevronDownIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-/* ─── Localized Mobile Input to match SignupForm ─── */
+/* ─── Mobile Input Component ─── */
 function MobileInput({
   countryCode,
   phoneNumber,
@@ -51,7 +57,7 @@ function MobileInput({
 
   return (
     <div className="space-y-1.5" ref={ref}>
-      <label className="block text-xs font-semibold uppercase tracking-wider text-black dark:text-white ml-1">
+      <label className="block text-xs font-semibold tracking-wider text-black dark:text-white ml-1">
         Mobile Number <span className="text-red-500">*</span>
       </label>
       <div className="relative flex">
@@ -59,7 +65,8 @@ function MobileInput({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-1.5 h-12 px-4 bg-brand-light-tertiary dark:bg-brand-dark-tertiary border ${error ? "border-red-400" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-l-full text-sm font-medium text-black dark:text-white hover:bg-brand-green/5 transition-colors min-w-[90px] cursor-pointer`}
+          style={{ borderTopLeftRadius: "9999px", borderBottomLeftRadius: "9999px" }}
+          className={`flex items-center gap-1.5 h-12 px-4 bg-brand-light-tertiary dark:bg-brand-dark-tertiary border ${error ? "border-red-400" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} text-sm font-medium text-black dark:text-white hover:bg-brand-green/5 transition-colors min-w-[90px] cursor-pointer`}
         >
           <ReactCountryFlag
             countryCode={selectedCountry?.code || "IN"}
@@ -79,12 +86,16 @@ function MobileInput({
             if (val.length <= (selectedCountry?.maxLength || 15)) onPhoneChange(val);
           }}
           placeholder="Enter mobile number"
-          className={`flex-1 h-12 px-5 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${error ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} rounded-r-full text-sm font-normal text-black dark:text-white outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
+          style={{ borderTopRightRadius: "9999px", borderBottomRightRadius: "9999px" }}
+          className={`flex-1 h-12 px-5 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${error ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} text-sm font-normal text-black dark:text-white outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
         />
 
         {/* Dropdown */}
         {isOpen && (
-          <div className="absolute z-50 top-full mt-1 left-0 w-64 bg-white dark:bg-brand-dark-secondary border border-brand-light-tertiary dark:border-brand-dark-tertiary rounded-xl shadow-xl max-h-64 overflow-hidden animate-in fade-in duration-200">
+          <div 
+            style={{ backgroundColor: "var(--admin-card-solid, #ffffff)" }}
+            className="absolute z-50 top-full mt-1 left-0 w-64 border border-brand-light-tertiary dark:border-brand-dark-tertiary rounded-xl shadow-xl max-h-64 overflow-hidden animate-in fade-in duration-200"
+          >
             <div className="p-2 border-b border-brand-light-tertiary dark:border-brand-dark-tertiary">
               <input
                 type="text"
@@ -117,24 +128,129 @@ function MobileInput({
   );
 }
 
+/* ─── Custom Select ─── */
+function CustomSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+  label,
+  required,
+  error,
+  disabled,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  label?: string;
+  required?: boolean;
+  error?: string;
+  disabled?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div className="space-y-1.5" ref={ref}>
+      {label && (
+        <label className="block text-xs font-semibold tracking-wider text-black dark:text-white ml-1">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      )}
+      <div className="relative">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setIsOpen(!isOpen)}
+          style={{ borderRadius: "9999px" }}
+          className={`w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${error ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} px-5 text-left text-sm font-medium text-black dark:text-white flex items-center justify-between transition-all hover:border-brand-green/50 focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          <span className={selected ? "" : "text-black/40 dark:text-white/40"}>
+            {selected ? selected.label : placeholder || "Select..."}
+          </span>
+          <ChevronDownIcon className={`w-4 h-4 text-black dark:text-white transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+        {isOpen && (
+          <div 
+            style={{ backgroundColor: "var(--admin-card-solid, #ffffff)" }}
+            className="absolute z-50 mt-1 w-full border border-brand-light-tertiary dark:border-brand-dark-tertiary rounded-xl shadow-xl max-h-52 overflow-y-auto"
+          >
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-brand-green/5 hover:text-brand-green ${value === opt.value ? "bg-brand-green/10 text-brand-green" : "text-black dark:text-white"}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {error && <p className="text-red-500 text-xs ml-1 mt-1">{error}</p>}
+    </div>
+  );
+}
+
+/* ═══════════════════════ ADD REGISTRATION FORM ═══════════════════════ */
+
 const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   onCancel,
   onRegister,
 }) => {
   const [formData, setFormData] = useState<RegisterRequest>({
     fullName: "",
-    gender: "FEMALE",
+    gender: "MALE",
     email: "",
     countryCode: "+91",
     mobileNumber: "",
     password: "",
     role: "STUDENT",
+    programCode: "",
+    schoolLevel: "",
+    schoolStream: "",
+    studentBoard: "",
+    departmentDegreeId: "",
+    currentYear: "",
+    currentRole: "",
+    roleDescription: "",
+    groupCode: "",
+    sendEmail: true,
   });
 
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [loadingDepts, setLoadingDepts] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (formData.programCode === "COLLEGE_STUDENT" && departments.length === 0) {
+      setLoadingDepts(true);
+      getDepartments()
+        .then((data) => {
+          const formatted = data.map((d: any) => ({ value: d.id, label: d.name }));
+          setDepartments(formatted);
+        })
+        .catch((err) => {
+          console.error("Failed to load departments:", err);
+        })
+        .finally(() => setLoadingDepts(false));
+    }
+  }, [formData.programCode, departments.length]);
 
   const handleInputChange = (field: keyof RegisterRequest, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -166,6 +282,26 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
       else if (!/[0-9]/.test(pwd)) errors.password = "Must contain 1 number";
       else if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd))
         errors.password = "Must contain 1 special character";
+    }
+
+    // Demographic Validation
+    if (!formData.programCode) {
+      errors.programCode = "Required";
+    } else {
+      if (formData.programCode === "SCHOOL_STUDENT") {
+        if (!formData.studentBoard) errors.studentBoard = "Required";
+        if (!formData.schoolLevel) errors.schoolLevel = "Required";
+        if (formData.schoolLevel === "HSC") {
+          if (!formData.schoolStream) errors.schoolStream = "Required";
+          if (!formData.currentYear) errors.currentYear = "Required";
+        }
+      } else if (formData.programCode === "COLLEGE_STUDENT") {
+        if (!formData.departmentDegreeId) errors.departmentDegreeId = "Required";
+        if (!formData.currentYear) errors.currentYear = "Required";
+      } else if (formData.programCode === "EMPLOYEE") {
+        if (!formData.currentRole?.trim()) errors.currentRole = "Required";
+        if (!formData.roleDescription?.trim()) errors.roleDescription = "Required";
+      }
     }
 
     setFormErrors(errors);
@@ -201,12 +337,12 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   };
 
   const baseInputClasses =
-    "w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border border-brand-light-tertiary dark:border-brand-dark-tertiary rounded-full px-5 text-sm font-normal text-black dark:text-white placeholder:text-black/40 dark:placeholder:text-white/40 outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20";
+    "w-full h-12 bg-brand-light-secondary dark:bg-brand-dark-tertiary border border-brand-light-tertiary dark:border-brand-dark-tertiary px-5 text-sm font-normal text-black dark:text-white placeholder:text-black/40 dark:placeholder:text-white/40 outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20";
 
-  const baseLabelClasses = "block text-xs font-semibold uppercase tracking-wider text-black dark:text-white ml-1";
-  const baseSectionTitleClasses = "text-xs font-semibold uppercase tracking-wider text-brand-green mb-6 block";
+  const baseLabelClasses = "block text-xs font-semibold tracking-wider text-black dark:text-white ml-1";
+  const baseSectionTitleClasses = "text-xs font-semibold tracking-wider text-brand-green mb-6 block";
   const toggleWrapperClasses = "flex w-full h-12 bg-brand-light-tertiary dark:bg-brand-dark-tertiary rounded-full p-1 border border-brand-light-tertiary dark:border-brand-dark-tertiary";
-  const toggleButtonBase = "flex-1 text-[10px] md:text-xs font-semibold uppercase tracking-wide rounded-full transition-all duration-300 cursor-pointer";
+  const toggleButtonBase = "flex-1 text-[10px] md:text-xs font-semibold rounded-full transition-all duration-300 cursor-pointer";
   const activeToggleClasses = "bg-brand-green text-white shadow-md";
   const inactiveToggleClasses = "text-black dark:text-white hover:text-brand-green";
 
@@ -234,18 +370,22 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
         </div>
       </div>
 
-      {/* Main Form Card */}
-      <div className="max-w-3xl mx-auto bg-white dark:bg-brand-dark-secondary border border-gray-200 dark:border-brand-dark-tertiary rounded-3xl p-6 sm:p-10 shadow-sm dark:shadow-xl transition-colors duration-300 relative">
+      {/* Main Form Card - full container width (w-full) matching the registration table */}
+      <div 
+        style={{ backgroundColor: "var(--admin-card-solid, #ffffff)" }}
+        className="w-full border border-gray-200 dark:border-brand-dark-tertiary rounded-3xl p-6 sm:p-10 shadow-sm dark:shadow-xl transition-colors duration-300 relative"
+      >
         {error && (
           <div className="mb-6 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">
             {error}
           </div>
         )}
 
+        {/* Basic Information Section */}
         <div className="mb-8">
           <h2 className={baseSectionTitleClasses}>Basic Information</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
             {/* Full Name */}
             <div className="space-y-1.5">
@@ -255,6 +395,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                 value={formData.fullName}
                 onChange={(e) => handleInputChange("fullName", e.target.value)}
                 placeholder="Enter full name"
+                style={{ borderRadius: "9999px" }}
                 className={`${baseInputClasses} ${formErrors.fullName ? "border-red-400 ring-1 ring-red-200" : ""}`}
               />
               {formErrors.fullName && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.fullName}</p>}
@@ -263,12 +404,13 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             {/* Gender */}
             <div className="space-y-1.5">
               <label className={baseLabelClasses}>Gender <span className="text-red-500">*</span></label>
-              <div className={toggleWrapperClasses}>
+              <div className={toggleWrapperClasses} style={{ borderRadius: "9999px" }}>
                 {["MALE", "FEMALE", "OTHER"].map((gender) => (
                   <button
                     key={gender}
                     type="button"
                     onClick={() => handleInputChange("gender", gender)}
+                    style={{ borderRadius: "9999px" }}
                     className={`${toggleButtonBase} ${formData.gender === gender ? activeToggleClasses : inactiveToggleClasses}`}
                   >
                     {gender.charAt(0) + gender.slice(1).toLowerCase()}
@@ -285,6 +427,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                 value={formData.email}
                 onChange={(e) => handleInputChange("email", e.target.value)}
                 placeholder="name@example.com"
+                style={{ borderRadius: "9999px" }}
                 className={`${baseInputClasses} ${formErrors.email ? "border-red-400 ring-1 ring-red-200" : ""}`}
               />
               {formErrors.email && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.email}</p>}
@@ -298,23 +441,6 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
               onPhoneChange={(num) => handleInputChange("mobileNumber", num)}
               error={formErrors.mobileNumber}
             />
-            
-            {/* Role Toggle */}
-            <div className="space-y-1.5">
-              <label className={baseLabelClasses}>Role <span className="text-red-500">*</span></label>
-              <div className={toggleWrapperClasses}>
-                {["STUDENT", "PROCTOR", "ADMIN"].map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => handleInputChange("role", role)}
-                    className={`${toggleButtonBase} ${formData.role === role ? activeToggleClasses : inactiveToggleClasses}`}
-                  >
-                    {role.charAt(0) + role.slice(1).toLowerCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             {/* Password input + Generate Password button */}
             <div className="space-y-1.5">
@@ -335,6 +461,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                   value={formData.password}
                   onChange={(e) => handleInputChange("password", e.target.value)}
                   placeholder="Min 8 characters"
+                  style={{ borderRadius: "9999px" }}
                   className={`${baseInputClasses} pr-12 ${formErrors.password ? "border-red-400 ring-1 ring-red-200" : ""}`}
                 />
                 <button
@@ -350,7 +477,193 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
               )}
             </div>
 
+            {/* Group Name input */}
+            <div className="space-y-1.5">
+              <label className={baseLabelClasses}>Group Name</label>
+              <input
+                type="text"
+                value={formData.groupCode || ""}
+                onChange={(e) => handleInputChange("groupCode", e.target.value)}
+                placeholder="Enter the Group Name"
+                style={{ borderRadius: "9999px" }}
+                className={baseInputClasses}
+              />
+            </div>
+
+            {/* Send Email Notification Toggle */}
+            <div className="space-y-1.5">
+              <label className={baseLabelClasses}>Send Email Notification <span className="text-red-500">*</span></label>
+              <div className={toggleWrapperClasses} style={{ borderRadius: "9999px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange("sendEmail", true)}
+                  style={{ borderRadius: "9999px" }}
+                  className={`${toggleButtonBase} ${formData.sendEmail !== false ? activeToggleClasses : inactiveToggleClasses}`}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange("sendEmail", false)}
+                  style={{ borderRadius: "9999px" }}
+                  className={`${toggleButtonBase} ${formData.sendEmail === false ? activeToggleClasses : inactiveToggleClasses}`}
+                >
+                  No
+                </button>
+              </div>
+            </div>
+
           </div>
+        </div>
+
+        {/* Designation & Demographic Information Section */}
+        <div className="mb-8 border-t border-gray-100 dark:border-white/5 pt-6">
+          <h2 className={baseSectionTitleClasses}>Demographic Information</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            {/* Designation Selector */}
+            <div className="lg:col-span-3">
+              <CustomSelect
+                label="Designation"
+                required
+                options={PROGRAM_OPTIONS}
+                value={formData.programCode || ""}
+                onChange={(val) => {
+                  handleInputChange("programCode", val);
+                  // Reset conditional fields
+                  handleInputChange("schoolLevel", "");
+                  handleInputChange("schoolStream", "");
+                  handleInputChange("studentBoard", "");
+                  handleInputChange("departmentDegreeId", "");
+                  handleInputChange("currentYear", "");
+                  handleInputChange("currentRole", "");
+                  handleInputChange("roleDescription", "");
+                }}
+                error={formErrors.programCode}
+                placeholder="Select current status"
+              />
+            </div>
+
+          </div>
+
+          {/* Conditional Sections */}
+          {formData.programCode === "SCHOOL_STUDENT" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6 animate-in fade-in slide-in-from-top-1 duration-300">
+              <CustomSelect
+                label="Board"
+                required
+                options={BOARD_OPTIONS}
+                value={formData.studentBoard || ""}
+                onChange={(val) => {
+                  handleInputChange("studentBoard", val);
+                  handleInputChange("schoolLevel", "");
+                }}
+                error={formErrors.studentBoard}
+                placeholder="Select Board"
+              />
+              <CustomSelect
+                label="School Level"
+                required
+                options={
+                  formData.studentBoard === "IGCSE" 
+                    ? SCHOOL_LEVELS.filter(l => l.value === "GCSE")
+                    : SCHOOL_LEVELS.filter(l => l.value === "SSLC" || l.value === "HSC")
+                }
+                value={formData.schoolLevel || ""}
+                onChange={(val) => handleInputChange("schoolLevel", val)}
+                error={formErrors.schoolLevel}
+                placeholder="Select Level"
+                disabled={!formData.studentBoard}
+              />
+              {formData.schoolLevel === "HSC" && (
+                <>
+                  <CustomSelect
+                    label="Stream"
+                    required
+                    options={SCHOOL_STREAMS}
+                    value={formData.schoolStream || ""}
+                    onChange={(val) => handleInputChange("schoolStream", val)}
+                    error={formErrors.schoolStream}
+                    placeholder="Select Stream"
+                  />
+                  <div className="space-y-1.5 lg:col-span-3">
+                    <label className={baseLabelClasses}>Current Year (1-2) <span className="text-red-500">*</span></label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="2"
+                      value={formData.currentYear || ""}
+                      onChange={(e) => handleInputChange("currentYear", e.target.value)}
+                      placeholder="Enter Year"
+                      style={{ borderRadius: "9999px" }}
+                      className={`${baseInputClasses} ${formErrors.currentYear ? "border-red-400 ring-1 ring-red-200" : ""}`}
+                    />
+                    {formErrors.currentYear && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.currentYear}</p>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {formData.programCode === "COLLEGE_STUDENT" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6 animate-in fade-in slide-in-from-top-1 duration-300">
+              <div className="lg:col-span-2">
+                <CustomSelect
+                  label="Department"
+                  required
+                  options={departments}
+                  value={formData.departmentDegreeId || ""}
+                  onChange={(val) => handleInputChange("departmentDegreeId", val)}
+                  error={formErrors.departmentDegreeId}
+                  placeholder={loadingDepts ? "Loading..." : "Select Department"}
+                  disabled={loadingDepts}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className={baseLabelClasses}>Current Year (1-6) <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  min="1"
+                  max="6"
+                  value={formData.currentYear || ""}
+                  onChange={(e) => handleInputChange("currentYear", e.target.value)}
+                  placeholder="Enter Year"
+                  style={{ borderRadius: "9999px" }}
+                  className={`${baseInputClasses} ${formErrors.currentYear ? "border-red-400 ring-1 ring-red-200" : ""}`}
+                />
+                {formErrors.currentYear && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.currentYear}</p>}
+              </div>
+            </div>
+          )}
+
+          {formData.programCode === "EMPLOYEE" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6 animate-in fade-in slide-in-from-top-1 duration-300">
+              <div className="space-y-1.5 lg:col-span-3">
+                <label className={baseLabelClasses}>Current Role <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={formData.currentRole || ""}
+                  onChange={(e) => handleInputChange("currentRole", e.target.value)}
+                  placeholder="e.g. Software Engineer"
+                  style={{ borderRadius: "9999px" }}
+                  className={`${baseInputClasses} ${formErrors.currentRole ? "border-red-400 ring-1 ring-red-200" : ""}`}
+                />
+                {formErrors.currentRole && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.currentRole}</p>}
+              </div>
+              <div className="space-y-1.5 lg:col-span-3">
+                <label className={baseLabelClasses}>Role Description <span className="text-red-500">*</span></label>
+                <textarea
+                  value={formData.roleDescription || ""}
+                  onChange={(e) => handleInputChange("roleDescription", e.target.value)}
+                  placeholder="Briefly describe your responsibilities"
+                  style={{ borderRadius: "24px" }}
+                  className="w-full min-h-[100px] bg-brand-light-secondary dark:bg-brand-dark-tertiary border border-brand-light-tertiary dark:border-brand-dark-tertiary px-5 py-3 text-sm font-normal text-black dark:text-white outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 resize-none"
+                />
+                {formErrors.roleDescription && <p className="text-red-500 text-xs ml-1 mt-1">{formErrors.roleDescription}</p>}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -358,22 +671,24 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="w-full sm:w-auto px-10 h-12 rounded-full border border-gray-300 dark:border-white/10 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm cursor-pointer"
+            style={{ borderRadius: "9999px" }}
+            className="w-full sm:w-auto px-10 h-12 border border-gray-300 dark:border-white/10 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="w-full sm:w-auto px-12 h-12 rounded-full bg-brand-green hover:bg-brand-green/90 text-white font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
+            style={{ borderRadius: "9999px" }}
+            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
           >
             {isLoading ? (
               <>
                 <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                Creating...
+                Processing...
               </>
             ) : (
-              "Add User"
+              "Register"
             )}
           </button>
         </div>

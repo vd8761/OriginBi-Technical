@@ -16,6 +16,7 @@ import {
   UserSearch,
   Users as UsersIcon,
   X,
+  Plus,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
@@ -235,15 +236,26 @@ function UsersInner() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search name, email..."
+                style={{ outline: "none", boxShadow: "none" }}
               />
             </label>
           </div>
           <div className="admin-row">
-            <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setView('bulk')}>
-              <Download size={14} /> Bulk Upload
+            <button 
+              type="button" 
+              onClick={() => setView('bulk')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#FFFFFF1F] border border-gray-200 dark:border-[#FFFFFF1F] rounded-lg text-sm font-medium text-brand-text-light-primary dark:text-white hover:bg-gray-50 dark:hover:bg-white/30 transition-all shadow-sm cursor-pointer"
+            >
+              <span>Bulk Upload</span>
+              <Download size={16} />
             </button>
-            <button type="button" className="admin-btn admin-btn-primary" onClick={() => setView('add')}>
-              <UserPlus size={14} /> Add User
+            <button
+              type="button"
+              onClick={() => setView('add')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green border border-transparent rounded-lg text-sm font-medium text-white hover:bg-brand-green/90 transition-all shadow-lg shadow-brand-green/20 cursor-pointer"
+            >
+              <span>Add New</span>
+              <Plus size={16} className="text-white" />
             </button>
           </div>
         </div>

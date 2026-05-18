@@ -2121,13 +2121,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 38px;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 8px 16px;
   color: var(--admin-fg-2);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1;
   text-decoration: none;
   transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
@@ -2139,7 +2139,7 @@
 
 .admin-btn-primary {
   background: var(--admin-green);
-  color: #07110b;
+  color: #ffffff !important;
 }
 
 .admin-btn-secondary {
@@ -2514,9 +2514,9 @@
 }
 
 .admin-pagination-page.active {
-  background: var(--admin-green-soft);
-  border-color: rgba(30, 211, 106, 0.3);
-  color: var(--admin-green);
+  background: var(--admin-green) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
 }
 
 .admin-state-card h3 {
@@ -2923,9 +2923,9 @@
 }
 
 .admin-pill-tabs button.is-active {
-  background: var(--admin-green-soft);
-  color: var(--admin-green);
-  box-shadow: 0 0 0 1px rgba(30, 211, 106, 0.32) inset;
+  background: var(--admin-green) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
 }
 
 .admin-pill-tabs button .admin-pill-tab-count {
@@ -2944,8 +2944,8 @@
 }
 
 .admin-pill-tabs button.is-active .admin-pill-tab-count {
-  background: rgba(30, 211, 106, 0.18);
-  color: var(--admin-green);
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
 }
 
 /* ── Admin: toggle switch ─────────────────────────────────────────── */

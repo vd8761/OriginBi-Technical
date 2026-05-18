@@ -166,7 +166,10 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                 </button>
             </div>
 
-            <div className="bg-white dark:bg-[#15171A] rounded-xl border border-gray-200 dark:border-[#FFFFFF1F] p-4">
+            <div 
+                style={{ backgroundColor: "var(--admin-bg-soft, #ffffff)" }}
+                className="rounded-xl border border-gray-200 dark:border-[#FFFFFF1F] p-4"
+            >
                 {activeTab === 'valid' ? renderTable(validRows, true) : renderTable(invalidRows, false)}
             </div>
 
