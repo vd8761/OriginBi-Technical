@@ -10,6 +10,12 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import {
+    DEFAULT_PROCTORING,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
 
 const ROLE_TOTAL_TIME = 30 * 60;
 
@@ -116,6 +122,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -160,7 +168,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
-                        
+                        setProctoringSettings(resolveProctoringForPackage(found));
+
                         let eqt = found.enabled_question_types;
                         if (eqt) {
                             if (typeof eqt === "string") {
@@ -568,6 +577,12 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-25" aria-hidden="true" />
+
+            {/* Per-package proctoring (tab_switch_limit, anti_copy_enabled). */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && !isBlocked}
+            />
 
             {/* ── Cache Restored Banner ──────────────────────────────── */}
             <AnimatePresence>

@@ -8,6 +8,12 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import {
+    DEFAULT_PROCTORING,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
 
 const MNC_TOTAL_TIME = 30 * 60;
 
@@ -97,6 +103,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -141,7 +149,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
-                        
+                        setProctoringSettings(resolveProctoringForPackage(found));
+
                         let eqt = found.enabled_question_types;
                         if (eqt) {
                             if (typeof eqt === "string") {
@@ -464,6 +473,12 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
+
+            {/* Per-package proctoring (tab_switch_limit, anti_copy_enabled). */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && !isBlocked}
+            />
 
             {/* ── Cache Restored Banner ──────────────────────────────── */}
             <AnimatePresence>
