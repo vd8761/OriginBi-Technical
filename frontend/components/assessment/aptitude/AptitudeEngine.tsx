@@ -8,6 +8,12 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import {
+    DEFAULT_PROCTORING,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
 import { McqQuestion } from "./question-types/McqQuestion";
 import { MsqQuestion } from "./question-types/MsqQuestion";
 import { TfQuestion } from "./question-types/TfQuestion";
@@ -74,7 +80,7 @@ const formatTime = (seconds: number) => {
 };
 
 const API_BASE =
-    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+    (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
     process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
     "";
 
@@ -109,6 +115,8 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
     // ── Intercept browser/mouse back button (popstate) ──
     useEffect(() => {
@@ -174,6 +182,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
+                        setProctoringSettings(resolveProctoringForPackage(found));
                     }
                 }
             } catch (err) {
@@ -622,7 +631,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         setAnswers(newAnswers);
         // Persist to cache immediately
         cacheSaveAnswer(currentQuestion.id, { optionId: value as any });
-        persistAnswer(currentQuestion.id, { optionId });
+        persistAnswer(currentQuestion.id, { optionId: value });
     };
 
     const handleClear = () => {
@@ -696,6 +705,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
+
+            {/* Per-package proctoring: rules driven by the assessment row
+                (tab_switch_limit, anti_copy_enabled). The host mounts the
+                shared useProctoring() rule-set and renders its own toast. */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && questions.length > 0}
+            />
 
             {/* ── Cache Restored Banner ──────────────────────────────── */}
             <AnimatePresence>

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, AlertCircle, Copy, Check } from "lucide-react";
+import { TECH_API_BASE } from "@/lib/api";
 
 interface PaymentModalProps {
     title: string;
@@ -17,10 +18,6 @@ interface PaymentModalProps {
 }
 
 type Stage = "processing" | "success" | "error";
-const TECH_API_BASE =
-    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
-    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
-    "";
 
 const generateRef = () => {
     const segment = () =>

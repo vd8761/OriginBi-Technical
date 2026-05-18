@@ -121,25 +121,23 @@ func ValidateQuestionBodyStruct(body *QuestionBody, ctx AuthoringContext) error 
 		return ctx.IsKnownLanguage(slug)
 	}
 
-	// allowedLanguages plugin slugs.
+	// allowedLanguages plugin slugs. Accept both canonical `language.<name>`
+	// and bare `<name>` (e.g. "python"); the runner-judge0 registry already
+	// normalizes them and there's historical data in the DB written under the
+	// bare form. Canonicalize internally so duplicate / allowlist comparisons
+	// don't depend on which form the caller used.
 	seenAllowed := map[string]bool{}
 	for i, slug := range body.AllowedLanguages {
-		if !strings.HasPrefix(slug, "language.") {
-			errs = append(errs, &ValidationError{
-				Code: "INVALID_LANGUAGE_SLUG", Field: fmt.Sprintf("allowedLanguages[%d]", i),
-				Message: fmt.Sprintf("must be a language plugin slug (got %q)", slug),
-			})
-			continue
-		}
-		if seenAllowed[slug] {
+		canonical := canonicalLanguageSlug(slug)
+		if seenAllowed[canonical] {
 			errs = append(errs, &ValidationError{
 				Code: "DUPLICATE_LANGUAGE", Field: fmt.Sprintf("allowedLanguages[%d]", i),
 				Message: fmt.Sprintf("duplicate language %s", slug),
 			})
 			continue
 		}
-		seenAllowed[slug] = true
-		if !known(slug) {
+		seenAllowed[canonical] = true
+		if !known(canonical) {
 			errs = append(errs, &ValidationError{
 				Code: "UNKNOWN_LANGUAGE", Field: fmt.Sprintf("allowedLanguages[%d]", i),
 				Message: fmt.Sprintf("language plugin %s is not installed", slug),
@@ -149,17 +147,18 @@ func ValidateQuestionBodyStruct(body *QuestionBody, ctx AuthoringContext) error 
 
 	// Collect the set of language keys actually used (starterCode + starterFiles
 	// + entryFile). Each of these implicitly extends the allowedLanguages.
+	// usedLangs is keyed by canonical slug to keep comparisons consistent.
 	usedLangs := map[string]bool{}
 	for slug := range body.StarterCode {
-		usedLangs[slug] = true
+		usedLangs[canonicalLanguageSlug(slug)] = true
 		checkLanguageKey(slug, "starterCode", &errs, known)
 	}
 	for slug := range body.StarterFiles {
-		usedLangs[slug] = true
+		usedLangs[canonicalLanguageSlug(slug)] = true
 		checkLanguageKey(slug, "starterFiles", &errs, known)
 	}
 	for slug := range body.EntryFile {
-		usedLangs[slug] = true
+		usedLangs[canonicalLanguageSlug(slug)] = true
 		checkLanguageKey(slug, "entryFile", &errs, known)
 	}
 
@@ -269,19 +268,26 @@ func ValidateQuestionBodyStruct(body *QuestionBody, ctx AuthoringContext) error 
 }
 
 func checkLanguageKey(slug, field string, errs *ValidationErrors, known func(string) bool) {
-	if !strings.HasPrefix(slug, "language.") {
-		*errs = append(*errs, &ValidationError{
-			Code: "INVALID_LANGUAGE_SLUG", Field: fmt.Sprintf("%s[%s]", field, slug),
-			Message: fmt.Sprintf("must be a language plugin slug (got %q)", slug),
-		})
-		return
-	}
-	if !known(slug) {
+	canonical := canonicalLanguageSlug(slug)
+	if !known(canonical) {
 		*errs = append(*errs, &ValidationError{
 			Code: "UNKNOWN_LANGUAGE", Field: fmt.Sprintf("%s[%s]", field, slug),
 			Message: fmt.Sprintf("language plugin %s is not installed", slug),
 		})
 	}
+}
+
+// canonicalLanguageSlug rewrites bare language identifiers ("python") to the
+// canonical plugin slug form ("language.python"). The runner-judge0 registry
+// performs the same normalization at lookup time, but the authoring validator
+// has to canonicalize early so duplicate / allowlist set comparisons agree
+// regardless of which form a given caller used.
+func canonicalLanguageSlug(slug string) string {
+	s := strings.ToLower(strings.TrimSpace(slug))
+	if s == "" || strings.HasPrefix(s, "language.") {
+		return s
+	}
+	return "language." + s
 }
 
 func countLines(s string) int {

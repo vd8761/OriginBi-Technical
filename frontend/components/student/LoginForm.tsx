@@ -88,6 +88,15 @@ const LoginForm: React.FC<LoginFormProps> = ({
     try {
       const session = await loginUser(values.email, values.password);
       
+      const role = String(session.user?.role || '').toUpperCase();
+      const isAdmin = session.user?.isAdmin === true || ['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(role);
+      
+      if (isAdmin) {
+        setGeneralError('Administrative accounts are not permitted on the student portal.');
+        setIsSubmitting(false);
+        return;
+      }
+      
       // Update SessionContext
       if (session.tokens) {
         login(

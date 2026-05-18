@@ -8,6 +8,7 @@ import {
     getPurchasedAssessments,
     listAssignments,
     HAS_TECH_API,
+    TECH_API_BASE,
 } from "./api";
 
 export type PaymentKey = AssessmentId | `coding:${string}`;
@@ -19,8 +20,7 @@ const PAID_KEY = "originbi:paid-assessments";
 const PAID_EVENT = "originbi:paid-changed";
 const COMPLETED_KEY = "originbi:completed-assessments";
 const COMPLETED_EVENT = "originbi:completed-changed";
-const LEGACY_TECH_API_URL =
-    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") || "http://localhost:5000";
+const LEGACY_TECH_API_URL = TECH_API_BASE;
 
 const isNetworkError = (err: any) => {
     if (err instanceof TypeError) return true;
@@ -272,8 +272,8 @@ export function useCompletedAssessments() {
                     if (!paid.has(module)) return;
 
                     try {
-                        await getLatestSubmittedResult(module, email);
-                        if (!current.has(module)) {
+                        const submission = await getLatestSubmittedResult(module, email);
+                        if (submission && !current.has(module)) {
                             current.add(module);
                             changed = true;
                         }

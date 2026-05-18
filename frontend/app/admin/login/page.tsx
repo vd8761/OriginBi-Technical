@@ -2,26 +2,105 @@
 
 import { useEffect, useState, Suspense, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
-import { signIn, fetchAuthSession, signOut } from "aws-amplify/auth";
+import Image from "next/image";
 import { configureAmplify } from "@/lib/aws-amplify-config";
-import { setAdminTokens } from "@/lib/api";
+import { setAdminTokens, loginUser } from "@/lib/api";
+import ThemeToggle from "@/components/ui/ThemeToggle";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import {
+  EmailIcon,
+  LockIcon,
+  EyeIcon,
+  EyeOffIcon,
+  ArrowRightIcon,
+} from "@/components/icons";
+import { ShieldAlert } from "lucide-react";
 
 configureAmplify();
-import { loginUser } from "@/lib/api";
 
-function getErrorMessage(err: unknown) {
-  if (err instanceof Error) return err.message;
+/* ── Helpers ── */
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message;
+    if (
+      msg.includes("not part of group 'ADMIN'") ||
+      msg.includes("Access denied. User is not part of group") ||
+      msg.includes("Access denied. You do not have permission")
+    ) {
+      return "Access denied. You do not have permission to access the admin portal.";
+    }
+    return msg;
+  }
   return "Invalid administrative credentials. Please verify your entries.";
 }
 
+function getSafeRedirect(param: string | null): string {
+  if (param && param.startsWith("/admin") && !param.startsWith("/admin/login")) {
+    return param;
+  }
+  return "/admin";
+}
+
+/* ── Branding Pattern (left column) ── */
+
+function BrandingPattern({ isDark }: { isDark: boolean }) {
+  const logoSrc = isDark ? "/Origin-BI-white-logo.png" : "/Origin-BI-Logo-01.png";
+  const barCount = 16;
+
+  return (
+    <div className="admin-login-branding">
+      {/* Vertical bar pattern */}
+      <div className="admin-login-pattern">
+        {Array.from({ length: barCount }, (_, i) => (
+          <div
+            key={i}
+            className="admin-login-pattern-bar"
+            style={{
+              background: `linear-gradient(180deg,
+                rgba(30, 211, 106, ${isDark ? 0.01 + (i % 6) * 0.015 : 0.03 + (i % 6) * 0.02}) 0%,
+                rgba(30, 211, 106, ${isDark ? 0.05 + (i % 4) * 0.025 : 0.08 + (i % 4) * 0.03}) 50%,
+                rgba(30, 211, 106, 0) 100%)`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Logo */}
+      <div className="admin-login-branding-logo">
+        <Image src={logoSrc} alt="OriginBI Logo" width={140} height={46} />
+      </div>
+
+      {/* Tagline */}
+      <div className="admin-login-branding-tagline">
+        <h2>
+          OriginBi<br />Technical Assessment
+        </h2>
+        <p>
+          The comprehensive platform for evaluating<br />and scaling technical talent.
+        </p>
+      </div>
+
+      {/* Bottom glow */}
+      <div className="admin-login-branding-glow" />
+    </div>
+  );
+}
+
+/* ── Login Form ── */
+
 function AdminLoginForm() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const router = useRouter();
+  const { theme } = useTheme();
   const searchParams = useSearchParams();
-  const nextParam = searchParams.get("next");
-  const safeNext = nextParam && nextParam.startsWith("/admin") && !nextParam.startsWith("/admin/login")
-    ? nextParam
-    : "/admin";
+  const safeNext = getSafeRedirect(searchParams.get("next"));
+  const isDark = mounted ? theme === "dark" : false;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -29,6 +108,7 @@ function AdminLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  /* Auto-redirect if already authenticated */
   useEffect(() => {
     const adminSession = localStorage.getItem("originbi:admin-session");
     const idToken = localStorage.getItem("originbi:admin-id-token");
@@ -37,6 +117,7 @@ function AdminLoginForm() {
     }
   }, [router, safeNext]);
 
+  /* Form submission */
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -45,7 +126,7 @@ function AdminLoginForm() {
     try {
       const session = await loginUser(email, password, { group: "ADMIN" });
       const tokens = session.tokens;
-      
+
       if (!tokens?.accessToken || !tokens.idToken) {
         throw new Error("Auth service did not return a complete token set.");
       }
@@ -54,20 +135,13 @@ function AdminLoginForm() {
       const accessTokenJwt = tokens.accessToken;
       const refreshTokenJwt = tokens.refreshToken || "";
 
-      // Auth/admin endpoints live on the NestJS assessment-service.
-      const apiBase = (
-        process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ||
-        process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
-        ""
-      ).replace(/\/$/, "");
-      
-      if (!apiBase) {
-        throw new Error(
-          "Auth service URL not configured. Set NEXT_PUBLIC_AUTH_SERVICE_URL in frontend/.env.local.",
-        );
-      }
+      // Use the same-origin Next.js proxy to bypass CORS restrictions in the browser.
+      // If NEXT_PUBLIC_ADMIN_API_BASE_URL is not set but NEXT_PUBLIC_AUTH_SERVICE_URL is,
+      // we fallback to the auth-api proxy. Otherwise we use the admin-api proxy.
+      const useAuthFallback = !process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL && process.env.NEXT_PUBLIC_AUTH_SERVICE_URL;
+      const proxyUrl = useAuthFallback ? `/auth-api/admin/me` : `/admin-api/admin/me`;
 
-      const res = await fetch(`${apiBase}/admin/me`, {
+      const res = await fetch(proxyUrl, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${idTokenJwt}`,
@@ -83,7 +157,6 @@ function AdminLoginForm() {
         } catch {
           // Keep fallback message.
         }
-        await signOut();
         setError(backendMessage);
         return;
       }
@@ -97,34 +170,28 @@ function AdminLoginForm() {
         ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(String(backendUser.role || "").toUpperCase());
 
       if (!isAdmin) {
-        await signOut();
         setError("You are not allowed to access this portal with these credentials.");
         return;
       }
 
-      // Keep admin auth in its own namespace so the student SessionProvider
-      // on `/` never mistakes an admin login for a candidate session.
+      /* Persist tokens across all required storage keys */
       setAdminTokens({
         accessToken: accessTokenJwt,
         idToken: idTokenJwt,
         refreshToken: refreshTokenJwt || undefined,
       });
 
-      // Token keys MUST match what lib/api.ts reads (ACCESS_TOKEN_KEY /
-      // ID_TOKEN_KEY) and what AdminGuard checks.
       localStorage.setItem("originbi:id-token", idTokenJwt);
       localStorage.setItem("originbi:access-token", accessTokenJwt);
       if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
-      
-      // Legacy keys — kept for any older code paths that haven't migrated.
+
       localStorage.setItem("originbi_id_token", idTokenJwt);
       localStorage.setItem("accessToken", accessTokenJwt);
       sessionStorage.setItem("idToken", idTokenJwt);
       sessionStorage.setItem("accessToken", accessTokenJwt);
-      
-      // Cookie used by the older proxy setup.
+
       document.cookie = `obi.accessToken=${accessTokenJwt}; path=/; samesite=lax; max-age=${60 * 60 * 24 * 7}`;
-      
+
       localStorage.setItem(
         "user",
         JSON.stringify({
@@ -146,101 +213,110 @@ function AdminLoginForm() {
   };
 
   return (
-    <div className="admin-page">
-      <section className="admin-grid-2" style={{ alignItems: "stretch" }}>
-        <div className="admin-card admin-card-pad" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 420 }}>
-          <div>
-            <p className="admin-page-eyebrow">Secure Access</p>
-            <h2 className="admin-page-title">Admin Portal</h2>
-            <p className="admin-page-copy">
-              Sign in with an Origin BI administrator account to manage question banks, assessments, plugins, and candidate support.
-            </p>
-          </div>
-          <div className="admin-grid-2">
-            <div className="admin-card admin-card-pad">
-              <p className="admin-stat-label">Question Banks</p>
-              <p className="admin-stat-value">5</p>
-              <p className="admin-stat-sub">Coding, aptitude, MNC, role, communication</p>
-            </div>
-            <div className="admin-card admin-card-pad">
-              <p className="admin-stat-label">Controls</p>
-              <p className="admin-stat-value">24</p>
-              <p className="admin-stat-sub">Plugin and exam settings</p>
-            </div>
-          </div>
-        </div>
+    <>
+      {/* Autofill override for themed inputs */}
+      <style jsx global>{`
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0px 1000px ${isDark ? "#1a1d1b" : "#f0f2f1"} inset !important;
+          -webkit-text-fill-color: var(--foreground) !important;
+        }
+        ::selection {
+          background: rgba(30, 211, 106, 0.3);
+          color: inherit;
+        }
+      `}</style>
 
-        <form onSubmit={handleSubmit} className="admin-card admin-card-pad admin-stack" style={{ minHeight: 420 }}>
-          <div style={{ textAlign: "center" }}>
-            <span className="admin-module-icon" style={{ margin: "0 auto 14px", background: "rgba(30,211,106,0.14)", color: "var(--admin-green)" }}>
-              <Lock size={20} />
-            </span>
-            <h1 className="admin-card-title" style={{ fontSize: 22 }}>Authenticate</h1>
-            <p className="admin-card-subtitle">Origin BI Technical Hub</p>
+      <div className="admin-login-card" data-theme={mounted ? (isDark ? "dark" : "light") : "light"}>
+        {/* Left column — Branding (desktop only) */}
+        <BrandingPattern isDark={isDark} />
+
+        {/* Right column — Form */}
+        <div className="admin-login-form-column">
+          <div className="admin-login-theme-toggle">
+            <ThemeToggle />
           </div>
 
-          <label className="admin-form-label">
-            Administrative Email
-            <span className="admin-search" style={{ width: "100%" }}>
-              <Mail size={15} />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="admin@touchmarkdes.com"
-              />
-            </span>
-          </label>
+          <header className="admin-login-header">
+            <h1>Login</h1>
+            <p>Welcome back. Please authenticate to continue.</p>
+          </header>
 
-          <label className="admin-form-label">
-            Portal Password
-            <span className="admin-search" style={{ width: "100%" }}>
-              <Lock size={15} />
-              <input
-                type={passwordVisible ? "text" : "password"}
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter password"
-              />
-              <button
-                type="button"
-                onClick={() => setPasswordVisible((value) => !value)}
-                className="admin-btn admin-btn-ghost"
-                style={{ minHeight: 28, padding: 6 }}
-                aria-label={passwordVisible ? "Hide password" : "Show password"}
-              >
-                {passwordVisible ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </span>
-          </label>
-
-          {error && (
-            <div className="admin-error">
-              <ShieldAlert size={15} style={{ verticalAlign: "middle", marginRight: 8 }} />
-              {error}
+          <form onSubmit={handleSubmit} className="admin-login-form">
+            {/* Email field */}
+            <div className="admin-login-field">
+              <label htmlFor="admin-email">Email</label>
+              <div className="admin-login-input-group">
+                <EmailIcon className="w-5 h-5 text-[var(--admin-green)]" />
+                <input
+                  id="admin-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@originbi.com"
+                />
+              </div>
             </div>
-          )}
 
-          <button type="submit" disabled={isSubmitting || success} className="admin-btn admin-btn-primary" style={{ width: "100%", minHeight: 46 }}>
-            {success ? (
-              <>
-                <CheckCircle size={16} /> Authorized
-              </>
-            ) : isSubmitting ? (
-              "Authenticating..."
-            ) : (
-              <>
-                Authenticate <ArrowRight size={15} />
-              </>
+            {/* Password field */}
+            <div className="admin-login-field">
+              <label htmlFor="admin-password">Password</label>
+              <div className="admin-login-input-group">
+                <LockIcon className="w-5 h-5 text-[var(--admin-green)]" />
+                <input
+                  id="admin-password"
+                  type={passwordVisible ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  className="admin-login-eye-btn"
+                  onClick={() => setPasswordVisible((v) => !v)}
+                  aria-label={passwordVisible ? "Hide password" : "Show password"}
+                >
+                  {passwordVisible
+                    ? <EyeIcon className="w-5 h-5" />
+                    : <EyeOffIcon className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="admin-login-error">
+                <ShieldAlert size={18} />
+                <span>{error}</span>
+              </div>
             )}
-          </button>
-        </form>
-      </section>
-    </div>
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={isSubmitting || success}
+              className="admin-login-submit"
+            >
+              {success ? (
+                "Authorized"
+              ) : isSubmitting ? (
+                "Authenticating..."
+              ) : (
+                <>Login <ArrowRightIcon className="w-5 h-5" /></>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    </>
   );
 }
+
+/* ── Page export ── */
 
 export default function AdminLoginPage() {
   return (

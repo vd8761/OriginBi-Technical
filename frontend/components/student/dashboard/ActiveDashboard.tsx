@@ -95,6 +95,7 @@ interface ActiveDashboardProps {
   onStartExam: (exam: Exam) => void;
   inProgressAttempt?: InProgressAttempt | null;
   onResumeAttempt?: (attempt: InProgressAttempt) => void;
+  dynamicExams?: Exam[];
 }
 
 function examPaidStatus(exam: ExtendedExam, isPaid: (k: PaymentKey) => boolean): "paid" | "partial" | "none" {
@@ -236,6 +237,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   onStartExam,
   inProgressAttempt,
   onResumeAttempt,
+  dynamicExams,
 }) => {
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
@@ -248,8 +250,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
-  const purchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
-  const unpurchasedExams = EXAMS.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
+  const baseExamsList = dynamicExams || EXAMS;
+  const purchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
+  const unpurchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
   const completedIds = Object.keys(results) as AssessmentId[];
   const identity = deriveCareerIdentity(completedIds);
 
@@ -274,7 +277,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                <ClockIcon className="h-5 w-5" />
+                <ClockIcon c="h-5 w-5" />
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Incomplete Assessment</p>
@@ -294,7 +297,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-amber-500/30 transition hover:bg-amber-600"
             >
               Resume Now
-              <ChevronRightIcon className="h-4 w-4" />
+              <ChevronRightIcon c="h-4 w-4" />
             </button>
           </div>
         </motion.section>

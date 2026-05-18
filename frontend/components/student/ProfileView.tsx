@@ -27,13 +27,15 @@ interface ProfileViewProps {
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
-    const { user: sessionUser, updateProfile } = useSession();
+    const { user: sessionUser, updateProfile, isLoading: isSessionLoading } = useSession();
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchUserProfile = async () => {
+            if (isSessionLoading) return;
+
             const email = sessionUser?.email;
             const name = sessionUser?.name || 'Student';
             const mobile = sessionUser?.mobile_number || 'Not provided';
@@ -52,8 +54,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
             // Fetch fresh profile from API in background to ensure accurate information
             if (email) {
                 try {
-                    const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
-                    const res = await fetch(`${studentServiceUrl}/student/profile`, {
+                    const res = await fetch(`/student-api/student/profile`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email }),
@@ -82,9 +83,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
         };
 
         fetchUserProfile();
-    }, [sessionUser?.email]);
+    }, [sessionUser?.email, isSessionLoading]);
 
-    if (isLoading) {
+    if (isLoading || isSessionLoading) {
         return (
             <div className="flex items-center justify-center p-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-green"></div>

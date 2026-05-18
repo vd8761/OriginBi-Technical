@@ -117,6 +117,7 @@ func (s *Server) routes() chi.Router {
 	})
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/auth/email-availability", s.emailAvailability)
+		r.Get("/auth/phone-availability", s.phoneAvailability)
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
 		r.Post("/admin/bootstrap", s.bootstrapAdmin)
@@ -161,8 +162,6 @@ func (s *Server) routes() chi.Router {
 			r.Get("/admin/exam-packages/{pkg_id}", s.getExamPackage)
 			r.Put("/admin/exam-packages/{pkg_id}", s.updateExamPackage)
 			r.Post("/admin/pricing-items", s.createPricingItem)
-			r.Get("/admin/dashboard-summary", s.adminDashboardSummary)
-			r.Get("/admin/users", s.listAdminUsers)
 			r.Get("/admin/users/{user_id}/entitlements", s.adminUserEntitlements)
 			r.Get("/admin/judge0/health", s.judge0Health)
 		})

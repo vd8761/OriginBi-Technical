@@ -8,6 +8,12 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import {
+  DEFAULT_PROCTORING,
+  resolveProctoringForPackage,
+  type ProctoringSettings,
+} from "@/lib/proctoring";
 
 interface Option {
   id: string;
@@ -86,7 +92,7 @@ const formatTime = (seconds: number) => {
 };
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
   "";
 
@@ -126,9 +132,11 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   
   // Multi-block navigation state
   const [allBlocks, setAllBlocks] = useState<Map<number, BlockData>>(new Map());
-  const [allAnswers, setAllAnswers] = useState<Record<string, string>>({});
+  const [allAnswers, setAllAnswers] = useState<Record<string, string | string[]>>({});
   const [viewingBlockNumber, setViewingBlockNumber] = useState(1);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
+  const [proctoringSettings, setProctoringSettings] =
+    useState<ProctoringSettings>(DEFAULT_PROCTORING);
   
   // Cache ref to prevent double-fetching
   const cacheRestoredRef = useRef(false);
@@ -264,6 +272,32 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     initializeBlockAttempt();
   }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache]);
 
+  // Pull per-package proctoring config off the admin assessment row. The
+  // block-based attempt response doesn't carry this metadata today, so we
+  // fetch the list and pick the aptitude package. Optional — defaults stand
+  // if the fetch fails.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const found = json?.data?.find(
+          (a: { module_type?: string; assessment_code?: string }) =>
+            a.module_type === "aptitude" || a.assessment_code === "aptitude",
+        );
+        if (found) setProctoringSettings(resolveProctoringForPackage(found));
+      } catch {
+        /* keep defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Timer management
   useEffect(() => {
     if (isLoading || !attemptToken) return;
@@ -337,7 +371,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       const timeTaken = totalTime - timeLeft;
 
       // Only send answers for the current block
-      const currentBlockAnswers: Record<string, string> = {};
+      const currentBlockAnswers: Record<string, string | string[]> = {};
       currentBlockQuestions.forEach(q => {
         if (allAnswers[q.id]) currentBlockAnswers[q.id] = allAnswers[q.id];
       });
@@ -448,14 +482,14 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   // Save answers for a specific block to backend
-  const saveBlockAnswers = async (blockNum: number, answersOverride?: Record<string, string>) => {
+  const saveBlockAnswers = async (blockNum: number, answersOverride?: Record<string, string | string[]>) => {
     if (!attemptToken) return;
     
     // Get answers for this block only
     const block = allBlocks.get(blockNum);
     if (!block) return;
     const source = answersOverride ?? allAnswers;
-    const blockAnswers: Record<string, string> = {};
+    const blockAnswers: Record<string, string | string[]> = {};
     block.questions.forEach(q => {
       if (source[q.id]) {
         blockAnswers[q.id] = source[q.id];
@@ -666,6 +700,12 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
       <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
       <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
+
+      {/* Per-package proctoring (tab_switch_limit, anti_copy_enabled). */}
+      <ProctoringHost
+        settings={proctoringSettings}
+        active={!isLoading && !isSubmitting && Boolean(currentBlock)}
+      />
 
       {/* Cache Restored Banner */}
       <AnimatePresence>

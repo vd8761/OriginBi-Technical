@@ -30,9 +30,9 @@ import { type InProgressAttempt } from "@/lib/assessmentResume";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
-const LEGACY_TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "");
+const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, ""));
 const TECH_API_BASE =
-  process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
   "";
 
@@ -232,10 +232,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     return () => {
       active = false;
     };
-  }, []);
-
-  const dynamicExams = useMemo(() => {
-    return EXAMS.map((exam) => {
+  }, []);  const dynamicExams = useMemo(() => {
+    const mapped = EXAMS.map((exam) => {
       const dbModule = exam.id === "communication" ? "grammar" : exam.id;
       const dbExam = assessmentsList.find(
         (a) => a.module_type === dbModule || a.assessment_code === exam.id
@@ -260,6 +258,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             }).filter(Boolean);
           }
         }
+
         return {
           ...exam,
           assessmentId: dbExam.assessment_id,
@@ -274,10 +273,13 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
           tags: tags,
+          enabledQuestionTypes: dbExam.enabled_question_types,
         };
       }
       return exam;
     });
+
+    return mapped;
   }, [assessmentsList]);
 
   // Read view from URL and sync with currentView
@@ -476,13 +478,13 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const handleResumeAttempt = (attempt: InProgressAttempt) => {
-    const module = attempt.module === "grammar" ? "communication" : attempt.module;
+    const resumeModule = attempt.module === "grammar" ? "communication" : attempt.module;
     const mode = attempt.mode ?? "main";
-    if (module === "aptitude" && attempt.isBlockBased) {
+    if (resumeModule === "aptitude" && attempt.isBlockBased) {
       router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
       return;
     }
-    router.push(`/assessment/${module}?mode=${mode}`);
+    router.push(`/assessment/${resumeModule}?mode=${mode}`);
   };
 
   const handleCardTrialStart = (exam: Exam) => {
@@ -606,7 +608,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={EXAMS}
+            assessments={dynamicExams as any}
             examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);
@@ -656,7 +658,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                 </h3>
                 
                 <p className="text-[14px] leading-relaxed text-black dark:text-white max-w-md mb-8">
-                  You haven't unlocked any assessments on your account. Go to the <span className="font-bold text-[#1ED36A]">Explore</span> page to browse and select evaluations.
+                  You haven&apos;t unlocked any assessments on your account. Go to the <span className="font-bold text-[#1ED36A]">Explore</span> page to browse and select evaluations.
                 </p>
 
                 <button
@@ -725,6 +727,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             handleStartExam={handleModalStart}
             inProgressAttempt={inProgressAttempt}
             onResumeAttempt={handleResumeAttempt}
+            dynamicExams={dynamicExams}
           />
         ) : currentView === "profile" ? (
           <ProfileView onNavigate={(view) => handleNavigate(view as any)} />
