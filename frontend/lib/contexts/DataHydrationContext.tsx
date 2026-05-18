@@ -58,10 +58,26 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
     setIsSyncing(true);
     try {
       // 1. Sync Purchases (Tech API + Exam Engine)
-      const [{ purchased }, { assignments }] = await Promise.all([
-        getPurchasedAssessments(email),
-        listAssignments()
-      ]);
+      // Handle network errors gracefully
+      let purchased: string[] = [];
+      let assignments: any[] = [];
+      
+      try {
+        const purchaseResult = await getPurchasedAssessments(email);
+        purchased = purchaseResult.purchased || [];
+      } catch (err: any) {
+        console.warn("[DataHydration] Purchases sync failed (network error?):", err?.message || err);
+        // Continue with empty purchases, don't fail entire sync
+      }
+
+      try {
+        const assignmentResult = await listAssignments();
+        assignments = assignmentResult.assignments || [];
+      } catch (err: any) {
+        console.warn("[DataHydration] Assignments sync failed (network error?):", err?.message || err);
+        // Continue with empty assignments, don't fail entire sync
+      }
+
       const nextPurchases = new Set(purchased);
       (assignments ?? []).forEach(a => {
         if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
@@ -73,16 +89,10 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
       localStorage.setItem(PAID_KEY, JSON.stringify(Array.from(nextPurchases)));
       window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
 
-      // 2. Sync Results
-      // We fetch results for all core modules to catch trial completions 
-      // and handle cases where purchase sync might be slightly delayed.
+      // 2. Sync Results - use functional updates to avoid closure dependency on results/completions
       const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role", "coding"];
-      const nextResults: Record<string, AssessmentResult> = { ...results };
-      const nextCompletions = new Set(completions);
-      let resultsChanged = false;
-      let completionsChanged = false;
 
-      await Promise.all(
+      const fetchResults = await Promise.all(
         modules.map(async (module) => {
           try {
             const submission = await getLatestSubmittedResult(module, email);
@@ -91,32 +101,42 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
               assessmentId: module,
               submission: submission as any,
             });
-
-            nextResults[module] = result;
-            resultsChanged = true;
-            
-            if (!nextCompletions.has(module)) {
-              nextCompletions.add(module);
-              completionsChanged = true;
-            }
+            return { module, result } as const;
           } catch (err: any) {
-            // Silence expected 404s
+            // Silence expected 404s and network errors
             if (err?.status !== 404 && err?.status !== 400) {
-              console.warn(`[DataHydration] ${module} result sync error:`, err?.message || err);
+              const isNetworkError = err?.message === 'Failed to fetch' || err?.name === 'TypeError';
+              if (!isNetworkError) {
+                console.warn(`[DataHydration] ${module} result sync error:`, err?.message || err);
+              }
             }
+            return null;
           }
         })
       );
 
-      if (resultsChanged) {
-        setResults(nextResults);
-        localStorage.setItem(RESULTS_KEY, JSON.stringify(nextResults));
-        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
-      }
+      const validResults = fetchResults.filter(Boolean) as { module: string; result: AssessmentResult }[];
 
-      if (completionsChanged) {
-        setCompletions(nextCompletions);
-        localStorage.setItem(COMPLETED_KEY, JSON.stringify(Array.from(nextCompletions)));
+      if (validResults.length > 0) {
+        setResults(prev => {
+          const next = { ...prev };
+          for (const { module, result } of validResults) {
+            next[module] = result;
+          }
+          localStorage.setItem(RESULTS_KEY, JSON.stringify(next));
+          return next;
+        });
+
+        setCompletions(prev => {
+          const next = new Set(prev);
+          for (const { module } of validResults) {
+            next.add(module);
+          }
+          localStorage.setItem(COMPLETED_KEY, JSON.stringify(Array.from(next)));
+          return next;
+        });
+
+        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
         window.dispatchEvent(new CustomEvent("originbi:completed-changed"));
       }
 
@@ -126,7 +146,7 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
       setIsSyncing(false);
       setIsInitialized(true);
     }
-  }, [results, completions]);
+  }, []);
 
   // Initial load from storage + backend sync
   useEffect(() => {

@@ -5,6 +5,7 @@ import React, {
   useState,
   useEffect,
   useContext,
+  useCallback,
   ReactNode,
 } from "react";
 
@@ -33,6 +34,41 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const logout = useCallback(() => {
+    try {
+      // Clear all originbi keys to avoid state leakage
+      localStorage.removeItem("originbi:access-token");
+      localStorage.removeItem("originbi:id-token");
+      localStorage.removeItem("originbi:user-profile");
+      localStorage.removeItem("originbi:assessment-results");
+      localStorage.removeItem("originbi:paid-assessments");
+      localStorage.removeItem("originbi:completed-assessments");
+      
+      // Clear any legacy userEmail keys if present
+      localStorage.removeItem("userEmail");
+      sessionStorage.removeItem("userEmail");
+
+      setUser(null);
+      setIsLoggedIn(false);
+    } catch (error) {
+      console.error("Error clearing session storage", error);
+    }
+  }, []);
+
+  const login = (accessToken: string, idToken: string, profile: UserProfile) => {
+    try {
+      localStorage.setItem("originbi:access-token", accessToken);
+      localStorage.setItem("originbi:id-token", idToken);
+      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+
+      setUser(profile);
+      setIsLoggedIn(true);
+      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+    } catch (error) {
+      console.error("Error setting session storage", error);
+    }
+  };
 
   useEffect(() => {
     // Check localStorage on mount
@@ -70,6 +106,13 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
           return;
         }
 
+        // If cache is cleared (no token and no profile), ensure logout
+        if (!token && !storedProfile) {
+          setUser(null);
+          setIsLoggedIn(false);
+          return;
+        }
+
         if (token) {
           if (storedProfile) {
             const parsedProfile = JSON.parse(storedProfile);
@@ -89,6 +132,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               setIsLoggedIn(true);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+            } else {
+              // Session invalid, logout
+              logout();
             }
           }
         } else {
@@ -107,53 +153,34 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               localStorage.setItem("originbi:access-token", accessToken);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+            } else {
+              // Session invalid, logout
+              logout();
             }
           }
         }
       } catch (error) {
         console.error("Failed to restore session from localStorage", error);
+        // On error, logout to ensure clean state
+        logout();
       } finally {
         setIsLoading(false);
       }
     };
 
     loadSession();
-  }, []);
 
-  const login = (accessToken: string, idToken: string, profile: UserProfile) => {
-    try {
-      localStorage.setItem("originbi:access-token", accessToken);
-      localStorage.setItem("originbi:id-token", idToken);
-      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+    // Listen for storage events (cross-tab sync and cache clear detection)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "originbi:access-token" && e.newValue === null) {
+        // Token was removed (cache cleared), logout
+        logout();
+      }
+    };
 
-      setUser(profile);
-      setIsLoggedIn(true);
-      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
-    } catch (error) {
-      console.error("Error setting session storage", error);
-    }
-  };
-
-  const logout = () => {
-    try {
-      // Clear all originbi keys to avoid state leakage
-      localStorage.removeItem("originbi:access-token");
-      localStorage.removeItem("originbi:id-token");
-      localStorage.removeItem("originbi:user-profile");
-      localStorage.removeItem("originbi:assessment-results");
-      localStorage.removeItem("originbi:paid-assessments");
-      localStorage.removeItem("originbi:completed-assessments");
-      
-      // Clear any legacy userEmail keys if present
-      localStorage.removeItem("userEmail");
-      sessionStorage.removeItem("userEmail");
-
-      setUser(null);
-      setIsLoggedIn(false);
-    } catch (error) {
-      console.error("Error clearing session storage", error);
-    }
-  };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [logout]);
 
   const updateProfile = (profileUpdates: Partial<UserProfile>) => {
     try {
