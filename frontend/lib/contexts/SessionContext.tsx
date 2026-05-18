@@ -44,7 +44,14 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.removeItem("originbi:assessment-results");
       localStorage.removeItem("originbi:paid-assessments");
       localStorage.removeItem("originbi:completed-assessments");
-      
+
+      // Clear admin session flag and tokens to avoid cross-session contamination
+      localStorage.removeItem("originbi:admin-session");
+      localStorage.removeItem("originbi:admin-access-token");
+      localStorage.removeItem("originbi:admin-id-token");
+      localStorage.removeItem("originbi:admin-refresh-token");
+      localStorage.removeItem("user");
+
       // Clear any legacy userEmail keys if present
       localStorage.removeItem("userEmail");
       sessionStorage.removeItem("userEmail");
@@ -61,6 +68,13 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.setItem("originbi:access-token", accessToken);
       localStorage.setItem("originbi:id-token", idToken);
       localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+
+      // Clear admin session flag and tokens to avoid cross-session contamination
+      localStorage.removeItem("originbi:admin-session");
+      localStorage.removeItem("originbi:admin-access-token");
+      localStorage.removeItem("originbi:admin-id-token");
+      localStorage.removeItem("originbi:admin-refresh-token");
+      localStorage.removeItem("user");
 
       setUser(profile);
       setIsLoggedIn(true);
@@ -185,50 +199,6 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [logout]);
-  }, []);
-
-  const login = (accessToken: string, idToken: string, profile: UserProfile) => {
-    try {
-      localStorage.setItem("originbi:access-token", accessToken);
-      localStorage.setItem("originbi:id-token", idToken);
-      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
-
-      // Clear admin session flag and tokens to avoid cross-session contamination
-      localStorage.removeItem("originbi:admin-session");
-      localStorage.removeItem("originbi:admin-access-token");
-      localStorage.removeItem("originbi:admin-id-token");
-      localStorage.removeItem("originbi:admin-refresh-token");
-      localStorage.removeItem("user");
-
-      setUser(profile);
-      setIsLoggedIn(true);
-      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
-    } catch (error) {
-      console.error("Error setting session storage", error);
-    }
-  };
-
-  const logout = () => {
-    try {
-      // Clear all originbi keys to avoid state leakage
-      localStorage.removeItem("originbi:access-token");
-      localStorage.removeItem("originbi:id-token");
-      localStorage.removeItem("originbi:user-profile");
-      localStorage.removeItem("originbi:assessment-results");
-      localStorage.removeItem("originbi:paid-assessments");
-      localStorage.removeItem("originbi:completed-assessments");
-      localStorage.removeItem("user");
-      
-      // Clear any legacy userEmail keys if present
-      localStorage.removeItem("userEmail");
-      sessionStorage.removeItem("userEmail");
-
-      setUser(null);
-      setIsLoggedIn(false);
-    } catch (error) {
-      console.error("Error clearing session storage", error);
-    }
-  };
 
   const updateProfile = (profileUpdates: Partial<UserProfile>) => {
     try {

@@ -82,16 +82,6 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
         // Continue with empty assignments, don't fail entire sync
       }
 
-      const [{ purchased }, { assignments }] = await Promise.all([
-        getPurchasedAssessments(email).catch(err => {
-          if (err?.status === 401) return { purchased: [] };
-          throw err;
-        }),
-        listAssignments().catch(err => {
-          if (err?.status === 401) return { assignments: [] };
-          throw err;
-        })
-      ]);
       const nextPurchases = new Set(purchased);
       (assignments ?? []).forEach(a => {
         if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
