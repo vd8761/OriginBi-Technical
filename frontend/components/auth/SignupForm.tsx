@@ -292,7 +292,19 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess }) => {
       nextErrors.email = "Enter a valid email address.";
     }
     if (!formData.phone.trim()) nextErrors.phone = "Mobile number is required.";
-    if (formData.password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    if (!formData.password.trim()) {
+      nextErrors.password = "Password is required.";
+    } else if (formData.password.length < 8) {
+      nextErrors.password = "Use at least 8 characters.";
+    } else if (!/[A-Z]/.test(formData.password)) {
+      nextErrors.password = "Must contain 1 uppercase letter.";
+    } else if (!/[a-z]/.test(formData.password)) {
+      nextErrors.password = "Must contain 1 lowercase letter.";
+    } else if (!/[0-9]/.test(formData.password)) {
+      nextErrors.password = "Must contain 1 number.";
+    } else if (!/[!@#$%^&*(),.?":{}|<>]/.test(formData.password)) {
+      nextErrors.password = "Must contain 1 special character.";
+    }
     
     // Demographic Validation
     if (!formData.programCode) {

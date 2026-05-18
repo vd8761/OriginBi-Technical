@@ -8,6 +8,13 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import {
+    DEFAULT_PROCTORING,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
 
 const MNC_TOTAL_TIME = 30 * 60;
 
@@ -69,11 +76,7 @@ const formatTime = (seconds: number) => {
 
 const labels = ["A", "B", "C", "D"];
 
-const API_BASE =
-    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
-    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
-    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-    "http://localhost:5000";
+const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
 
 const MNCEngine: React.FC<MNCEngineProps> = ({ 
     onComplete,
@@ -101,6 +104,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -145,7 +150,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
-                        
+                        setProctoringSettings(resolveProctoringForPackage(found));
+
                         let eqt = found.enabled_question_types;
                         if (eqt) {
                             if (typeof eqt === "string") {
@@ -485,10 +491,18 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
     }
 
     return (
+        <AssessmentPluginHost packageSlug="mnc">
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
+
+            {/* Hand-rolled proctoring rules (right-click, copy-paste, etc.).
+                Tab-switch is plugin-driven via AssessmentPluginHost. */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && !isBlocked}
+            />
 
             {/* ── Cache Restored Banner ──────────────────────────────── */}
             <AnimatePresence>
@@ -730,6 +744,7 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                 </div>
             )}
         </div>
+        </AssessmentPluginHost>
     );
 };
 

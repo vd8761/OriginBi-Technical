@@ -8,6 +8,7 @@ const STUDENT_SERVICE_URL = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http
 const ADMIN_API_BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "http://localhost:4001";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8088";
 const TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+const JUDGE0_URL = process.env.NEXT_PUBLIC_JUDGE0_URL || "http://localhost:2358";
 
 const nextConfig: NextConfig = {
   // Pin the tracing root to this frontend directory so Next.js doesn't
@@ -40,6 +41,10 @@ const nextConfig: NextConfig = {
       {
         source: "/admin-api/:path*",
         destination: `${ADMIN_API_BASE_URL}/:path*`,
+      },
+      {
+        source: "/judge0-api/:path*",
+        destination: `${JUDGE0_URL}/:path*`, // Judge0 Execution Engine
       },
     ];
   },

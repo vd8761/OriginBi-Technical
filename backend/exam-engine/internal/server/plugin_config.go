@@ -44,12 +44,20 @@ type surfaceCollections struct {
 }
 
 // mePluginConfig resolves the set of plugins the caller should run, with
-// their effective configuration. Today the resolution is naive: every
-// enabled-by-default plugin is included with its declared schema defaults.
-// Per-org and per-attempt overrides are stubs that future work fills in.
+// their effective configuration.
 //
-// Optional ?attempt_id=<uuid> narrows resolution to that attempt. We only
-// validate the format here; the org/package join is a TODO callout below.
+// Filtering today:
+//   - ?attempt_id=<uuid> — coding path, validated for shape; org/package join
+//     to come (see TODO below).
+//   - ?package=<slug>   — non-coding path. "aptitude" / "communication" /
+//     "mnc" / "role" / "coding". A plugin is included for the package when
+//     either (a) its manifest extends list is empty (treated as "global"),
+//     or (b) the list contains "assessment.<package>". This is what lets
+//     proctoring-tab-switch apply to every engine instead of just coding.
+//
+// Per-org and per-attempt overrides are still a TODO — admin can't yet
+// toggle a plugin off for one package while leaving it on for another.
+// That needs a `package_plugin_overrides` table; tracked separately.
 func (s *Server) mePluginConfig(w http.ResponseWriter, r *http.Request) {
 	if _, err := auth.Require(r.Context()); err != nil {
 		writeError(w, http.StatusUnauthorized, "unauthenticated")
@@ -74,6 +82,8 @@ func (s *Server) mePluginConfig(w http.ResponseWriter, r *http.Request) {
 		// stable contract while resolution is built out.
 	}
 
+	pkg := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("package")))
+
 	out := pluginConfigResponse{
 		Plugins:  []pluginConfigEntry{},
 		Surfaces: surfaceCollections{},
@@ -81,6 +91,9 @@ func (s *Server) mePluginConfig(w http.ResponseWriter, r *http.Request) {
 
 	for _, m := range s.plugins.All() {
 		if m == nil {
+			continue
+		}
+		if !pluginAppliesToPackage(m, pkg) {
 			continue
 		}
 		ext, err := m.DecodeExtensions()
@@ -112,6 +125,39 @@ func (s *Server) mePluginConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, out)
+}
+
+// pluginAppliesToPackage decides whether a plugin manifest should be served
+// to a candidate working on a particular assessment package.
+//
+//   - When the request didn't specify a package (empty `pkg`), we keep the
+//     historical behaviour: return every plugin. The coding flow has always
+//     called the endpoint without a package and relied on `attempt_id`.
+//   - When a package is requested, include plugins whose `extends` list is
+//     empty (global addons), whose list contains "*" (explicit wildcard),
+//     or whose list contains the package's assessment slug.
+//
+// We also always include the assessment plugin itself for the requested
+// package, even if the manifest doesn't extend anything — without it the
+// frontend can't reason about what kind of attempt this is.
+func pluginAppliesToPackage(m *pluginhost.Manifest, pkg string) bool {
+	if pkg == "" {
+		return true
+	}
+	assessmentSlug := "assessment." + pkg
+	if m.Slug == assessmentSlug {
+		return true
+	}
+	if len(m.Extends) == 0 {
+		return true
+	}
+	for _, ext := range m.Extends {
+		switch ext {
+		case "*", assessmentSlug:
+			return true
+		}
+	}
+	return false
 }
 
 // defaultConfigFromSchema reads the top-level "defaults" key from a manifest

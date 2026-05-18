@@ -8,6 +8,13 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import {
+    DEFAULT_PROCTORING,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
 import { McqQuestion } from "./question-types/McqQuestion";
 import { MsqQuestion } from "./question-types/MsqQuestion";
 import { TfQuestion } from "./question-types/TfQuestion";
@@ -74,7 +81,7 @@ const formatTime = (seconds: number) => {
 };
 
 const API_BASE =
-    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
+    (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
     process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
     "";
 
@@ -109,6 +116,8 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
     // ── Intercept browser/mouse back button (popstate) ──
     useEffect(() => {
@@ -174,6 +183,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
+                        setProctoringSettings(resolveProctoringForPackage(found));
                     }
                 }
             } catch (err) {
@@ -692,9 +702,22 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     }
 
     return (
+        <AssessmentPluginHost packageSlug="aptitude">
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
+
+            {/* Hand-rolled rules (right-click, copy-paste, browser-shortcuts,
+                fullscreen, mouse-leave). The settings are derived from the
+                package's tab_switch_limit / anti_copy_enabled columns.
+                Tab-switch itself is owned by the `proctoring.tab-switch`
+                plugin mounted through AssessmentPluginHost above; this hook
+                no longer duplicates that concern. As more rules graduate to
+                plugins, this host shrinks. */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && questions.length > 0}
+            />
 
             {/* ── Cache Restored Banner ──────────────────────────────── */}
             <AnimatePresence>
@@ -1205,6 +1228,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 </div>
             )}
         </div>
+        </AssessmentPluginHost>
     );
 };
 

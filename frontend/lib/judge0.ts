@@ -4,9 +4,7 @@
 
 const DEFAULT_BASE_URL = "http://localhost:2358";
 
-export const JUDGE0_BASE_URL =
-    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_JUDGE0_URL) ||
-    DEFAULT_BASE_URL;
+export const JUDGE0_BASE_URL = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "/judge0-api" : (process.env.NEXT_PUBLIC_JUDGE0_URL || DEFAULT_BASE_URL);
 
 export const JUDGE0_LANG_ID: Record<string, number> = {
     python: 71,
