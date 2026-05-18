@@ -97,6 +97,7 @@ function UsersInner() {
   const [selected, setSelected] = useState<AdminUserRow | null>(null);
   const [lookupId, setLookupId] = useState("");
   const [lookupError, setLookupError] = useState("");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [counts, setCounts] = useState<AdminUserCounts>({
@@ -150,7 +151,7 @@ function UsersInner() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, filter, currentPage]);
+  }, [debouncedSearch, filter, currentPage, refreshTrigger]);
 
   const tabs = useMemo(
     () => [
@@ -181,13 +182,13 @@ function UsersInner() {
           }}
           onRegister={() => {
             setView("list");
-            setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
+            setRefreshTrigger((prev) => prev + 1);
           }}
         />
       ) : view === "bulk" ? (
         <BulkUploadRegistration onCancel={() => {
           setView("list");
-          setSearch(s => s + " "); setTimeout(() => setSearch(s => s.trim()), 0); // Trigger refresh
+          setRefreshTrigger((prev) => prev + 1);
         }} />
       ) : (
       <>
@@ -244,7 +245,7 @@ function UsersInner() {
             <button 
               type="button" 
               onClick={() => setView('bulk')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#FFFFFF1F] border border-gray-200 dark:border-[#FFFFFF1F] rounded-lg text-sm font-medium text-brand-text-light-primary dark:text-white hover:bg-gray-50 dark:hover:bg-white/30 transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#FFFFFF1F] border border-gray-200 dark:border-[#FFFFFF1F] rounded-lg text-sm font-medium text-brand-text-light-primary dark:text-white hover:bg-gray-50 dark:hover:bg-white/30 transition-all cursor-pointer"
             >
               <span>Bulk Upload</span>
               <Download size={16} />
@@ -252,7 +253,7 @@ function UsersInner() {
             <button
               type="button"
               onClick={() => setView('add')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green border border-transparent rounded-lg text-sm font-medium text-white hover:bg-brand-green/90 transition-all shadow-lg shadow-brand-green/20 cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green border border-transparent rounded-lg text-sm font-medium text-white hover:bg-brand-green/90 transition-all cursor-pointer"
             >
               <span>Add New</span>
               <Plus size={16} className="text-white" />
