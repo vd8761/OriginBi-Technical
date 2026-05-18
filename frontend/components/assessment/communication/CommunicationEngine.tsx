@@ -15,11 +15,7 @@ import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
 
 const COMMUNICATION_TOTAL_TIME = 45 * 60;
-const API_BASE =
-    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
-    process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
-    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-    "http://localhost:5000";
+const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
 
 export type TaskType = "audio" | "speaking" | "reading" | "writing" | "mcq";
 
