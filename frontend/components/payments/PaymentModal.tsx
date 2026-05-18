@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useSession } from "@/lib/contexts/SessionContext";
+import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, AlertCircle, Copy, Check } from "lucide-react";
 import { TECH_API_BASE } from "@/lib/api";
@@ -75,6 +75,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
         const email = user?.email || "candidate@originbi.com";
         const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
+        const isAdminFree = isAdminRegisteredProfile(user);
 
         try {
             // Frontend-only sandbox mode: bypass backend order creation entirely.
@@ -103,6 +104,21 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             const orderRes = await orderPromise;
             if (!orderRes.ok) throw new Error("Gateway failed to issue order.");
             const order = await orderRes.json();
+
+            // Admin-registered users hit a free order — the backend has
+            // already recorded the purchase, so we just flip the assignment
+            // on in the exam-engine (via onSuccess → demoPurchase) and skip
+            // Razorpay entirely.
+            if (order?.free || isAdminFree) {
+                await onSuccess();
+                successHandledRef.current = true;
+                if (mountedRef.current) {
+                    setRefId(`FREE-ADMIN-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                    setPaidAt(new Date());
+                    setStage("success");
+                }
+                return;
+            }
 
             // Check if Razorpay is explicitly disabled in client environment (already declared above)
 
