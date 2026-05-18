@@ -166,6 +166,25 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
+		// Admin-registered users get free access — materialize the missing
+		// assignment on demand and try the lookup once more in the same tx.
+		if req.AssignmentRef != "" && s.isAdminRegistered(ctx, principal.UserID) {
+			if grantErr := s.grantFreeAssignmentTx(ctx, tx, principal.UserID, req.AssignmentRef); grantErr == nil {
+				err = tx.QueryRow(ctx, `
+					SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds
+					FROM exam_assignments a
+					JOIN exam_versions ev ON ev.id = a.exam_version_id
+					WHERE a.candidate_user_id = $1
+					  AND a.assignment_ref = $2
+					  AND a.status = 'active'
+					ORDER BY a.created_at DESC
+					LIMIT 1
+					FOR UPDATE OF a
+				`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds)
+			}
+		}
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "active assignment not found")
 		return
 	}

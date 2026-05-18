@@ -33,6 +33,12 @@ func (s *Server) meLanguages(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
+	// Admin-registered users always see every coding language plugin as
+	// entitled. Materialize their assignments first so UserLanguagePlugins
+	// (which joins exam_assignments) picks them up automatically.
+	if s.isAdminRegistered(ctx, principal.UserID) {
+		_ = s.grantFreeCodingAssignments(ctx, principal.UserID)
+	}
 	ents, err := s.plugins.UserLanguagePlugins(ctx, principal.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "language lookup failed")
