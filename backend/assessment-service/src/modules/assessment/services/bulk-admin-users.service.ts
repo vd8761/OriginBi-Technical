@@ -5,6 +5,7 @@ import * as csv from 'fast-csv';
 import { Readable } from 'stream';
 import axios from 'axios';
 import { BulkImportEntity, BulkImportRowEntity } from '../../../entities';
+import { RegistrationService } from './registration.service';
 
 @Injectable()
 export class BulkAdminUsersService {
@@ -16,6 +17,7 @@ export class BulkAdminUsersService {
     @InjectRepository(BulkImportRowEntity)
     private bulkImportRowRepo: Repository<BulkImportRowEntity>,
     private dataSource: DataSource,
+    private registrationService: RegistrationService,
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -175,32 +177,14 @@ export class BulkAdminUsersService {
         try {
           const dto = row.normalizedData;
           
-          // First create in Cognito
-          let cognitoRes;
-          try {
-            cognitoRes = await axios.post('http://localhost:4002/internal/cognito/users', {
-              email: dto.email,
-              password: 'TempPassword123!',
-              groupName: dto.role,
-            });
-          } catch (cognitoErr: any) {
-             if (cognitoErr.response?.data?.message?.includes('already exists') || cognitoErr.response?.status === 409) {
-                 // User already exists, proceed to just register them for tech assessment if not already
-                 cognitoRes = { data: { email: dto.email } };
-             } else {
-                 throw cognitoErr;
-             }
-          }
-
-          // Register in originbi via student-service
-          await axios.post('http://localhost:4004/auth/register', {
+          // Register via local RegistrationService (Cognito + DB only, no main app assignments)
+          await this.registrationService.registerUser({
             email: dto.email,
-            name: dto.name,
-            gender: dto.gender,
-            is_tech_assessment: 1,
-            role: dto.role,
-            mobile_number: dto.mobile,
-            registration_source: 'originbi-technical',
+            password: 'TempPassword123!',
+            fullName: dto.name,
+            gender: String(dto.gender || 'MALE').toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
+            mobileNumber: dto.mobile || '',
+            sendEmail: false,
           });
 
           row.status = 'SUCCESS';

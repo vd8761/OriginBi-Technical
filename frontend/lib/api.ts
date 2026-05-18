@@ -179,8 +179,6 @@ export interface RegisterRequest {
   currentYear?: string;
   currentRole?: string;
   roleDescription?: string;
-  registrationSource?: string;
-  groupCode?: string;
   sendEmail?: boolean;
 }
 
@@ -658,51 +656,30 @@ function errorMessageFrom(data: ErrorEnvelope | null): string | null {
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
   await assertRegistrationEmailAvailable(input.email);
   await assertRegistrationPhoneAvailable(input.mobileNumber);
-  const registrationSource = input.registrationSource || "originbi-technical";
 
-  const cognito = await apiFetch<{ sub?: string; email?: string; group?: string }>("/internal/cognito/users", {
+  await apiFetch<any>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email: input.email,
       password: input.password,
-      groupName: input.role === "ADMIN" ? "ADMIN" : input.role === "PROCTOR" ? "PROCTOR" : "STUDENT",
+      fullName: input.fullName,
+      gender: input.gender || "MALE",
+      mobileNumber: input.mobileNumber,
+      countryCode: input.countryCode || "+91",
+      sendEmail: input.sendEmail !== false,
+      programCode: input.programCode,
+      schoolLevel: input.schoolLevel,
+      schoolStream: input.schoolStream,
+      studentBoard: input.studentBoard,
+      departmentDegreeId: input.departmentDegreeId,
+      currentYear: input.currentYear,
+      currentRole: input.currentRole,
+      roleDescription: input.roleDescription,
     }),
-    baseOverride: AUTH_API_BASE,
+    baseOverride: TECH_API_BASE,
     auth: false,
   });
 
-  if (!cognito.sub) {
-    throw new ApiError(502, "Auth service did not return a Cognito user id.");
-  }
-
-  await apiFetch<any>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify({
-      email: input.email,
-      name: input.fullName,
-      gender: input.gender,
-      role: input.role,
-      is_tech_assessment: 1,
-      program_code: input.programCode,
-      school_level: input.schoolLevel,
-      school_stream: input.schoolStream,
-      student_board: input.studentBoard,
-      department_degree_id: input.departmentDegreeId,
-      current_year: input.currentYear,
-      current_role: input.currentRole,
-      role_description: input.roleDescription,
-      group_code: input.groupCode,
-      metadata: {
-        sendEmail: input.sendEmail !== false,
-      },
-    }),
-    baseOverride: STUDENT_API_BASE,
-    auth: false,
-  });
-  
-  // Note: Main Student Service returns { success: true } and triggers emails.
-  // It doesn't return tokens; the user must log in after registration.
-  
   return {
     user: { email: input.email } as any,
     registration: null,
