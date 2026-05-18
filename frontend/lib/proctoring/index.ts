@@ -41,8 +41,7 @@ export type ProctoringCounter =
     | "mouseLeave"
     | "fullscreenExit"
     | "copyPaste"
-    | "browserShortcut"
-    | "tabSwitch";
+    | "browserShortcut";
 
 export type ProctoringCounters = Record<ProctoringCounter, number>;
 
@@ -52,7 +51,6 @@ export const EMPTY_COUNTERS: ProctoringCounters = {
     fullscreenExit: 0,
     copyPaste: 0,
     browserShortcut: 0,
-    tabSwitch: 0,
 };
 
 const SETTINGS_KEY = "ob_proctoring_settings";
@@ -153,23 +151,11 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
         return () => document.removeEventListener("fullscreenchange", handler);
     }, [active, settings.detectFullscreenExit, onViolation]);
 
-    // Tab-switch detection (only inside the engine itself; the proctoring
-    // plugin in frontend/plugins/proctoring-tab-switch handles the same
-    // concern for coding via the plugin event bus. Non-coding engines don't
-    // run the plugin host yet, so we replicate the basic detection here.)
-    useEffect(() => {
-        if (!active || !settings.tabSwitch) return;
-        const handler = () => {
-            if (document.visibilityState === "hidden") {
-                onViolation("tabSwitch", {
-                    title: "Tab switch detected",
-                    desc: "Stay on this tab while the assessment is running.",
-                });
-            }
-        };
-        document.addEventListener("visibilitychange", handler);
-        return () => document.removeEventListener("visibilitychange", handler);
-    }, [active, settings.tabSwitch, onViolation]);
+    // Tab-switch is owned by the `proctoring.tab-switch` plugin (see
+    // frontend/plugins/proctoring-tab-switch/manifest.tsx) — it runs its own
+    // visibilitychange listener and publishes onto the plugin event bus.
+    // The settings.tabSwitch / settings.tabSwitchToast flags remain on the
+    // type for back-compat but are no longer read from this hook.
 
     // Block browser shortcuts that would either steal focus to a native
     // dialog (Ctrl+S "Save Page" / Ctrl+P "Print") or open devtools / view-

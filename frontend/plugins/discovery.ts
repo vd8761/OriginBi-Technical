@@ -24,11 +24,27 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return apiFetch<T>(path, init);
 }
 
+export interface CandidatePluginConfigArgs {
+  /** Coding attempts pass this to resolve org/package overrides on the backend. */
+  attemptId?: string;
+  /** Non-coding engines pass their assessment package (e.g. "aptitude").
+   *  The backend then filters plugins to those whose `extends` is empty,
+   *  contains "*", or includes "assessment.<packageSlug>". */
+  packageSlug?: string;
+}
+
 export async function fetchCandidatePluginConfig(
-  attemptId?: string,
+  arg?: string | CandidatePluginConfigArgs,
 ): Promise<EnabledPluginConfig[]> {
+  const args: CandidatePluginConfigArgs =
+    typeof arg === "string" ? { attemptId: arg } : arg ?? {};
+
+  const params = new URLSearchParams();
+  if (args.attemptId) params.set("attempt_id", args.attemptId);
+  if (args.packageSlug) params.set("package", args.packageSlug);
+  const query = params.toString() ? `?${params.toString()}` : "";
+
   try {
-    const query = attemptId ? `?attempt_id=${encodeURIComponent(attemptId)}` : "";
     const data = await fetchJson<PluginConfigResponse>(`/v1/me/plugin-config${query}`);
     return data.plugins.map((p) => ({
       id: p.slug || p.id,
