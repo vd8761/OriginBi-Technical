@@ -266,8 +266,8 @@ export class PurchaseService {
                 [email]
             );
 
-            const purchased = new Set(
-                rows.map((row: any) => String(row.assessment_code)),
+            const purchased = new Set<string>(
+                (rows as any[]).map((row) => String(row.assessment_code)),
             );
 
             if (await this.isAdminRegistered(email)) {
