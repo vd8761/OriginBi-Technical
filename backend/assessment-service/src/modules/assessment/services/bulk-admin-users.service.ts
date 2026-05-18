@@ -68,12 +68,32 @@ export class BulkAdminUsersService {
       if (['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(roleRaw)) role = 'ADMIN';
       else if (roleRaw === 'PROCTOR') role = 'PROCTOR';
 
+      const pCode = row['ProgramId'] || row['program_code'] || 'SCHOOL_STUDENT';
+      const isCollege = String(pCode).toUpperCase().includes('COLLEGE');
+      const isSchool = String(pCode).toUpperCase().includes('SCHOOL');
+
       const dto = {
         email,
         name,
+        fullName: name,
         mobile,
+        mobileNumber: mobile,
         role,
         gender: row['Gender'] || row['gender'] || 'Male',
+        countryCode: row['CountryCode'] || row['country_code'] || '+91',
+        programCode: pCode,
+        schoolLevel: isSchool ? (row['SchoolLevel'] || row['school_level']) : undefined,
+        schoolStream: isSchool ? (row['SchoolStream'] || row['school_stream']) : undefined,
+        studentBoard: isSchool ? (row['StudentBoard'] || row['student_board'] || row['board']) : undefined,
+        departmentDegreeId: isCollege ? (row['DepartmentId'] || row['department_degree'] || row['department'] || row['department_degree_id']) : undefined,
+        currentYear: isCollege ? (row['CurrentYear'] || row['current_year'] || row['Year'] || row['year']) : undefined,
+        currentRole: row['CurrentRole'] || row['current_role'] || row['Current Role'] || row['currentRole'],
+        roleDescription: row['RoleDescription'] || row['role_description'] || row['Role Description'] || row['roleDescription'],
+        password: row['Password'] || row['password'] || 'TempPassword123!',
+        sendEmail: (() => {
+          const val = row['SendEmail'] || row['send_email'];
+          return val ? String(val).toUpperCase() === 'TRUE' : false;
+        })(),
       };
 
       const isValid = email.length > 0;
@@ -180,11 +200,20 @@ export class BulkAdminUsersService {
           // Register via local RegistrationService (Cognito + DB only, no main app assignments)
           await this.registrationService.registerUser({
             email: dto.email,
-            password: 'TempPassword123!',
-            fullName: dto.name,
+            password: dto.password || 'TempPassword123!',
+            fullName: dto.fullName || dto.name,
             gender: String(dto.gender || 'MALE').toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
-            mobileNumber: dto.mobile || '',
-            sendEmail: false,
+            mobileNumber: dto.mobileNumber || dto.mobile || '',
+            countryCode: dto.countryCode || '+91',
+            sendEmail: dto.sendEmail || false,
+            programCode: dto.programCode,
+            schoolLevel: dto.schoolLevel,
+            schoolStream: dto.schoolStream,
+            studentBoard: dto.studentBoard,
+            departmentDegreeId: dto.departmentDegreeId,
+            currentYear: dto.currentYear,
+            currentRole: dto.currentRole,
+            roleDescription: dto.roleDescription,
           });
 
           row.status = 'SUCCESS';

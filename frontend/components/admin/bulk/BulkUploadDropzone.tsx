@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 
 interface BulkUploadDropzoneProps {
     onFileSelected: (file: File) => void;
@@ -15,6 +15,7 @@ export const BulkUploadDropzone: React.FC<BulkUploadDropzoneProps> = ({
     onFileSelected, onReviewClick, isUploading, uploadProgress, uploadComplete, fileName, error, onReset
 }) => {
     const [isDragActive, setIsDragActive] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -126,17 +127,24 @@ export const BulkUploadDropzone: React.FC<BulkUploadDropzoneProps> = ({
         );
     }
 
+    const handleContainerClick = (e: React.MouseEvent) => {
+        if (isUploading || uploadComplete) return;
+        fileInputRef.current?.click();
+    };
+
     return (
-        <label
+        <div
+            onClick={handleContainerClick}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-colors h-[400px] block
+            className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-colors h-[400px]
                 ${isDragActive ? 'border-[#1ED36A] bg-[#1ED36A]/5' : 'border-gray-300 dark:border-gray-700 hover:border-[#1ED36A]/50 hover:bg-gray-50 dark:hover:bg-[#FFFFFF05]'}
                 ${error ? 'border-red-500 bg-red-500/5' : ''}
             `}
         >
             <input
+                ref={fileInputRef}
                 type="file"
                 accept=".csv"
                 className="hidden"
@@ -168,6 +176,6 @@ export const BulkUploadDropzone: React.FC<BulkUploadDropzoneProps> = ({
                     Download Sample CSV
                 </a>
             </div>
-        </label>
+        </div>
     );
 };

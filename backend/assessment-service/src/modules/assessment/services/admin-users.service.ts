@@ -12,6 +12,14 @@ export interface AdminUserRow {
   assessments: number;
   lastSeenAt: string | null;
   createdAt: string | null;
+  mobileNumber: string;
+  designation: string;
+  schoolLevel: string;
+  schoolStream: string;
+  studentBoard: string;
+  departmentName: string;
+  degreeName: string;
+  currentYear: string;
 }
 
 export interface AdminUserCounts {
@@ -134,6 +142,14 @@ export class AdminUsersService {
                COALESCE(u.email, '') as email,
                COALESCE(r.full_name, '') as full_name,
                COALESCE(u.role, '') AS role,
+               COALESCE(r.mobile_number, '') as mobile_number,
+               COALESCE(p.name, '') as designation,
+               COALESCE(r.school_level, '') as school_level,
+               COALESCE(r.school_stream, '') as school_stream,
+               COALESCE(r.student_board, '') as student_board,
+               COALESCE(dept.name, (SELECT name FROM departments WHERE id = NULLIF(r.metadata->>'departmentId', '')::bigint), '') as department_name,
+               COALESCE(deg.name, (SELECT name FROM degree_types WHERE id = NULLIF(r.metadata->>'degreeTypeId', '')::bigint), '') as degree_name,
+               COALESCE(r.metadata->>'currentYear', r.metadata->>'current_year', '') as current_year,
                COALESCE(
                    r.metadata->>'institutionName',
                    r.metadata->>'institution_name',
@@ -146,6 +162,10 @@ export class AdminUsersService {
                (SELECT COUNT(*)::bigint FROM attempts a WHERE a.candidate_user_id = u.id) AS assessments
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
+        LEFT JOIN programs p ON p.id = r.program_id
+        LEFT JOIN department_degrees dd ON dd.id = r.department_degree_id
+        LEFT JOIN departments dept ON dept.id = dd.department_id
+        LEFT JOIN degree_types deg ON deg.id = dd.degree_type_id
         ${whereSQL}
         ORDER BY u.created_at DESC NULLS LAST, u.id DESC
         LIMIT $${args.length + 1} OFFSET $${args.length + 2}
@@ -174,6 +194,14 @@ export class AdminUsersService {
           assessments: Number(row.assessments),
           lastSeenAt: row.last_login_at ? new Date(row.last_login_at).toISOString() : null,
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+          mobileNumber: row.mobile_number,
+          designation: row.designation,
+          schoolLevel: row.school_level,
+          schoolStream: row.school_stream,
+          studentBoard: row.student_board,
+          departmentName: row.department_name,
+          degreeName: row.degree_name,
+          currentYear: row.current_year,
         };
       });
 
