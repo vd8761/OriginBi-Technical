@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { Eye, EyeOff, ArrowRight } from "lucide-react";
-import { registerUser, RegisterRequest, getDepartments } from "../../lib/api";
+import { registerUser, RegisterRequest, getDepartments, assertRegistrationEmailAvailable, assertRegistrationPhoneAvailable, ApiError } from "../../lib/api";
 import { COUNTRY_CODES } from "../../lib/countryCodes";
 import { 
   PROGRAM_OPTIONS, 
@@ -31,12 +31,14 @@ function MobileInput({
   onCountryChange,
   onPhoneChange,
   error,
+  onBlur,
 }: {
   countryCode: string;
   phoneNumber: string;
   onCountryChange: (code: string) => void;
   onPhoneChange: (num: string) => void;
   error?: string;
+  onBlur?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -85,6 +87,7 @@ function MobileInput({
             const val = e.target.value.replace(/\D/g, "");
             if (val.length <= (selectedCountry?.maxLength || 15)) onPhoneChange(val);
           }}
+          onBlur={onBlur}
           placeholder="Enter mobile number"
           style={{ borderTopRightRadius: "9999px", borderBottomRightRadius: "9999px" }}
           className={`flex-1 h-12 px-5 bg-brand-light-secondary dark:bg-brand-dark-tertiary border ${error ? "border-red-400 ring-1 ring-red-200" : "border-brand-light-tertiary dark:border-brand-dark-tertiary"} text-sm font-normal text-black dark:text-white outline-none transition-all focus:border-brand-green focus:ring-2 focus:ring-brand-green/20`}
@@ -264,6 +267,36 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
     setError(null);
   };
 
+  const handleEmailBlur = async () => {
+    const email = formData.email.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return;
+    }
+    try {
+      await assertRegistrationEmailAvailable(email);
+      setFormErrors((prev) => ({ ...prev, email: "" }));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setFormErrors((prev) => ({ ...prev, email: "This email is already registered." }));
+      }
+    }
+  };
+
+  const handlePhoneBlur = async () => {
+    const phone = formData.mobileNumber.trim();
+    if (!phone || phone.length < 8) {
+      return;
+    }
+    try {
+      await assertRegistrationPhoneAvailable(phone);
+      setFormErrors((prev) => ({ ...prev, mobileNumber: "" }));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setFormErrors((prev) => ({ ...prev, mobileNumber: "This mobile number is already registered." }));
+      }
+    }
+  };
+
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
@@ -343,7 +376,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   const baseSectionTitleClasses = "text-xs font-semibold tracking-wider text-brand-green mb-6 block";
   const toggleWrapperClasses = "flex w-full h-12 bg-brand-light-tertiary dark:bg-brand-dark-tertiary rounded-full p-1 border border-brand-light-tertiary dark:border-brand-dark-tertiary";
   const toggleButtonBase = "flex-1 text-[10px] md:text-xs font-semibold rounded-full transition-all duration-300 cursor-pointer";
-  const activeToggleClasses = "bg-brand-green text-white shadow-md";
+  const activeToggleClasses = "bg-brand-green text-white";
   const inactiveToggleClasses = "text-black dark:text-white hover:text-brand-green";
 
   return (
@@ -426,6 +459,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange("email", e.target.value)}
+                onBlur={handleEmailBlur}
                 placeholder="name@example.com"
                 style={{ borderRadius: "9999px" }}
                 className={`${baseInputClasses} ${formErrors.email ? "border-red-400 ring-1 ring-red-200" : ""}`}
@@ -440,19 +474,19 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
               onCountryChange={(code) => handleInputChange("countryCode", code)}
               onPhoneChange={(num) => handleInputChange("mobileNumber", num)}
               error={formErrors.mobileNumber}
+              onBlur={handlePhoneBlur}
             />
 
             {/* Password input + Generate Password button */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className={baseLabelClasses}>Password <span className="text-red-500">*</span></label>
-                <button
-                  type="button"
+                <span
                   onClick={generatePassword}
-                  className="text-xs font-semibold cursor-pointer text-brand-green hover:underline ml-1"
+                  className="text-xs font-semibold tracking-wider cursor-pointer text-brand-green hover:underline ml-1 select-none"
                 >
                   Generate Password
-                </button>
+                </span>
               </div>
 
               <div className="relative">
@@ -680,7 +714,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             onClick={handleSubmit}
             disabled={isLoading}
             style={{ borderRadius: "9999px" }}
-            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
+            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-bold transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
           >
             {isLoading ? (
               <>
