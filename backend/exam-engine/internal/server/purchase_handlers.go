@@ -60,10 +60,9 @@ func (s *Server) listAssignments(w http.ResponseWriter, r *http.Request) {
 	// Admin-registered users get free access to every coding language.
 	// Lazily materialize the assignment rows so attempt creation, traceability,
 	// and result publishing all behave identically to a paid attempt.
+	// Failures are non-fatal — the regular query below still runs.
 	if s.isAdminRegistered(ctx, principal.UserID) {
-		if err := s.grantFreeCodingAssignments(ctx, principal.UserID); err != nil {
-			// Non-fatal: fall through to the regular query.
-		}
+		_ = s.grantFreeCodingAssignments(ctx, principal.UserID)
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT a.id,
