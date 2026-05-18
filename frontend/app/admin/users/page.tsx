@@ -271,25 +271,24 @@ function UsersInner() {
             <thead>
               <tr>
                 <th>User</th>
-                <th>OB ID</th>
-                <th>Role</th>
-                <th>Institution</th>
+                <th>Email ID</th>
+                <th>Mobile Number</th>
+                <th>Designation</th>
                 <th>Status</th>
                 <th>Assessments</th>
                 <th>Last seen</th>
-                <th style={{ textAlign: "right" }}></th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                  <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
                     Loading users…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg-3)" }}>
+                  <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
                     No users match the current filters.
                   </td>
                 </tr>
@@ -305,32 +304,19 @@ function UsersInner() {
                       <td>
                         <div className="admin-row" style={{ gap: 12 }}>
                           <Avatar name={name} email={u.email} />
-                          <div>
-                            <div style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{name}</div>
-                            <div style={{ fontSize: 11, color: "var(--admin-fg-3)" }}>{u.email}</div>
-                          </div>
+                          <span style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{name}</span>
                         </div>
                       </td>
-                      <td className="admin-mono" style={{ color: "var(--admin-fg-3)" }}>{formatObId(u.id)}</td>
+                      <td style={{ color: "var(--admin-fg)" }}>{u.email}</td>
+                      <td className="admin-mono" style={{ color: "var(--admin-fg)" }}>{u.mobileNumber || "—"}</td>
                       <td>
-                        <Badge tone={roleTones[u.roleGroup]}>{u.roleGroup}</Badge>
+                        <Badge tone={roleTones[u.roleGroup] || "blue"}>{u.designation || u.roleGroup || "—"}</Badge>
                       </td>
-                      <td>{u.institutionName || "—"}</td>
                       <td>
                         <Badge tone={statusTones[u.status]} dot>{u.status}</Badge>
                       </td>
                       <td className="admin-mono">{u.assessments}</td>
-                      <td style={{ color: "var(--admin-fg-3)" }}>{formatRelativeFromIso(u.lastSeenAt)}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <button
-                          className="admin-icon-btn"
-                          type="button"
-                          aria-label="More"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <MoreHorizontal size={14} />
-                        </button>
-                      </td>
+                      <td style={{ color: "var(--admin-fg)" }}>{formatRelativeFromIso(u.lastSeenAt)}</td>
                     </tr>
                   );
                 })
@@ -431,11 +417,11 @@ function UsersInner() {
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-fg)" }}>
                   {displayName(selected)}
                 </h2>
-                <p style={{ margin: "2px 0 8px", color: "var(--admin-fg-3)", fontSize: 12.5 }}>
+                <p style={{ margin: "2px 0 8px", color: "var(--admin-fg)", fontSize: 12.5 }}>
                   {selected.email}
                 </p>
                 <div className="admin-row">
-                  <Badge tone={roleTones[selected.roleGroup]}>{selected.roleGroup}</Badge>
+                  <Badge tone={roleTones[selected.roleGroup]}>{selected.designation || selected.roleGroup}</Badge>
                   <Badge tone={statusTones[selected.status]} dot>{selected.status}</Badge>
                 </div>
               </div>
@@ -443,15 +429,15 @@ function UsersInner() {
 
             <div className="admin-grid-2">
               <div>
-                <p className="admin-stat-label">Origin BI ID</p>
+                <p className="admin-stat-label">Mobile Number</p>
                 <p className="admin-mono" style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
-                  {formatObId(selected.id)}
+                  {selected.mobileNumber || "—"}
                 </p>
               </div>
               <div>
-                <p className="admin-stat-label">Institution</p>
+                <p className="admin-stat-label">Designation</p>
                 <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
-                  {selected.institutionName || "—"}
+                  {selected.designation || selected.roleGroup || "—"}
                 </p>
               </div>
               <div>
@@ -463,6 +449,70 @@ function UsersInner() {
                 <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>{formatJoined(selected.createdAt)}</p>
               </div>
             </div>
+
+            {/* Academic / College Student Information */}
+            {(selected.designation === "College Students" || selected.departmentName || selected.currentYear) && (
+              <>
+                <hr className="admin-divider" />
+                <div>
+                  <h4 style={{ margin: "0 0 12px", fontSize: 12.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-fg)" }}>
+                    College Information
+                  </h4>
+                  <div className="admin-grid-2">
+                    <div>
+                      <p className="admin-stat-label">Degree</p>
+                      <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                        {selected.degreeName || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="admin-stat-label">Department</p>
+                      <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                        {selected.departmentName || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="admin-stat-label">Current Year</p>
+                      <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                        {selected.currentYear ? `${selected.currentYear} Year` : "—"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* School Student Information */}
+            {(selected.designation === "School Students" || selected.schoolLevel || selected.studentBoard) && (
+              <>
+                <hr className="admin-divider" />
+                <div>
+                  <h4 style={{ margin: "0 0 12px", fontSize: 12.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-fg)" }}>
+                    School Information
+                  </h4>
+                  <div className="admin-grid-2">
+                    <div>
+                      <p className="admin-stat-label">School Level</p>
+                      <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                        {selected.schoolLevel || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="admin-stat-label">School Stream</p>
+                      <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                        {selected.schoolStream || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="admin-stat-label">Student Board</p>
+                      <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                        {selected.studentBoard || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <hr className="admin-divider" />
 
