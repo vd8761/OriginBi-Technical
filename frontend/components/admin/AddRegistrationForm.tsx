@@ -319,7 +319,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
       onRegister();
     } catch (err: any) {
       console.error("Registration Error:", err);
-      let message = err.message || "Failed to create registration.";
+      const message = err.message || "Failed to create registration.";
       setError(message);
     } finally {
       setIsLoading(false);
