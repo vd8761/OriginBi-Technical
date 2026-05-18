@@ -70,4 +70,17 @@ export class RegistrationService {
       throw new BadRequestException(errMsg);
     }
   }
+
+  async validateRegistration(email: string, mobileNumber?: string) {
+    try {
+      const res = await axios.post(`${this.studentServiceUrl}/student/validate-registration`, {
+        email,
+        mobile_number: mobileNumber,
+      });
+      return res.data; // { isValid: boolean; field?: string; message: string }
+    } catch (err: any) {
+      this.logger.error(`Validation check failed for ${email}: ${err.message}`);
+      return { isValid: true, message: 'Skipped validation due to error' };
+    }
+  }
 }
