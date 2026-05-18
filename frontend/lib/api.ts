@@ -663,7 +663,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
     body: JSON.stringify({
       email: input.email,
       password: input.password,
-      groupName: input.role === "ADMIN" ? "ADMIN" : "STUDENT",
+      groupName: input.role === "ADMIN" ? "ADMIN" : input.role === "PROCTOR" ? "PROCTOR" : "STUDENT",
     }),
     baseOverride: AUTH_API_BASE,
     auth: false,
@@ -679,6 +679,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       email: input.email,
       name: input.fullName,
       gender: input.gender,
+      role: input.role,
       is_tech_assessment: 1,
       program_code: input.programCode,
       school_level: input.schoolLevel,

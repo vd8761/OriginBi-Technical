@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+// Read backend service URLs from env, falling back to localhost for local dev.
+// In production (DigitalOcean), these point to the Render-hosted services.
+const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:4002";
+const STUDENT_SERVICE_URL = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
+const ADMIN_API_BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "http://localhost:4001";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8088";
+const TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+
 const nextConfig: NextConfig = {
   // Pin the tracing root to this frontend directory so Next.js doesn't
   // walk up to C:\Users\Jaya Krishna and get confused by the lockfile there.
@@ -15,19 +23,19 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:5000/api/:path*", // NestJS Assessment Service
+        destination: `${TECH_API_URL}/api/:path*`, // NestJS Assessment Service
       },
       {
         source: "/v1/:path*",
-        destination: "http://localhost:8088/v1/:path*", // Go Exam Engine
+        destination: `${API_BASE}/v1/:path*`, // Go Exam Engine
       },
       {
         source: "/student-api/:path*",
-        destination: "http://localhost:4004/:path*", // Student Service
+        destination: `${STUDENT_SERVICE_URL}/:path*`, // Student Service
       },
       {
         source: "/auth-api/:path*",
-        destination: "http://localhost:4002/:path*", // Cognito Auth Service
+        destination: `${AUTH_SERVICE_URL}/:path*`, // Cognito Auth Service
       },
     ];
   },
