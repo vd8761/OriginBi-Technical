@@ -1,11 +1,20 @@
 name: Deploy to VPS
 
+# Triggers:
+#   - pull_request → run only the verify-* gate jobs. These are the
+#     required status checks that branch protection blocks merges on.
+#   - push (after merge) → run verify-* + sync + deploy-* on the VPS.
 on:
   push:
     branches:
       - develop
+  pull_request:
+    branches:
+      - develop
 
-# Cancel any in-progress deployment for this branch when a new push arrives
+# Cancel any in-progress run for the same ref when a new event arrives.
+# PR refs (refs/pull/N/merge) and the develop branch ref are distinct,
+# so push deploys are never cancelled by PR validation runs.
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -224,9 +233,11 @@ jobs:
       - verify-tech-engine
       - verify-assessment-service
       - verify-judge0
-    # Run only when at least one service changed AND no required verify failed.
-    # Skipped verify jobs (untouched services) count as success; failed ones block sync.
+    # Run only on push events (i.e. after merge to develop), and only when at
+    # least one service changed AND no required verify failed. Skipped verify
+    # jobs (untouched services) count as success; failed ones block sync.
     if: >-
+      github.event_name == 'push' &&
       !cancelled() &&
       !failure() &&
       (
@@ -257,7 +268,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     needs: [detect-changes, verify-frontend, sync]
-    if: needs.detect-changes.outputs.frontend == 'true'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload frontend
@@ -282,7 +293,7 @@ jobs:
   deploy-exam-engine:
     name: Deploy Exam Engine
     needs: [detect-changes, verify-exam-engine, sync]
-    if: needs.detect-changes.outputs.exam_engine == 'true'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.exam_engine == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart exam-engine
@@ -306,7 +317,7 @@ jobs:
   deploy-tech-engine:
     name: Deploy Tech Assessment Engine
     needs: [detect-changes, verify-tech-engine, sync]
-    if: needs.detect-changes.outputs.tech_engine == 'true'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.tech_engine == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart tech-assessment-engine
@@ -330,7 +341,7 @@ jobs:
   deploy-assessment-service:
     name: Deploy Assessment Service
     needs: [detect-changes, verify-assessment-service, sync]
-    if: needs.detect-changes.outputs.assessment_service == 'true'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.assessment_service == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload assessment-service
@@ -356,7 +367,7 @@ jobs:
   deploy-judge0:
     name: Deploy Judge0
     needs: [detect-changes, verify-judge0, sync]
-    if: needs.detect-changes.outputs.judge0 == 'true'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.judge0 == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Update Judge0 containers
