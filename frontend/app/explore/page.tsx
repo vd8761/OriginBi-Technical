@@ -15,7 +15,7 @@ export default function ExplorePage() {
     let active = true;
     const fetchAll = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") || "";
+        const apiBase = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) || "";
         const response = await fetch(`${apiBase}/api/assessment/admin/assessments`);
         if (!response.ok) return;
         const json = await response.json();
