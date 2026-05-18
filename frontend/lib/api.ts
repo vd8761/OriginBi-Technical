@@ -579,7 +579,12 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
       }
     }
   }
-  const base = baseOverride ?? API_BASE;
+  const base =
+    path.startsWith("/admin-api") ||
+    path.startsWith("/auth-api") ||
+    path.startsWith("/student-api")
+      ? ""
+      : (baseOverride ?? API_BASE);
   const res = await fetch(`${base}${path}`, {
     ...rest,
     headers,
@@ -1414,29 +1419,36 @@ export async function getBulkAdminUsersJobRows(importId: string) {
 
 // ── Admin Groups & Cohorts Database-backed CRUD ─────────────────────────────
 export async function getAdminGroups(): Promise<any[]> {
-  return apiFetch<any[]>("/admin-api/admin/groups");
+  return apiFetch<any[]>("/api/admin/groups", {
+    baseOverride: TECH_API_BASE,
+  });
 }
 
 export async function createAdminGroup(body: any): Promise<any> {
-  return apiFetch<any>("/admin-api/admin/groups", {
+  return apiFetch<any>("/api/admin/groups", {
     method: "POST",
     body: JSON.stringify(body),
+    baseOverride: TECH_API_BASE,
   });
 }
 
 export async function updateAdminGroup(id: number | string, body: any): Promise<any> {
-  return apiFetch<any>(`/admin-api/admin/groups/${id}`, {
+  return apiFetch<any>(`/api/admin/groups/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+    baseOverride: TECH_API_BASE,
   });
 }
 
 export async function deleteAdminGroup(id: number | string): Promise<any> {
-  return apiFetch<any>(`/admin-api/admin/groups/${id}`, {
+  return apiFetch<any>(`/api/admin/groups/${id}`, {
     method: "DELETE",
+    baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getAdminPrograms(): Promise<any> {
-  return apiFetch<any>("/admin-api/admin/programs?limit=100");
+export async function getAdminAssessments(): Promise<any> {
+  return apiFetch<any>("/api/assessment/admin/assessments", {
+    baseOverride: TECH_API_BASE,
+  });
 }

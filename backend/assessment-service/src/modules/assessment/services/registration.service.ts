@@ -17,6 +17,7 @@ export interface RegisterUserDto {
   currentYear?: string;
   currentRole?: string;
   roleDescription?: string;
+  groupName?: string;
 }
 
 @Injectable()
@@ -52,6 +53,7 @@ export class RegistrationService {
           sendEmail: dto.sendEmail !== false,
           currentRole: dto.currentRole || null,
           roleDescription: dto.roleDescription || null,
+          groupName: dto.groupName || null,
         },
       });
 

@@ -41,7 +41,7 @@ import {
   createAdminGroup,
   updateAdminGroup,
   deleteAdminGroup,
-  getAdminPrograms,
+  getAdminAssessments,
 } from "@/lib/api";
 
 interface GroupMember {
@@ -72,10 +72,11 @@ interface Group {
 }
 
 const DEFAULT_ASSESSMENTS = [
-  "Technical Coding Challenge",
-  "Aptitude & Logical Reasoning",
-  "SQL & Database Design",
-  "MNC Career Prep Assessment",
+  "Coding Assessment",
+  "Technical Aptitude Assessment",
+  "Communication Skills Assessment",
+  "Role Fit Assessment",
+  "MNC Readiness Assessment",
 ];
 
 const INITIAL_GROUPS: Group[] = [
@@ -178,12 +179,19 @@ function formatRelativeFromIso(iso: string | null): string {
 // ── Mapper function ─────────────────────────────────────────────────────────
 function mapBackendGroup(bg: any): Group {
   const meta = bg.groupMetadata || {};
+  
+  // Handle both legacy objects and raw string arrays of assessments
   const assessments = Array.isArray(bg.assessments)
-    ? bg.assessments.map((a: any) => a.name)
+    ? bg.assessments.map((a: any) => {
+        if (typeof a === "string") return a;
+        if (a && typeof a === "object" && a.name) return a.name;
+        return String(a);
+      })
     : [];
-  const isFree = Array.isArray(bg.assessments)
-    ? bg.assessments.some((a: any) => a.isFree === true)
-    : false;
+
+  const isFree = meta.isFree === true || (Array.isArray(bg.assessments)
+    ? bg.assessments.some((a: any) => a && typeof a === "object" && a.isFree === true)
+    : false);
 
   return {
     id: String(bg.id),
@@ -262,14 +270,37 @@ function GroupsInner() {
         }
 
         try {
-          const programsRes = await getAdminPrograms();
-          if (programsRes && Array.isArray(programsRes.data)) {
-            setAvailableAssessments(programsRes.data.map((p: any) => p.name));
+          const assessmentsRes = await getAdminAssessments();
+          if (assessmentsRes && Array.isArray(assessmentsRes.data)) {
+            const list = assessmentsRes.data;
+            const EXAMS_MODULE_MAP: Record<string, string> = {
+              aptitude: "aptitude",
+              communication: "grammar",
+              coding: "coding",
+              mnc: "mnc",
+              role: "role",
+            };
+            const EXAM_DEFAULT_NAMES: Record<string, string> = {
+              aptitude: "Aptitude Assessment",
+              communication: "Communication Assessment",
+              coding: "Coding Assessment",
+              mnc: "MNC Career Assessment",
+              role: "Role Based Questions",
+            };
+            
+            const mapped = Object.keys(EXAM_DEFAULT_NAMES).map((id) => {
+              const dbModule = EXAMS_MODULE_MAP[id];
+              const dbExam = list.find(
+                (a: any) => a.module_type === dbModule || a.assessment_code === id
+              );
+              return dbExam ? dbExam.assessment_name : EXAM_DEFAULT_NAMES[id];
+            });
+            setAvailableAssessments(mapped);
           } else {
             setAvailableAssessments(DEFAULT_ASSESSMENTS);
           }
-        } catch (programsErr) {
-          console.error("Failed to load dynamic programs, falling back to defaults:", programsErr);
+        } catch (assessmentsErr) {
+          console.error("Failed to load tech assessments, falling back to defaults:", assessmentsErr);
           setAvailableAssessments(DEFAULT_ASSESSMENTS);
         }
       } catch (err) {
@@ -287,7 +318,7 @@ function GroupsInner() {
       const groupId = selectedGroup.id;
       async function loadMembers() {
         try {
-          const res = await fetch(`/admin-api/admin/groups/${groupId}/members`);
+          const res = await fetch(`/api/admin/groups/${groupId}/members`);
           if (res.ok) {
             const data = await res.json();
             setGroupMembers(data.map((m: any) => ({
@@ -583,10 +614,10 @@ function GroupsInner() {
         {/* Group Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mt-4">
           {filteredGroups.length === 0 ? (
-            <div className="col-span-full text-center py-16 text-gray-500">
-              <Layers size={48} className="mx-auto text-gray-400/50 mb-3" />
+            <div className="col-span-full text-center py-16 text-black/60 dark:text-white/60">
+              <Layers size={48} className="mx-auto text-black/30 dark:text-white/30 mb-3" />
               <p className="text-base font-semibold">No groups found</p>
-              <p className="text-sm mt-1 text-gray-400">Create a new group or check your filter criteria.</p>
+              <p className="text-sm mt-1 text-black/50 dark:text-white/50">Create a new group or check your filter criteria.</p>
             </div>
           ) : (
             filteredGroups.map((g) => (
@@ -596,7 +627,7 @@ function GroupsInner() {
                   setSelectedGroup(g);
                   setDrawerTab("members");
                 }}
-                className="group relative border border-gray-100 dark:border-white/10 hover:border-brand-green dark:hover:border-brand-green/60 rounded-2xl p-5 bg-white dark:bg-[#1a201c] hover:bg-brand-green/[0.01] dark:hover:bg-brand-green/[0.01] transition-all cursor-pointer flex flex-col justify-between shadow-sm"
+                className="group relative border border-black/10 dark:border-white/10 hover:border-brand-green dark:hover:border-brand-green/60 rounded-2xl p-5 bg-white dark:bg-[#1a201c] hover:bg-brand-green/[0.01] dark:hover:bg-brand-green/[0.01] transition-all cursor-pointer flex flex-col justify-between shadow-sm"
               >
                 <div>
                   <div className="flex items-start justify-between">
@@ -604,7 +635,7 @@ function GroupsInner() {
                       <span className="font-mono text-xs text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded-md">
                         {g.code}
                       </span>
-                      <h4 className="text-base font-bold text-gray-900 dark:text-white mt-2 group-hover:text-brand-green transition-colors">
+                      <h4 className="text-base font-bold text-black dark:text-white mt-2 group-hover:text-brand-green transition-colors">
                         {g.name}
                       </h4>
                     </div>
@@ -623,12 +654,12 @@ function GroupsInner() {
 
                   <div className="flex flex-wrap gap-1.5 mt-4">
                     {g.assessments.length === 0 ? (
-                      <span className="text-[10px] text-gray-400 font-medium">No assessments assigned</span>
+                      <span className="text-[10px] text-black/50 dark:text-white/50 font-medium">No assessments assigned</span>
                     ) : (
                       g.assessments.map((a) => (
                         <span
                           key={a}
-                          className="text-[10px] bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded-full text-gray-600 dark:text-gray-300 font-medium"
+                          className="text-[10px] bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-2 py-0.5 rounded-full text-black/70 dark:text-white/70 font-medium"
                         >
                           {a}
                         </span>
@@ -637,10 +668,10 @@ function GroupsInner() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-gray-50 dark:border-white/5 pt-4 mt-5">
-                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-4 mt-5">
+                  <div className="flex items-center gap-4 text-xs text-black/50 dark:text-white/50">
                     <span className="flex items-center gap-1 font-medium">
-                      <Users size={12} className="text-gray-400" />
+                      <Users size={12} className="text-black/40 dark:text-white/40" />
                       <strong>{g.members.length}</strong> candidates
                     </span>
                     <span className="flex items-center gap-1">
@@ -669,7 +700,7 @@ function GroupsInner() {
                         e.stopPropagation();
                         handleDeleteGroup(g.id);
                       }}
-                      className="p-1 rounded-md hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors ml-2"
+                      className="p-1 rounded-md hover:bg-red-500/10 text-black/50 dark:text-white/50 hover:text-red-500 transition-colors ml-2"
                       title="Archive Group"
                     >
                       <Trash2 size={13} />

@@ -116,6 +116,7 @@ export class BulkAdminUsersService {
         currentRole: row['CurrentRole'] || row['current_role'] || row['Current Role'] || row['currentRole'],
         roleDescription: row['RoleDescription'] || row['role_description'] || row['Role Description'] || row['roleDescription'],
         password: row['Password'] || row['password'] || 'TempPassword123!',
+        groupName: row['GroupName'] || row['group_name'] || row['Group'] || row['group'] || '',
         sendEmail: (() => {
           const val = row['SendEmail'] || row['send_email'];
           return val ? String(val).toUpperCase() === 'TRUE' : false;
@@ -264,7 +265,6 @@ export class BulkAdminUsersService {
         try {
           const dto = row.normalizedData;
           
-          // Register via local RegistrationService (Cognito + DB only, no main app assignments)
           await this.registrationService.registerUser({
             email: dto.email,
             password: dto.password || 'TempPassword123!',
@@ -281,6 +281,7 @@ export class BulkAdminUsersService {
             currentYear: dto.currentYear,
             currentRole: dto.currentRole,
             roleDescription: dto.roleDescription,
+            groupName: dto.groupName,
           });
 
           row.status = 'SUCCESS';
