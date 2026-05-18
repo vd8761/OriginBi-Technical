@@ -140,8 +140,7 @@ const Header: React.FC<HeaderProps> = ({
             if (!user?.email) return;
 
             try {
-                const studentServiceUrl = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
-                const res = await fetch(`${studentServiceUrl}/student/profile`, {
+                const res = await fetch(`/student-api/student/profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: user.email }),

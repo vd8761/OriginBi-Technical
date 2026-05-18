@@ -34,6 +34,10 @@ const nextConfig: NextConfig = {
         source: "/auth-api/:path*",
         destination: `${AUTH_SERVICE_URL}/:path*`, // Cognito Auth Service
       },
+      {
+        source: "/admin-api/:path*",
+        destination: `${ADMIN_API_BASE_URL}/:path*`, // Admin Service
+      },
     ];
   },
 } as any;

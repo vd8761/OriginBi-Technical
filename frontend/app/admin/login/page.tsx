@@ -135,19 +135,13 @@ function AdminLoginForm() {
       const accessTokenJwt = tokens.accessToken;
       const refreshTokenJwt = tokens.refreshToken || "";
 
-      const apiBase = (
-        process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ||
-        process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
-        ""
-      ).replace(/\/$/, "");
+      // Use the same-origin Next.js proxy to bypass CORS restrictions in the browser.
+      // If NEXT_PUBLIC_ADMIN_API_BASE_URL is not set but NEXT_PUBLIC_AUTH_SERVICE_URL is,
+      // we fallback to the auth-api proxy. Otherwise we use the admin-api proxy.
+      const useAuthFallback = !process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL && process.env.NEXT_PUBLIC_AUTH_SERVICE_URL;
+      const proxyUrl = useAuthFallback ? `/auth-api/admin/me` : `/admin-api/admin/me`;
 
-      if (!apiBase) {
-        throw new Error(
-          "Auth service URL not configured. Set NEXT_PUBLIC_AUTH_SERVICE_URL in frontend/.env.local.",
-        );
-      }
-
-      const res = await fetch(`${apiBase}/admin/me`, {
+      const res = await fetch(proxyUrl, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${idTokenJwt}`,
