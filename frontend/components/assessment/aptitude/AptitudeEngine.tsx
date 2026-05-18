@@ -485,9 +485,8 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             console.log("Aptitude: Submission API success (200), clearing session...");
             const result = await response.json();
             // Clear cache after successful submission
-            await clearSession();
-            console.log("Aptitude: Calling onComplete...");
             await Promise.resolve(onComplete(result));
+            await clearSession();
             // Guarantee post-submit navigation even if parent callback does not route.
             if (mode === 'trial') {
                 window.location.href = '/assessment';

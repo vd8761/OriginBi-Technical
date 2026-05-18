@@ -20,20 +20,24 @@ function RoleAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
-        const assessmentResult = mapSubmissionToAssessmentResult({
-            assessmentId: "role",
-            submission: result,
-            detail: EXAM_DETAILS.role,
-        });
-        saveAssessmentResultToStorage(assessmentResult);
-        unlockAssessmentForDashboard("role");
+        try {
+            const assessmentResult = mapSubmissionToAssessmentResult({
+                assessmentId: "role",
+                submission: result,
+                detail: EXAM_DETAILS.role,
+            });
+            saveAssessmentResultToStorage(assessmentResult);
+            unlockAssessmentForDashboard("role");
 
-        markAssessmentComplete("role", {
-            totalScore: assessmentResult.overallScore,
-            correctCount: assessmentResult.correctCount ?? 0,
-            wrongCount: assessmentResult.wrongCount ?? 0,
-            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-        });
+            markAssessmentComplete("role", {
+                totalScore: assessmentResult.overallScore,
+                correctCount: assessmentResult.correctCount ?? 0,
+                wrongCount: assessmentResult.wrongCount ?? 0,
+                timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
+            });
+        } catch (err) {
+            console.error("[Role] handleComplete error:", err);
+        }
 
         if (mode === 'trial') {
             router.push('/assessment');

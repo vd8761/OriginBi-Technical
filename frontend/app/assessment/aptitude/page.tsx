@@ -18,21 +18,24 @@ function AptitudeAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = useCallback((result: AttemptSubmitResult) => {
-        const assessmentResult = mapSubmissionToAssessmentResult({
-            assessmentId: "aptitude",
-            submission: result,
-            detail: EXAM_DETAILS.aptitude,
-        });
-        saveAssessmentResultToStorage(assessmentResult);
-        unlockAssessmentForDashboard("aptitude");
+        try {
+            const assessmentResult = mapSubmissionToAssessmentResult({
+                assessmentId: "aptitude",
+                submission: result,
+                detail: EXAM_DETAILS.aptitude,
+            });
+            saveAssessmentResultToStorage(assessmentResult);
+            unlockAssessmentForDashboard("aptitude");
 
-        // Mark complete in tracker (generates notifications & suggestions)
-        markAssessmentComplete("aptitude", {
-            totalScore: assessmentResult.overallScore,
-            correctCount: assessmentResult.correctCount ?? 0,
-            wrongCount: assessmentResult.wrongCount ?? 0,
-            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-        });
+            markAssessmentComplete("aptitude", {
+                totalScore: assessmentResult.overallScore,
+                correctCount: assessmentResult.correctCount ?? 0,
+                wrongCount: assessmentResult.wrongCount ?? 0,
+                timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
+            });
+        } catch (err) {
+            console.error("[Aptitude] handleComplete error:", err);
+        }
 
         // Redirect to dashboard using hard redirect to ensure navigation
         console.log("Aptitude: Submission complete, redirecting...");

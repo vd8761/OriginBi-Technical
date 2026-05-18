@@ -218,16 +218,11 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
       const el = certificateRef.current;
       const containerWidth = el.offsetWidth;
 
-      // Convert all cqw-based elements to px before capture
-      const cqwEls = el.querySelectorAll<HTMLElement>("[data-cqw]");
-      const origStyles: {
-        el: HTMLElement;
-        fontSize: string;
-        width: string;
-        height: string;
-        padding: string;
-      }[] = [];
-      cqwEls.forEach((child) => {
+      // ── Step 1: resolve all cqw values to px so html2canvas captures them ──
+      type OrigStyle = { el: HTMLElement; fontSize: string; width: string; height: string; padding: string };
+      const origStyles: OrigStyle[] = [];
+
+      el.querySelectorAll<HTMLElement>("[data-cqw]").forEach((child) => {
         const cqwVal = child.getAttribute("data-cqw");
         if (!cqwVal) return;
         origStyles.push({
@@ -237,27 +232,23 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
           height: child.style.height,
           padding: child.style.padding,
         });
-        const vals = cqwVal.split(",");
-        vals.forEach((v) => {
+        cqwVal.split(",").forEach((v) => {
           const [prop, cqw] = v.split(":");
           const px = (parseFloat(cqw) / 100) * containerWidth;
           child.style.setProperty(prop.trim(), `${px}px`);
         });
       });
 
+      // ── Step 2: capture at 3× scale for crisp PDF output ──
       const canvas = await html2canvas(el, {
-        scale: 2,
+        scale: 3,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: null,
-        // Ignore elements that may carry oklch-based styles from Tailwind/shadcn
-        ignoreElements: (element) => {
-          // Only capture the certificate itself — skip any stray portals
-          return false;
-        },
+        backgroundColor: "#ffffff",
+        logging: false,
       });
 
-      // Restore original styles
+      // ── Step 3: restore cqw styles ──
       origStyles.forEach(({ el: child, fontSize, width, height, padding }) => {
         child.style.fontSize = fontSize;
         child.style.width = width;
@@ -265,18 +256,42 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
         child.style.padding = padding;
       });
 
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      // ── Step 4: build PDF sized to match the certificate aspect ratio ──
+      // Certificate is 2000×1414 px → landscape A4 is 297×210 mm
+      // We fit the image into A4 landscape with no margins.
+      const PDF_W_MM = 297; // A4 landscape width
+      const PDF_H_MM = 210; // A4 landscape height
+
+      // Scale the canvas image to fill the page while preserving aspect ratio
+      const imgAspect = canvas.width / canvas.height;
+      const pageAspect = PDF_W_MM / PDF_H_MM;
+
+      let imgW = PDF_W_MM;
+      let imgH = PDF_W_MM / imgAspect;
+      if (imgH > PDF_H_MM) {
+        imgH = PDF_H_MM;
+        imgW = PDF_H_MM * imgAspect;
+      }
+
+      // Centre on page
+      const offsetX = (PDF_W_MM - imgW) / 2;
+      const offsetY = (PDF_H_MM - imgH) / 2;
+
       const pdf = new jsPDF({
-        orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
-        unit: "px",
-        format: [canvas.width, canvas.height],
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
         compress: true,
       });
-      pdf.addImage(dataUrl, "JPEG", 0, 0, canvas.width, canvas.height);
+
+      // Use PNG for lossless quality (no JPEG artefacts on text/lines)
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", offsetX, offsetY, imgW, imgH);
+
       pdf.save(`${serialNumber}.pdf`);
     } catch (error) {
       console.error("Failed to generate certificate PDF", error);
-      alert("Failed to download certificate PDF. Please try again.");
+      alert("Failed to download certificate. Please try again.");
     } finally {
       setIsDownloading(false);
     }

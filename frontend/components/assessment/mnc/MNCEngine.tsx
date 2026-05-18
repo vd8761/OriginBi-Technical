@@ -396,8 +396,8 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             }
 
             const result = await response.json();
-            await clearSession();
             onComplete(result);
+            await clearSession();
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
@@ -453,7 +453,28 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
         );
     }
 
-    if (loadError || questions.length === 0) {
+    if (loadError) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
+                <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+                <p className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Something went wrong
+                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-md text-center">
+                    {loadError}
+                </p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-green px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-green/90 transition-colors"
+                >
+                    <RotateCcw className="h-4 w-4" />
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    if (questions.length === 0) {
         return (
             <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
                 <p className="text-lg text-slate-500 dark:text-slate-400">

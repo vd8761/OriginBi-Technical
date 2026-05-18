@@ -20,20 +20,24 @@ function CommunicationAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
-        const assessmentResult = mapSubmissionToAssessmentResult({
-            assessmentId: "communication",
-            submission: result,
-            detail: EXAM_DETAILS.communication,
-        });
-        saveAssessmentResultToStorage(assessmentResult);
-        unlockAssessmentForDashboard("communication");
+        try {
+            const assessmentResult = mapSubmissionToAssessmentResult({
+                assessmentId: "communication",
+                submission: result,
+                detail: EXAM_DETAILS.communication,
+            });
+            saveAssessmentResultToStorage(assessmentResult);
+            unlockAssessmentForDashboard("communication");
 
-        markAssessmentComplete("communication", {
-            totalScore: assessmentResult.overallScore,
-            correctCount: assessmentResult.correctCount ?? 0,
-            wrongCount: assessmentResult.wrongCount ?? 0,
-            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-        });
+            markAssessmentComplete("communication", {
+                totalScore: assessmentResult.overallScore,
+                correctCount: assessmentResult.correctCount ?? 0,
+                wrongCount: assessmentResult.wrongCount ?? 0,
+                timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
+            });
+        } catch (err) {
+            console.error("[Communication] handleComplete error:", err);
+        }
 
         if (mode === 'trial') {
             router.push('/assessment');

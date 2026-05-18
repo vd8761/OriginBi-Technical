@@ -34,15 +34,19 @@ function AdaptiveAptitudeContent() {
   }, [searchParams]);
 
   const handleComplete = (result: AttemptSubmitResult) => {
-    console.log("Adaptive assessment completed:", result);
-    const assessmentResult = mapSubmissionToAssessmentResult({
-      assessmentId: "aptitude",
-      submission: result,
-      detail: EXAM_DETAILS.aptitude,
-    });
+    try {
+      console.log("Adaptive assessment completed:", result);
+      const assessmentResult = mapSubmissionToAssessmentResult({
+        assessmentId: "aptitude",
+        submission: result,
+        detail: EXAM_DETAILS.aptitude,
+      });
 
-    localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
-    saveAssessmentResultToStorage(assessmentResult);
+      localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
+      saveAssessmentResultToStorage(assessmentResult);
+    } catch (err) {
+      console.error("[AdaptiveAptitude] handleComplete error:", err);
+    }
 
     router.push("/dashboard?completed=aptitude");
   };

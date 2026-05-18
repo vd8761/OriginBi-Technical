@@ -20,20 +20,24 @@ function MNCAssessmentContent() {
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
-        const assessmentResult = mapSubmissionToAssessmentResult({
-            assessmentId: "mnc",
-            submission: result,
-            detail: EXAM_DETAILS.mnc,
-        });
-        saveAssessmentResultToStorage(assessmentResult);
-        unlockAssessmentForDashboard("mnc");
+        try {
+            const assessmentResult = mapSubmissionToAssessmentResult({
+                assessmentId: "mnc",
+                submission: result,
+                detail: EXAM_DETAILS.mnc,
+            });
+            saveAssessmentResultToStorage(assessmentResult);
+            unlockAssessmentForDashboard("mnc");
 
-        markAssessmentComplete("mnc", {
-            totalScore: assessmentResult.overallScore,
-            correctCount: assessmentResult.correctCount ?? 0,
-            wrongCount: assessmentResult.wrongCount ?? 0,
-            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-        });
+            markAssessmentComplete("mnc", {
+                totalScore: assessmentResult.overallScore,
+                correctCount: assessmentResult.correctCount ?? 0,
+                wrongCount: assessmentResult.wrongCount ?? 0,
+                timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
+            });
+        } catch (err) {
+            console.error("[MNC] handleComplete error:", err);
+        }
 
         if (mode === 'trial') {
             router.push('/assessment');

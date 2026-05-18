@@ -422,8 +422,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             }
 
             const result = await response.json();
-            await clearSession();
             onComplete(result);
+            await clearSession();
         } catch (error) {
             setLoadError((error as Error).message);
         } finally {
