@@ -82,9 +82,9 @@
   --admin-border: rgba(0, 0, 0, 0.06);
   --admin-border-strong: rgba(0, 0, 0, 0.12);
   --admin-fg: #0f1411;
-  --admin-fg-2: #3a423e;
-  --admin-fg-3: #6b7280;
-  --admin-fg-4: #9ca3af;
+  --admin-fg-2: #0f1411;
+  --admin-fg-3: #0f1411;
+  --admin-fg-4: #0f1411;
 }
 
 @theme {
@@ -416,10 +416,9 @@
   --admin-border: rgba(255, 255, 255, 0.075);
   --admin-border-strong: rgba(255, 255, 255, 0.14);
   --admin-fg: #ffffff;
-  --admin-fg-2: rgba(244, 251, 247, 0.78);
-  --admin-fg-3: rgba(244, 251, 247, 0.55);
-  --admin-fg-3: rgba(244, 251, 247, 0.55);
-  --admin-fg-4: rgba(244, 251, 247, 0.34);
+  --admin-fg-2: #ffffff;
+  --admin-fg-3: #ffffff;
+  --admin-fg-4: #ffffff;
 
   /* Shadows (Dark Override) */
   --admin-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);

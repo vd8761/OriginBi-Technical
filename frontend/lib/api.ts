@@ -1263,6 +1263,14 @@ export interface AdminUserRow {
   assessments: number;
   lastSeenAt: string | null;
   createdAt: string | null;
+  mobileNumber: string;
+  designation: string;
+  schoolLevel: string;
+  schoolStream: string;
+  studentBoard: string;
+  departmentName: string;
+  degreeName: string;
+  currentYear: string;
 }
 
 export interface AdminUserCounts {
