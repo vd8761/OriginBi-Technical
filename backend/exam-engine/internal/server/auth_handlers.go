@@ -754,16 +754,6 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func nullableDate(v string) any {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	t, err := time.Parse("2006-01-02", v)
-	if err != nil {
-		return nil
-	}
-	return t
-}
 
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {

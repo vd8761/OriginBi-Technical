@@ -478,13 +478,13 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const handleResumeAttempt = (attempt: InProgressAttempt) => {
-    const module = attempt.module === "grammar" ? "communication" : attempt.module;
+    const resumeModule = attempt.module === "grammar" ? "communication" : attempt.module;
     const mode = attempt.mode ?? "main";
-    if (module === "aptitude" && attempt.isBlockBased) {
+    if (resumeModule === "aptitude" && attempt.isBlockBased) {
       router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
       return;
     }
-    router.push(`/assessment/${module}?mode=${mode}`);
+    router.push(`/assessment/${resumeModule}?mode=${mode}`);
   };
 
   const handleCardTrialStart = (exam: Exam) => {
@@ -658,7 +658,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                 </h3>
                 
                 <p className="text-[14px] leading-relaxed text-black dark:text-white max-w-md mb-8">
-                  You haven't unlocked any assessments on your account. Go to the <span className="font-bold text-[#1ED36A]">Explore</span> page to browse and select evaluations.
+                  You haven&apos;t unlocked any assessments on your account. Go to the <span className="font-bold text-[#1ED36A]">Explore</span> page to browse and select evaluations.
                 </p>
 
                 <button

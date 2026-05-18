@@ -756,7 +756,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
         applyLockedDecorations();
         const showGlyph = !!(lockedRegions && lockedRegions.length > 0);
         editor.updateOptions({ glyphMargin: showGlyph });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [lockedRegions]);
 
     // Sync incoming value into the active model without thrashing the undo stack.

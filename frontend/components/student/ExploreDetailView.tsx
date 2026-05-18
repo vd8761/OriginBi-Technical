@@ -617,7 +617,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <CodingPreTest
                     language={pendingCodingLang}
                     mode={assessmentMode}
-                    // @ts-ignore
                     onStart={(mode: 'trial' | 'main') => {
                         const langId = pendingCodingLang.id;
                         setPendingCodingLang(null);
