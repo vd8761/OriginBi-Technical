@@ -71,6 +71,10 @@ class RegisterBodyDto {
   @IsString()
   @IsOptional()
   groupName?: string;
+
+  @IsString()
+  @IsOptional()
+  pricingPolicy?: string;
 }
 
 @Controller('auth')
@@ -107,6 +111,7 @@ export class RegistrationController {
       currentRole: body.currentRole,
       roleDescription: body.roleDescription,
       groupName: body.groupName || body.groupCode,
+      pricingPolicy: body.pricingPolicy,
     });
   }
 }

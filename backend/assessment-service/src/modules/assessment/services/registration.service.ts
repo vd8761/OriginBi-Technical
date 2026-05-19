@@ -18,6 +18,7 @@ export interface RegisterUserDto {
   currentRole?: string;
   roleDescription?: string;
   groupName?: string;
+  pricingPolicy?: string;
 }
 
 @Injectable()
@@ -54,6 +55,8 @@ export class RegistrationService {
           currentRole: dto.currentRole || null,
           roleDescription: dto.roleDescription || null,
           groupName: dto.groupName || null,
+          isFree: dto.pricingPolicy !== 'pay',
+          pricingPolicy: dto.pricingPolicy === 'pay' ? 'pay' : 'free',
         },
       });
 

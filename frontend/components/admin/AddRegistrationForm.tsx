@@ -233,6 +233,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
     roleDescription: "",
     groupCode: initialGroupCode || "",
     sendEmail: false,
+    pricingPolicy: "free",
   });
 
   const [departments, setDepartments] = useState<any[]>([]);
@@ -545,6 +546,29 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                   className={`${toggleButtonBase} ${formData.sendEmail === false ? activeToggleClasses : inactiveToggleClasses}`}
                 >
                   No
+                </button>
+              </div>
+            </div>
+
+            {/* Pricing Policy Toggle */}
+            <div className="space-y-1.5">
+              <label className={baseLabelClasses}>Pricing Policy</label>
+              <div className={toggleWrapperClasses} style={{ borderRadius: "9999px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange("pricingPolicy", "free")}
+                  style={{ borderRadius: "9999px" }}
+                  className={`${toggleButtonBase} ${formData.pricingPolicy !== "pay" ? activeToggleClasses : inactiveToggleClasses}`}
+                >
+                  Free
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange("pricingPolicy", "pay")}
+                  style={{ borderRadius: "9999px" }}
+                  className={`${toggleButtonBase} ${formData.pricingPolicy === "pay" ? activeToggleClasses : inactiveToggleClasses}`}
+                >
+                  Pay
                 </button>
               </div>
             </div>

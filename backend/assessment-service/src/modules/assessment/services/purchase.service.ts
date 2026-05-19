@@ -53,6 +53,32 @@ export class PurchaseService {
         }
     }
 
+    async isUserMarkedFree(email: string): Promise<boolean> {
+        if (!email) return false;
+        try {
+            const rows = await this.dataSource.query(
+                `SELECT r.metadata
+                 FROM registrations r
+                 JOIN users u ON u.id = r.user_id
+                 WHERE LOWER(u.email) = LOWER($1)
+                   AND COALESCE(r.is_deleted, FALSE) = FALSE
+                 ORDER BY r.id DESC
+                 LIMIT 1`,
+                [email],
+            );
+            if (!rows?.length) {
+                return false;
+            }
+            const metadata = rows[0].metadata || {};
+            return metadata.isFree === true || metadata.is_free === true;
+        } catch (err: any) {
+            this.logger.warn(
+                `isUserMarkedFree lookup failed for ${email}: ${err.message}`,
+            );
+            return false;
+        }
+    }
+
     /**
      * Returns true if the candidate identified by `email` is part of a cohort group (tech_groups)
      * which has a FREE pricing policy (metadata.isFree === true) and has the specified
@@ -258,22 +284,29 @@ export class PurchaseService {
         let isFree = finalAmount === 0;
 
         try {
-            // First check the corporate legacy overrides
-            const overrideRows = await this.dataSource.query(
-                `SELECT ga.metadata 
-                 FROM registrations r 
-                 JOIN users u ON r.user_id = u.id 
-                 JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
-                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
-                 LIMIT 1`,
-                [email]
-            );
+            if (await this.isUserMarkedFree(email)) {
+                isFree = true;
+                finalAmount = 0;
+            }
 
-            if (overrideRows && overrideRows.length > 0) {
-                const metadata = overrideRows[0].metadata || {};
-                if (metadata.isFree === true || metadata.is_free === true) {
-                    isFree = true;
-                    finalAmount = 0;
+            // First check the corporate legacy overrides
+            if (!isFree) {
+                const overrideRows = await this.dataSource.query(
+                    `SELECT ga.metadata 
+                     FROM registrations r 
+                     JOIN users u ON r.user_id = u.id 
+                     JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
+                     WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                     LIMIT 1`,
+                    [email]
+                );
+
+                if (overrideRows && overrideRows.length > 0) {
+                    const metadata = overrideRows[0].metadata || {};
+                    if (metadata.isFree === true || metadata.is_free === true) {
+                        isFree = true;
+                        finalAmount = 0;
+                    }
                 }
             }
 
@@ -436,7 +469,7 @@ export class PurchaseService {
 
         // Verify signature (with secure fallback for free-tier bypasses)
         if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
-            let hasFreeOverride = assessmentAmount === 0;
+            let hasFreeOverride = assessmentAmount === 0 || (await this.isUserMarkedFree(body.email));
 
             if (!hasFreeOverride) {
                 try {
@@ -558,7 +591,7 @@ export class PurchaseService {
                 (rows as any[]).map((row) => String(row.assessment_code)),
             );
 
-            if (await this.isAdminRegistered(email)) {
+            if (await this.isAdminRegistered(email) || await this.isUserMarkedFree(email)) {
                 for (const code of this.knownAssessmentCodes()) {
                     purchased.add(code);
                 }
