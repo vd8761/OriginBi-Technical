@@ -619,14 +619,17 @@ func (s *Server) registrationForUser(ctx context.Context, userID int64) (registr
 // id used as FK throughout the schema.
 func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, time.Time, bool) {
 	if s.cognito == nil {
+		s.logger.Warn("auth: cognito verifier not configured", "path", r.URL.Path)
 		return userDTO{}, time.Time{}, false
 	}
 	header := r.Header.Get("Authorization")
 	if header == "" {
+		s.logger.Warn("auth: missing Authorization header", "path", r.URL.Path)
 		return userDTO{}, time.Time{}, false
 	}
 	parts := strings.SplitN(header, " ", 2)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		s.logger.Warn("auth: malformed Authorization header", "path", r.URL.Path)
 		return userDTO{}, time.Time{}, false
 	}
 
@@ -634,6 +637,7 @@ func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, 
 	defer cancel()
 	claims, err := s.cognito.Verify(verifyCtx, parts[1])
 	if err != nil {
+		s.logger.Warn("auth: cognito verify failed", "path", r.URL.Path, "err", err)
 		return userDTO{}, time.Time{}, false
 	}
 
@@ -662,6 +666,7 @@ func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, 
 		LIMIT 1
 	`, claims.Sub, identity).Scan(&user.ID, &user.Email, &role)
 	if err != nil {
+		s.logger.Warn("auth: user lookup failed", "path", r.URL.Path, "sub", claims.Sub, "identity", identity, "err", err)
 		return userDTO{}, time.Time{}, false
 	}
 	if identity != "" {
