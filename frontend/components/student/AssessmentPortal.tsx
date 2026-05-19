@@ -310,7 +310,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     for (const exam of dynamicExams) {
       if (exam.id === "coding") {
         const codingPaid = CODING_LANGUAGES.filter((lang) =>
-          paidRefs.has(`coding:${lang.id}`),
+          paidRefs.has(`coding:${lang.id}`) || isPaid(`coding:${lang.id}` as PaymentKey),
         );
         for (const lang of codingPaid) {
           // Synthesize a per-language card from the base coding exam.
@@ -344,7 +344,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
   const hasPurchasedAny = useMemo(() => {
     if (paidAssignments && paidAssignments.length > 0) return true;
-    return dynamicExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey));
+    if (dynamicExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey))) {
+      return true;
+    }
+    return CODING_LANGUAGES.some((lang) => isPaid(`coding:${lang.id}` as PaymentKey));
   }, [dynamicExams, isPaid, paidAssignments]);
 
   const handleSelectExam = (exam: Exam) => {

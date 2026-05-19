@@ -17,6 +17,14 @@ export class PurchaseService {
         return !!code && code.toLowerCase().startsWith("coding:");
     }
 
+    private resolveAssessmentLookupCode(code: string | number): string {
+        const raw = String(code || "").trim().toLowerCase();
+        if (raw === "communication") {
+            return "grammar";
+        }
+        return raw;
+    }
+
     /**
      * Returns true if the user identified by `email` was registered by an
      * admin (registrations.registration_source = 'ADMIN'). Admin-registered
@@ -43,6 +51,166 @@ export class PurchaseService {
             );
             return false;
         }
+    }
+
+    /**
+     * Returns true if the candidate identified by `email` is part of a cohort group (tech_groups)
+     * which has a FREE pricing policy (metadata.isFree === true) and has the specified
+     * assessment assigned to it.
+     */
+    async isAssessmentFreeForCandidate(email: string, assessmentIdOrCode: string | number): Promise<boolean> {
+        if (!email) return false;
+        try {
+            // 1. Get the groupName the user is registered in
+            const regRows = await this.dataSource.query(
+                `SELECT r.metadata->>'groupName' as "groupName"
+                 FROM registrations r
+                 JOIN users u ON u.id = r.user_id
+                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                 LIMIT 1`,
+                [email]
+            );
+            if (!regRows || regRows.length === 0 || !regRows[0].groupName) {
+                return false;
+            }
+
+            const groupName = regRows[0].groupName;
+
+            // 2. Fetch the tech_groups metadata
+            const groupRows = await this.dataSource.query(
+                `SELECT metadata FROM tech_groups
+                 WHERE name = $1 AND is_active = true AND is_deleted = false
+                 LIMIT 1`,
+                [groupName]
+            );
+            if (!groupRows || groupRows.length === 0) {
+                return false;
+            }
+
+            const metadata = groupRows[0].metadata || {};
+            if (metadata.isFree !== true) {
+                return false;
+            }
+
+            // 3. Resolve the assessment name for the given assessmentIdOrCode
+            let assessmentName = "";
+            const idOrCodeStr = String(assessmentIdOrCode);
+            const lookupCode = this.resolveAssessmentLookupCode(idOrCodeStr);
+
+            // If it's a coding language purchase (e.g. coding:python), it maps to the Coding Assessment
+            if (lookupCode.startsWith("coding")) {
+                const codingRows = await this.dataSource.query(
+                    `SELECT assessment_name FROM tech_assessments WHERE module_type = 'coding' LIMIT 1`
+                );
+                if (codingRows && codingRows.length > 0) {
+                    assessmentName = codingRows[0].assessment_name;
+                }
+            } else {
+                let rows: any[] = [];
+                const isNumeric = /^\d+$/.test(idOrCodeStr);
+                if (isNumeric) {
+                    rows = await this.dataSource.query(
+                        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
+                        [Number(idOrCodeStr)]
+                    );
+                } else {
+                    rows = await this.dataSource.query(
+                        `SELECT assessment_name FROM tech_assessments WHERE assessment_code = $1 OR module_type = $1 LIMIT 1`,
+                        [lookupCode]
+                    );
+                }
+
+                if (rows && rows.length > 0) {
+                    assessmentName = rows[0].assessment_name;
+                }
+            }
+
+            if (!assessmentName) {
+                return false;
+            }
+
+            // 4. Check if the assessment is assigned to this group
+            const assignedAssessments = metadata.assessments || [];
+            return Array.isArray(assignedAssessments) && assignedAssessments.includes(assessmentName);
+        } catch (err: any) {
+            this.logger.warn(`Failed in isAssessmentFreeForCandidate check for ${email}: ${err.message}`);
+            return false;
+        }
+    }
+
+    private async getFreeAssignedAssessmentCodes(email: string): Promise<Set<string>> {
+        const freeCodes = new Set<string>();
+        if (!email) return freeCodes;
+
+        const groupRows = await this.dataSource.query(
+            `SELECT g.metadata
+             FROM registrations r
+             JOIN users u ON u.id = r.user_id
+             JOIN tech_groups g ON g.name = r.metadata->>'groupName'
+             WHERE LOWER(u.email) = LOWER($1)
+               AND COALESCE(r.is_deleted, FALSE) = FALSE
+               AND COALESCE(g.is_active, TRUE) = TRUE
+               AND COALESCE(g.is_deleted, FALSE) = FALSE
+             LIMIT 1`,
+            [email],
+        );
+
+        if (!groupRows?.length) {
+            return freeCodes;
+        }
+
+        const metadata = groupRows[0].metadata || {};
+        if (metadata.isFree !== true) {
+            return freeCodes;
+        }
+
+        const assignedAssessments = new Set<string>(
+            Array.isArray(metadata.assessments)
+                ? metadata.assessments
+                      .map((value: unknown) => String(value || "").trim())
+                      .filter(Boolean)
+                : [],
+        );
+        if (assignedAssessments.size === 0) {
+            return freeCodes;
+        }
+
+        const assessmentRows = await this.dataSource.query(
+            `SELECT assessment_name, assessment_code, module_type
+             FROM tech_assessments`,
+        );
+
+        const codingAssigned = (assessmentRows as any[]).some(
+            (row) =>
+                String(row.module_type || "").toLowerCase() === "coding" &&
+                assignedAssessments.has(String(row.assessment_name || "").trim()),
+        );
+
+        for (const code of this.knownAssessmentCodes()) {
+            if (this.isCodingCode(code)) {
+                if (codingAssigned) {
+                    freeCodes.add(code);
+                }
+                continue;
+            }
+
+            const lookupCode = this.resolveAssessmentLookupCode(code);
+            const matchedAssessment = (assessmentRows as any[]).find(
+                (row) =>
+                    row.assessment_code === lookupCode ||
+                    row.module_type === lookupCode,
+            );
+            if (
+                matchedAssessment &&
+                assignedAssessments.has(
+                    String(matchedAssessment.assessment_name || "").trim(),
+                )
+            ) {
+                freeCodes.add(code);
+            }
+        }
+
+        return freeCodes;
     }
 
     /**
@@ -90,6 +258,7 @@ export class PurchaseService {
         let isFree = finalAmount === 0;
 
         try {
+            // First check the corporate legacy overrides
             const overrideRows = await this.dataSource.query(
                 `SELECT ga.metadata 
                  FROM registrations r 
@@ -103,6 +272,14 @@ export class PurchaseService {
             if (overrideRows && overrideRows.length > 0) {
                 const metadata = overrideRows[0].metadata || {};
                 if (metadata.isFree === true || metadata.is_free === true) {
+                    isFree = true;
+                    finalAmount = 0;
+                }
+            }
+
+            // Then check the tech-specific cohort groups (tech_groups) which overrides the payment gate completely
+            if (!isFree) {
+                if (await this.isAssessmentFreeForCandidate(email, assessmentCode) || await this.isAssessmentFreeForCandidate(email, assessmentId)) {
                     isFree = true;
                     finalAmount = 0;
                 }
@@ -284,6 +461,16 @@ export class PurchaseService {
             }
 
             if (!hasFreeOverride) {
+                try {
+                    if (await this.isAssessmentFreeForCandidate(body.email, body.assessmentCode) || await this.isAssessmentFreeForCandidate(body.email, body.assessmentId)) {
+                        hasFreeOverride = true;
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`Failed to resolve group-based pricing override for ${body.email}: ${err.message}`);
+                }
+            }
+
+            if (!hasFreeOverride) {
                 throw new BadRequestException("User does not qualify for free tier assessment");
             }
             this.logger.log(`[PricingOverride] Bypassed Razorpay verification for free tier purchase of ${body.email}`);
@@ -375,6 +562,9 @@ export class PurchaseService {
                 for (const code of this.knownAssessmentCodes()) {
                     purchased.add(code);
                 }
+            } else {
+                const freeCodes = await this.getFreeAssignedAssessmentCodes(email);
+                freeCodes.forEach((code) => purchased.add(code));
             }
 
             return { purchased: Array.from(purchased) };

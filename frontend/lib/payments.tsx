@@ -21,6 +21,7 @@ const PAID_EVENT = "originbi:paid-changed";
 const COMPLETED_KEY = "originbi:completed-assessments";
 const COMPLETED_EVENT = "originbi:completed-changed";
 const LEGACY_TECH_API_URL = TECH_API_BASE;
+const PAID_REFRESH_MS = 30000;
 
 const isNetworkError = (err: any) => {
     if (err instanceof TypeError) return true;
@@ -161,11 +162,9 @@ export function usePaidAssessments() {
     }, []);
 
     const hydrateFromBackend = useCallback(async () => {
-        const next = readSet(PAID_KEY);
         const serverPaid = await fetchServerPaidSet();
-        serverPaid.forEach((key) => next.add(key));
-        writeSet(PAID_KEY, PAID_EVENT, next);
-        setLocal(next);
+        writeSet(PAID_KEY, PAID_EVENT, serverPaid);
+        setLocal(serverPaid);
     }, []);
 
     useEffect(() => {
@@ -173,12 +172,30 @@ export function usePaidAssessments() {
             syncFromStorage();
             void hydrateFromBackend();
         }, 0);
+        const intervalId = window.setInterval(() => {
+            if (document.visibilityState === "visible") {
+                void hydrateFromBackend();
+            }
+        }, PAID_REFRESH_MS);
+        const handleFocus = () => {
+            void hydrateFromBackend();
+        };
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") {
+                void hydrateFromBackend();
+            }
+        };
         window.addEventListener("storage", syncFromStorage);
         window.addEventListener(PAID_EVENT, syncFromStorage);
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibility);
         return () => {
             window.clearTimeout(id);
+            window.clearInterval(intervalId);
             window.removeEventListener("storage", syncFromStorage);
             window.removeEventListener(PAID_EVENT, syncFromStorage);
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibility);
         };
     }, [hydrateFromBackend, syncFromStorage]);
 

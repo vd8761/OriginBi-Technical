@@ -28,6 +28,7 @@ import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } 
 import { readableTextOn } from "@/lib/colors";
 import { Loader2 } from "lucide-react";
 import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
+import { useDataHydration } from "@/lib/contexts/DataHydrationContext";
 
 const TECH_API_BASE =
   (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
@@ -50,6 +51,7 @@ const codingStatusRank: Record<CodingLangStatus, number> = {
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
     const { user } = useSession();
+    const { isInitialized: isEntitlementsReady } = useDataHydration();
     const isAdminFree = isAdminRegisteredProfile(user);
     const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
@@ -85,7 +87,13 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             .map((lang) => {
                 const key = codingPaymentKey(lang.id);
                 const assignment = serverAssignments.find((a) => a.assignmentRef === key);
-                const paid = isAdminFree || (!!assignment && assignment.status === "active");
+                const paid =
+                    isAdminFree ||
+                    isPaid(key) ||
+                    (!!assignment &&
+                        (assignment.status === "active" ||
+                            assignment.status === "completed" ||
+                            assignment.completed));
                 const completed = !!assignment?.completed;
                 const status: CodingLangStatus = completed
                     ? "completed"
@@ -95,7 +103,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 return { lang, paid, completed, status, assignment };
             })
             .sort((a, b) => codingStatusRank[a.status] - codingStatusRank[b.status]);
-    }, [exam.id, serverAssignments, isAdminFree]);
+    }, [exam.id, serverAssignments, isAdminFree, isPaid]);
 
     const codingSummary = useMemo(() => {
         const completed = codingEntries.filter((e) => e.status === "completed").length;
@@ -124,6 +132,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const isCoding = exam.id === "coding";
     const examPaid = !isCoding && (isAdminFree || isPaid(exam.id as PaymentKey));
     const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey);
+    const hasCodingEntitlement = codingEntries.some((entry) => entry.paid || entry.completed);
 
     const startNonCodingAssessment = () => {
         if (exam.id === "aptitude") setShowAptitudeModal(true);
@@ -133,7 +142,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     };
 
     const handlePrimaryClick = async () => {
-        if (!isReady || isConnecting) return;
+        if (!isReady || isConnecting || (!isAdminFree && !isEntitlementsReady)) return;
 
         if (isCoding) {
             setShowLanguageModal(true);
@@ -222,25 +231,23 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             setShowLanguageModal(false);
             return;
         }
-        if (assignment?.status === "active") {
-            setShowLanguageModal(false);
-            setPendingCodingLang(language);
-            return;
-        }
-        // Admin-registered users skip the payment modal — the exam-engine
-        // auto-grants the assignment on listAssignments / startAttempt.
-        if (isAdminFree) {
+        const isUnlocked =
+            isAdminFree ||
+            isPaid(key) ||
+            assignment?.status === "active" ||
+            assignment?.status === "completed" ||
+            assignment?.completed;
+        if (isUnlocked) {
             setShowLanguageModal(false);
             setIsConnecting(true);
-            (async () => {
-                try {
-                    await demoPurchase(key).catch(() => undefined);
-                    await refreshAssignments();
-                } finally {
-                    setIsConnecting(false);
-                    setPendingCodingLang(language);
-                }
-            })();
+            try {
+                await demoPurchase(key).catch(() => undefined);
+                await refreshAssignments();
+                setPendingCodingLang(language);
+                setAssignmentError("");
+            } finally {
+                setIsConnecting(false);
+            }
             return;
         }
 
@@ -359,8 +366,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const isCodingPaid = useCallback(
         (key: PaymentKey) =>
             isAdminFree ||
-            serverAssignments.some((a) => a.assignmentRef === key && a.status === "active"),
-        [serverAssignments, isAdminFree],
+            isPaid(key) ||
+            serverAssignments.some((a) => a.assignmentRef === key && (a.status === "active" || a.status === "completed" || a.completed)),
+        [serverAssignments, isAdminFree, isPaid],
     );
 
     const isCodingCompleted = useCallback(
@@ -371,8 +379,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const primaryLabel = (() => {
         if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
+        if (!isAdminFree && !isEntitlementsReady) return "Checking Access...";
         if (isCoding) {
-            if (isAdminFree) return "Pick Language";
+            if (hasCodingEntitlement) return "Pick Language & Start";
             return exam.price === 0 || !exam.price ? "Pick Language & Start" : "Pick Language & Pay";
         }
         if (examCompleted) return "View Results";
@@ -455,7 +464,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                                         style={{ background: `${accent}1f`, color: accent }}
                                     >
-                                        Paid &middot; Unlocked
+                                        Unlocked
                                     </span>
                                 )}
                             </div>
@@ -669,7 +678,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             <p className="text-[18px] font-bold text-black dark:text-white">
                                 {exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                                 <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
-                                    {isCoding ? (exam.price === 0 || !exam.price ? "free assessment" : "per language") : examPaid ? "paid" : (exam.price === 0 || !exam.price ? "free assessment" : "fixed price")}
+                                    {isCoding ? (hasCodingEntitlement || exam.price === 0 || !exam.price ? "available now" : "per language") : examPaid ? "available now" : (exam.price === 0 || !exam.price ? "free assessment" : "fixed price")}
                                 </span>
                             </p>
                         </div>
@@ -689,8 +698,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         <button
                             type="button"
                             onClick={handlePrimaryClick}
-                            disabled={!isReady || isConnecting}
+                            disabled={!isReady || isConnecting || (!isAdminFree && !isEntitlementsReady)}
                             className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady && !isConnecting
+                                    && (isAdminFree || isEntitlementsReady)
                                     ? "bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-md shadow-[#1ED36A]/30"
                                     : "bg-slate-100 dark:bg-white/[0.04] text-black dark:text-white cursor-not-allowed"
                                 }`}
