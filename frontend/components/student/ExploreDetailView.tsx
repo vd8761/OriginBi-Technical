@@ -27,6 +27,12 @@ import {
 import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
 import { Loader2 } from "lucide-react";
+import { useSession } from "@/lib/contexts/SessionContext";
+
+const TECH_API_BASE =
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
 
 interface ExploreDetailViewProps {
     exam: ExtendedExam;
@@ -43,6 +49,7 @@ const codingStatusRank: Record<CodingLangStatus, number> = {
 
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
+    const { user } = useSession();
     const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
     const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
@@ -124,7 +131,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         else if (exam.id === "mnc") setShowMncModal(true);
     };
 
-    const handlePrimaryClick = () => {
+    const handlePrimaryClick = async () => {
         if (!isReady || isConnecting) return;
 
         if (isCoding) {
@@ -144,6 +151,55 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
 
+        if (exam.price === 0 || !exam.price) {
+            setIsConnecting(true);
+            try {
+                const email = user?.email || "candidate@originbi.com";
+                const assessmentId = (exam as any).assessmentId || 1;
+                const assessmentCode = exam.id;
+
+                const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode,
+                        amount: 0,
+                    }),
+                });
+                if (!orderRes.ok) throw new Error("Failed to initialize free unlock.");
+
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode,
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+                if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
+
+                markPaid(exam.id as PaymentKey);
+                refreshPurchases?.();
+                setIsConnecting(false);
+
+                setAssessmentMode("main");
+                startNonCodingAssessment();
+                return;
+            } catch (err: any) {
+                console.error("Free unlock failed:", err);
+                setIsConnecting(false);
+                alert(err?.message || "Failed to unlock free assessment.");
+                return;
+            }
+        }
+
         setIsConnecting(true);
         setPaymentTarget({
             kind: "exam",
@@ -155,7 +211,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         });
     };
 
-    const handleLanguagePick = (language: CodingLanguage) => {
+    const handleLanguagePick = async (language: CodingLanguage) => {
         const key = codingPaymentKey(language.id);
         const assignment = serverAssignments.find((a) => a.assignmentRef === key);
         if (assignment?.completed) {
@@ -167,6 +223,56 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             setPendingCodingLang(language);
             return;
         }
+
+        if (exam.price === 0 || !exam.price) {
+            setIsConnecting(true);
+            try {
+                const email = user?.email || "candidate@originbi.com";
+                const assessmentId = (exam as any).assessmentId || 1;
+
+                const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode: key,
+                        amount: 0,
+                    }),
+                });
+                if (!orderRes.ok) throw new Error("Failed to initialize free unlock.");
+
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode: key,
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+                if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
+
+                await demoPurchase(key);
+                await refreshAssignments();
+                setShowLanguageModal(false);
+                setIsConnecting(false);
+
+                setAssessmentMode("main");
+                setPendingCodingLang(language);
+                return;
+            } catch (err: any) {
+                console.error("Free coding unlock failed:", err);
+                setIsConnecting(false);
+                alert(err?.message || "Failed to unlock free coding language.");
+                return;
+            }
+        }
+
         setIsConnecting(true);
         setPaymentTarget({
             kind: "coding",
@@ -244,10 +350,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const primaryLabel = (() => {
         if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
-        if (isCoding) return `Pick Language & Pay`;
+        if (isCoding) return exam.price === 0 || !exam.price ? "Pick Language & Start" : `Pick Language & Pay`;
         if (examCompleted) return "View Results";
         if (examPaid) return "Start Assessment";
-        return `Pay ₹${exam.price}`;
+        return exam.price === 0 || !exam.price ? "Unlock for Free" : `Pay ₹${exam.price}`;
     })();
 
     return (
@@ -345,7 +451,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         <Stat label="Difficulty" value={exam.difficulty} />
                         <Stat
                             label={isCoding ? "Per language" : "Price"}
-                            value={`₹${exam.price}`}
+                            value={exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                             accent={accent}
                         />
                     </div>
@@ -537,9 +643,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                 {exam.shortTitle} &middot; {exam.duration} &middot; {exam.questions} Questions
                             </p>
                             <p className="text-[18px] font-bold text-black dark:text-white">
-                                ₹{exam.price}
+                                {exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                                 <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
-                                    {isCoding ? "per language" : examPaid ? "paid" : "fixed price"}
+                                    {isCoding ? (exam.price === 0 || !exam.price ? "free assessment" : "per language") : examPaid ? "paid" : (exam.price === 0 || !exam.price ? "free assessment" : "fixed price")}
                                 </span>
                             </p>
                         </div>

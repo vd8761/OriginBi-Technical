@@ -28,9 +28,33 @@ export class PurchaseService {
         keyId: string;
         isFree?: boolean;
     }> {
+        // Resolve the actual assessment amount from the database
+        let dbAmount = 0;
+        try {
+            const byIdRows = await this.dataSource.query(
+                `SELECT amount FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
+                [String(assessmentId)]
+            );
+            if (byIdRows && byIdRows.length > 0) {
+                dbAmount = byIdRows[0].amount !== null && byIdRows[0].amount !== undefined ? Number(byIdRows[0].amount) : 0;
+            } else {
+                const byCodeRows = await this.dataSource.query(
+                    `SELECT amount FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
+                    [assessmentCode]
+                );
+                if (byCodeRows && byCodeRows.length > 0) {
+                    dbAmount = byCodeRows[0].amount !== null && byCodeRows[0].amount !== undefined ? Number(byCodeRows[0].amount) : 0;
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`Failed to resolve assessment amount for ${assessmentId}/${assessmentCode}: ${err.message}`);
+            dbAmount = amount;
+        }
+
+        let finalAmount = dbAmount;
+
         // Check for Group-Based pricing overrides
-        let isFree = false;
-        let finalAmount = amount;
+        let isFree = finalAmount === 0;
 
         try {
             const overrideRows = await this.dataSource.query(
@@ -131,24 +155,61 @@ export class PurchaseService {
             throw new Error("Payment gateway not configured");
         }
 
-        // Verify signature (with secure fallback for free-tier bypasses)
-        if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
-            const overrideRows = await this.dataSource.query(
-                `SELECT ga.metadata 
-                 FROM registrations r 
-                 JOIN users u ON r.user_id = u.id 
-                 JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
-                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
-                 LIMIT 1`,
-                [body.email]
+        // Resolve assessment_id and amount robustly (input can be id or code)
+        let resolvedAssessmentId: string | null = null;
+        let assessmentAmount = 0;
+        try {
+            const byIdRows = await this.dataSource.query(
+                `SELECT assessment_id, amount FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
+                [String(body.assessmentId)]
             );
-            let hasFreeOverride = false;
-            if (overrideRows && overrideRows.length > 0) {
-                const metadata = overrideRows[0].metadata || {};
-                if (metadata.isFree === true || metadata.is_free === true) {
-                    hasFreeOverride = true;
+            if (byIdRows && byIdRows.length > 0) {
+                resolvedAssessmentId = String(byIdRows[0].assessment_id);
+                assessmentAmount = byIdRows[0].amount !== null && byIdRows[0].amount !== undefined ? Number(byIdRows[0].amount) : 0;
+            } else {
+                const byCodeRows = await this.dataSource.query(
+                    `SELECT assessment_id, amount FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
+                    [body.assessmentCode]
+                );
+                if (byCodeRows && byCodeRows.length > 0) {
+                    resolvedAssessmentId = String(byCodeRows[0].assessment_id);
+                    assessmentAmount = byCodeRows[0].amount !== null && byCodeRows[0].amount !== undefined ? Number(byCodeRows[0].amount) : 0;
                 }
             }
+        } catch (err: any) {
+            this.logger.warn(`Failed to resolve assessment_id for ${body.assessmentCode}: ${err.message}`);
+        }
+
+        if (!resolvedAssessmentId) {
+            throw new BadRequestException("Invalid assessment reference for purchase");
+        }
+
+        // Verify signature (with secure fallback for free-tier bypasses)
+        if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
+            let hasFreeOverride = assessmentAmount === 0;
+
+            if (!hasFreeOverride) {
+                try {
+                    const overrideRows = await this.dataSource.query(
+                        `SELECT ga.metadata 
+                         FROM registrations r 
+                         JOIN users u ON r.user_id = u.id 
+                         JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
+                         WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                         LIMIT 1`,
+                        [body.email]
+                    );
+                    if (overrideRows && overrideRows.length > 0) {
+                        const metadata = overrideRows[0].metadata || {};
+                        if (metadata.isFree === true || metadata.is_free === true) {
+                            hasFreeOverride = true;
+                        }
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`Failed to resolve group-based pricing override for ${body.email}: ${err.message}`);
+                }
+            }
+
             if (!hasFreeOverride) {
                 throw new BadRequestException("User does not qualify for free tier assessment");
             }
@@ -179,31 +240,7 @@ export class PurchaseService {
             this.logger.warn(`Failed to resolve user_id for ${body.email}: ${err.message}`);
         }
 
-        // Resolve assessment_id robustly (input can be id or code)
-        let resolvedAssessmentId: string | null = null;
-        try {
-            const byIdRows = await this.dataSource.query(
-                `SELECT assessment_id FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
-                [String(body.assessmentId)]
-            );
-            if (byIdRows && byIdRows.length > 0) {
-                resolvedAssessmentId = String(byIdRows[0].assessment_id);
-            } else {
-                const byCodeRows = await this.dataSource.query(
-                    `SELECT assessment_id FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
-                    [body.assessmentCode]
-                );
-                if (byCodeRows && byCodeRows.length > 0) {
-                    resolvedAssessmentId = String(byCodeRows[0].assessment_id);
-                }
-            }
-        } catch (err: any) {
-            this.logger.warn(`Failed to resolve assessment_id for ${body.assessmentCode}: ${err.message}`);
-        }
 
-        if (!resolvedAssessmentId) {
-            throw new BadRequestException("Invalid assessment reference for purchase");
-        }
 
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();

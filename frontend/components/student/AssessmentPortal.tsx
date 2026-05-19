@@ -702,7 +702,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
                     statusTone={exam.available ? "success" : "warning"}
                     totalQuestions={exam.questions}
                     duration={exam.duration}
-                    price={`₹${exam.price}`}
+                    price={exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                     tags={exam.tags}
                     icon={exam.icon}
                     available={exam.available}

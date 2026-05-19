@@ -63,7 +63,9 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
             ? `${selected.lang.name} completed`
             : selected.paid
                 ? `Start in ${selected.lang.name}`
-                : `Pay ₹${price} for ${selected.lang.name}`;
+                : price === 0
+                    ? `Unlock ${selected.lang.name} for Free`
+                    : `Pay ₹${price} for ${selected.lang.name}`;
 
     const footerNote = !selected
         ? "Pick a language to continue."
@@ -71,7 +73,9 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
             ? `${selected.lang.name} is completed. Retakes will be added through a later policy.`
             : selected.paid
                 ? `${selected.lang.name} is unlocked. Start any time.`
-                : `You'll pay ₹${price} to unlock ${selected.lang.name}.`;
+                : price === 0
+                    ? `Unlock ${selected.lang.name} for free.`
+                    : `You'll pay ₹${price} to unlock ${selected.lang.name}.`;
 
     return (
         <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 py-6 sm:px-6">
@@ -104,7 +108,9 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                         Choose your coding language
                     </h2>
                     <p className="text-[13px] text-slate-500 dark:text-gray-400 leading-relaxed">
-                        Each language is unlocked separately. Pay ₹{price} per language &mdash; you can come back and pay for another later.
+                        {price === 0
+                            ? "Unlock each language for free — you can come back and unlock another later."
+                            : `Each language is unlocked separately. Pay ₹${price} per language — you can come back and pay for another later.`}
                     </p>
                 </header>
 
@@ -171,7 +177,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                                             className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
                                             style={{ background: `${lang.accent}18`, color: lang.accent }}
                                         >
-                                            ₹{price}
+                                            {price === 0 ? "Free" : `₹${price}`}
                                         </span>
                                     )}
                                 </div>
