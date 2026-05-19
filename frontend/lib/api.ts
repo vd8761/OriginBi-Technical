@@ -1134,6 +1134,17 @@ export async function archiveAdminQuestion(questionId: string): Promise<void> {
   await apiFetch(`/v1/admin/questions/${questionId}`, { method: "DELETE" });
 }
 
+// Toggle archived flag without bumping the question version.
+export async function setAdminQuestionArchived(
+  questionId: string,
+  archived: boolean,
+): Promise<{ archived: boolean }> {
+  return apiFetch(`/v1/admin/questions/${questionId}/archive`, {
+    method: "POST",
+    body: JSON.stringify({ archived }),
+  });
+}
+
 export async function listAdminTestCases(
   questionId: string,
 ): Promise<{ testCases: AdminTestCase[] }> {

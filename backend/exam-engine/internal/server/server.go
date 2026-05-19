@@ -146,6 +146,7 @@ func (s *Server) routes() chi.Router {
 			r.Get("/admin/questions/{question_id}", s.getAdminQuestion)
 			r.Put("/admin/questions/{question_id}", s.updateAdminQuestion)
 			r.Delete("/admin/questions/{question_id}", s.deleteAdminQuestion)
+			r.Post("/admin/questions/{question_id}/archive", s.setAdminQuestionArchive)
 			r.Get("/admin/questions/{question_id}/test-cases", s.listAdminQuestionTestCases)
 			r.Post("/admin/questions/{question_id}/test-cases", s.appendAdminQuestionTestCase)
 			r.Put("/admin/questions/{question_id}/test-cases/{tc_id}", s.updateAdminQuestionTestCase)
