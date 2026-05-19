@@ -247,7 +247,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const refreshModuleCounts = useCallback(async (module?: AssessmentType) => {
     const modules = module
       ? [module]
-      : (["aptitude", "mnc", "communication", "role"] as AssessmentType[]);
+      : (["aptitude", "mnc", "communication", "role", "coding"] as AssessmentType[]);
 
     await Promise.all(
       modules.map(async (currentModule) => {
@@ -528,8 +528,8 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
             const realTrialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
             const realMainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
             
-            const trialCount = realTrialCount > 0 ? realTrialCount : config.trial;
-            const mainCount = realMainCount > 0 ? realMainCount : config.main;
+            const trialCount = realTrialCount;
+            const mainCount = realMainCount;
 
             return (
               <article key={at} className={`admin-module-card admin-qb-tile ${config.accentClass}`}>
@@ -631,9 +631,9 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
 
       <main className="relative z-10 py-2">
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
-        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6 mt-4">
+        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-end mb-6 mt-4">
           {/* Filter Tabs & Mode Toggle */}
-          <div className="flex flex-wrap items-center gap-6 w-full xl:w-auto">
+          <div className="flex flex-wrap items-end gap-6 w-full xl:w-auto">
             <div className="w-full sm:w-64">
               <CustomSelect
                 label="Filter by Category"
@@ -656,7 +656,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   onClick={() => setMode(m)}
                   className={`px-6 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
                     mode === m 
-                      ? "bg-brand-green text-[#0f1411] shadow-lg shadow-brand-green/20" 
+                      ? "bg-brand-green text-white" 
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -704,16 +704,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
               <span>Bulk Import</span>
               <Upload size={16} className="text-brand-green" />
             </button>
- 
-            {isDbModule(selectedModule) && (
-              <button 
-                onClick={() => router.push(`/admin/questions/settings?module=${selectedModule}`)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
-              >
-                <Settings size={16} className="text-brand-green" />
-                <span>Settings</span>
-              </button>
-            )}
 
             <button 
               onClick={() => setEditingQuestion("new")} 
@@ -738,13 +728,13 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2">
-                <div>
+                <div className="flex items-center gap-3">
                   <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
                     Inventory Overview <span className="text-brand-green">({questions.length})</span>
-                    <span className="ml-3 text-xs font-medium text-slate-500 capitalize px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 inline-block align-middle">
-                      {mode} bank
-                    </span>
                   </h3>
+                  <span className="text-xs font-medium text-slate-500 capitalize px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                    {mode} bank
+                  </span>
                 </div>
                 
                 {/* Search Bar - Now relocated here */}
@@ -754,7 +744,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search repository..."
-                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-slate-300 dark:focus:border-white/20 transition-all"
+                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus-visible:!outline-none focus:!border-brand-green dark:focus:!border-brand-green transition-all"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                     <Search size={16} />
@@ -810,8 +800,8 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       <AnimatePresence>
         {deleteConfirm && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md z-0" onClick={() => setDeleteConfirm(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative z-10 w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Question?</h3>
@@ -829,8 +819,8 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       <AnimatePresence>
         {clearConfirm && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md" onClick={() => setClearConfirm(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md z-0" onClick={() => setClearConfirm(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative z-10 w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
               <div className="flex flex-col items-center text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
