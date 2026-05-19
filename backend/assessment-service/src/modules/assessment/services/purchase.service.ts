@@ -25,6 +25,131 @@ export class PurchaseService {
         return raw;
     }
 
+    private normalizeAssessmentCode(code: string | undefined | null): string {
+        const raw = String(code || "").trim().toLowerCase();
+        if (raw === "grammar") {
+            return "communication";
+        }
+        return raw;
+    }
+
+    private knownBaseAssessmentCodes(): string[] {
+        return ["aptitude", "communication", "coding", "mnc", "role"];
+    }
+
+    private expandVisibleCodesToUnlockCodes(visibleCodes: Iterable<string>): Set<string> {
+        const unlockCodes = new Set<string>();
+        for (const code of visibleCodes) {
+            const normalized = this.normalizeAssessmentCode(code);
+            if (normalized === "coding") {
+                for (const knownCode of this.knownAssessmentCodes()) {
+                    if (this.isCodingCode(knownCode)) {
+                        unlockCodes.add(knownCode);
+                    }
+                }
+                continue;
+            }
+            unlockCodes.add(normalized);
+        }
+        return unlockCodes;
+    }
+
+    private async getActiveGroupMetadata(email: string): Promise<any | null> {
+        if (!email) return null;
+        const rows = await this.dataSource.query(
+            `SELECT g.metadata
+             FROM registrations r
+             JOIN users u ON u.id = r.user_id
+             JOIN tech_groups g ON g.name = r.metadata->>'groupName'
+             WHERE LOWER(u.email) = LOWER($1)
+               AND COALESCE(r.is_deleted, FALSE) = FALSE
+               AND COALESCE(g.is_active, TRUE) = TRUE
+               AND COALESCE(g.is_deleted, FALSE) = FALSE
+             ORDER BY r.id DESC
+             LIMIT 1`,
+            [email],
+        );
+        return rows?.length ? rows[0].metadata || {} : null;
+    }
+
+    private async getGroupAssessmentScope(email: string): Promise<{ visible: Set<string>; free: Set<string> }> {
+        const scope = { visible: new Set<string>(), free: new Set<string>() };
+        const metadata = await this.getActiveGroupMetadata(email);
+        if (!metadata) {
+            return scope;
+        }
+
+        const assignedAssessments = new Set<string>(
+            Array.isArray(metadata.assessments)
+                ? metadata.assessments
+                      .map((value: unknown) => String(value || "").trim())
+                      .filter(Boolean)
+                : [],
+        );
+        if (assignedAssessments.size === 0) {
+            return scope;
+        }
+
+        const assessmentRows = await this.dataSource.query(
+            `SELECT assessment_name, assessment_code, module_type
+             FROM tech_assessments`,
+        );
+
+        for (const row of assessmentRows as any[]) {
+            const assessmentName = String(row.assessment_name || "").trim();
+            if (!assignedAssessments.has(assessmentName)) {
+                continue;
+            }
+
+            const rowCode = this.normalizeAssessmentCode(
+                row.module_type || row.assessment_code,
+            );
+            if (!rowCode) {
+                continue;
+            }
+
+            scope.visible.add(rowCode === "coding" ? "coding" : rowCode);
+        }
+
+        if (metadata.isFree === true) {
+            scope.free = this.expandVisibleCodesToUnlockCodes(scope.visible);
+        }
+
+        return scope;
+    }
+
+    async getUserPricingPolicy(email: string): Promise<"free" | "pay" | null> {
+        if (!email) return null;
+        try {
+            const rows = await this.dataSource.query(
+                `SELECT r.metadata
+                 FROM registrations r
+                 JOIN users u ON u.id = r.user_id
+                 WHERE LOWER(u.email) = LOWER($1)
+                   AND COALESCE(r.is_deleted, FALSE) = FALSE
+                 ORDER BY r.id DESC
+                 LIMIT 1`,
+                [email],
+            );
+            if (!rows?.length) {
+                return null;
+            }
+            const metadata = rows[0].metadata || {};
+            if (metadata.pricingPolicy === "pay") {
+                return "pay";
+            }
+            if (metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
+                return "free";
+            }
+            return null;
+        } catch (err: any) {
+            this.logger.warn(
+                `getUserPricingPolicy lookup failed for ${email}: ${err.message}`,
+            );
+            return null;
+        }
+    }
+
     /**
      * Returns true if the user identified by `email` was registered by an
      * admin (registrations.registration_source = 'ADMIN'). Admin-registered
@@ -54,29 +179,7 @@ export class PurchaseService {
     }
 
     async isUserMarkedFree(email: string): Promise<boolean> {
-        if (!email) return false;
-        try {
-            const rows = await this.dataSource.query(
-                `SELECT r.metadata
-                 FROM registrations r
-                 JOIN users u ON u.id = r.user_id
-                 WHERE LOWER(u.email) = LOWER($1)
-                   AND COALESCE(r.is_deleted, FALSE) = FALSE
-                 ORDER BY r.id DESC
-                 LIMIT 1`,
-                [email],
-            );
-            if (!rows?.length) {
-                return false;
-            }
-            const metadata = rows[0].metadata || {};
-            return metadata.isFree === true || metadata.is_free === true;
-        } catch (err: any) {
-            this.logger.warn(
-                `isUserMarkedFree lookup failed for ${email}: ${err.message}`,
-            );
-            return false;
-        }
+        return (await this.getUserPricingPolicy(email)) === "free";
     }
 
     /**
@@ -164,81 +267,6 @@ export class PurchaseService {
         }
     }
 
-    private async getFreeAssignedAssessmentCodes(email: string): Promise<Set<string>> {
-        const freeCodes = new Set<string>();
-        if (!email) return freeCodes;
-
-        const groupRows = await this.dataSource.query(
-            `SELECT g.metadata
-             FROM registrations r
-             JOIN users u ON u.id = r.user_id
-             JOIN tech_groups g ON g.name = r.metadata->>'groupName'
-             WHERE LOWER(u.email) = LOWER($1)
-               AND COALESCE(r.is_deleted, FALSE) = FALSE
-               AND COALESCE(g.is_active, TRUE) = TRUE
-               AND COALESCE(g.is_deleted, FALSE) = FALSE
-             LIMIT 1`,
-            [email],
-        );
-
-        if (!groupRows?.length) {
-            return freeCodes;
-        }
-
-        const metadata = groupRows[0].metadata || {};
-        if (metadata.isFree !== true) {
-            return freeCodes;
-        }
-
-        const assignedAssessments = new Set<string>(
-            Array.isArray(metadata.assessments)
-                ? metadata.assessments
-                      .map((value: unknown) => String(value || "").trim())
-                      .filter(Boolean)
-                : [],
-        );
-        if (assignedAssessments.size === 0) {
-            return freeCodes;
-        }
-
-        const assessmentRows = await this.dataSource.query(
-            `SELECT assessment_name, assessment_code, module_type
-             FROM tech_assessments`,
-        );
-
-        const codingAssigned = (assessmentRows as any[]).some(
-            (row) =>
-                String(row.module_type || "").toLowerCase() === "coding" &&
-                assignedAssessments.has(String(row.assessment_name || "").trim()),
-        );
-
-        for (const code of this.knownAssessmentCodes()) {
-            if (this.isCodingCode(code)) {
-                if (codingAssigned) {
-                    freeCodes.add(code);
-                }
-                continue;
-            }
-
-            const lookupCode = this.resolveAssessmentLookupCode(code);
-            const matchedAssessment = (assessmentRows as any[]).find(
-                (row) =>
-                    row.assessment_code === lookupCode ||
-                    row.module_type === lookupCode,
-            );
-            if (
-                matchedAssessment &&
-                assignedAssessments.has(
-                    String(matchedAssessment.assessment_name || "").trim(),
-                )
-            ) {
-                freeCodes.add(code);
-            }
-        }
-
-        return freeCodes;
-    }
-
     /**
      * Create a Razorpay order for Technical Assessment purchase
      */
@@ -282,15 +310,16 @@ export class PurchaseService {
 
         // Check for Group-Based pricing overrides
         let isFree = finalAmount === 0;
+        const userPricingPolicy = await this.getUserPricingPolicy(email);
 
         try {
-            if (await this.isUserMarkedFree(email)) {
+            if (userPricingPolicy === "free") {
                 isFree = true;
                 finalAmount = 0;
             }
 
             // First check the corporate legacy overrides
-            if (!isFree) {
+            if (!isFree && userPricingPolicy !== "pay") {
                 const overrideRows = await this.dataSource.query(
                     `SELECT ga.metadata 
                      FROM registrations r 
@@ -311,7 +340,7 @@ export class PurchaseService {
             }
 
             // Then check the tech-specific cohort groups (tech_groups) which overrides the payment gate completely
-            if (!isFree) {
+            if (!isFree && userPricingPolicy !== "pay") {
                 if (await this.isAssessmentFreeForCandidate(email, assessmentCode) || await this.isAssessmentFreeForCandidate(email, assessmentId)) {
                     isFree = true;
                     finalAmount = 0;
@@ -469,9 +498,10 @@ export class PurchaseService {
 
         // Verify signature (with secure fallback for free-tier bypasses)
         if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
-            let hasFreeOverride = assessmentAmount === 0 || (await this.isUserMarkedFree(body.email));
+            const userPricingPolicy = await this.getUserPricingPolicy(body.email);
+            let hasFreeOverride = assessmentAmount === 0 || userPricingPolicy === "free";
 
-            if (!hasFreeOverride) {
+            if (!hasFreeOverride && userPricingPolicy !== "pay") {
                 try {
                     const overrideRows = await this.dataSource.query(
                         `SELECT ga.metadata 
@@ -493,7 +523,7 @@ export class PurchaseService {
                 }
             }
 
-            if (!hasFreeOverride) {
+            if (!hasFreeOverride && userPricingPolicy !== "pay") {
                 try {
                     if (await this.isAssessmentFreeForCandidate(body.email, body.assessmentCode) || await this.isAssessmentFreeForCandidate(body.email, body.assessmentId)) {
                         hasFreeOverride = true;
@@ -579,7 +609,7 @@ export class PurchaseService {
      * Fetch all purchased assessment codes for a user.
      * Admin-registered users are treated as having purchased every assessment.
      */
-    async getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+    async getPurchasedAssessments(email: string): Promise<{ purchased: string[]; visible: string[] }> {
         try {
             const rows = await this.dataSource.query(
                 `SELECT assessment_code FROM tech_assessment_purchases
@@ -590,20 +620,27 @@ export class PurchaseService {
             const purchased = new Set<string>(
                 (rows as any[]).map((row) => String(row.assessment_code)),
             );
+            const groupScope = await this.getGroupAssessmentScope(email);
+            const userPricingPolicy = await this.getUserPricingPolicy(email);
+            const visible = groupScope.visible.size > 0
+                ? new Set<string>(groupScope.visible)
+                : new Set<string>(this.knownBaseAssessmentCodes());
 
-            if (await this.isAdminRegistered(email) || await this.isUserMarkedFree(email)) {
+            if (await this.isAdminRegistered(email)) {
                 for (const code of this.knownAssessmentCodes()) {
                     purchased.add(code);
                 }
-            } else {
-                const freeCodes = await this.getFreeAssignedAssessmentCodes(email);
-                freeCodes.forEach((code) => purchased.add(code));
+                this.knownBaseAssessmentCodes().forEach((code) => visible.add(code));
+            } else if (userPricingPolicy === "free") {
+                this.expandVisibleCodesToUnlockCodes(visible).forEach((code) => purchased.add(code));
+            } else if (userPricingPolicy !== "pay") {
+                groupScope.free.forEach((code) => purchased.add(code));
             }
 
-            return { purchased: Array.from(purchased) };
+            return { purchased: Array.from(purchased), visible: Array.from(visible) };
         } catch (err: any) {
             this.logger.error(`Failed to retrieve purchases for ${email}: ${err.message}`);
-            return { purchased: [] };
+            return { purchased: [], visible: this.knownBaseAssessmentCodes() };
         }
     }
 

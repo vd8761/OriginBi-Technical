@@ -523,7 +523,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                 onChange={(e) => handleInputChange("groupCode", e.target.value)}
                 placeholder="Enter the Group Name"
                 style={{ borderRadius: "9999px" }}
-                className={baseInputClasses}
+                className={`${baseInputClasses} placeholder:text-xs placeholder:opacity-50`}
               />
             </div>
 

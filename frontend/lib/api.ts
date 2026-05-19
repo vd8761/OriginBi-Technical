@@ -1285,11 +1285,11 @@ export function getActiveEmail(): string {
 
 // ── Purchase + completion sync (backend source of truth) ──────────────────
 
-export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[]; visible?: string[] }> {
   if (!HAS_TECH_API) {
     return { purchased: [] };
   }
-  return apiFetch<{ purchased: string[] }>("/api/assessment/purchase/purchases", {
+  return apiFetch<{ purchased: string[]; visible?: string[] }>("/api/assessment/purchase/purchases", {
     method: "POST",
     body: JSON.stringify({ email }),
     baseOverride: TECH_API_BASE,

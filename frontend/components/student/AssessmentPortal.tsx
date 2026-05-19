@@ -60,7 +60,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [showDetailModal, setShowDetailModal] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isPaid } = usePaidAssessments();
+  const { isPaid, isVisible, isEntitlementsReady } = usePaidAssessments();
   const { isCompleted } = useCompletedAssessments();
   const { user } = useSession();
   
@@ -282,6 +282,11 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     return mapped;
   }, [assessmentsList]);
 
+  const visibleExams = useMemo(() => {
+    if (!isEntitlementsReady) return [];
+    return dynamicExams.filter((exam) => isVisible(exam.id));
+  }, [dynamicExams, isVisible, isEntitlementsReady]);
+
   // Read view from URL and sync with currentView
   useEffect(() => {
     const viewFromUrl = searchParams.get("view") as AssessmentView | null;
@@ -307,7 +312,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     // exception: instead of one "Coding Assessment" card, expand into one
     // card per language the user has paid for.
     const result: ExtendedExam[] = [];
-    for (const exam of dynamicExams) {
+    for (const exam of visibleExams) {
       if (exam.id === "coding") {
         const codingPaid = CODING_LANGUAGES.filter((lang) =>
           paidRefs.has(`coding:${lang.id}`) || isPaid(`coding:${lang.id}` as PaymentKey),
@@ -340,15 +345,15 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     const baseExams = result;
     if (filter === "ready" || filter === "all") return baseExams;
     return baseExams.filter((exam) => (exam as ExtendedExam).track === filter);
-  }, [dynamicExams, filter, paidAssignments, isPaid]);
+  }, [visibleExams, filter, paidAssignments, isPaid]);
 
   const hasPurchasedAny = useMemo(() => {
     if (paidAssignments && paidAssignments.length > 0) return true;
-    if (dynamicExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey))) {
+    if (visibleExams.some((exam) => exam.available && isPaid(exam.id as PaymentKey))) {
       return true;
     }
     return CODING_LANGUAGES.some((lang) => isPaid(`coding:${lang.id}` as PaymentKey));
-  }, [dynamicExams, isPaid, paidAssignments]);
+  }, [visibleExams, isPaid, paidAssignments]);
 
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);
@@ -611,7 +616,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       <main className="relative z-10 mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         {currentView === "explore" ? (
           <ExploreView
-            assessments={dynamicExams as any}
+            assessments={visibleExams as any}
             examDetails={EXAM_DETAILS}
             onNavigateToDetails={(exam) => {
               router.push(`/explore/${exam.id}`);

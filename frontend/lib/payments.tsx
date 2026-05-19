@@ -18,10 +18,13 @@ export const codingPaymentKey = (languageId: string): PaymentKey =>
 
 const PAID_KEY = "originbi:paid-assessments";
 const PAID_EVENT = "originbi:paid-changed";
+const VISIBLE_KEY = "originbi:visible-assessments";
+const VISIBLE_EVENT = "originbi:visible-changed";
 const COMPLETED_KEY = "originbi:completed-assessments";
 const COMPLETED_EVENT = "originbi:completed-changed";
 const LEGACY_TECH_API_URL = TECH_API_BASE;
 const PAID_REFRESH_MS = 30000;
+const DEFAULT_VISIBLE_ASSESSMENTS = ["aptitude", "communication", "coding", "mnc", "role"];
 
 const isNetworkError = (err: any) => {
     if (err instanceof TypeError) return true;
@@ -66,8 +69,9 @@ const resolveCurrentEmail = (): string | null => {
     return null;
 };
 
-const fetchServerPaidSet = async (): Promise<Set<string>> => {
+const fetchServerEntitlements = async (): Promise<{ paid: Set<string>; visible: Set<string> }> => {
     const paid = new Set<string>();
+    const visible = new Set<string>(DEFAULT_VISIBLE_ASSESSMENTS);
 
     const email = resolveCurrentEmail();
     if (email) {
@@ -86,6 +90,14 @@ const fetchServerPaidSet = async (): Promise<Set<string>> => {
                 for (const code of data?.purchased ?? []) {
                     if (typeof code === "string" && code.trim()) {
                         paid.add(code.trim());
+                    }
+                }
+                if (Array.isArray(data?.visible) && data.visible.length > 0) {
+                    visible.clear();
+                    for (const code of data.visible) {
+                        if (typeof code === "string" && code.trim()) {
+                            visible.add(code.trim());
+                        }
                     }
                 }
             }
@@ -109,7 +121,7 @@ const fetchServerPaidSet = async (): Promise<Set<string>> => {
         // Exam-engine assignments are also best-effort here.
     }
 
-    return paid;
+    return { paid, visible };
 };
 
 const useKeyedSet = (storageKey: string, eventName: string) => {
@@ -156,15 +168,22 @@ const useKeyedSet = (storageKey: string, eventName: string) => {
 
 export function usePaidAssessments() {
     const [set, setLocal] = useState<Set<string>>(new Set());
+    const [visibleSet, setVisibleLocal] = useState<Set<string>>(new Set(DEFAULT_VISIBLE_ASSESSMENTS));
+    const [isEntitlementsReady, setIsEntitlementsReady] = useState(false);
 
     const syncFromStorage = useCallback(() => {
         setLocal(readSet(PAID_KEY));
+        const nextVisible = readSet(VISIBLE_KEY);
+        setVisibleLocal(nextVisible.size > 0 ? nextVisible : new Set(DEFAULT_VISIBLE_ASSESSMENTS));
     }, []);
 
     const hydrateFromBackend = useCallback(async () => {
-        const serverPaid = await fetchServerPaidSet();
-        writeSet(PAID_KEY, PAID_EVENT, serverPaid);
-        setLocal(serverPaid);
+        const { paid, visible } = await fetchServerEntitlements();
+        writeSet(PAID_KEY, PAID_EVENT, paid);
+        writeSet(VISIBLE_KEY, VISIBLE_EVENT, visible);
+        setLocal(paid);
+        setVisibleLocal(visible);
+        setIsEntitlementsReady(true);
     }, []);
 
     useEffect(() => {
@@ -187,6 +206,7 @@ export function usePaidAssessments() {
         };
         window.addEventListener("storage", syncFromStorage);
         window.addEventListener(PAID_EVENT, syncFromStorage);
+        window.addEventListener(VISIBLE_EVENT, syncFromStorage);
         window.addEventListener("focus", handleFocus);
         document.addEventListener("visibilitychange", handleVisibility);
         return () => {
@@ -194,12 +214,19 @@ export function usePaidAssessments() {
             window.clearInterval(intervalId);
             window.removeEventListener("storage", syncFromStorage);
             window.removeEventListener(PAID_EVENT, syncFromStorage);
+            window.removeEventListener(VISIBLE_EVENT, syncFromStorage);
             window.removeEventListener("focus", handleFocus);
             document.removeEventListener("visibilitychange", handleVisibility);
         };
     }, [hydrateFromBackend, syncFromStorage]);
 
     const isPaid = useCallback((key: PaymentKey) => set.has(key), [set]);
+    const isVisible = useCallback((key: string) => {
+        if (key.startsWith("coding:")) {
+            return visibleSet.has("coding") || visibleSet.has(key);
+        }
+        return visibleSet.has(key);
+    }, [visibleSet]);
 
     const markPaid = useCallback((key: PaymentKey) => {
         const next = readSet(PAID_KEY);
@@ -227,19 +254,19 @@ export function usePaidAssessments() {
                 return;
             }
             try {
-                const { purchased } = await getPurchasedAssessments(email);
+                const { purchased, visible } = await getPurchasedAssessments(email);
                 if (cancelled) return;
-                const current = readSet(PAID_KEY);
-                let changed = false;
-                for (const code of purchased) {
-                    if (!current.has(code)) {
-                        current.add(code);
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    writeSet(PAID_KEY, PAID_EVENT, current);
-                }
+                const current = new Set<string>(purchased);
+                const nextVisible = new Set<string>(
+                    Array.isArray(visible) && visible.length > 0
+                        ? visible
+                        : DEFAULT_VISIBLE_ASSESSMENTS,
+                );
+                writeSet(PAID_KEY, PAID_EVENT, current);
+                writeSet(VISIBLE_KEY, VISIBLE_EVENT, nextVisible);
+                setLocal(current);
+                setVisibleLocal(nextVisible);
+                setIsEntitlementsReady(true);
                 console.log("[usePaidAssessments] Synced purchases:", purchased);
             } catch (err: any) {
                 if (isNetworkError(err)) return;
@@ -262,9 +289,12 @@ export function usePaidAssessments() {
 
     return {
         isPaid,
+        isVisible,
+        visibleAssessments: visibleSet,
         markPaid,
         clearPaid,
         refreshPurchases: hydrateFromBackend,
+        isEntitlementsReady,
     };
 }
 

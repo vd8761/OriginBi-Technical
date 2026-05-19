@@ -1250,7 +1250,7 @@ function GroupsInner() {
                   setNewGroupCode(cleanWord);
                 }}
                 placeholder="e.g. B.Tech CSE Batch 2026"
-                className="admin-field text-black dark:text-white"
+                className="admin-field text-black dark:text-white placeholder:text-xs placeholder:opacity-50"
                 required
               />
             </label>
