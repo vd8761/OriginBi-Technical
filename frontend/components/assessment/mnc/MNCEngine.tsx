@@ -716,29 +716,88 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
             </main>
 
             {showSubmitModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-3xl bg-white p-10 text-center dark:bg-[#111a15]">
-                        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
-                            <CheckCircle2 size={40} />
-                        </div>
-                        <h2 className="text-2xl font-bold">Submit Assessment?</h2>
-                        <p className="mt-2 text-sm opacity-60">You have answered {answeredCount} out of {totalQuestions} questions.</p>
-                        <div className="mt-8 flex gap-4">
-                            <button onClick={() => setShowSubmitModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-brand-green/20 py-3 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed">Review</button>
-                            <button 
-                                onClick={completeAssessment} 
-                                disabled={isSubmitting} 
-                                className="flex-1 rounded-xl bg-brand-green py-3 text-sm font-bold text-white hover:bg-[#19be5e] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span>Submitting...</span>
-                                    </>
-                                ) : (
-                                    "Yes, Submit"
-                                )}
-                            </button>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-md transition-opacity" 
+                        onClick={() => setShowSubmitModal(false)}
+                    />
+                    
+                    <div className="relative w-full max-w-lg transform overflow-hidden rounded-2xl border border-brand-green/20 bg-white p-8 shadow-2xl transition-all dark:border-white/10 dark:bg-[#111a15]">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-green/10 text-brand-green">
+                                <CheckCircle2 size={40} />
+                            </div>
+                            
+                            <h2 className="text-2xl font-black text-[#17201b] dark:text-white">Ready to submit?</h2>
+                            <p className="mt-2 text-sm text-[#17201b] dark:text-white">Review your assessment summary before finalizing your submission.</p>
+
+                            <div className="mt-4 flex items-center gap-2 rounded-full border border-brand-green/10 bg-brand-green/[0.03] px-4 py-1.5 dark:border-white/5 dark:bg-white/5">
+                                <div className="h-2 w-2 rounded-full bg-brand-green" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-brand-green">
+                                    Time Remaining: {formatTime(timeLeft)}
+                                </span>
+                            </div>
+                            
+                            <div className="mt-8 grid w-full grid-cols-3 gap-4">
+                                <div className="flex flex-col items-center rounded-xl bg-brand-green/[0.05] p-4 border border-brand-green/10">
+                                    <span className="text-xl font-black text-brand-green">{navigatorQuestions.filter(q => q.isAnswered).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green">Answered</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-xl bg-amber-400/[0.05] p-4 border border-amber-400/10">
+                                    <span className="text-xl font-black text-amber-500">{navigatorQuestions.filter(q => q.isMarked).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Review</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-xl bg-slate-100 p-4 border border-slate-200 dark:bg-white/[0.03] dark:border-white/10">
+                                    <span className="text-xl font-black text-[#17201b] dark:text-white">{navigatorQuestions.filter(q => !q.isAnswered).length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#17201b] dark:text-white">Left</span>
+                                </div>
+                            </div>
+
+                            {navigatorQuestions.some(q => !q.isAnswered) && (() => {
+                                const missed = navigatorQuestions
+                                    .filter(q => !q.isAnswered)
+                                    .map(q => q.number);
+                                return (
+                                    <div className="mt-6 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4 text-left">
+                                        <p className="text-sm font-black text-[#17201b] dark:text-white leading-relaxed">
+                                            You have not answered {missed.length === 1 ? 'question' : 'questions'}{' '}
+                                            <span className="font-black text-red-600 dark:text-red-400">
+                                                {missed.join(', ')}
+                                            </span>
+                                            . Please complete {missed.length === 1 ? 'it' : 'all of them'} before submitting.
+                                        </p>
+                                    </div>
+                                );
+                            })()}
+
+                            <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSubmitModal(false)}
+                                    disabled={isSubmitting}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Review Answers
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={completeAssessment}
+                                    disabled={isSubmitting}
+                                    className="group flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition-all hover:bg-[#19be5e] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Yes, Submit Test
+                                            <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

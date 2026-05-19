@@ -980,6 +980,24 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                                         <span className="text-[10px] font-bold uppercase text-slate-700 dark:text-white">Left</span>
                                     </div>
                                 </div>
+
+                                {navigatorTasks.some(q => !q.isAnswered) && (() => {
+                                    const missed = navigatorTasks
+                                        .filter(q => !q.isAnswered)
+                                        .map(q => q.number);
+                                    return (
+                                        <div className="mt-6 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4 text-left">
+                                            <p className="text-sm font-black text-[#17201b] dark:text-white leading-relaxed">
+                                                You have not answered {missed.length === 1 ? 'task' : 'tasks'}{' '}
+                                                <span className="font-black text-red-600 dark:text-red-400">
+                                                    {missed.join(', ')}
+                                                </span>
+                                                . Please complete {missed.length === 1 ? 'it' : 'all of them'} before submitting.
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+
                                 <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
                                     <button onClick={() => setShowSubmitModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border py-3.5 text-sm font-bold dark:text-white disabled:opacity-50 disabled:cursor-not-allowed">Review Tasks</button>
                                     <button 

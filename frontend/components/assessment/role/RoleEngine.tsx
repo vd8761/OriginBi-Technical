@@ -859,17 +859,22 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                                 </div>
                             </div>
 
-                            {navigatorQuestions.some(q => !q.isAnswered) && (
-                                <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
-                                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-                                    <div>
-                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions Detected</p>
-                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
-                                            You have {navigatorQuestions.filter(q => !q.isAnswered).length} questions left. We recommend reviewing them before final submission.
+                            {navigatorQuestions.some(q => !q.isAnswered) && (() => {
+                                const missed = navigatorQuestions
+                                    .filter(q => !q.isAnswered)
+                                    .map(q => q.number);
+                                return (
+                                    <div className="mt-6 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4 text-left">
+                                        <p className="text-sm font-black text-[#17201b] dark:text-white leading-relaxed">
+                                            You have not answered {missed.length === 1 ? 'question' : 'questions'}{' '}
+                                            <span className="font-black text-red-600 dark:text-red-400">
+                                                {missed.join(', ')}
+                                            </span>
+                                            . Please complete {missed.length === 1 ? 'it' : 'all of them'} before submitting.
                                         </p>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
                                 <button

@@ -79,7 +79,7 @@ const EyeIcon = ({ c }: { c?: string }) => (
 
 const LinkedInIcon = ({ c }: { c?: string }) => (
   <svg className={c} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
   </svg>
 );
 
@@ -243,9 +243,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   const router = useRouter();
   const { isPaid } = usePaidAssessments();
   const { results, isCompleted, getResult } = useAssessmentResults();
-  const { 
-    notifications, 
-    markNotificationRead, 
+  const {
+    notifications,
+    markNotificationRead,
     clearAllNotifications,
   } = useAssessmentTracker();
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
@@ -269,6 +269,26 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
   return (
     <div className="flex flex-col gap-8 pt-2" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+
+      {/* ===== GREETING ===== */}
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45 }}
+        className="flex flex-col sm:flex-row sm:items-end justify-between gap-3"
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-[#1ed36a] mb-1">Dashboard</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+            {userName && userName !== 'Student' ? `${userName.split(' ')[0]}'s` : 'Your'} Assessments
+          </h1>
+        </div>
+        {completedCount > 0 && (
+          <p className="text-sm text-gray-500 dark:text-slate-400 font-medium tabular-nums">
+            {completedCount} of {purchasedCount} completed
+          </p>
+        )}
+      </motion.div>
 
       {inProgressAttempt && onResumeAttempt && (
         <motion.section
@@ -310,7 +330,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
       {/* ===== HERO + 360 IMPACT: Side by side grid ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Purple personality card with full background image */}
+        {/* Left: Personality card */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -332,7 +352,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <span className="inline-block text-xs sm:text-sm font-medium text-white/80 mb-0.5">
+              <span className="inline-block text-xs sm:text-sm font-bold text-white mb-0.5">
                 Your Personality
               </span>
             </motion.div>
@@ -351,7 +371,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
             >
-              <span className="text-white/80 text-xs sm:text-sm font-medium leading-relaxed max-w-md">
+              <span className="text-white font-medium text-xs sm:text-sm leading-relaxed max-w-md">
                 {identity.subtitle}
               </span>
             </motion.p>
@@ -392,20 +412,28 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
         )}
       </div>
 
-      {/* ===== RESULTS: Clean list layout (NOT card grid) ===== */}
+      {/* ===== RESULTS: Professional UI Layout ===== */}
       <motion.section
         id="results"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
+        className="mt-8"
       >
-        <div className="flex flex-wrap items-center gap-2 mb-5">
-          <BarChartIcon c="w-5 h-5 text-[#1ed36a]" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Results</h2>
-          <span className="ml-2 text-sm text-gray-600 dark:text-slate-400 font-semibold">{completedCount} of {purchasedCount} completed</span>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <BarChartIcon c="w-5 h-5 text-slate-500 dark:text-slate-400" />
+              Assessment Results
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Review your performance across completed modules</p>
+          </div>
+          <div className="text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-md border border-slate-200 dark:border-white/10">
+            {completedCount} of {purchasedCount} Completed
+          </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="flex flex-col gap-4">
           {purchasedExams.map((exam, idx) => {
             const status = statusOf(exam);
             const result = getResult(exam.id as AssessmentId);
@@ -414,77 +442,82 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             return (
               <motion.div
                 key={exam.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * idx }}
-                className="group relative bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-5 hover:border-[#1ed36a]/30 dark:hover:border-[#1ed36a]/30 transition-all"
+                className="group relative flex flex-col bg-white dark:bg-[#111a15] rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden hover:border-brand-green/30 transition-colors shadow-sm"
               >
-                {/* Left accent bar */}
-                <div
-                  className="absolute left-0 top-4 bottom-4 w-1 rounded-full"
-                  style={{ background: exam.accentColor }}
-                />
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pl-3">
+                {/* Top strip for brand color */}
+                <div className="h-1 w-full" style={{ background: exam.accentColor }} />
+                
+                <div className="p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                   {/* Info */}
-                  <div className="flex items-start sm:items-center gap-4">
+                  <div className="flex items-start gap-4 flex-1">
                     <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                      className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 border border-slate-100 dark:border-white/5"
                       style={{ background: `${exam.accentColor}10`, color: exam.accentColor }}
                     >
                       {exam.icon}
                     </div>
                     <div>
-                      <h3 className="font-bold text-gray-900 dark:text-white text-base">{exam.title}</h3>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-gray-600 dark:text-slate-400 font-medium">
-                        <span className="font-semibold">{exam.difficulty}</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-700" />
-                        <span className="font-semibold">{exam.questions} questions</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-700" />
-                        <span className="font-semibold">{exam.duration}</span>
+                      <h3 className="font-semibold text-slate-900 dark:text-white text-lg leading-tight">{exam.title}</h3>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1.5">
+                           <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                           {exam.difficulty}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                           <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                           {exam.questions} questions
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                           <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                           {exam.duration}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Right: Score or Action */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:gap-6">
                     {done && result ? (
                       <>
-                        {/* Section mini-bars */}
-                        <div className="hidden sm:flex items-center gap-2 mr-2">
-                          {result.sections?.slice(0, 3).map((s: SectionResult) => (
-                            <div key={s.name} className="flex flex-col items-center gap-1">
-                              <div className="w-1.5 h-8 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden relative">
-                                <div
-                                  className="absolute bottom-0 left-0 right-0 rounded-full"
-                                  style={{ height: `${s.score}%`, background: getSkillColor(s.score) }}
-                                />
+                        <div className="flex items-center gap-6 bg-slate-50 dark:bg-white/[0.02] px-4 py-2.5 rounded-lg border border-slate-100 dark:border-white/5">
+                          {/* Mini bars */}
+                          <div className="hidden sm:flex items-end gap-1.5 h-10 border-r border-slate-200 dark:border-white/10 pr-6">
+                            {result.sections?.slice(0, 3).map((s: SectionResult) => (
+                              <div key={s.name} className="flex flex-col items-center gap-1 justify-end h-full">
+                                <div className="w-1.5 bg-slate-200 dark:bg-white/10 rounded-t-sm overflow-hidden h-6 relative">
+                                  <div
+                                    className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all"
+                                    style={{ height: `${s.score}%`, background: getSkillColor(s.score) }}
+                                  />
+                                </div>
                               </div>
-                              <span className="text-[10px] text-gray-700 dark:text-slate-300 font-semibold max-w-[40px] truncate">{s.name.split(" ")[0]}</span>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
 
-                        <div className="text-left sm:text-right mr-0 sm:mr-3">
-                          <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
-                          <p className="text-xs text-gray-700 dark:text-slate-300 font-semibold">{getSkillLabel(result.overallScore)}</p>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-slate-900 dark:text-white leading-none">{result.overallScore}%</p>
+                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1.5">{getSkillLabel(result.overallScore)}</p>
+                          </div>
                         </div>
 
                         <button
                           onClick={() => setSelectedResult({ exam, result })}
-                          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-bold hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-2"
+                          className="w-full sm:w-auto px-6 py-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-transparent text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-white/5 hover:border-slate-300 dark:hover:border-white/20 transition-all flex items-center justify-center gap-2 shadow-sm"
                         >
-                          Analysis
-                          <ChevronRightIcon c="w-4 h-4" />
+                          View Analysis
+                          <ChevronRightIcon c="w-4 h-4 text-slate-400" />
                         </button>
                       </>
                     ) : (
                       <button
                         onClick={() => onStartExam(exam)}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-black hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-2"
+                        className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-brand-green text-white text-sm font-semibold hover:bg-brand-green/90 transition-all flex items-center justify-center gap-2 shadow-sm"
                       >
                         <PlayIcon c="w-4 h-4" />
-                        Start Now
+                        Start Assessment
                       </button>
                     )}
                   </div>
@@ -492,12 +525,15 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
                 {/* Expanded section breakdown for completed */}
                 {done && result && result.sections && result.sections.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/10 pl-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.01] p-5 sm:px-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
                       {result.sections.map((section: SectionResult) => (
-                        <div key={section.name} className="flex items-center gap-3">
-                          <span className="text-sm text-gray-800 dark:text-slate-200 font-semibold w-28 truncate">{section.name}</span>
-                          <div className="flex-1 h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                        <div key={section.name} className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                             <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate pr-2">{section.name}</span>
+                             <span className="text-sm font-bold" style={{ color: getSkillColor(section.score) }}>{section.score}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${section.score}%` }}
@@ -506,30 +542,31 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                               style={{ background: getSkillColor(section.score) }}
                             />
                           </div>
-                          <span className="text-xs font-bold w-8 text-right" style={{ color: getSkillColor(section.score) }}>
-                            {section.score}%
-                          </span>
                         </div>
                       ))}
                     </div>
 
                     {/* Strong / Weak summary */}
-                    <div className="flex flex-wrap gap-4 mt-3">
-                      {result.sections.filter((s: SectionResult) => s.score >= 75).length > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-green-600 font-medium">
-                          <CheckIcon c="w-3.5 h-3.5" />
-                          {result.sections.filter((s: SectionResult) => s.score >= 75).length} Strong Areas
-                        </span>
-                      )}
-                      {result.sections.filter((s: SectionResult) => s.score < 60).length > 0 && (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 font-medium">
-                          <AlertIcon c="w-3.5 h-3.5" />
-                          {result.sections.filter((s: SectionResult) => s.score < 60).length} Growth Areas
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-600 dark:text-slate-400 w-full sm:w-auto sm:ml-auto sm:text-right">
-                        {result.accuracy}% accuracy &middot; {result.timeTaken}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-4 mt-6 pt-5 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                        {result.sections.filter((s: SectionResult) => s.score >= 75).length > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1.5 rounded-md border border-emerald-100 dark:border-emerald-500/20">
+                            <CheckIcon c="w-4 h-4" />
+                            {result.sections.filter((s: SectionResult) => s.score >= 75).length} Strong Areas
+                          </span>
+                        )}
+                        {result.sections.filter((s: SectionResult) => s.score < 60).length > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1.5 rounded-md border border-amber-100 dark:border-amber-500/20">
+                            <AlertIcon c="w-4 h-4" />
+                            {result.sections.filter((s: SectionResult) => s.score < 60).length} Growth Areas
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <span>Accuracy: <span className="text-slate-700 dark:text-slate-200">{result.accuracy}%</span></span>
+                        <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                        <span>Time: <span className="text-slate-700 dark:text-slate-200">{result.timeTaken}</span></span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -539,22 +576,27 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
         </div>
       </motion.section>
 
-      {/* ===== YOUR CERTIFICATES ===== */}
+      {/* ===== YOUR CERTIFICATES: Professional Grid Layout ===== */}
       {completedCount > 0 && (
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-8 sm:p-10"
+          className="mt-12 mb-8"
         >
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Certificates</h2>
-            <p className="text-sm text-gray-700 dark:text-slate-300 font-semibold mt-1">
-              Share your achievements with your professional network
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+                Certificates & Achievements
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Download and share your verified credentials</p>
+            </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             {purchasedExams
               .filter(e => {
                 const res = getResult(e.id as AssessmentId);
@@ -568,60 +610,59 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                 return (
                   <motion.div
                     key={exam.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 + idx * 0.1 }}
-                    className="group relative bg-white dark:bg-[#243028] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-6 hover:shadow-md hover:border-gray-300 dark:hover:border-white/25 transition-all"
+                    className="group relative flex flex-col bg-white dark:bg-[#111a15] rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden hover:border-brand-green/30 transition-colors shadow-sm"
                   >
-                    {/* Left accent */}
-                    <div
-                      className="absolute left-0 top-4 bottom-4 w-1.5 rounded-full"
-                      style={{ background: exam.accentColor }}
-                    />
+                    {/* Top strip for brand color */}
+                    <div className="h-1 w-full" style={{ background: exam.accentColor }} />
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6 pl-4">
-                      {/* Left: Certificate info */}
-                      <div className="flex items-start sm:items-center gap-4 sm:gap-5">
-                        {/* Large icon */}
+                    <div className="p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                      {/* Left: Info */}
+                      <div className="flex items-start gap-4 flex-1">
                         <div
-                          className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl shrink-0"
-                          style={{ background: `${exam.accentColor}12`, color: exam.accentColor }}
+                          className="w-12 h-12 rounded-lg flex items-center justify-center text-xl shrink-0 border border-slate-100 dark:border-white/5"
+                          style={{ background: `${exam.accentColor}10`, color: exam.accentColor }}
                         >
                           {exam.icon}
                         </div>
-
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{exam.title}</h3>
-                            <span
-                              className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                              style={{ background: exam.accentColor }}
-                            >
+                            <h3 className="font-semibold text-slate-900 dark:text-white leading-tight text-lg">{exam.title}</h3>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
                               CERTIFIED
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-slate-200 font-semibold">
-                            Completed on {dateStr} &middot; {result.timeTaken}
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Issued on {dateStr}
                           </p>
                         </div>
                       </div>
-
+                      
                       {/* Right: Score + Actions */}
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 w-full sm:w-auto">
-                        {/* Score display */}
-                        <div className="text-left sm:text-right">
-                          <p className="text-3xl font-black text-gray-900 dark:text-white">{result.overallScore}%</p>
-                          <p className="text-xs text-gray-700 dark:text-slate-200 font-bold">{getSkillLabel(result.overallScore)}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:gap-6">
+                        <div className="flex items-center gap-6 bg-slate-50 dark:bg-white/[0.02] px-4 py-2.5 rounded-lg border border-slate-100 dark:border-white/5">
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-slate-900 dark:text-white leading-none">{result.overallScore}%</p>
+                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1.5">Score</p>
+                          </div>
                         </div>
 
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedCertificate({ exam, result })}
+                            className="px-5 py-2.5 bg-brand-green text-white text-sm font-semibold rounded-lg hover:bg-brand-green/90 transition-colors flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
+                          >
+                            <EyeIcon c="w-4 h-4" />
+                            View Certificate
+                          </button>
                           <button
                             onClick={() => {
                               const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`;
                               window.open(url, '_blank');
                             }}
-                            className="w-10 h-10 rounded-xl bg-[#0A66C2] text-white flex items-center justify-center hover:bg-[#084d94] transition-colors"
+                            className="w-10 h-10 flex items-center justify-center border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 transition-colors shadow-sm"
                             title="Share on LinkedIn"
                           >
                             <LinkedInIcon c="w-4 h-4" />
@@ -638,17 +679,10 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                                 navigator.clipboard.writeText(`I scored ${result.overallScore}% on ${exam.title} via OriginBi! ${window.location.href}`);
                               }
                             }}
-                            className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-slate-300 flex items-center justify-center hover:bg-gray-200 dark:bg-white/10 transition-colors"
-                            title="Share"
+                            className="w-10 h-10 flex items-center justify-center border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 transition-colors shadow-sm"
+                            title="Share Link"
                           >
                             <ShareIcon c="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setSelectedCertificate({ exam, result })}
-                            className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
-                            title="View Certificate"
-                          >
-                            <EyeIcon c="w-4 h-4" />
                           </button>
                         </div>
                       </div>
