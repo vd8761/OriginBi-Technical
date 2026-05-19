@@ -22,6 +22,10 @@ import {
 } from "./index";
 import { requestDummyMedia } from "./dummyMedia";
 
+// Counters live in a ref because no host-rendered UI reads them today —
+// they're forwarded straight to `onViolation` so engines can persist them
+// with the attempt. Tracking via ref avoids a re-render per violation.
+
 const TOAST_VISIBLE_MS = 4500;
 
 interface ProctoringHostProps {
@@ -37,7 +41,7 @@ interface ProctoringHostProps {
 }
 
 export default function ProctoringHost({ settings, active, onViolation }: ProctoringHostProps) {
-    const [counters, setCounters] = useState<ProctoringCounters>({ ...EMPTY_COUNTERS });
+    const countersRef = useRef<ProctoringCounters>({ ...EMPTY_COUNTERS });
     const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
@@ -70,13 +74,10 @@ export default function ProctoringHost({ settings, active, onViolation }: Procto
 
     const handleViolation = useCallback(
         (type: ProctoringCounter, message: { title: string; desc: string }) => {
-            // Use functional setState so we always read the latest counter
-            // value when several violations fire in the same tick.
-            setCounters((prev) => {
-                const next: ProctoringCounters = { ...prev, [type]: prev[type] + 1 };
-                onViolation?.(type, message, next);
-                return next;
-            });
+            const prev = countersRef.current;
+            const next: ProctoringCounters = { ...prev, [type]: prev[type] + 1 };
+            countersRef.current = next;
+            onViolation?.(type, message, next);
             showToast(message.title, message.desc);
         },
         [onViolation, showToast],

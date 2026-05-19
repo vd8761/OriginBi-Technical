@@ -498,7 +498,7 @@ function ProblemTab({
           )}
           {media.length === 0 ? (
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Optional. Upload images / video / audio, then insert into the statement using the snippet for the selected format. Inserted media renders inline in the candidate's preview.
+              Optional. Upload images / video / audio, then insert into the statement using the snippet for the selected format. Inserted media renders inline in the candidate&apos;s preview.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
