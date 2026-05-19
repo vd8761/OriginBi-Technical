@@ -196,11 +196,14 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		    provider, provider_ref, metadata
 		)
 		VALUES ($1, $2, $3, $4, $5, 'demo', $6, '{"source":"frontend-demo"}'::jsonb)
-		ON CONFLICT (user_id, pricing_item_id, provider_ref) DO UPDATE
+		ON CONFLICT (user_id, pricing_item_id, provider_ref)
+		WHERE provider_ref IS NOT NULL
+		DO UPDATE
 		SET paid_at = purchases.paid_at
 		RETURNING id
 	`, uuid.New(), principal.UserID, pricingID, priceCents, currency, providerRef).Scan(&purchaseID)
 	if err != nil {
+		s.logger.Error("purchase upsert failed", "user_id", principal.UserID, "item_ref", req.ItemRef, "err", err)
 		writeError(w, http.StatusInternalServerError, "purchase failed")
 		return
 	}
