@@ -326,13 +326,13 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           </div>
 
           {/* Content */}
-          <div className="relative p-6 sm:p-10 flex flex-col h-full">
+          <div className="relative p-5 sm:p-6 flex flex-col h-full justify-start items-start">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <span className="inline-block text-sm font-bold text-white/90 uppercase tracking-[0.2em] mb-3">
+              <span className="inline-block text-xs sm:text-sm font-medium text-white/80 mb-0.5">
                 Your Personality
               </span>
             </motion.div>
@@ -341,11 +341,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-3xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1] mb-4"
+              className="text-3xl sm:text-4xl font-bold text-white tracking-tight leading-[1.1] mb-2 max-w-[220px] sm:max-w-[280px]"
             >
-              {identity.archetype.split(" ").map((word, i) => (
-                <span key={i} className="block">{word}</span>
-              ))}
+              {identity.archetype}
             </motion.h1>
 
             <motion.p
@@ -353,12 +351,10 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
             >
-              <span className="text-white/80 text-base sm:text-lg font-semibold leading-relaxed max-w-md"
-              >
+              <span className="text-white/80 text-xs sm:text-sm font-medium leading-relaxed max-w-md">
                 {identity.subtitle}
               </span>
             </motion.p>
-
           </div>
         </motion.section>
 

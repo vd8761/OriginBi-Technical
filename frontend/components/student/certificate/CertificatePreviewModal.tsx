@@ -91,8 +91,8 @@ const getCertificateDescription = (
   grade: string,
   score: number
 ): string => {
-  // Each domain phrase is tuned so the full sentence wraps to exactly 3 lines
-  // at the certificate's 2.1cqw font size across a 75% width container.
+  // Domain phrase is kept short so the full sentence fits in 3 lines
+  // at 2.1cqw font size in a 75%-width container.
   const domainPhrase = (() => {
     if (examId.startsWith("coding:")) {
       const lang = examId.slice("coding:".length);
@@ -103,25 +103,25 @@ const getCertificateDescription = (
         lang === "javascript" ? "JavaScript" :
         lang === "c"      ? "C"      :
         lang.toUpperCase();
-      return `validating programming logic and problem-solving skills in ${langName}`;
+      return `validating programming and problem-solving skills in ${langName}`;
     }
     switch (examId) {
       case "aptitude":
         return "evaluating logical reasoning and numerical agility";
       case "communication":
-        return "measuring core communication and professional writing skills";
+        return "assessing communication and professional writing skills";
       case "coding":
-        return "validating fundamental programming and problem-solving skills";
+        return "validating programming and problem-solving skills";
       case "mnc":
-        return "assessing aptitude and professional readiness for MNC environments";
+        return "assessing aptitude and MNC professional readiness";
       case "role":
-        return "evaluating role-based judgment and situational decision-making";
+        return "evaluating role-based judgment and decision-making";
       default:
-        return "evaluating core competencies and professional skill standards";
+        return "evaluating core competencies and professional skills";
     }
   })();
 
-  return `Awarded for successfully completing the ${examTitle}, ${domainPhrase} with Grade ${grade} performance ${score}%, demonstrating exceptional proficiency and professional competency.`;
+  return `Awarded for successfully completing the ${examTitle}, ${domainPhrase} with Grade ${grade} and ${score}% score, demonstrating professional competency.`;
 };
 
 // ── Icons ──

@@ -597,7 +597,10 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   const handleNext = () => {
-    if (!isLastQuestion) {
+    if (isLastQuestion && isViewingCurrentBlock) {
+      // On the last question of the current block — trigger block completion or final submit
+      handleSubmit();
+    } else if (!isLastQuestion) {
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       cacheSaveNavigation(nextIndex, [...markedForReview], timeLeft);
@@ -1063,35 +1066,25 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               >
                 Previous
               </button>
-              {isLastQuestion ? (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={isGeneratingNextBlock || isSubmitting}
-                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isGeneratingNextBlock || isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {isSubmitting ? 'Submitting...' : 'Unlocking next block...'}
-                    </>
-                  ) : !isViewingCurrentBlock ? (
-                    `Return to Block ${currentBlockNumber}`
-                  ) : currentBlockNumber === totalBlocks ? (
-                    'Submit Assessment'
-                  ) : (
-                    `Complete Block ${currentBlockNumber}`
-                  )}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
-                >
-                  Save and next
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={(isLastQuestion && isViewingCurrentBlock && (isGeneratingNextBlock || isSubmitting))}
+                className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
+              >
+                {isLastQuestion && isViewingCurrentBlock && (isGeneratingNextBlock || isSubmitting) ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isSubmitting ? 'Submitting...' : 'Unlocking next block...'}
+                  </>
+                ) : isLastQuestion && !isViewingCurrentBlock ? (
+                  `Return to Block ${currentBlockNumber}`
+                ) : isLastQuestion && currentBlockNumber === totalBlocks ? (
+                  'Submit Assessment'
+                ) : (
+                  'Save and next'
+                )}
+              </button>
             </div>
           </div>
         </section>
