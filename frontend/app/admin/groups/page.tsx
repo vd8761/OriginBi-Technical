@@ -994,7 +994,7 @@ function GroupsInner() {
         >
           <div className="flex flex-col gap-3 py-2">
             <p className="text-sm text-black dark:text-white leading-relaxed">
-              Are you sure you want to delete the group <strong className="text-rose-500 font-bold">"{selectedGroup?.name}"</strong>?
+              Are you sure you want to delete the group <strong className="text-rose-500 font-bold">&quot;{selectedGroup?.name}&quot;</strong>?
             </p>
             <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
               <p className="text-xs text-rose-500 dark:text-rose-400 font-semibold leading-normal">
@@ -1349,7 +1349,7 @@ function GroupsInner() {
       >
         <div className="flex flex-col gap-3 py-2">
           <p className="text-sm text-black dark:text-white leading-relaxed">
-            Are you sure you want to delete the group <strong className="text-rose-500 font-bold">"{selectedGroup?.name}"</strong>?
+            Are you sure you want to delete the group <strong className="text-rose-500 font-bold">&quot;{selectedGroup?.name}&quot;</strong>?
           </p>
           <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
             <p className="text-xs text-rose-500 dark:text-rose-400 font-semibold leading-normal">

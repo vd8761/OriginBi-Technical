@@ -429,7 +429,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                 <div className="flex items-center gap-2.5">
                   <Search className="w-5 h-5 text-brand-green" />
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Search Results for <span className="text-brand-green font-extrabold">"{searchQuery}"</span>
+                    Search Results for <span className="text-brand-green font-extrabold">&quot;{searchQuery}&quot;</span>
                   </h2>
                 </div>
                 <button 
@@ -837,7 +837,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                       </div>
                       <h3 className="font-bold text-base text-slate-900 dark:text-white">No settings found</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
-                        We couldn't find any settings matching "{searchQuery}". Try a different keyword.
+                        We couldn&apos;t find any settings matching &quot;{searchQuery}&quot;. Try a different keyword.
                       </p>
                     </div>
                   )}
