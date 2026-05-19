@@ -17,6 +17,8 @@ export interface RegisterUserDto {
   currentYear?: string;
   currentRole?: string;
   roleDescription?: string;
+  groupName?: string;
+  pricingPolicy?: string;
 }
 
 @Injectable()
@@ -32,6 +34,8 @@ export class RegistrationService {
 
   async registerUser(dto: RegisterUserDto) {
     const email = dto.email.trim().toLowerCase();
+    const hasGroup = !!dto.groupName?.trim();
+    const effectivePricingPolicy = hasGroup ? null : dto.pricingPolicy;
 
     try {
       this.logger.log(`Forwarding tech assessment registration to student-service for: ${email}`);
@@ -52,6 +56,13 @@ export class RegistrationService {
           sendEmail: dto.sendEmail !== false,
           currentRole: dto.currentRole || null,
           roleDescription: dto.roleDescription || null,
+          groupName: dto.groupName || null,
+          ...(effectivePricingPolicy
+            ? {
+                isFree: effectivePricingPolicy !== 'pay',
+                pricingPolicy: effectivePricingPolicy === 'pay' ? 'pay' : 'free',
+              }
+            : {}),
         },
       });
 
@@ -68,6 +79,19 @@ export class RegistrationService {
       );
       const errMsg = err.response?.data?.message || err.message || 'Failed to create registration.';
       throw new BadRequestException(errMsg);
+    }
+  }
+
+  async validateRegistration(email: string, mobileNumber?: string) {
+    try {
+      const res = await axios.post(`${this.studentServiceUrl}/student/validate-registration`, {
+        email,
+        mobile_number: mobileNumber,
+      });
+      return res.data; // { isValid: boolean; field?: string; message: string }
+    } catch (err: any) {
+      this.logger.error(`Validation check failed for ${email}: ${err.message}`);
+      return { isValid: true, message: 'Skipped validation due to error' };
     }
   }
 }

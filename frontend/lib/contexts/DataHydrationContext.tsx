@@ -82,7 +82,9 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
         // Continue with empty assignments, don't fail entire sync
       }
 
-      const nextPurchases = new Set(purchased);
+      const nextPurchases = new Set(
+        purchased.filter((code) => !String(code).startsWith("coding:")),
+      );
       (assignments ?? []).forEach(a => {
         if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
           nextPurchases.add(a.assignmentRef);

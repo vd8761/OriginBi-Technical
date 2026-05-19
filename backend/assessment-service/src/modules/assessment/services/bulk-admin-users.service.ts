@@ -57,18 +57,44 @@ export class BulkAdminUsersService {
     let validCount = 0;
     let invalidCount = 0;
 
-    for (let i = 0; i < rawRows.length; i++) {
-      const row = rawRows[i];
+    const seenEmails = new Set<string>();
+    const seenMobiles = new Set<string>();
+
+    const preparedRows = rawRows.map((row, idx) => {
       const email = this.normalizeEmail(row['Email'] || row['email']);
       const name = row['Name'] || row['name'] || row['FullName'] || row['full_name'];
-      const mobile = this.normalizeMobile(row['Mobile'] || row['mobile'] || row['mobile_number']);
+      let mobile = this.normalizeMobile(row['Mobile'] || row['mobile'] || row['mobile_number']);
+      const cCodeRaw = String(row['CountryCode'] || row['country_code'] || '').replace(/\D/g, '');
+      if (cCodeRaw && mobile.startsWith(cCodeRaw)) {
+        mobile = mobile.substring(cCodeRaw.length);
+      } else if (mobile.length > 10 && mobile.startsWith('91')) {
+        mobile = mobile.substring(2);
+      }
       const roleRaw = String(row['Role'] || row['role'] || 'STUDENT').toUpperCase();
       
       let role = 'STUDENT';
       if (['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(roleRaw)) role = 'ADMIN';
       else if (roleRaw === 'PROCTOR') role = 'PROCTOR';
 
-      const pCode = row['ProgramId'] || row['program_code'] || 'SCHOOL_STUDENT';
+      let pCode = row['ProgramId'] || row['program_code'];
+      if (!pCode) {
+        const hasCollegeField = 
+          row['DepartmentId'] || row['department_degree'] || row['department'] || row['department_degree_id'] ||
+          row['Degree'] || row['degree'] ||
+          row['CurrentYear'] || row['current_year'] || row['Year'] || row['year'];
+          
+        const hasEmployeeField =
+          row['CurrentRole'] || row['current_role'] || row['Current Role'] || row['currentRole'] ||
+          row['RoleDescription'] || row['role_description'] || row['Role Description'] || row['roleDescription'];
+          
+        if (hasCollegeField) {
+          pCode = 'COLLEGE_STUDENT';
+        } else if (hasEmployeeField) {
+          pCode = 'EMPLOYEE';
+        } else {
+          pCode = 'SCHOOL_STUDENT';
+        }
+      }
       const isCollege = String(pCode).toUpperCase().includes('COLLEGE');
       const isSchool = String(pCode).toUpperCase().includes('SCHOOL');
 
@@ -90,25 +116,67 @@ export class BulkAdminUsersService {
         currentRole: row['CurrentRole'] || row['current_role'] || row['Current Role'] || row['currentRole'],
         roleDescription: row['RoleDescription'] || row['role_description'] || row['Role Description'] || row['roleDescription'],
         password: row['Password'] || row['password'] || 'TempPassword123!',
+        groupName: row['GroupName'] || row['group_name'] || row['Group'] || row['group'] || '',
         sendEmail: (() => {
           const val = row['SendEmail'] || row['send_email'];
           return val ? String(val).toUpperCase() === 'TRUE' : false;
         })(),
       };
 
-      const isValid = email.length > 0;
-      const status = isValid ? 'READY' : 'INVALID';
-      
-      if (isValid) validCount++; else invalidCount++;
+      let isValid = email.length > 0;
+      let errorMessage = isValid ? null : 'Missing required fields (Email)';
+
+      if (isValid) {
+        if (seenEmails.has(email)) {
+          isValid = false;
+          errorMessage = 'Duplicate email address within the uploaded file.';
+        } else if (mobile && seenMobiles.has(mobile)) {
+          isValid = false;
+          errorMessage = 'Duplicate mobile number within the uploaded file.';
+        } else {
+          seenEmails.add(email);
+          if (mobile) seenMobiles.add(mobile);
+        }
+      }
+
+      return { row, dto, isValid, errorMessage, index: idx };
+    });
+
+    // Check external duplicates concurrently
+    await Promise.all(
+      preparedRows.map(async (pRow) => {
+        if (!pRow.isValid) return;
+
+        try {
+          const check = await this.registrationService.validateRegistration(
+            pRow.dto.email,
+            pRow.dto.mobile || undefined,
+          );
+          if (!check.isValid) {
+            pRow.isValid = false;
+            pRow.errorMessage = check.message;
+          }
+        } catch (err: any) {
+          this.logger.warn(`External validation failed for ${pRow.dto.email}: ${err.message}`);
+        }
+      })
+    );
+
+    for (const pRow of preparedRows) {
+      if (pRow.isValid) {
+        validCount++;
+      } else {
+        invalidCount++;
+      }
 
       rowsToInsert.push(this.bulkImportRowRepo.create({
         importId: importJob.id,
-        rowIndex: i + 1,
-        rawData: row,
-        normalizedData: dto,
-        status,
-        resultType: isValid ? null : 'INVALID_DATA',
-        errorMessage: isValid ? null : 'Missing required fields (Email)',
+        rowIndex: pRow.index + 1,
+        rawData: pRow.row,
+        normalizedData: pRow.dto,
+        status: pRow.isValid ? 'READY' : 'INVALID',
+        resultType: pRow.isValid ? null : 'INVALID_DATA',
+        errorMessage: pRow.errorMessage,
       }));
     }
 
@@ -129,7 +197,7 @@ export class BulkAdminUsersService {
         valid: validCount,
         invalid: invalidCount,
       },
-      rows: rowsToInsert.map((r) => ({ ...r, import: undefined })),
+      rows: rowsToInsert.map((r: BulkImportRowEntity) => ({ ...r, import: undefined })),
     };
   }
 
@@ -197,7 +265,6 @@ export class BulkAdminUsersService {
         try {
           const dto = row.normalizedData;
           
-          // Register via local RegistrationService (Cognito + DB only, no main app assignments)
           await this.registrationService.registerUser({
             email: dto.email,
             password: dto.password || 'TempPassword123!',
@@ -214,6 +281,7 @@ export class BulkAdminUsersService {
             currentYear: dto.currentYear,
             currentRole: dto.currentRole,
             roleDescription: dto.roleDescription,
+            groupName: dto.groupName,
           });
 
           row.status = 'SUCCESS';

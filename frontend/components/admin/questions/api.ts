@@ -71,6 +71,14 @@ export interface ApiAssessment {
     trial_attempts_limit?: number;
     main_attempts_limit?: number;
     enabled_question_types?: Record<string, boolean> | string;
+    proctoring_require_fullscreen?: boolean;
+    fullscreen_exit_limit?: number;
+    proctoring_block_devtools?: boolean;
+    devtools_open_limit?: number;
+    mouse_focus_loss_limit?: number;
+    keypress_log_enabled?: boolean;
+    require_camera_mic?: boolean;
+    live_proctoring_enabled?: boolean;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

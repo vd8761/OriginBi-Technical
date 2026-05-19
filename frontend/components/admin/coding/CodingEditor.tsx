@@ -15,7 +15,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import MonacoEditor from "@/components/assessment/coding/MonacoEditor";
+import CustomSelect from "@/components/ui/CustomSelect";
+import { Switch } from "@/components/ui/Switch";
+import { Image as ImageIcon, Trash2, Upload as UploadIcon, Eye, Code } from "lucide-react";
 import {
   createAdminQuestion,
   updateAdminQuestion,
@@ -29,6 +34,7 @@ import {
   type LanguageSchema,
   type Plugin,
 } from "@/lib/api";
+import { uploadQuestionAsset } from "@/components/admin/questions/api";
 
 // ── Body shape (matches plugins/assessment-coding/schemas/question-body.schema.json) ──
 
@@ -46,6 +52,14 @@ interface StarterFile {
   lockedRegions?: LockedRegion[];
 }
 
+interface AttachmentAsset {
+  url: string;
+  key?: string;
+  fileName?: string;
+  alt?: string;
+  mime?: string;
+}
+
 interface QuestionBody {
   type: "coding";
   responseType: "code";
@@ -54,6 +68,8 @@ interface QuestionBody {
   title?: string;
   difficulty?: "easy" | "medium" | "hard";
   section?: string;
+  category?: string;
+  mode?: "trial" | "main";
   allowedLanguages?: string[];
   entryFile?: Record<string, string>;
   starterFiles?: Record<string, StarterFile[]>;
@@ -61,6 +77,10 @@ interface QuestionBody {
   samples?: { input: string; output: string; explanation?: string }[];
   constraints?: string;
   hints?: { afterFailures: number; text: string }[];
+  // The plugin schema reserves `media` for a single embedded video/audio
+  // object, so multi-file question attachments live under `attachments`.
+  // Schema root allows additionalProperties so the backend accepts it.
+  attachments?: AttachmentAsset[];
   judgeConfig?: {
     strictWhitespace?: boolean;
     showDiff?: boolean;
@@ -212,7 +232,15 @@ export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
     setSaving(true);
     setError("");
     try {
-      const sanitizedBody = sanitizeBodyForPayload(state.body);
+      const sanitizedBody = sanitizeBodyForPayload({
+        ...state.body,
+        // The schema (assessment-coding/question-body.schema.json) requires
+        // body.title; the outer state.title was the only source of truth so
+        // make sure it lands in the body too — otherwise the create payload
+        // fails validation with a non-obvious "title required" error.
+        title: state.title,
+        prompt: state.body.prompt || "Describe the problem here.",
+      });
       const payload = {
         title: state.title,
         plugin_slug: "assessment.coding",
@@ -334,8 +362,65 @@ function ProblemTab({
   const setBody = (patch: Partial<QuestionBody>) =>
     onChange({ ...state, body: { ...state.body, ...patch } });
 
+  const [pane, setPane] = useState<"edit" | "preview">("edit");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const attachments = state.body.attachments ?? [];
+
+  const promptFormat = state.body.promptFormat;
+  const monacoLang =
+    promptFormat === "markdown" ? "markdown" : promptFormat === "html" ? "html" : "plaintext";
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const uploaded: AttachmentAsset[] = [];
+      for (const file of Array.from(files)) {
+        const res = await uploadQuestionAsset("coding", file);
+        uploaded.push({
+          url: res.url,
+          key: res.key,
+          fileName: res.fileName,
+          alt: file.name,
+          mime: file.type,
+        });
+      }
+      setBody({ attachments: [...attachments, ...uploaded] });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const snippetFor = (m: AttachmentAsset): string => {
+    const alt = (m.alt ?? m.fileName ?? "media").replace(/[\]\\]/g, "");
+    if (promptFormat === "html") return `<img src="${m.url}" alt="${alt}" />`;
+    if (promptFormat === "plain") return `[media: ${m.url}]`;
+    return `![${alt}](${m.url})`;
+  };
+
+  const appendToPrompt = (snippet: string) => {
+    const sep = state.body.prompt && !state.body.prompt.endsWith("\n") ? "\n\n" : "";
+    setBody({ prompt: state.body.prompt + sep + snippet + "\n" });
+  };
+
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ignore — admin can manually copy from the snippet preview
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setBody({ attachments: attachments.filter((_, i) => i !== idx) });
+  };
+
   return (
-    <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <section className="grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-6">
       <div className="flex flex-col gap-4">
         <FieldSelect
           label="Difficulty"
@@ -355,14 +440,14 @@ function ProblemTab({
           onChange={(v) => setBody({ promptFormat: v as QuestionBody["promptFormat"] })}
           options={[
             { value: "markdown", label: "Markdown (recommended)" },
-            { value: "html", label: "HTML (legacy)" },
+            { value: "html", label: "HTML" },
             { value: "plain", label: "Plain text" },
           ]}
         />
         <Field label="Section / topic">
           <input
             value={state.body.section ?? ""}
-            onChange={(e) => setBody({ section: e.target.value })}
+            onChange={(e) => setBody({ section: e.target.value, category: e.target.value })}
             placeholder="Arrays & Hashing"
             className="input-base"
           />
@@ -375,24 +460,145 @@ function ProblemTab({
             className="input-base font-mono text-xs"
           />
         </Field>
+
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <ImageIcon size={12} /> Question Pool
+            </span>
+            <Switch
+              checked={(state.body.mode ?? "main") === "trial"}
+              onCheckedChange={(val) => setBody({ mode: val ? "trial" : "main" })}
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            On = Sample / Trial pool (visible during practice); Off = Main pool (live exam set).
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <ImageIcon size={12} /> Media ({attachments.length})
+            </span>
+            <label className="cursor-pointer text-xs font-bold text-emerald-600 hover:underline">
+              <UploadIcon size={11} className="inline mr-1" />
+              {uploading ? "Uploading…" : "Add"}
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*,audio/*"
+                className="hidden"
+                onChange={(e) => {
+                  handleFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {uploadError && (
+            <p className="text-[11px] text-red-500">{uploadError}</p>
+          )}
+          {attachments.length === 0 ? (
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              Optional. Upload images / video / audio, then insert into the statement using the snippet for the selected format. Inserted media renders inline in the candidate&apos;s preview.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {attachments.map((m, i) => (
+                <li key={i} className="flex items-center gap-2 text-[11px] bg-slate-50 dark:bg-white/5 rounded-lg p-2">
+                  {m.mime?.startsWith("image/") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.url} alt={m.alt ?? ""} style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4 }} />
+                  ) : (
+                    <div style={{ width: 32, height: 32, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.1)", borderRadius: 4 }}>
+                      <ImageIcon size={14} />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold truncate text-slate-900 dark:text-white">{m.fileName ?? m.url}</div>
+                    <div className="flex gap-1.5">
+                      <button type="button" className="text-emerald-600 hover:underline" onClick={() => appendToPrompt(snippetFor(m))}>Insert</button>
+                      <button type="button" className="text-slate-500 hover:underline" onClick={() => copy(snippetFor(m))}>Copy</button>
+                    </div>
+                  </div>
+                  <button type="button" className="text-red-500 hover:text-red-700" onClick={() => removeAttachment(i)} title="Remove">
+                    <Trash2 size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Statement ({state.body.promptFormat})
-        </span>
-        <textarea
-          value={state.body.prompt}
-          onChange={(e) => setBody({ prompt: e.target.value })}
-          rows={20}
-          className="input-base font-mono text-xs leading-relaxed"
-        />
+      <div className="flex flex-col gap-2 min-w-0">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Statement ({promptFormat})
+          </span>
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setPane("edit")}
+              className={`flex items-center gap-1 px-3 py-1.5 ${pane === "edit" ? "bg-emerald-600 text-white" : "text-slate-600 dark:text-slate-300"}`}
+            >
+              <Code size={12} /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setPane("preview")}
+              className={`flex items-center gap-1 px-3 py-1.5 ${pane === "preview" ? "bg-emerald-600 text-white" : "text-slate-600 dark:text-slate-300"}`}
+            >
+              <Eye size={12} /> Preview
+            </button>
+          </div>
+        </div>
+        {pane === "edit" ? (
+          <div className="border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden" style={{ height: 520 }}>
+            <MonacoEditor
+              path={`prompt.${promptFormat}`}
+              value={state.body.prompt}
+              language={monacoLang}
+              fontSize={13}
+              theme={typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"}
+              suggestionsEnabled={false}
+              lintsEnabled={false}
+              onChange={(v) => setBody({ prompt: v })}
+            />
+          </div>
+        ) : (
+          <div className="border border-slate-200 dark:border-white/10 rounded-lg p-4 overflow-auto bg-white dark:bg-[#0f1411]" style={{ height: 520 }}>
+            <PromptPreview prompt={state.body.prompt} format={promptFormat} />
+          </div>
+        )}
         <p className="text-xs text-slate-400">
-          The candidate side renders this with the renderer matching the selected format.
+          The candidate-side renderer matches the selected format. HTML preview is sandboxed.
         </p>
       </div>
     </section>
   );
+}
+
+function PromptPreview({ prompt, format }: { prompt: string; format: QuestionBody["promptFormat"] }) {
+  if (format === "markdown") {
+    return (
+      <div className="prose prose-sm dark:prose-invert max-w-none">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{prompt}</ReactMarkdown>
+      </div>
+    );
+  }
+  if (format === "html") {
+    return (
+      <iframe
+        title="HTML preview"
+        srcDoc={prompt}
+        sandbox="allow-same-origin"
+        style={{ width: "100%", height: "100%", border: 0, background: "white" }}
+      />
+    );
+  }
+  return <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed">{prompt}</pre>;
 }
 
 // ── TEST CASES TAB ────────────────────────────────────────────────────────
@@ -1102,10 +1308,10 @@ function SettingsTab({
       </div>
 
       <div className="text-xs text-slate-500 leading-relaxed">
-        Proctoring toggles (full-screen lock, tab-switch detection, webcam capture) are configured at the exam
-        package level, not per question. Visit{" "}
-        <Link href="/admin/exam-packages" className="text-emerald-600 hover:underline">
-          Exam Packages
+        Proctoring toggles (full-screen lock, tab-switch detection, webcam capture) are configured at the group
+        level, not per question. Visit{" "}
+        <Link href="/admin/groups" className="text-emerald-600 hover:underline">
+          Groups Management
         </Link>{" "}
         to wire them.
       </div>
@@ -1150,23 +1356,20 @@ function FieldSelect<T extends string | number>({
   onBlur?: () => void;
   options: { value: T; label: string }[];
 }) {
+  const isNumeric = typeof value === "number" || options.some((o) => typeof o.value === "number");
   return (
     <Field label={label}>
-      <select
-        value={value as unknown as string}
-        onChange={(e) => {
-          const v = typeof value === "number" ? (Number(e.target.value) as T) : (e.target.value as T);
-          onChange(v);
+      <CustomSelect
+        value={String(value)}
+        options={options.map((o) => ({ value: String(o.value), label: o.label }))}
+        onChange={(v) => {
+          const next = (isNumeric ? Number(v) : v) as T;
+          onChange(next);
         }}
-        onBlur={onBlur}
-        className="input-base"
-      >
-        {options.map((o) => (
-          <option key={String(o.value)} value={String(o.value)}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        onOpenChange={(open) => {
+          if (!open) onBlur?.();
+        }}
+      />
     </Field>
   );
 }

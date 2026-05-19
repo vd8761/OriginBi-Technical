@@ -6,10 +6,12 @@ import ExploreView from "@/components/student/ExploreView";
 import Header from "@/components/student/Header";
 import { EXAMS, EXAM_DETAILS } from "@/lib/exams";
 import { useSession } from "@/lib/contexts/SessionContext";
+import { usePaidAssessments } from "@/lib/payments";
 
 export default function ExplorePage() {
   const router = useRouter();
   const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
+  const { isVisible, isEntitlementsReady } = usePaidAssessments();
 
   useEffect(() => {
     let active = true;
@@ -81,6 +83,11 @@ export default function ExplorePage() {
     return mapped;
   }, [assessmentsList]);
 
+  const visibleExams = useMemo(() => {
+    if (!isEntitlementsReady) return [];
+    return dynamicExams.filter((exam) => isVisible(exam.id));
+  }, [dynamicExams, isVisible, isEntitlementsReady]);
+
   const handleNavigateToDetails = (exam: any) => {
     router.push(`/explore/${exam.id}`);
   };
@@ -107,7 +114,7 @@ export default function ExplorePage() {
       />
       <main className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 pt-[88px] sm:pt-[96px]">
         <ExploreView
-          assessments={dynamicExams as any}
+          assessments={visibleExams as any}
           examDetails={EXAM_DETAILS as any}
           onNavigateToDetails={handleNavigateToDetails}
         />

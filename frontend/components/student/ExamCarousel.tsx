@@ -215,16 +215,16 @@ const ExamCarousel: React.FC<ExamCarouselProps> = ({ exams, onSelectExam, onStar
 
                       {/* Price Badge */}
                       <div className="flex flex-col items-end">
-                        {exam.discount && (
+                        {exam.price > 0 && exam.discount && (
                           <span className="text-sm text-brand-text-light-secondary/70 line-through">
                             ₹{exam.originalPrice}
                           </span>
                         )}
                         <div className="flex items-baseline gap-1">
                           <span className="text-3xl font-semibold" style={{ color: exam.accentColor }}>
-                            ₹{exam.price}
+                            {exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                           </span>
-                          {exam.discount && (
+                          {exam.price > 0 && exam.discount && (
                             <span className="text-xs font-medium text-brand-green">
                               Save {exam.discount}%
                             </span>

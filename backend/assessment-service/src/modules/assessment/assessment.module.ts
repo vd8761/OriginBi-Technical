@@ -19,6 +19,8 @@ import { BulkAdminUsersService } from './services/bulk-admin-users.service';
 import { RegistrationController } from './controllers/registration.controller';
 import { RegistrationService } from './services/registration.service';
 import { EmailService } from './services/email.service';
+import { GroupsController } from './controllers/groups.controller';
+import { GroupsService } from './services/groups.service';
 import * as Entities from '../../entities';
 
 import { R2Module } from '../r2/r2.module';
@@ -38,6 +40,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     AdaptiveBlockController,
     PurchaseController,
     RegistrationController,
+    GroupsController,
   ],
   providers: [
     AdminQuestionService,
@@ -52,6 +55,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     BulkAdminUsersService,
     RegistrationService,
     EmailService,
+    GroupsService,
   ],
   exports: [
     AdminQuestionService,
@@ -64,6 +68,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     BulkAdminUsersService,
     RegistrationService,
     EmailService,
+    GroupsService,
   ],
 })
 export class AssessmentModule {}

@@ -24,6 +24,10 @@ export interface ProctoringSettings {
     detectFullscreenExit: boolean;
     blockCopyPaste: boolean;
     blockBrowserShortcuts: boolean;
+    detectDevtools: boolean;
+    detectFocusLoss: boolean;
+    logKeypress: boolean;
+    requireCameraMic: boolean;
 }
 
 export const DEFAULT_PROCTORING: ProctoringSettings = {
@@ -34,6 +38,10 @@ export const DEFAULT_PROCTORING: ProctoringSettings = {
     detectFullscreenExit: false,
     blockCopyPaste: true,
     blockBrowserShortcuts: true,
+    detectDevtools: false,
+    detectFocusLoss: false,
+    logKeypress: false,
+    requireCameraMic: false,
 };
 
 export type ProctoringCounter =
@@ -41,7 +49,10 @@ export type ProctoringCounter =
     | "mouseLeave"
     | "fullscreenExit"
     | "copyPaste"
-    | "browserShortcut";
+    | "browserShortcut"
+    | "devtoolsOpen"
+    | "focusLost"
+    | "keypress";
 
 export type ProctoringCounters = Record<ProctoringCounter, number>;
 
@@ -51,6 +62,9 @@ export const EMPTY_COUNTERS: ProctoringCounters = {
     fullscreenExit: 0,
     copyPaste: 0,
     browserShortcut: 0,
+    devtoolsOpen: 0,
+    focusLost: 0,
+    keypress: 0,
 };
 
 const SETTINGS_KEY = "ob_proctoring_settings";
@@ -211,6 +225,63 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
         };
     }, [active, settings.blockBrowserShortcuts, onViolation]);
 
+    // Devtools-open heuristic. Two signals:
+    //   1. Window outer/inner size delta > 160px (docked devtools).
+    //   2. F12 / Ctrl+Shift+I keystrokes (covered by blockBrowserShortcuts
+    //      above but we count the *attempt* here too).
+    useEffect(() => {
+        if (!active || !settings.detectDevtools) return;
+        let wasOpen = false;
+        const check = () => {
+            const dx = window.outerWidth - window.innerWidth;
+            const dy = window.outerHeight - window.innerHeight;
+            const open = dx > 160 || dy > 160;
+            if (open && !wasOpen) {
+                onViolation("devtoolsOpen", {
+                    title: "Developer tools detected",
+                    desc: "Opening the browser inspector is recorded by the proctor.",
+                });
+            }
+            wasOpen = open;
+        };
+        const id = window.setInterval(check, 1500);
+        return () => window.clearInterval(id);
+    }, [active, settings.detectDevtools, onViolation]);
+
+    // Focus-loss / window-blur counter. Fires when the candidate clicks away
+    // (e.g. into another app) or moves the mouse outside the viewport for
+    // long enough to register a blur event.
+    useEffect(() => {
+        if (!active || !settings.detectFocusLoss) return;
+        const blurHandler = () => {
+            onViolation("focusLost", {
+                title: "Window lost focus",
+                desc: "Stay on the assessment window for the full duration.",
+            });
+        };
+        window.addEventListener("blur", blurHandler);
+        return () => window.removeEventListener("blur", blurHandler);
+    }, [active, settings.detectFocusLoss, onViolation]);
+
+    // Optional keypress log. Throttled to one event every 250 ms so a normal
+    // typing burst doesn't flood the event channel. Counts attempts; the
+    // payload could later carry the key if the assessment opted in.
+    useEffect(() => {
+        if (!active || !settings.logKeypress) return;
+        let last = 0;
+        const handler = () => {
+            const now = Date.now();
+            if (now - last < 250) return;
+            last = now;
+            onViolation("keypress", {
+                title: "Keystroke recorded",
+                desc: "Keystroke activity is logged for this assessment.",
+            });
+        };
+        window.addEventListener("keydown", handler, { passive: true });
+        return () => window.removeEventListener("keydown", handler);
+    }, [active, settings.logKeypress, onViolation]);
+
     // Copy / paste / cut block — except in the code editor textarea (the
     // coding engine adds `.code-textarea` to its Monaco mount, others don't).
     useEffect(() => {
@@ -261,6 +332,12 @@ export function exitFullscreen() {
 export interface PackageProctoringInput {
     tab_switch_limit?: number | null;
     anti_copy_enabled?: boolean | null;
+    proctoring_block_devtools?: boolean | null;
+    proctoring_require_fullscreen?: boolean | null;
+    devtools_open_limit?: number | null;
+    mouse_focus_loss_limit?: number | null;
+    keypress_log_enabled?: boolean | null;
+    require_camera_mic?: boolean | null;
 }
 
 export function resolveProctoringForPackage(
@@ -270,10 +347,23 @@ export function resolveProctoringForPackage(
     const tabSwitch =
         typeof assessment.tab_switch_limit === "number" && assessment.tab_switch_limit > 0;
     const blockCopyPaste = Boolean(assessment.anti_copy_enabled);
+    const detectDevtools = Boolean(assessment.proctoring_block_devtools);
+    const detectFullscreenExit = Boolean(assessment.proctoring_require_fullscreen);
+    const detectFocusLoss =
+        typeof assessment.mouse_focus_loss_limit === "number" && assessment.mouse_focus_loss_limit >= 0
+            ? Boolean(assessment.mouse_focus_loss_limit) || true
+            : false;
+    const logKeypress = Boolean(assessment.keypress_log_enabled);
+    const requireCameraMic = Boolean(assessment.require_camera_mic);
     return {
         ...DEFAULT_PROCTORING,
         tabSwitch,
         tabSwitchToast: tabSwitch,
         blockCopyPaste,
+        detectDevtools,
+        detectFullscreenExit,
+        detectFocusLoss,
+        logKeypress,
+        requireCameraMic,
     };
 }

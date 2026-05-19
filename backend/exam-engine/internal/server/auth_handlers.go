@@ -59,21 +59,22 @@ type userDTO struct {
 }
 
 type registrationDTO struct {
-	FullName         string          `json:"fullName"`
-	Gender           string          `json:"gender"`
-	CountryCode      string          `json:"countryCode"`
-	Phone            string          `json:"phone"`
-	Role             string          `json:"role"`
-	DateOfBirth      *string         `json:"dateOfBirth,omitempty"`
-	City             string          `json:"city,omitempty"`
-	State            string          `json:"state,omitempty"`
-	Country          string          `json:"country,omitempty"`
-	EducationLevel   string          `json:"educationLevel,omitempty"`
-	InstitutionName  string          `json:"institutionName,omitempty"`
-	GraduationYear   *int            `json:"graduationYear,omitempty"`
-	WorkStatus       string          `json:"workStatus,omitempty"`
-	IsTechAssessment bool            `json:"isTechAssessment"`
-	Metadata         json.RawMessage `json:"metadata,omitempty"`
+	FullName           string          `json:"fullName"`
+	Gender             string          `json:"gender"`
+	CountryCode        string          `json:"countryCode"`
+	Phone              string          `json:"phone"`
+	Role               string          `json:"role"`
+	RegistrationSource string          `json:"registrationSource"`
+	DateOfBirth        *string         `json:"dateOfBirth,omitempty"`
+	City               string          `json:"city,omitempty"`
+	State              string          `json:"state,omitempty"`
+	Country            string          `json:"country,omitempty"`
+	EducationLevel     string          `json:"educationLevel,omitempty"`
+	InstitutionName    string          `json:"institutionName,omitempty"`
+	GraduationYear     *int            `json:"graduationYear,omitempty"`
+	WorkStatus         string          `json:"workStatus,omitempty"`
+	IsTechAssessment   bool            `json:"isTechAssessment"`
+	Metadata           json.RawMessage `json:"metadata,omitempty"`
 }
 
 type registerRequest struct {
@@ -514,6 +515,27 @@ func (s *Server) bootstrapAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, authResponse{User: user, Registration: reg, ExpiresAt: expires})
 }
 
+// isAdminRegistered returns true when the user's most recent active
+// registration row has registration_source = 'ADMIN'. Such users get every
+// assessment for free — the entitlement gates in listAssignments and
+// startAttempt fall through as if they had paid.
+func (s *Server) isAdminRegistered(ctx context.Context, userID int64) bool {
+	ctx, cancel := contextWithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var source string
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(registration_source, 'SELF')
+		FROM registrations
+		WHERE user_id = $1 AND is_deleted = FALSE
+		ORDER BY created_at DESC, id DESC
+		LIMIT 1
+	`, userID).Scan(&source)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(source, "ADMIN")
+}
+
 func (s *Server) isAdmin(ctx context.Context, userID int64) bool {
 	ctx, cancel := contextWithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -547,13 +569,14 @@ func (s *Server) registrationForUser(ctx context.Context, userID int64) (registr
 		       COALESCE(country_code, '+91'),
 		       COALESCE(mobile_number, ''),
 		       COALESCE(status, ''),
+		       COALESCE(registration_source, 'SELF'),
 		       COALESCE(is_tech_assessment, FALSE),
 		       metadata
 		FROM registrations
 		WHERE user_id = $1 AND is_deleted = FALSE
 		ORDER BY created_at DESC, id DESC
 		LIMIT 1
-	`, userID).Scan(&reg.FullName, &reg.Gender, &reg.CountryCode, &reg.Phone, &reg.Role, &reg.IsTechAssessment, &metadata)
+	`, userID).Scan(&reg.FullName, &reg.Gender, &reg.CountryCode, &reg.Phone, &reg.Role, &reg.RegistrationSource, &reg.IsTechAssessment, &metadata)
 	if err != nil {
 		return registrationDTO{}, err
 	}

@@ -27,6 +27,13 @@ import {
 import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
 import { Loader2 } from "lucide-react";
+import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
+import { useDataHydration } from "@/lib/contexts/DataHydrationContext";
+
+const TECH_API_BASE =
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
 
 interface ExploreDetailViewProps {
     exam: ExtendedExam;
@@ -43,6 +50,9 @@ const codingStatusRank: Record<CodingLangStatus, number> = {
 
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
+    const { user } = useSession();
+    const { isInitialized: isEntitlementsReady } = useDataHydration();
+    const isAdminFree = isAdminRegisteredProfile(user);
     const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
     const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
@@ -77,7 +87,13 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             .map((lang) => {
                 const key = codingPaymentKey(lang.id);
                 const assignment = serverAssignments.find((a) => a.assignmentRef === key);
-                const paid = !!assignment && assignment.status === "active";
+                const paid =
+                    isAdminFree ||
+                    isPaid(key) ||
+                    (!!assignment &&
+                        (assignment.status === "active" ||
+                            assignment.status === "completed" ||
+                            assignment.completed));
                 const completed = !!assignment?.completed;
                 const status: CodingLangStatus = completed
                     ? "completed"
@@ -87,7 +103,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 return { lang, paid, completed, status, assignment };
             })
             .sort((a, b) => codingStatusRank[a.status] - codingStatusRank[b.status]);
-    }, [exam.id, serverAssignments]);
+    }, [exam.id, serverAssignments, isAdminFree, isPaid]);
 
     const codingSummary = useMemo(() => {
         const completed = codingEntries.filter((e) => e.status === "completed").length;
@@ -114,8 +130,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const gradient = exam.gradient;
 
     const isCoding = exam.id === "coding";
-    const examPaid = !isCoding && isPaid(exam.id as PaymentKey);
+    const examPaid = !isCoding && (isAdminFree || isPaid(exam.id as PaymentKey));
     const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey);
+    const hasCodingEntitlement = codingEntries.some((entry) => entry.paid || entry.completed);
 
     const startNonCodingAssessment = () => {
         if (exam.id === "aptitude") setShowAptitudeModal(true);
@@ -124,8 +141,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         else if (exam.id === "mnc") setShowMncModal(true);
     };
 
-    const handlePrimaryClick = () => {
-        if (!isReady || isConnecting) return;
+    const handlePrimaryClick = async () => {
+        if (!isReady || isConnecting || (!isAdminFree && !isEntitlementsReady)) return;
 
         if (isCoding) {
             setShowLanguageModal(true);
@@ -138,10 +155,62 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
 
+        // examPaid is already true for admin-registered users (see definition),
+        // so they will fall through to startNonCodingAssessment without ever
+        // hitting the payment modal.
         if (examPaid) {
             setAssessmentMode("main");
             startNonCodingAssessment();
             return;
+        }
+
+        if (exam.price === 0 || !exam.price) {
+            setIsConnecting(true);
+            try {
+                const email = user?.email || "candidate@originbi.com";
+                const assessmentId = (exam as any).assessmentId || 1;
+                const assessmentCode = exam.id;
+
+                const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode,
+                        amount: 0,
+                    }),
+                });
+                if (!orderRes.ok) throw new Error("Failed to initialize free unlock.");
+
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode,
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+                if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
+
+                markPaid(exam.id as PaymentKey);
+                refreshPurchases?.();
+                setIsConnecting(false);
+
+                setAssessmentMode("main");
+                startNonCodingAssessment();
+                return;
+            } catch (err: any) {
+                console.error("Free unlock failed:", err);
+                setIsConnecting(false);
+                alert(err?.message || "Failed to unlock free assessment.");
+                return;
+            }
         }
 
         setIsConnecting(true);
@@ -155,17 +224,80 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         });
     };
 
-    const handleLanguagePick = (language: CodingLanguage) => {
+    const handleLanguagePick = async (language: CodingLanguage) => {
         const key = codingPaymentKey(language.id);
         const assignment = serverAssignments.find((a) => a.assignmentRef === key);
         if (assignment?.completed) {
             setShowLanguageModal(false);
             return;
         }
-        if (assignment?.status === "active") {
+        const isUnlocked =
+            isAdminFree ||
+            isPaid(key) ||
+            assignment?.status === "active" ||
+            assignment?.status === "completed" ||
+            assignment?.completed;
+        if (isUnlocked) {
             setShowLanguageModal(false);
-            setPendingCodingLang(language);
+            setIsConnecting(true);
+            try {
+                await demoPurchase(key).catch(() => undefined);
+                await refreshAssignments();
+                setPendingCodingLang(language);
+                setAssignmentError("");
+            } finally {
+                setIsConnecting(false);
+            }
             return;
+        }
+
+        if (exam.price === 0 || !exam.price) {
+            setIsConnecting(true);
+            try {
+                const email = user?.email || "candidate@originbi.com";
+                const assessmentId = (exam as any).assessmentId || 1;
+
+                const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode: key,
+                        amount: 0,
+                    }),
+                });
+                if (!orderRes.ok) throw new Error("Failed to initialize free unlock.");
+
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode: key,
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+                if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
+
+                await demoPurchase(key);
+                await refreshAssignments();
+                setShowLanguageModal(false);
+                setIsConnecting(false);
+
+                setAssessmentMode("main");
+                setPendingCodingLang(language);
+                return;
+            } catch (err: any) {
+                console.error("Free coding unlock failed:", err);
+                setIsConnecting(false);
+                alert(err?.message || "Failed to unlock free coding language.");
+                return;
+            }
         }
         setIsConnecting(true);
         setPaymentTarget({
@@ -181,7 +313,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handlePaymentSuccess = async () => {
         if (!paymentTarget) return;
-        const isSandboxMode = process.env.NEXT_PUBLIC_RAZORPAY === "false";
         setIsConnecting(false);
         if (paymentTarget.kind === "coding") {
             try {
@@ -192,15 +323,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 router.push("/assessment?view=assessment");
                 setAssignmentError("");
             } catch (err) {
-                if (isSandboxMode) {
-                    // Frontend-only fallback when backend assignment APIs are offline.
-                    markPaid(paymentTarget.key);
-                    setShowLanguageModal(false);
-                    setPendingCodingLang(paymentTarget.language);
-                    setAssignmentError("");
-                    setPaymentTarget(null);
-                    return;
-                }
                 const message =
                     err instanceof ApiError
                         ? err.message
@@ -232,8 +354,11 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     };
 
     const isCodingPaid = useCallback(
-        (key: PaymentKey) => serverAssignments.some((a) => a.assignmentRef === key && a.status === "active"),
-        [serverAssignments],
+        (key: PaymentKey) =>
+            isAdminFree ||
+            isPaid(key) ||
+            serverAssignments.some((a) => a.assignmentRef === key && (a.status === "active" || a.status === "completed" || a.completed)),
+        [serverAssignments, isAdminFree, isPaid],
     );
 
     const isCodingCompleted = useCallback(
@@ -244,10 +369,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const primaryLabel = (() => {
         if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
-        if (isCoding) return `Pick Language & Pay`;
+        if (!isAdminFree && !isEntitlementsReady) return "Checking Access...";
+        if (isCoding) {
+            if (hasCodingEntitlement) return "Pick Language & Start";
+            return exam.price === 0 || !exam.price ? "Pick Language & Start" : "Pick Language & Pay";
+        }
         if (examCompleted) return "View Results";
         if (examPaid) return "Start Assessment";
-        return `Pay ₹${exam.price}`;
+        return exam.price === 0 || !exam.price ? "Unlock for Free" : `Pay ₹${exam.price}`;
     })();
 
     return (
@@ -325,7 +454,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                                         style={{ background: `${accent}1f`, color: accent }}
                                     >
-                                        Paid &middot; Unlocked
+                                        Unlocked
                                     </span>
                                 )}
                             </div>
@@ -345,7 +474,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         <Stat label="Difficulty" value={exam.difficulty} />
                         <Stat
                             label={isCoding ? "Per language" : "Price"}
-                            value={`₹${exam.price}`}
+                            value={exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                             accent={accent}
                         />
                     </div>
@@ -537,9 +666,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                 {exam.shortTitle} &middot; {exam.duration} &middot; {exam.questions} Questions
                             </p>
                             <p className="text-[18px] font-bold text-black dark:text-white">
-                                ₹{exam.price}
+                                {exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                                 <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
-                                    {isCoding ? "per language" : examPaid ? "paid" : "fixed price"}
+                                    {isCoding ? (hasCodingEntitlement || exam.price === 0 || !exam.price ? "available now" : "per language") : examPaid ? "available now" : (exam.price === 0 || !exam.price ? "free assessment" : "fixed price")}
                                 </span>
                             </p>
                         </div>
@@ -559,8 +688,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         <button
                             type="button"
                             onClick={handlePrimaryClick}
-                            disabled={!isReady || isConnecting}
+                            disabled={!isReady || isConnecting || (!isAdminFree && !isEntitlementsReady)}
                             className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady && !isConnecting
+                                    && (isAdminFree || isEntitlementsReady)
                                     ? "bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-md shadow-[#1ED36A]/30"
                                     : "bg-slate-100 dark:bg-white/[0.04] text-black dark:text-white cursor-not-allowed"
                                 }`}

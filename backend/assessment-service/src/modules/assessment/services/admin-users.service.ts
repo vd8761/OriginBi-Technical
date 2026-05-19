@@ -20,11 +20,16 @@ export interface AdminUserRow {
   departmentName: string;
   degreeName: string;
   currentYear: string;
+  groupName?: string;
+  countryCode?: string;
 }
 
 export interface AdminUserCounts {
   total: number;
   students: number;
+  college: number;
+  school: number;
+  employee: number;
   admins: number;
   proctors: number;
   blocked: number;
@@ -40,7 +45,7 @@ export interface AdminUsersResponse {
 
 export interface ListAdminUsersParams {
   q?: string;
-  role?: 'admin' | 'proctor' | 'student';
+  role?: 'admin' | 'proctor' | 'student' | 'college' | 'school' | 'employee';
   status?: 'active' | 'blocked' | 'pending';
   tech?: boolean;
   limit?: number;
@@ -84,7 +89,16 @@ export class AdminUsersService {
           where.push("u.role = 'PROCTOR'");
           break;
         case 'student':
-          where.push("u.role NOT IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'PROCTOR') OR u.role IS NULL");
+          where.push("(u.role NOT IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'PROCTOR') OR u.role IS NULL)");
+          break;
+        case 'college':
+          where.push("p.code = 'COLLEGE_STUDENT'");
+          break;
+        case 'school':
+          where.push("p.code = 'SCHOOL_STUDENT'");
+          break;
+        case 'employee':
+          where.push("p.code = 'EMPLOYEE'");
           break;
       }
 
@@ -109,11 +123,15 @@ export class AdminUsersService {
         SELECT
             COUNT(*)::bigint AS total,
             COUNT(*) FILTER (WHERE u.role NOT IN ('ADMIN','SUPER_ADMIN','STAFF','PROCTOR') OR u.role IS NULL)::bigint AS students,
+            COUNT(*) FILTER (WHERE p.code = 'COLLEGE_STUDENT')::bigint AS college,
+            COUNT(*) FILTER (WHERE p.code = 'SCHOOL_STUDENT')::bigint AS school,
+            COUNT(*) FILTER (WHERE p.code = 'EMPLOYEE')::bigint AS employee,
             COUNT(*) FILTER (WHERE u.role IN ('ADMIN','SUPER_ADMIN','STAFF'))::bigint AS admins,
             COUNT(*) FILTER (WHERE u.role = 'PROCTOR')::bigint AS proctors,
             COUNT(*) FILTER (WHERE u.is_blocked = TRUE)::bigint AS blocked
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
+        LEFT JOIN programs p ON p.id = r.program_id
         WHERE r.is_tech_assessment IN (1, 2)
       `);
       const countsRaw = countsResult[0];
@@ -121,6 +139,9 @@ export class AdminUsersService {
       const counts: AdminUserCounts = {
         total: Number(countsRaw.total),
         students: Number(countsRaw.students),
+        college: Number(countsRaw.college),
+        school: Number(countsRaw.school),
+        employee: Number(countsRaw.employee),
         admins: Number(countsRaw.admins),
         proctors: Number(countsRaw.proctors),
         blocked: Number(countsRaw.blocked),
@@ -131,6 +152,7 @@ export class AdminUsersService {
         SELECT COUNT(*)::bigint as total
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
+        LEFT JOIN programs p ON p.id = r.program_id
         ${whereSQL}
       `, args);
       const total = Number(totalResult[0]?.total || 0);
@@ -142,11 +164,12 @@ export class AdminUsersService {
                COALESCE(u.email, '') as email,
                COALESCE(r.full_name, '') as full_name,
                COALESCE(u.role, '') AS role,
-               COALESCE(r.mobile_number, '') as mobile_number,
+               COALESCE(r.mobile_number, '') as mobile_number, COALESCE(r.country_code, '+91') as country_code,
                COALESCE(p.name, '') as designation,
                COALESCE(r.school_level, '') as school_level,
                COALESCE(r.school_stream, '') as school_stream,
                COALESCE(r.student_board, '') as student_board,
+               COALESCE(r.metadata->>'groupName', '') as group_name,
                COALESCE(dept.name, (SELECT name FROM departments WHERE id = NULLIF(r.metadata->>'departmentId', '')::bigint), '') as department_name,
                COALESCE(deg.name, (SELECT name FROM degree_types WHERE id = NULLIF(r.metadata->>'degreeTypeId', '')::bigint), '') as degree_name,
                COALESCE(r.metadata->>'currentYear', r.metadata->>'current_year', '') as current_year,
@@ -202,6 +225,7 @@ export class AdminUsersService {
           departmentName: row.department_name,
           degreeName: row.degree_name,
           currentYear: row.current_year,
+          groupName: row.group_name || undefined, countryCode: row.country_code || undefined,
         };
       });
 
