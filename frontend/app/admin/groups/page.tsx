@@ -257,6 +257,8 @@ function GroupsInner() {
 
   // Create Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupCode, setNewGroupCode] = useState("");
   const [newGroupAssessments, setNewGroupAssessments] = useState<string[]>([]);
@@ -489,13 +491,7 @@ function GroupsInner() {
   // Handles deleting/archiving group entirely
   const handleDeleteGroup = async (groupId: string) => {
     if (!selectedGroup) return;
-    if (
-      !confirm(
-        `Are you sure you want to delete the group "${selectedGroup.name}"? This action is permanent and will also delete all users/candidates belonging to this group.`
-      )
-    ) {
-      return;
-    }
+    setIsDeletingGroup(true);
     try {
       await deleteAdminGroup(groupId);
       await loadLatestGroups();
@@ -503,8 +499,11 @@ function GroupsInner() {
         setSelectedGroup(null);
         setView("list");
       }
+      setIsDeleteConfirmOpen(false);
     } catch (err) {
       console.error("Failed to delete group:", err);
+    } finally {
+      setIsDeletingGroup(false);
     }
   };
 
@@ -631,7 +630,7 @@ function GroupsInner() {
             <button
               type="button"
               onClick={() => {
-                handleDeleteGroup(selectedGroup.id);
+                setIsDeleteConfirmOpen(true);
               }}
               className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer"
             >
@@ -647,7 +646,7 @@ function GroupsInner() {
           {/* Card 1: Cohort settings & pricing toggle */}
           <Card>
             <h3 className="text-sm font-bold text-black dark:text-white uppercase tracking-wider mb-4 border-b border-black/5 dark:border-white/5 pb-2">
-              Cohort Configuration
+              Group Configuration
             </h3>
             
             <div className="flex flex-col gap-4">
@@ -662,7 +661,7 @@ function GroupsInner() {
                     });
                   }}
                   className="admin-field text-xs text-black dark:text-white px-3 py-2"
-                  placeholder="Cohort Group Name"
+                  placeholder="Group Name"
                 />
               </label>
 
@@ -807,7 +806,7 @@ function GroupsInner() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
               <div>
                 <h3 className="text-base font-bold text-black dark:text-white">
-                  Cohort Candidates
+                  Group Candidates
                 </h3>
               </div>
               
@@ -962,6 +961,48 @@ function GroupsInner() {
 
         </div>
 
+        <Modal
+          narrow
+          open={isDeleteConfirmOpen}
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          title="Delete Group"
+          eyebrow="Workspace Management"
+          footer={
+            <div className="flex items-center justify-end gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-lg text-sm text-black dark:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all font-medium cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedGroup) {
+                    handleDeleteGroup(selectedGroup.id);
+                  }
+                }}
+                disabled={isDeletingGroup}
+                className="px-5 py-2 bg-rose-600 rounded-lg text-sm text-white hover:bg-rose-700 transition-all font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingGroup && <Loader2 size={12} className="animate-spin" />}
+                Delete Group
+              </button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-3 py-2">
+            <p className="text-sm text-black dark:text-white leading-relaxed">
+              Are you sure you want to delete the group <strong className="text-rose-500 font-bold">"{selectedGroup?.name}"</strong>?
+            </p>
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+              <p className="text-xs text-rose-500 dark:text-rose-400 font-semibold leading-normal">
+                Warning: This action is permanent. All candidates and records associated with this group will be deleted from this cohort.
+              </p>
+            </div>
+          </div>
+        </Modal>
       </div>
     );
   }
@@ -974,7 +1015,7 @@ function GroupsInner() {
         <StatCard
           label="Total Groups"
           value={stats.totalGroups.toLocaleString()}
-          sub="Configured Cohorts"
+          sub="Configured Groups"
           icon={<Layers size={18} />}
           iconBg="rgba(139,109,240,0.18)"
           iconColor="var(--admin-purple)"
@@ -1175,7 +1216,7 @@ function GroupsInner() {
       <Modal
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Create Cohort Group"
+        title="Create Group"
         eyebrow="Workspace Management"
         footer={
           <div className="flex items-center justify-end gap-3 w-full">
@@ -1259,7 +1300,7 @@ function GroupsInner() {
 
           <div className="border-t border-gray-100 dark:border-white/10 pt-4 mt-2">
             <h4 className="text-xs font-bold text-black dark:text-white tracking-wider mb-3">
-              Cohort Pricing Configuration
+              Group Pricing Configuration
             </h4>
             <div className="flex flex-col gap-3">
               <ToggleSwitch
@@ -1273,6 +1314,49 @@ function GroupsInner() {
             </div>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        narrow
+        open={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        title="Delete Group"
+        eyebrow="Workspace Management"
+        footer={
+          <div className="flex items-center justify-end gap-3 w-full">
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-lg text-sm text-black dark:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all font-medium cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedGroup) {
+                  handleDeleteGroup(selectedGroup.id);
+                }
+              }}
+              disabled={isDeletingGroup}
+              className="px-5 py-2 bg-rose-600 rounded-lg text-sm text-white hover:bg-rose-700 transition-all font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {isDeletingGroup && <Loader2 size={12} className="animate-spin" />}
+              Delete Group
+            </button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3 py-2">
+          <p className="text-sm text-black dark:text-white leading-relaxed">
+            Are you sure you want to delete the group <strong className="text-rose-500 font-bold">"{selectedGroup?.name}"</strong>?
+          </p>
+          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+            <p className="text-xs text-rose-500 dark:text-rose-400 font-semibold leading-normal">
+              Warning: This action is permanent. All candidates and records associated with this group will be deleted from this cohort.
+            </p>
+          </div>
+        </div>
       </Modal>
     </div>
   );

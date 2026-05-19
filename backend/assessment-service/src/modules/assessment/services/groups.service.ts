@@ -159,17 +159,9 @@ export class GroupsService implements OnModuleInit {
       throw new NotFoundException('Group not found');
     }
 
-    // 1. Cascade soft-delete registrations matching this group's name
+    // 1. Dissociate the group from registrations by removing groupName key
     await this.techGroupsRepo.query(
-      `UPDATE registrations SET is_deleted = true WHERE metadata->>'groupName' = $1`,
-      [group.name],
-    );
-
-    // 2. Deactivate and block the corresponding users so they cannot access any assessments or log in
-    await this.techGroupsRepo.query(
-      `UPDATE users SET is_active = false, is_blocked = true WHERE id IN (
-        SELECT user_id FROM registrations WHERE metadata->>'groupName' = $1
-      )`,
+      `UPDATE registrations SET metadata = metadata - 'groupName' WHERE metadata->>'groupName' = $1`,
       [group.name],
     );
 

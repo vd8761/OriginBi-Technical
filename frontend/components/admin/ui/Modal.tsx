@@ -11,10 +11,11 @@ interface Props {
   eyebrow?: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  narrow?: boolean;
   children: ReactNode;
 }
 
-export function Modal({ open, onClose, title, eyebrow, footer, wide = false, children }: Props) {
+export function Modal({ open, onClose, title, eyebrow, footer, wide = false, narrow = false, children }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -39,7 +40,7 @@ export function Modal({ open, onClose, title, eyebrow, footer, wide = false, chi
       onClick={onClose}
     >
       <div
-        className={`admin-modal${wide ? " admin-modal-wide" : ""}`}
+        className={`admin-modal${wide ? " admin-modal-wide" : narrow ? " admin-modal-narrow" : ""}`}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="admin-modal-header">

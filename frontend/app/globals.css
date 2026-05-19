@@ -3096,6 +3096,7 @@
 }
 
 .admin-modal-wide { width: min(1180px, 100%); }
+.admin-modal-narrow { width: min(440px, 100%); }
 
 .admin-modal-header,
 .admin-modal-footer {
