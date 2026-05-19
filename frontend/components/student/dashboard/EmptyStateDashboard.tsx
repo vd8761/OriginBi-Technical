@@ -333,7 +333,7 @@ const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartE
                     </div>
                     <div className="text-right shrink-0">
                       <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-500">
-                        ₹{exam.price}
+                        {exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                       </span>
                     </div>
                   </div>

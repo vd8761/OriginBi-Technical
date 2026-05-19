@@ -15,6 +15,7 @@ import {
 interface AddRegistrationFormProps {
   onCancel: () => void;
   onRegister: () => void;
+  initialGroupCode?: string;
 }
 
 /* ─── Chevron Icon ─── */
@@ -212,6 +213,7 @@ function CustomSelect({
 const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   onCancel,
   onRegister,
+  initialGroupCode,
 }) => {
   const [formData, setFormData] = useState<RegisterRequest>({
     fullName: "",
@@ -229,8 +231,9 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
     currentYear: "",
     currentRole: "",
     roleDescription: "",
-    groupCode: "",
-    sendEmail: true,
+    groupCode: initialGroupCode || "",
+    sendEmail: false,
+    pricingPolicy: "free",
   });
 
   const [departments, setDepartments] = useState<any[]>([]);
@@ -378,6 +381,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   const toggleButtonBase = "flex-1 text-[10px] md:text-xs font-semibold rounded-full transition-all duration-300 cursor-pointer";
   const activeToggleClasses = "bg-brand-green text-white";
   const inactiveToggleClasses = "text-black dark:text-white hover:text-brand-green";
+  const isGroupPricingManaged = !!formData.groupCode?.trim();
 
   return (
     <div className="w-full font-sans animate-fade-in pb-12">
@@ -520,7 +524,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                 onChange={(e) => handleInputChange("groupCode", e.target.value)}
                 placeholder="Enter the Group Name"
                 style={{ borderRadius: "9999px" }}
-                className={baseInputClasses}
+                className={`${baseInputClasses} placeholder:text-xs placeholder:opacity-50`}
               />
             </div>
 
@@ -545,6 +549,39 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
                   No
                 </button>
               </div>
+            </div>
+
+            {/* Pricing Policy Toggle */}
+            <div className="space-y-1.5">
+              <label className={baseLabelClasses}>Pricing Policy</label>
+              <div
+                className={`${toggleWrapperClasses} ${isGroupPricingManaged ? "opacity-60" : ""}`}
+                style={{ borderRadius: "9999px" }}
+              >
+                <button
+                  type="button"
+                  disabled={isGroupPricingManaged}
+                  onClick={() => handleInputChange("pricingPolicy", "free")}
+                  style={{ borderRadius: "9999px" }}
+                  className={`${toggleButtonBase} ${formData.pricingPolicy !== "pay" ? activeToggleClasses : inactiveToggleClasses} ${isGroupPricingManaged ? "cursor-not-allowed" : ""}`}
+                >
+                  Free
+                </button>
+                <button
+                  type="button"
+                  disabled={isGroupPricingManaged}
+                  onClick={() => handleInputChange("pricingPolicy", "pay")}
+                  style={{ borderRadius: "9999px" }}
+                  className={`${toggleButtonBase} ${formData.pricingPolicy === "pay" ? activeToggleClasses : inactiveToggleClasses} ${isGroupPricingManaged ? "cursor-not-allowed" : ""}`}
+                >
+                  Pay
+                </button>
+              </div>
+              <p className="text-[11px] text-black/60 dark:text-white/50 ml-1">
+                {isGroupPricingManaged
+                  ? "Disabled because this user belongs to a group. Pricing is controlled by that group's settings."
+                  : "Applied only to standalone users who are not attached to a group."}
+              </p>
             </div>
 
           </div>
@@ -706,7 +743,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             onClick={onCancel}
             disabled={isLoading}
             style={{ borderRadius: "9999px" }}
-            className="w-full sm:w-auto px-10 h-12 border border-gray-300 dark:border-white/10 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm cursor-pointer"
+            className="w-full sm:w-auto px-10 h-12 border border-gray-300 dark:border-white/10 text-black dark:text-white font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm cursor-pointer"
           >
             Cancel
           </button>
@@ -714,7 +751,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             onClick={handleSubmit}
             disabled={isLoading}
             style={{ borderRadius: "9999px" }}
-            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-bold transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
+            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-semibold transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
           >
             {isLoading ? (
               <>

@@ -154,8 +154,8 @@ const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
                 <p className="text-xl font-bold text-slate-800 dark:text-white">Included</p>
               </div>
               <div className="group/stat rounded-2xl bg-slate-50/50 dark:bg-white/5 p-4 border border-slate-100/50 dark:border-white/5 hover:bg-slate-100/80 dark:hover:bg-white/10 transition-all duration-300 transform hover:-translate-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Starting at</p>
-                <p className="text-xl font-bold" style={{ color: exam.accentColor }}>₹{exam.price}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Price</p>
+                <p className="text-xl font-bold" style={{ color: exam.accentColor }}>{exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}</p>
               </div>
             </div>
           </div>

@@ -9,11 +9,13 @@ import {
   Code2,
   Database,
   LayoutDashboard,
+  Layers,
   LogOut,
   PackageCheck,
   Settings,
   ShieldCheck,
   Users,
+  BookOpen,
 } from "lucide-react";
 import { API_BASE, listAdminQuestions, listExamPackages } from "@/lib/api";
 import { Avatar } from "./ui";
@@ -25,7 +27,7 @@ interface NavItem {
   label: string;
   eyebrow?: string;
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
-  countKey?: "users" | "questions" | "exam-packages";
+  countKey?: "users" | "questions" | "exam-packages" | "groups";
 }
 
 const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
@@ -35,8 +37,8 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
-      { href: "/admin/question-banks", label: "Question Banks", icon: Database, countKey: "questions" },
-      { href: "/admin/exam-packages", label: "Assessments", icon: PackageCheck, countKey: "exam-packages" },
+      { href: "/admin/groups", label: "Groups", icon: Layers },
+      { href: "/admin/questions", label: "Assessments", icon: BookOpen },
     ],
   },
   {
@@ -55,6 +57,7 @@ interface NavCounts {
   users?: number;
   questions?: number;
   "exam-packages"?: number;
+  groups?: number;
 }
 
 function useNavCounts(): NavCounts {
@@ -71,6 +74,19 @@ function useNavCounts(): NavCounts {
       const next: NavCounts = {};
       if (qs.status === "fulfilled") next.questions = qs.value.questions.length;
       if (pkgs.status === "fulfilled") next["exam-packages"] = pkgs.value.examPackages.length;
+      
+      // Initialize groups count from localStorage or dynamic count
+      const stored = localStorage.getItem("originbi:groups");
+      if (stored) {
+        try {
+          next.groups = JSON.parse(stored).length;
+        } catch {
+          next.groups = 4;
+        }
+      } else {
+        next.groups = 4;
+      }
+      
       setCounts(next);
     });
     return () => {
