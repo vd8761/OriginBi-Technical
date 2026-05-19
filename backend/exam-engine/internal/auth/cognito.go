@@ -6,8 +6,13 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -19,6 +24,7 @@ type CognitoVerifier struct {
 	jwksURL  string
 	issuer   string
 	clientID string
+	region   string
 }
 
 type CognitoClaims struct {
@@ -49,7 +55,56 @@ func NewCognitoVerifier(ctx context.Context, region, userPoolID, clientID string
 		jwksURL:  jwksURL,
 		issuer:   issuer,
 		clientID: clientID,
+		region:   region,
 	}, nil
+}
+
+// FetchUserEmail calls Cognito's GetUser API using the access token itself
+// as the credential — no AWS IAM keys required. Only the legitimate holder
+// of the access token can call this, so the returned email is the real
+// user's email. Used as a backstop when our local users.cognito_sub column
+// is empty (older registrations missing the sub mapping).
+func (c *CognitoVerifier) FetchUserEmail(ctx context.Context, accessToken string) (string, error) {
+	if accessToken == "" {
+		return "", fmt.Errorf("cognito: missing access token")
+	}
+	endpoint := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/", c.region)
+	body, err := json.Marshal(map[string]string{"AccessToken": accessToken})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-Amz-Target", "AWSCognitoIdentityProviderService.GetUser")
+	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("cognito GetUser %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	var parsed struct {
+		UserAttributes []struct {
+			Name  string `json:"Name"`
+			Value string `json:"Value"`
+		} `json:"UserAttributes"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "", fmt.Errorf("cognito GetUser decode: %w", err)
+	}
+	for _, attr := range parsed.UserAttributes {
+		if attr.Name == "email" {
+			return strings.TrimSpace(attr.Value), nil
+		}
+	}
+	return "", fmt.Errorf("cognito GetUser: no email attribute")
 }
 
 // Verify parses and validates a Cognito ACCESS token (not the id token).
