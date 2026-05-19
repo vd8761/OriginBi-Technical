@@ -30,7 +30,7 @@ function ManageModuleInner({ slug }: { slug: string }) {
       { label },
     ],
   });
-  return <AdminQuestionsManager />;
+  return <AdminQuestionsManager initialModule={moduleType} />;
 }
 
 export default function ManageModulePage() {

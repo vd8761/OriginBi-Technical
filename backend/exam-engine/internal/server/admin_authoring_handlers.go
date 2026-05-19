@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/originbi/exam-engine/internal/auth"
 	assessmentcoding "github.com/originbi/exam-engine/plugins/assessment-coding"
@@ -197,6 +198,51 @@ func (s *Server) updateAdminQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// setAdminQuestionArchive flips a question's archived flag without bumping
+// the version, so the admin list view can toggle active/inactive inline.
+// POST /v1/admin/questions/{question_id}/archive  body: {"archived": bool}
+func (s *Server) setAdminQuestionArchive(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdminPrincipal(w, r); !ok {
+		return
+	}
+	questionID, err := uuid.Parse(chi.URLParam(r, "question_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid question_id")
+		return
+	}
+	var body struct {
+		Archived bool `json:"archived"`
+	}
+	if !decodeJSON(w, r, &body, 1<<10) {
+		return
+	}
+	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	var tag pgconn.CommandTag
+	if body.Archived {
+		tag, err = s.pool.Exec(ctx, `
+			UPDATE questions
+			SET is_archived = true, deleted_at = COALESCE(deleted_at, now())
+			WHERE id = $1
+		`, questionID)
+	} else {
+		tag, err = s.pool.Exec(ctx, `
+			UPDATE questions
+			SET is_archived = false, deleted_at = NULL
+			WHERE id = $1
+		`, questionID)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "archive update failed")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "question not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"archived": body.Archived})
 }
 
 func (s *Server) deleteAdminQuestion(w http.ResponseWriter, r *http.Request) {

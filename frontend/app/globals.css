@@ -1042,6 +1042,21 @@
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
+/* Native <select> options inherit system colors by default, which renders
+   a white panel on the dark theme. Force a dark palette so any remaining
+   native selects stay legible alongside the preferred CustomSelect. */
+.dark select,
+.dark select.admin-select,
+.dark select.input-base {
+  background-color: #1c241f;
+  color: #e2e8f0;
+}
+.dark select option,
+.dark select optgroup {
+  background-color: #111a15;
+  color: #e2e8f0;
+}
+
 /* ── Admin Login Page ── */
 
 .admin-login-viewport {
