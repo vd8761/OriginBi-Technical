@@ -18,6 +18,8 @@ import {
   X,
   Plus,
 } from "lucide-react";
+import ReactCountryFlag from "react-country-flag";
+import { COUNTRY_CODES } from "@/lib/countryCodes";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import BulkUploadRegistration from "@/components/admin/BulkUploadRegistration";
@@ -309,7 +311,27 @@ function UsersInner() {
                         </div>
                       </td>
                       <td style={{ color: "var(--admin-fg)" }}>{u.email}</td>
-                      <td className="admin-mono" style={{ color: "var(--admin-fg)" }}>{u.mobileNumber || "—"}</td>
+                      <td>
+                        <div className="flex items-center gap-2 admin-mono" style={{ color: "var(--admin-fg)" }}>
+                          {u.mobileNumber && u.mobileNumber !== "—" ? (
+                            <>
+                              <ReactCountryFlag
+                                countryCode={COUNTRY_CODES.find(c => c.dial_code === (u.countryCode || "+91"))?.code || "IN"}
+                                svg
+                                style={{
+                                  width: "1.4em",
+                                  height: "1.4em",
+                                  borderRadius: "2px",
+                                }}
+                              />
+                              <span style={{ color: "var(--admin-muted-fg)" }}>{u.countryCode || "+91"}</span>
+                              <span>{u.mobileNumber}</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <Badge tone={roleTones[u.roleGroup] || "blue"}>{u.designation || u.roleGroup || "—"}</Badge>
                       </td>
@@ -448,6 +470,12 @@ function UsersInner() {
               <div>
                 <p className="admin-stat-label">Joined</p>
                 <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>{formatJoined(selected.createdAt)}</p>
+              </div>
+              <div>
+                <p className="admin-stat-label">Group / Cohort</p>
+                <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                  {selected.groupName || "—"}
+                </p>
               </div>
             </div>
 

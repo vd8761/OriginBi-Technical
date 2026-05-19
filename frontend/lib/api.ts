@@ -1284,6 +1284,7 @@ export interface AdminUserRow {
   departmentName: string;
   degreeName: string;
   currentYear: string;
+  groupName?: string; countryCode?: string;
 }
 
 export interface AdminUserCounts {

@@ -15,6 +15,7 @@ import {
 interface AddRegistrationFormProps {
   onCancel: () => void;
   onRegister: () => void;
+  initialGroupCode?: string;
 }
 
 /* ─── Chevron Icon ─── */
@@ -212,6 +213,7 @@ function CustomSelect({
 const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   onCancel,
   onRegister,
+  initialGroupCode,
 }) => {
   const [formData, setFormData] = useState<RegisterRequest>({
     fullName: "",
@@ -229,8 +231,8 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
     currentYear: "",
     currentRole: "",
     roleDescription: "",
-    groupCode: "",
-    sendEmail: true,
+    groupCode: initialGroupCode || "",
+    sendEmail: false,
   });
 
   const [departments, setDepartments] = useState<any[]>([]);
@@ -706,7 +708,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             onClick={onCancel}
             disabled={isLoading}
             style={{ borderRadius: "9999px" }}
-            className="w-full sm:w-auto px-10 h-12 border border-gray-300 dark:border-white/10 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm cursor-pointer"
+            className="w-full sm:w-auto px-10 h-12 border border-gray-300 dark:border-white/10 text-black dark:text-white font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm cursor-pointer"
           >
             Cancel
           </button>
@@ -714,7 +716,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             onClick={handleSubmit}
             disabled={isLoading}
             style={{ borderRadius: "9999px" }}
-            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-bold transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
+            className="w-full sm:w-auto px-12 h-12 bg-brand-green hover:bg-brand-green/90 text-white font-semibold transition-all active:scale-[0.98] disabled:opacity-50 text-sm flex justify-center items-center cursor-pointer"
           >
             {isLoading ? (
               <>

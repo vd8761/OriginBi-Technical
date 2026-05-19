@@ -22,9 +22,17 @@ import {
   Calendar,
   AlertTriangle,
   Lock,
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Loader2,
+  Check,
 } from "lucide-react";
+import ReactCountryFlag from "react-country-flag";
+import { COUNTRY_CODES } from "@/lib/countryCodes";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import AddRegistrationForm from "@/components/admin/AddRegistrationForm";
 import {
   Avatar,
   Badge,
@@ -35,6 +43,7 @@ import {
   StatusDot,
   ToggleSwitch,
   Modal,
+  SegmentedToggle,
 } from "@/components/admin/ui";
 import {
   getAdminGroups,
@@ -50,6 +59,8 @@ interface GroupMember {
   email: string;
   status: "active" | "blocked" | "pending";
   lastSeenAt: string | null;
+  mobileNumber?: string;
+  designation?: string; countryCode?: string;
 }
 
 interface Group {
@@ -178,20 +189,22 @@ function formatRelativeFromIso(iso: string | null): string {
 
 // ── Mapper function ─────────────────────────────────────────────────────────
 function mapBackendGroup(bg: any): Group {
-  const meta = bg.groupMetadata || {};
+  // Handle both SQL query shape (groupMetadata) and TypeORM entity shape (metadata)
+  const meta = bg.groupMetadata || bg.metadata || {};
   
   // Handle both legacy objects and raw string arrays of assessments
-  const assessments = Array.isArray(bg.assessments)
-    ? bg.assessments.map((a: any) => {
-        if (typeof a === "string") return a;
-        if (a && typeof a === "object" && a.name) return a.name;
-        return String(a);
-      })
+  const rawAssessments = Array.isArray(bg.assessments)
+    ? bg.assessments
+    : Array.isArray(meta.assessments)
+    ? meta.assessments
     : [];
+  const assessments = rawAssessments.map((a: any) => {
+    if (typeof a === "string") return a;
+    if (a && typeof a === "object" && a.name) return a.name;
+    return String(a);
+  });
 
-  const isFree = meta.isFree === true || (Array.isArray(bg.assessments)
-    ? bg.assessments.some((a: any) => a && typeof a === "object" && a.isFree === true)
-    : false);
+  const isFree = meta.isFree === true;
 
   return {
     id: String(bg.id),
@@ -199,7 +212,7 @@ function mapBackendGroup(bg: any): Group {
     name: bg.name || "",
     description: meta.description || "",
     status: meta.status || (bg.isActive ? "active" : "draft"),
-    createdAt: bg.createdAt || new Date().toISOString(),
+    createdAt: bg.createdAt || bg.created_at || new Date().toISOString(),
     proctoring: meta.proctoring || {
       fullScreenLock: true,
       tabSwitchLimit: 3,
@@ -234,6 +247,14 @@ function GroupsInner() {
   const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   
+  // Custom navigation views
+  const [view, setView] = useState<"list" | "detail" | "add-candidate">("list");
+  const [membersRefreshTrigger, setMembersRefreshTrigger] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [studentPage, setStudentPage] = useState(1);
+  const limit = 10;
+  const studentLimit = 10;
+
   // Create Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -248,7 +269,7 @@ function GroupsInner() {
     isFree: false,
   });
 
-  // Drawer Tabs State
+  // Drawer Tabs State (unused now, kept for backward compatibility if reference is needed)
   const [drawerTab, setDrawerTab] = useState<"members" | "settings">("members");
 
   // Drawer Member Inputs State
@@ -271,31 +292,9 @@ function GroupsInner() {
 
         try {
           const assessmentsRes = await getAdminAssessments();
-          if (assessmentsRes && Array.isArray(assessmentsRes.data)) {
-            const list = assessmentsRes.data;
-            const EXAMS_MODULE_MAP: Record<string, string> = {
-              aptitude: "aptitude",
-              communication: "grammar",
-              coding: "coding",
-              mnc: "mnc",
-              role: "role",
-            };
-            const EXAM_DEFAULT_NAMES: Record<string, string> = {
-              aptitude: "Aptitude Assessment",
-              communication: "Communication Assessment",
-              coding: "Coding Assessment",
-              mnc: "MNC Career Assessment",
-              role: "Role Based Questions",
-            };
-            
-            const mapped = Object.keys(EXAM_DEFAULT_NAMES).map((id) => {
-              const dbModule = EXAMS_MODULE_MAP[id];
-              const dbExam = list.find(
-                (a: any) => a.module_type === dbModule || a.assessment_code === id
-              );
-              return dbExam ? dbExam.assessment_name : EXAM_DEFAULT_NAMES[id];
-            });
-            setAvailableAssessments(mapped);
+          if (assessmentsRes && Array.isArray(assessmentsRes.data) && assessmentsRes.data.length > 0) {
+            const names = assessmentsRes.data.map((a: any) => a.assessment_name).filter(Boolean);
+            setAvailableAssessments(names.length > 0 ? names : DEFAULT_ASSESSMENTS);
           } else {
             setAvailableAssessments(DEFAULT_ASSESSMENTS);
           }
@@ -325,8 +324,10 @@ function GroupsInner() {
               id: String(m.id),
               fullName: m.fullName || m.email.split("@")[0],
               email: m.email,
-              status: m.status || "active",
+              status: m.status === "registered" ? "active" : (m.status || "active"),
               lastSeenAt: m.createdAt || null,
+              mobileNumber: m.mobileNumber || "—", countryCode: m.countryCode || "+91",
+              designation: m.designation || "—",
             })));
           }
         } catch (err) {
@@ -337,7 +338,7 @@ function GroupsInner() {
     } else {
       setGroupMembers([]);
     }
-  }, [selectedGroup]);
+  }, [selectedGroup, membersRefreshTrigger]);
 
   // Load latest helper
   const loadLatestGroups = async () => {
@@ -359,6 +360,11 @@ function GroupsInner() {
       return matchesFilter && matchesSearch;
     });
   }, [groups, filter, search]);
+
+  // Reset pagination when search or filter updates
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filter]);
 
   // Counts for tabs
   const tabCounts = useMemo(() => {
@@ -382,6 +388,12 @@ function GroupsInner() {
       avgMembers,
     };
   }, [groups]);
+
+  // Paginated Groups
+  const paginatedGroups = useMemo(() => {
+    const startIndex = (currentPage - 1) * limit;
+    return filteredGroups.slice(startIndex, startIndex + limit);
+  }, [filteredGroups, currentPage]);
 
   // Handles adding new group
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -437,101 +449,64 @@ function GroupsInner() {
     alert("Candidate blocking/unblocking must be performed from the main Users dashboard.");
   };
 
-  // Handles updating proctoring configuration
-  const handleUpdateProctoring = async (key: keyof Group["proctoring"], value: any) => {
-    if (!selectedGroup) return;
-    try {
-      const nextProctoring = {
-        ...selectedGroup.proctoring,
-        [key]: value,
-      };
-      const body = {
-        proctoring: nextProctoring,
-      };
-      const updated = await updateAdminGroup(selectedGroup.id, body);
-      await loadLatestGroups();
-      setSelectedGroup(mapBackendGroup(updated));
-    } catch (err) {
-      console.error("Failed to update proctoring:", err);
-    }
-  };
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Handles updating pricing override configuration
-  const handleUpdatePricing = async (key: "isFree", value: any) => {
+  // Handles saving group changes to the database
+  const handleSaveSettings = async () => {
     if (!selectedGroup) return;
+    if (!selectedGroup.name.trim()) {
+      alert("Group name cannot be empty.");
+      return;
+    }
     try {
+      setIsSaving(true);
+      setSaveSuccess(false);
+
       const body = {
+        name: selectedGroup.name.trim(),
         pricing: {
-          isFree: value,
+          isFree: selectedGroup.pricing?.isFree || false,
         },
+        proctoring: selectedGroup.proctoring,
         assessments: selectedGroup.assessments,
       };
-      const updated = await updateAdminGroup(selectedGroup.id, body);
-      await loadLatestGroups();
-      setSelectedGroup(mapBackendGroup(updated));
-    } catch (err) {
-      console.error("Failed to update pricing:", err);
-    }
-  };
 
-  // Handles updating group status in drawer
-  const handleUpdateGroupStatus = async (status: Group["status"]) => {
-    if (!selectedGroup) return;
-    try {
-      const body = {
-        status,
-      };
       const updated = await updateAdminGroup(selectedGroup.id, body);
       await loadLatestGroups();
       setSelectedGroup(mapBackendGroup(updated));
+      
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      console.error("Failed to update status:", err);
+      console.error("Failed to save cohort settings:", err);
+      alert("Failed to save changes. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Handles deleting/archiving group entirely
   const handleDeleteGroup = async (groupId: string) => {
-    if (!confirm("Are you sure you want to delete this group?")) return;
+    if (!selectedGroup) return;
+    if (
+      !confirm(
+        `Are you sure you want to delete the group "${selectedGroup.name}"? This action is permanent and will also delete all users/candidates belonging to this group.`
+      )
+    ) {
+      return;
+    }
     try {
       await deleteAdminGroup(groupId);
       await loadLatestGroups();
       if (selectedGroup?.id === groupId) {
         setSelectedGroup(null);
+        setView("list");
       }
     } catch (err) {
       console.error("Failed to delete group:", err);
     }
   };
-
-  // Toggles assessments inside drawer
-  const handleToggleAssessment = async (assessment: string) => {
-    if (!selectedGroup) return;
-    const current = selectedGroup.assessments;
-    const next = current.includes(assessment)
-      ? current.filter((a) => a !== assessment)
-      : [...current, assessment];
-
-    try {
-      const body = {
-        assessments: next,
-        pricing: selectedGroup.pricing,
-      };
-      const updated = await updateAdminGroup(selectedGroup.id, body);
-      await loadLatestGroups();
-      setSelectedGroup(mapBackendGroup(updated));
-    } catch (err) {
-      console.error("Failed to update assessments:", err);
-    }
-  };
-
-  // Filters members for display in drawer
-  const displayedMembers = useMemo(() => {
-    return groupMembers.filter(
-      (m) =>
-        m.fullName.toLowerCase().includes(memberSearch.toLowerCase()) ||
-        m.email.toLowerCase().includes(memberSearch.toLowerCase())
-    );
-  }, [groupMembers, memberSearch]);
 
   const tabs = useMemo(
     () => [
@@ -543,6 +518,455 @@ function GroupsInner() {
     [tabCounts]
   );
 
+  // ── ADD CANDIDATE VIEW RENDERING ──────────────────────────────────────────────
+  if (view === "add-candidate" && selectedGroup) {
+    return (
+      <div className="admin-page">
+        <AddRegistrationForm
+          initialGroupCode={selectedGroup.name}
+          onCancel={() => setView("detail")}
+          onRegister={async () => {
+            setView("detail");
+            await loadLatestGroups();
+            setMembersRefreshTrigger((prev) => prev + 1);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // ── DETAILED VIEW RENDERING ───────────────────────────────────────────────────
+  if (view === "detail" && selectedGroup) {
+    const originalGroup = groups.find((g) => g.id === selectedGroup.id) || null;
+
+    const hasChanges = (() => {
+      if (!originalGroup) return false;
+      if (selectedGroup.name !== originalGroup.name) return true;
+      const selectedIsFree = selectedGroup.pricing?.isFree ?? false;
+      const originalIsFree = originalGroup.pricing?.isFree ?? false;
+      if (selectedIsFree !== originalIsFree) return true;
+      if (
+        selectedGroup.proctoring.fullScreenLock !== originalGroup.proctoring.fullScreenLock ||
+        selectedGroup.proctoring.tabSwitchLimit !== originalGroup.proctoring.tabSwitchLimit ||
+        selectedGroup.proctoring.webcamProctoring !== originalGroup.proctoring.webcamProctoring
+      ) {
+        return true;
+      }
+      const selectedAss = [...selectedGroup.assessments].sort();
+      const originalAss = [...originalGroup.assessments].sort();
+      if (
+        selectedAss.length !== originalAss.length ||
+        selectedAss.some((a, idx) => a !== originalAss[idx])
+      ) {
+        return true;
+      }
+      return false;
+    })();
+
+    const displayedMembers = groupMembers.filter(
+      (m) =>
+        m.fullName.toLowerCase().includes(memberSearch.toLowerCase()) ||
+        m.email.toLowerCase().includes(memberSearch.toLowerCase())
+    );
+
+    const paginatedMembers = displayedMembers.slice(
+      (studentPage - 1) * studentLimit,
+      studentPage * studentLimit
+    );
+
+    return (
+      <div className="admin-page">
+        {/* Back navigation & Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setView("list");
+                setSelectedGroup(null);
+              }}
+              className="flex items-center justify-center p-2 rounded-lg bg-white dark:bg-[#FFFFFF0F] border border-gray-200 dark:border-[#FFFFFF0F] hover:bg-gray-50 dark:hover:bg-white/20 transition-all text-black dark:text-white cursor-pointer"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-bold text-black dark:text-white">
+                  {selectedGroup.name}
+                </h1>
+                <span className="font-mono text-xs text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded-md">
+                  {selectedGroup.code}
+                </span>
+              </div>
+              <p className="text-xs text-black dark:text-white mt-1">
+                Created {new Date(selectedGroup.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Save Settings Button */}
+            <button
+              type="button"
+              onClick={handleSaveSettings}
+              disabled={isSaving || !hasChanges}
+              className={`flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-md ${
+                saveSuccess
+                  ? "bg-emerald-600 shadow-emerald-500/20"
+                  : !hasChanges
+                  ? "bg-gray-400 dark:bg-white/10 text-black dark:text-white cursor-not-allowed opacity-50 shadow-none"
+                  : "bg-brand-green hover:bg-brand-green/90 disabled:opacity-50 shadow-brand-green/20"
+              }`}
+            >
+              {isSaving ? (
+                <Loader2 className="animate-spin" size={13} />
+              ) : saveSuccess ? (
+                <Check size={13} />
+              ) : (
+                <Save size={13} />
+              )}
+              <span>{saveSuccess ? "Settings Saved!" : isSaving ? "Saving..." : "Save Settings"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleDeleteGroup(selectedGroup.id);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>Delete Group</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Top Configuration Row (3-Columns Grid) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          
+          {/* Card 1: Cohort settings & pricing toggle */}
+          <Card>
+            <h3 className="text-sm font-bold text-black dark:text-white uppercase tracking-wider mb-4 border-b border-black/5 dark:border-white/5 pb-2">
+              Cohort Configuration
+            </h3>
+            
+            <div className="flex flex-col gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-black dark:text-white uppercase tracking-wider">Group Name</span>
+                <input
+                  value={selectedGroup.name}
+                  onChange={(e) => {
+                    setSelectedGroup({
+                      ...selectedGroup,
+                      name: e.target.value,
+                    });
+                  }}
+                  className="admin-field text-xs text-black dark:text-white px-3 py-2"
+                  placeholder="Cohort Group Name"
+                />
+              </label>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-black dark:text-white uppercase tracking-wider">Pricing Policy</span>
+                <div className="w-fit">
+                  <SegmentedToggle
+                    value={selectedGroup.pricing?.isFree ? "free" : "pay"}
+                    onChange={(val) => {
+                      setSelectedGroup({
+                        ...selectedGroup,
+                        pricing: {
+                          ...selectedGroup.pricing,
+                          isFree: val === "free",
+                        },
+                      });
+                    }}
+                    options={[
+                      { value: "free", label: "Free" },
+                      { value: "pay", label: "Pay" },
+                    ]}
+                  />
+                </div>
+                <p className="text-[10px] text-black dark:text-white mt-0.5">
+                  {selectedGroup.pricing?.isFree
+                    ? "Candidates bypass checkout payment gate completely"
+                    : "Candidates must complete payment before accessing assessments"}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Card 2: Security & Proctoring */}
+          <Card>
+            <h3 className="text-sm font-bold text-black dark:text-white uppercase tracking-wider mb-4 border-b border-black/5 dark:border-white/5 pb-2">
+              Security & Proctoring
+            </h3>
+            
+            <div className="flex flex-col gap-5">
+              <ToggleSwitch
+                checked={selectedGroup.proctoring.fullScreenLock}
+                onChange={(val) => {
+                  setSelectedGroup({
+                    ...selectedGroup,
+                    proctoring: {
+                      ...selectedGroup.proctoring,
+                      fullScreenLock: val,
+                    },
+                  });
+                }}
+                label="Enforce Full Screen Lock"
+                hint="Requires students to remain in full-screen during exams"
+              />
+
+              {selectedGroup.proctoring.fullScreenLock && (
+                <label className="flex flex-col gap-1.5 pl-2 border-l-2 border-rose-500/30">
+                  <span className="text-xs font-bold text-black dark:text-white uppercase tracking-wider">
+                    Tab Switch Lockout Limit
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={selectedGroup.proctoring.tabSwitchLimit}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setSelectedGroup({
+                        ...selectedGroup,
+                        proctoring: {
+                          ...selectedGroup.proctoring,
+                          tabSwitchLimit: val,
+                        },
+                      });
+                    }}
+                    className="admin-field text-xs text-black dark:text-white px-3 py-2 max-w-[120px]"
+                  />
+                  <p className="text-[10px] text-black dark:text-white">
+                    Attempts will be force-submitted after this number of switch violations. Set to 0 to disable lockout.
+                  </p>
+                </label>
+              )}
+
+              <ToggleSwitch
+                checked={selectedGroup.proctoring.webcamProctoring}
+                onChange={(val) => {
+                  setSelectedGroup({
+                    ...selectedGroup,
+                    proctoring: {
+                      ...selectedGroup.proctoring,
+                      webcamProctoring: val,
+                    },
+                  });
+                }}
+                label="Enable Webcam Verification"
+                hint="Captures continuous proctor snapshots of students"
+              />
+            </div>
+          </Card>
+
+          {/* Card 3: Assigned Packages */}
+          <Card>
+            <h3 className="text-sm font-bold text-black dark:text-white uppercase tracking-wider mb-4 border-b border-black/5 dark:border-white/5 pb-2">
+              Assigned Packages ({selectedGroup.assessments.length})
+            </h3>
+            
+            <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+              {availableAssessments.map((a) => {
+                const checked = selectedGroup.assessments.includes(a);
+                return (
+                  <label
+                    key={a}
+                    className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 rounded-xl text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 transition-all text-black dark:text-white font-semibold"
+                  >
+                    <span className="truncate max-w-[85%]">{a}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const current = selectedGroup.assessments;
+                        const next = current.includes(a)
+                          ? current.filter((item) => item !== a)
+                          : [...current, a];
+                        setSelectedGroup({
+                          ...selectedGroup,
+                          assessments: next,
+                        });
+                      }}
+                      className="accent-brand-green h-4 w-4 rounded cursor-pointer"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </Card>
+
+        </div>
+
+        {/* Student List & Members (Full Width) */}
+        <div className="w-full flex flex-col gap-6">
+          
+          {/* Student Table Card */}
+          <Card>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-base font-bold text-black dark:text-white">
+                  Cohort Candidates
+                </h3>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {/* Search Bar */}
+                <label className="admin-search w-full sm:w-64">
+                  <Search size={14} />
+                  <input
+                    value={memberSearch}
+                    onChange={(e) => {
+                      setMemberSearch(e.target.value);
+                      setStudentPage(1);
+                    }}
+                    placeholder="Search candidate name, email..."
+                    style={{ outline: "none", boxShadow: "none" }}
+                  />
+                </label>
+
+                {/* Add Candidate Button */}
+                <button
+                  type="button"
+                  onClick={() => setView("add-candidate")}
+                  className="flex items-center justify-center gap-1.5 py-2 px-4 bg-brand-green hover:bg-brand-green/90 rounded-lg text-xs font-semibold text-white transition-all cursor-pointer shrink-0 h-9 shadow-md shadow-brand-green/20"
+                >
+                  <UserPlus size={14} />
+                  <span>Add Candidate</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Student Table */}
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Email ID</th>
+                    <th>Phone Number</th>
+                    <th>Designation</th>
+                    <th>Joined Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedMembers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
+                        No candidates assigned or matching the filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedMembers.map((m) => (
+                      <tr key={m.id}>
+                        <td>
+                          <div className="admin-row" style={{ gap: 12 }}>
+                            <Avatar name={m.fullName} email={m.email} />
+                            <span style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{m.fullName}</span>
+                          </div>
+                        </td>
+                        <td style={{ color: "var(--admin-fg)" }}>{m.email}</td>
+                        <td>
+                          <div className="flex items-center gap-2 admin-mono" style={{ color: "var(--admin-fg)" }}>
+                            {m.mobileNumber && m.mobileNumber !== "—" ? (
+                              <>
+                                <ReactCountryFlag
+                                  countryCode={COUNTRY_CODES.find(c => c.dial_code === (m.countryCode || "+91"))?.code || "IN"}
+                                  svg
+                                  style={{
+                                    width: "1.4em",
+                                    height: "1.4em",
+                                    borderRadius: "2px",
+                                  }}
+                                />
+                                <span style={{ color: "var(--admin-muted-fg)" }}>{m.countryCode || "+91"}</span>
+                                <span>{m.mobileNumber}</span>
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ color: "var(--admin-fg)" }}>{m.designation || "—"}</td>
+                        <td style={{ color: "var(--admin-fg)" }}>
+                          {m.lastSeenAt ? new Date(m.lastSeenAt).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "2-digit",
+                            year: "numeric"
+                          }) : "—"}
+                        </td>
+                        <td>
+                          <Badge
+                            tone={
+                              m.status === "active"
+                                ? "green"
+                                : m.status === "pending"
+                                ? "amber"
+                                : "red"
+                            }
+                          >
+                            {m.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Student List Pagination */}
+            {displayedMembers.length > studentLimit && (
+              <div className="admin-pagination-row mt-4">
+                <div className="admin-pagination-info">
+                  Showing <strong>{Math.min((studentPage - 1) * studentLimit + 1, displayedMembers.length)}</strong> to{" "}
+                  <strong>{Math.min(studentPage * studentLimit, displayedMembers.length)}</strong> of{" "}
+                  <strong>{displayedMembers.length.toLocaleString()}</strong> candidates
+                </div>
+                <div className="admin-pagination-actions">
+                  <button
+                    className="admin-pagination-btn"
+                    disabled={studentPage <= 1}
+                    onClick={() => setStudentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft size={16} /> Previous
+                  </button>
+                  <div className="admin-pagination-pages">
+                    {Array.from({ length: Math.ceil(displayedMembers.length / studentLimit) }, (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          className={`admin-pagination-page ${studentPage === pageNum ? "active" : ""}`}
+                          onClick={() => setStudentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    className="admin-pagination-btn"
+                    disabled={studentPage >= Math.ceil(displayedMembers.length / studentLimit)}
+                    onClick={() => setStudentPage((p) => p + 1)}
+                  >
+                    Next <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </Card>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  // ── DEFAULT LIST VIEW RENDERING ────────────────────────────────────────────────
   return (
     <div className="admin-page">
       {/* KPI Section */}
@@ -605,106 +1029,147 @@ function GroupsInner() {
           </button>
         </div>
 
-        {/* Group Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mt-4">
-          {filteredGroups.length === 0 ? (
-            <div className="col-span-full text-center py-16 text-black/60 dark:text-white/60">
-              <Layers size={48} className="mx-auto text-black/30 dark:text-white/30 mb-3" />
-              <p className="text-base font-semibold">No groups found</p>
-              <p className="text-sm mt-1 text-black/50 dark:text-white/50">Create a new group or check your filter criteria.</p>
-            </div>
-          ) : (
-            filteredGroups.map((g) => (
-              <div
-                key={g.id}
-                onClick={() => {
-                  setSelectedGroup(g);
-                  setDrawerTab("members");
-                }}
-                className="group relative border border-black/10 dark:border-white/10 hover:border-brand-green dark:hover:border-brand-green/60 rounded-2xl p-5 bg-white dark:bg-[#1a201c] hover:bg-brand-green/[0.01] dark:hover:bg-brand-green/[0.01] transition-all cursor-pointer flex flex-col justify-between shadow-sm"
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="font-mono text-xs text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded-md">
-                        {g.code}
+        {/* Group Table */}
+        <div className="admin-table-wrap mt-4">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Group Name</th>
+                <th>Assigned Packages</th>
+                <th>Candidates</th>
+                <th>Pricing Policy</th>
+                <th>Status</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && groups.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
+                    Loading groups…
+                  </td>
+                </tr>
+              ) : filteredGroups.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
+                    No groups found.
+                  </td>
+                </tr>
+              ) : (
+                paginatedGroups.map((g) => (
+                  <tr
+                    key={g.id}
+                    onClick={() => {
+                      setSelectedGroup(g);
+                      setView("detail");
+                    }}
+                    style={{ cursor: "pointer" }}
+                    className="hover:bg-brand-green/[0.02]"
+                  >
+                    <td>
+                      <span style={{ fontWeight: 700, color: "var(--admin-fg)" }}>{g.name}</span>
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1 max-w-[280px]">
+                        {g.assessments.length === 0 ? (
+                          <span className="text-[10px] text-black/50 dark:text-white/50">No assessments</span>
+                        ) : (
+                          g.assessments.map((a) => (
+                            <span
+                              key={a}
+                              className="text-[9.5px] bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-1.5 py-0.5 rounded text-black/70 dark:text-white/70"
+                            >
+                              {a}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="text-xs text-black/80 dark:text-white/80 font-bold">
+                        {g.members.length}
                       </span>
-                      <h4 className="text-base font-bold text-black dark:text-white mt-2 group-hover:text-brand-green transition-colors">
-                        {g.name}
-                      </h4>
-                    </div>
-                    <Badge
-                      tone={
-                        g.status === "active"
-                          ? "green"
-                          : g.status === "draft"
-                          ? "amber"
-                          : "neutral"
-                      }
-                    >
-                      {g.status}
-                    </Badge>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5 mt-4">
-                    {g.assessments.length === 0 ? (
-                      <span className="text-[10px] text-black/50 dark:text-white/50 font-medium">No assessments assigned</span>
-                    ) : (
-                      g.assessments.map((a) => (
-                        <span
-                          key={a}
-                          className="text-[10px] bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-2 py-0.5 rounded-full text-black/70 dark:text-white/70 font-medium"
+                    </td>
+                    <td>
+                      <Badge tone={g.pricing?.isFree ? "green" : "blue"}>
+                        {g.pricing?.isFree ? "Free" : "Pay"}
+                      </Badge>
+                    </td>
+                    <td>
+                      <Badge
+                        tone={
+                          g.status === "active"
+                            ? "green"
+                            : g.status === "draft"
+                            ? "amber"
+                            : "neutral"
+                        }
+                      >
+                        {g.status}
+                      </Badge>
+                    </td>
+                    <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedGroup(g);
+                            setView("detail");
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-brand-green/10 text-brand-green hover:bg-brand-green hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer"
                         >
-                          {a}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-4 mt-5">
-                  <div className="flex items-center gap-4 text-xs text-black/50 dark:text-white/50">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Users size={12} className="text-black/40 dark:text-white/40" />
-                      <strong>{g.members.length}</strong> candidates
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar size={12} />
-                      {new Date(g.createdAt).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "2-digit",
-                      })}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {g.proctoring.fullScreenLock && (
-                      <span title="Full-screen lock enabled" className="p-1 rounded-md bg-rose-500/10 text-rose-500">
-                        <Laptop size={12} />
-                      </span>
-                    )}
-                    {g.proctoring.webcamProctoring && (
-                      <span title="Webcam verification required" className="p-1 rounded-md bg-amber-500/10 text-amber-500">
-                        <Camera size={12} />
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteGroup(g.id);
-                      }}
-                      className="p-1 rounded-md hover:bg-red-500/10 text-black/50 dark:text-white/50 hover:text-red-500 transition-colors ml-2"
-                      title="Archive Group"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+                          <Eye size={12} />
+                          <span>View</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+
+        {/* Group Table Pagination */}
+        {filteredGroups.length > limit && (
+          <div className="admin-pagination-row">
+            <div className="admin-pagination-info">
+              Showing <strong>{Math.min((currentPage - 1) * limit + 1, filteredGroups.length)}</strong> to{" "}
+              <strong>{Math.min(currentPage * limit, filteredGroups.length)}</strong> of{" "}
+              <strong>{filteredGroups.length.toLocaleString()}</strong> groups
+            </div>
+            <div className="admin-pagination-actions">
+              <button
+                className="admin-pagination-btn"
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <div className="admin-pagination-pages">
+                {Array.from({ length: Math.ceil(filteredGroups.length / limit) }, (_, i) => {
+                  const pageNum = i + 1;
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`admin-pagination-page ${currentPage === pageNum ? "active" : ""}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                className="admin-pagination-btn"
+                disabled={currentPage >= Math.ceil(filteredGroups.length / limit) || loading}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Modal
@@ -809,275 +1274,6 @@ function GroupsInner() {
           </div>
         </form>
       </Modal>
-
-      {/* Details Drawer */}
-      <Drawer
-        open={selectedGroup !== null}
-        onClose={() => setSelectedGroup(null)}
-        title={selectedGroup ? selectedGroup.name : undefined}
-        subtitle={selectedGroup ? `Group Code: ${selectedGroup.code} · Created ${new Date(selectedGroup.createdAt).toLocaleDateString()}` : undefined}
-      >
-        {selectedGroup && (
-          <div className="flex flex-col h-full gap-5">
-            {/* Tab switchers in Drawer */}
-            <div className="flex border-b border-gray-100 dark:border-white/10 gap-4 mt-2">
-              <button
-                type="button"
-                onClick={() => setDrawerTab("members")}
-                className={`pb-2.5 text-xs font-bold transition-all relative ${
-                  drawerTab === "members"
-                    ? "text-brand-green font-extrabold"
-                    : "text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white"
-                }`}
-              >
-                Members ({selectedGroup.members.length})
-                {drawerTab === "members" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-green rounded-full" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDrawerTab("settings")}
-                className={`pb-2.5 text-xs font-bold transition-all relative ${
-                  drawerTab === "settings"
-                    ? "text-brand-green font-extrabold"
-                    : "text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white"
-                }`}
-              >
-                Packages
-                {drawerTab === "settings" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-green rounded-full" />
-                )}
-              </button>
-            </div>
-
-            {/* TAB CONTENT: MEMBERS */}
-            {drawerTab === "members" && (
-              <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1">
-                {/* Add Member inline form */}
-                <form
-                  onSubmit={handleAddMember}
-                  className="flex flex-col gap-2 p-3.5 bg-brand-green/5 border border-brand-green/10 rounded-xl"
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-green">
-                    Add new candidate manually
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                    <input
-                      value={newMemberName}
-                      onChange={(e) => setNewMemberName(e.target.value)}
-                      placeholder="Full Name"
-                      className="admin-field py-1.5 px-3 text-xs text-black dark:text-white"
-                      required
-                    />
-                    <input
-                      type="email"
-                      value={newMemberEmail}
-                      onChange={(e) => setNewMemberEmail(e.target.value)}
-                      placeholder="email@example.com"
-                      className="admin-field py-1.5 px-3 text-xs text-black dark:text-white"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-4 bg-brand-green hover:bg-brand-green/90 rounded-lg text-xs font-semibold text-white transition-all cursor-pointer mt-1"
-                  >
-                    <UserPlus size={13} />
-                    <span>Add Candidate</span>
-                  </button>
-                </form>
-
-                {/* Member search filter */}
-                <div className="flex items-center justify-between mt-2 gap-3">
-                  <label className="admin-search flex-1 py-1.5 px-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-100 dark:border-white/10">
-                    <Search size={12} className="text-black dark:text-white" />
-                    <input
-                      value={memberSearch}
-                      onChange={(e) => setMemberSearch(e.target.value)}
-                      placeholder="Search member email, name..."
-                      style={{ outline: "none", boxShadow: "none", fontSize: 12 }}
-                      className="text-black dark:text-white"
-                    />
-                  </label>
-                </div>
-
-                {/* Members list */}
-                <div className="flex-1 flex flex-col gap-2 mt-1">
-                  {displayedMembers.length === 0 ? (
-                    <div className="text-center py-10 text-black dark:text-white text-xs">
-                      No members in this group match the search.
-                    </div>
-                  ) : (
-                    displayedMembers.map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex items-center justify-between p-3 border border-gray-50 dark:border-white/[0.04] bg-white dark:bg-[#1f2621] rounded-xl hover:border-gray-200 dark:hover:border-white/10 transition-all gap-3"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Avatar name={m.fullName} email={m.email} size={32} />
-                          <div className="min-w-0">
-                            <h5 className="text-xs font-bold text-black dark:text-white truncate">
-                              {m.fullName}
-                            </h5>
-                            <p className="text-[10.5px] text-black dark:text-white truncate mt-0.5">{m.email}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <div className="text-right hidden sm:block">
-                            <span className="text-[9.5px] text-black dark:text-white block">Seen</span>
-                            <span className="text-[10px] text-black dark:text-white font-medium">
-                              {formatRelativeFromIso(m.lastSeenAt)}
-                            </span>
-                          </div>
-
-                          <Badge
-                            tone={
-                              m.status === "active"
-                                ? "green"
-                                : m.status === "pending"
-                                ? "amber"
-                                : "red"
-                            }
-                          >
-                            {m.status}
-                          </Badge>
-
-                          <div className="flex items-center gap-1 border-l border-gray-100 dark:border-white/10 pl-2 ml-1">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleMemberBlock(m.id)}
-                              className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-white/5 transition-all text-xs font-bold ${
-                                m.status === "blocked" ? "text-brand-green" : "text-rose-500"
-                              }`}
-                              title={m.status === "blocked" ? "Unblock candidate" : "Block candidate"}
-                            >
-                              <Lock size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMember(m.id)}
-                              className="p-1 rounded hover:bg-red-500/10 text-black dark:text-white hover:text-red-500 transition-all"
-                              title="Remove Candidate"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* TAB CONTENT: SETTINGS & PROCTORING */}
-            {drawerTab === "settings" && (
-              <div className="flex-1 flex flex-col gap-5 overflow-y-auto pr-1">
-                {/* Cohort Identity Section */}
-                <div className="flex flex-col gap-3">
-                  <h4 className="text-[10.5px] font-extrabold tracking-wider text-black dark:text-white">
-                    Cohort Identity
-                  </h4>
-                  <p className="text-[11px] text-black dark:text-white leading-normal">
-                    Update the group display name. The immutable group code is fixed and cannot be changed.
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-[9.5px] font-bold text-black/60 dark:text-white/60 uppercase tracking-wider">Group Name</span>
-                      <input
-                        value={selectedGroup.name}
-                        onChange={(e) => {
-                          setSelectedGroup({
-                            ...selectedGroup,
-                            name: e.target.value,
-                          });
-                        }}
-                        onBlur={async () => {
-                          if (!selectedGroup.name.trim()) return;
-                          try {
-                            const body = { name: selectedGroup.name.trim() };
-                            const updated = await updateAdminGroup(selectedGroup.id, body);
-                            await loadLatestGroups();
-                            setSelectedGroup(mapBackendGroup(updated));
-                          } catch (err) {
-                            console.error("Failed to update name:", err);
-                          }
-                        }}
-                        onKeyDown={async (e) => {
-                          if (e.key === "Enter") {
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        className="admin-field text-xs text-black dark:text-white px-3 py-2"
-                        placeholder="Cohort Group Name"
-                      />
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                      <span className="text-[9.5px] font-bold text-black/60 dark:text-white/60 uppercase tracking-wider">Group Code (Immutable)</span>
-                      <input
-                        value={selectedGroup.code}
-                        readOnly
-                        disabled
-                        className="admin-field font-mono text-xs text-black/70 dark:text-white/70 bg-black/[0.03] dark:bg-white/[0.03] cursor-not-allowed opacity-75 px-3 py-2"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* Assigned Assessments Section */}
-                <div className="flex flex-col gap-3 border-t border-gray-100 dark:border-white/10 pt-4 mt-2">
-                  <h4 className="text-[10.5px] font-extrabold tracking-wider text-black dark:text-white">
-                    Assigned Assessments
-                  </h4>
-                  <p className="text-[11px] text-black dark:text-white leading-normal">
-                    Candidates who register under this group will be automatically granted free-tier trial access to the selected packages.
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {availableAssessments.map((a) => {
-                      const checked = selectedGroup.assessments.includes(a);
-                      return (
-                        <label
-                          key={a}
-                          className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 rounded-xl text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 transition-all text-black dark:text-white font-semibold"
-                        >
-                          <span>{a}</span>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => handleToggleAssessment(a)}
-                            className="accent-brand-green h-4 w-4 rounded"
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Cohort Pricing Override Settings */}
-                <div className="flex flex-col gap-3 mt-2 border-t border-gray-100 dark:border-white/10 pt-4">
-                  <h4 className="text-[10.5px] font-extrabold tracking-wider text-black dark:text-white">
-                    Cohort Pricing Override
-                  </h4>
-                  <p className="text-[11px] text-black dark:text-white leading-normal">
-                    Manage pricing options for this specific cohort. Bypasses standard program cost configuration.
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    <ToggleSwitch
-                      checked={selectedGroup.pricing?.isFree || false}
-                      onChange={(val) => handleUpdatePricing("isFree", val)}
-                      label="Mark Assessments as Free"
-                      hint="Bypass payments for all students assigned to this group"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Drawer>
     </div>
   );
 }

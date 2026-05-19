@@ -42,6 +42,7 @@ export class GroupsService implements OnModuleInit {
         g.name,
         g.metadata as "groupMetadata",
         g.is_active as "isActive",
+        g.created_at as "createdAt",
         (SELECT COUNT(r.id)::int FROM registrations r WHERE r.metadata->>'groupName' = g.name AND r.is_deleted = false) as "candidateCount"
       FROM tech_groups g
       WHERE g.is_deleted = false
@@ -56,7 +57,9 @@ export class GroupsService implements OnModuleInit {
         name: g.name,
         isActive: g.isActive,
         candidateCount: g.candidateCount,
+        createdAt: g.createdAt,
         assessments: meta.assessments || [],
+        groupMetadata: meta,
       };
     });
   }
@@ -136,9 +139,16 @@ export class GroupsService implements OnModuleInit {
     }
 
     return this.techGroupsRepo.query(`
-      SELECT r.id::text as id, r.full_name as "fullName", u.email, 'registered' as status, r.created_at as "createdAt"
+      SELECT r.id::text as id, 
+             r.full_name as "fullName", 
+             u.email, 
+             'registered' as status, 
+             r.created_at as "createdAt",
+             COALESCE(r.mobile_number, '') as "mobileNumber", COALESCE(r.country_code, '+91') as "countryCode",
+             COALESCE(p.name, '') as designation
       FROM registrations r
       JOIN users u ON u.id = r.user_id
+      LEFT JOIN programs p ON p.id = r.program_id
       WHERE r.metadata->>'groupName' = $1 AND r.is_deleted = false
     `, [group.name]);
   }
@@ -148,6 +158,22 @@ export class GroupsService implements OnModuleInit {
     if (!group) {
       throw new NotFoundException('Group not found');
     }
+
+    // 1. Cascade soft-delete registrations matching this group's name
+    await this.techGroupsRepo.query(
+      `UPDATE registrations SET is_deleted = true WHERE metadata->>'groupName' = $1`,
+      [group.name],
+    );
+
+    // 2. Deactivate and block the corresponding users so they cannot access any assessments or log in
+    await this.techGroupsRepo.query(
+      `UPDATE users SET is_active = false, is_blocked = true WHERE id IN (
+        SELECT user_id FROM registrations WHERE metadata->>'groupName' = $1
+      )`,
+      [group.name],
+    );
+
+    // 3. Mark the group itself as deleted
     group.isDeleted = true;
     await this.techGroupsRepo.save(group);
   }

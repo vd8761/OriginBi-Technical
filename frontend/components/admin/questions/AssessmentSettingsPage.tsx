@@ -381,7 +381,12 @@ export default function AssessmentSettingsPage() {
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
                         <div className="sm:max-w-md"><label className={labelCls}>Assessment Amount</label><p className={descCls}>The fee or value associated with this assessment. Set to 0 if free.</p></div>
-                        <div className="sm:max-w-[400px] w-full"><input type="number" min={0} step="0.01" value={amount} onChange={e => { const val = e.target.value; setAmount(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
+                        <div className="sm:max-w-[400px] w-full relative flex items-center">
+                          <span className="absolute left-4 text-slate-400 dark:text-white/40 pointer-events-none font-bold text-sm">
+                            ₹
+                          </span>
+                          <input type="number" min={0} step="0.01" value={amount} onChange={e => { const val = e.target.value; setAmount(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls + " pl-8"} />
+                        </div>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
                         <div className="sm:max-w-md"><label className={labelCls}>Trial Attempts Limit</label><p className={descCls}>Total number of trial attempts a candidate is allowed. Set to 0 for unlimited.</p></div>

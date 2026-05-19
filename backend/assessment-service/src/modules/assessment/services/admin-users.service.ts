@@ -20,6 +20,8 @@ export interface AdminUserRow {
   departmentName: string;
   degreeName: string;
   currentYear: string;
+  groupName?: string;
+  countryCode?: string;
 }
 
 export interface AdminUserCounts {
@@ -142,11 +144,12 @@ export class AdminUsersService {
                COALESCE(u.email, '') as email,
                COALESCE(r.full_name, '') as full_name,
                COALESCE(u.role, '') AS role,
-               COALESCE(r.mobile_number, '') as mobile_number,
+               COALESCE(r.mobile_number, '') as mobile_number, COALESCE(r.country_code, '+91') as country_code,
                COALESCE(p.name, '') as designation,
                COALESCE(r.school_level, '') as school_level,
                COALESCE(r.school_stream, '') as school_stream,
                COALESCE(r.student_board, '') as student_board,
+               COALESCE(r.metadata->>'groupName', '') as group_name,
                COALESCE(dept.name, (SELECT name FROM departments WHERE id = NULLIF(r.metadata->>'departmentId', '')::bigint), '') as department_name,
                COALESCE(deg.name, (SELECT name FROM degree_types WHERE id = NULLIF(r.metadata->>'degreeTypeId', '')::bigint), '') as degree_name,
                COALESCE(r.metadata->>'currentYear', r.metadata->>'current_year', '') as current_year,
@@ -202,6 +205,7 @@ export class AdminUsersService {
           departmentName: row.department_name,
           degreeName: row.degree_name,
           currentYear: row.current_year,
+          groupName: row.group_name || undefined, countryCode: row.country_code || undefined,
         };
       });
 

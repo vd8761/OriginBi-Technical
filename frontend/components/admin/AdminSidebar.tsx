@@ -37,8 +37,8 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
-      { href: "/admin/question-banks", label: "Question Banks", icon: Database, countKey: "questions" },
-      { href: "/admin/groups", label: "Groups", icon: Layers, countKey: "groups" },
+      { href: "/admin/question-banks", label: "Question Banks", icon: Database },
+      { href: "/admin/groups", label: "Groups", icon: Layers },
       { href: "/admin/questions", label: "MCQ Authoring", icon: Banknote },
     ],
   },

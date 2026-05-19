@@ -63,6 +63,14 @@ class RegisterBodyDto {
   @IsString()
   @IsOptional()
   roleDescription?: string;
+
+  @IsString()
+  @IsOptional()
+  groupCode?: string;
+
+  @IsString()
+  @IsOptional()
+  groupName?: string;
 }
 
 @Controller('auth')
@@ -98,6 +106,7 @@ export class RegistrationController {
       currentYear: body.currentYear,
       currentRole: body.currentRole,
       roleDescription: body.roleDescription,
+      groupName: body.groupName || body.groupCode,
     });
   }
 }
