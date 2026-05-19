@@ -231,6 +231,7 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		RETURNING id, available_from
 	`, uuid.New(), codingExamVersionID, principal.UserID, systemOrgID, req.ItemRef, purchaseID).Scan(&assignmentID, &availableFrom)
 	if err != nil {
+		s.logger.Error("assignment upsert failed", "user_id", principal.UserID, "item_ref", req.ItemRef, "err", err)
 		writeError(w, http.StatusInternalServerError, "assignment failed")
 		return
 	}

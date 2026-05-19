@@ -190,8 +190,8 @@ export function usePaidAssessments() {
     const hydrateFromBackend = useCallback(async () => {
         const next = readSet(PAID_KEY);
         removeCodingKeys(next);
-        const serverPaid = await fetchServerPaidSet();
-        serverPaid.forEach((key) => next.add(key));
+        const { paid } = await fetchServerEntitlements();
+        paid.forEach((key: string) => next.add(key));
         writeSet(PAID_KEY, PAID_EVENT, next);
         setLocal(next);
     }, []);
@@ -264,7 +264,7 @@ export function usePaidAssessments() {
                 return;
             }
             try {
-                const serverPaid = await fetchServerPaidSet();
+                const { paid: serverPaid } = await fetchServerEntitlements();
                 if (cancelled) return;
                 const current = readSet(PAID_KEY);
                 let changed = removeCodingKeys(current);
