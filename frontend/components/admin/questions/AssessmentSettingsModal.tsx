@@ -333,16 +333,21 @@ export default function AssessmentSettingsModal({
                                     <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase block">
                                         Assessment Amount
                                     </label>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        step="0.01"
-                                        required
-                                        value={amount}
-                                        onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
-                                        className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
-                                        placeholder="0.00"
-                                    />
+                                    <div className="relative flex items-center">
+                                        <span className="absolute left-3.5 text-slate-400 font-bold text-sm pointer-events-none">
+                                            ₹
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            required
+                                            value={amount}
+                                            onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
+                                            className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 pl-8 pr-3 text-sm text-white outline-none transition"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

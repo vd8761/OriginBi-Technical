@@ -1,5 +1,5 @@
-full_name,gender,email,country_code,mobile_number,group_name,program_code,school_level,student_board,school_stream,department,degree,current_year,current_role,role_description,exam_start_date,exam_end_date,password,send_email
-Student College,Female,college.student@example.com,91,9876543201,CollegeGroup,COLLEGE_STUDENT,,,,Computer Science and Engineering,B.Tech,1,,,2026-06-01 09:00:00,2026-12-31 18:00:00,Student@123,TRUE
-Student School HSC,Male,school.hsc@example.com,91,9876543202,SchoolGroup,SCHOOL_STUDENT,HSC,STATE_BOARD,SCIENCE,,,1,,,2026-06-01 09:00:00,2026-12-31 18:00:00,Student@123,TRUE
-Student School SSLC,Female,school.sslc@example.com,91,9876543203,SchoolGroup,SCHOOL_STUDENT,SSLC,CBSE,,,,, , ,2026-06-01 09:00:00,2026-12-31 18:00:00,Student@123,TRUE
-Employee User,Male,employee@example.com,91,9876543204,CorporateGroup,EMPLOYEE,,,,,,,Software Engineer,Full Stack Developer,2026-06-01 09:00:00,2026-12-31 18:00:00,Employee@123,TRUE
+full_name,gender,email,country_code,mobile_number,group_name,school_level,student_board,school_stream,department,degree,current_year,current_role,role_description,password,send_email
+Student College,Female,college.student@example.com,91,9876543201,CollegeGroup,,,,Computer Science and Engineering,B.Tech,1,,,Student@123,TRUE
+Student School HSC,Male,school.hsc@example.com,91,9876543202,SchoolGroup,HSC,STATE_BOARD,SCIENCE,,,1,,,Student@123,TRUE
+Student School SSLC,Female,school.sslc@example.com,91,9876543203,SchoolGroup,SSLC,CBSE,,,,, , ,Student@123,TRUE
+Employee User,Male,employee@example.com,91,9876543204,CorporateGroup,,,,,,,Software Engineer,Full Stack Developer,Employee@123,TRUE

@@ -17,6 +17,139 @@ export class PurchaseService {
         return !!code && code.toLowerCase().startsWith("coding:");
     }
 
+    private resolveAssessmentLookupCode(code: string | number): string {
+        const raw = String(code || "").trim().toLowerCase();
+        if (raw === "communication") {
+            return "grammar";
+        }
+        return raw;
+    }
+
+    private normalizeAssessmentCode(code: string | undefined | null): string {
+        const raw = String(code || "").trim().toLowerCase();
+        if (raw === "grammar") {
+            return "communication";
+        }
+        return raw;
+    }
+
+    private knownBaseAssessmentCodes(): string[] {
+        return ["aptitude", "communication", "coding", "mnc", "role"];
+    }
+
+    private expandVisibleCodesToUnlockCodes(visibleCodes: Iterable<string>): Set<string> {
+        const unlockCodes = new Set<string>();
+        for (const code of visibleCodes) {
+            const normalized = this.normalizeAssessmentCode(code);
+            if (normalized === "coding") {
+                for (const knownCode of this.knownAssessmentCodes()) {
+                    if (this.isCodingCode(knownCode)) {
+                        unlockCodes.add(knownCode);
+                    }
+                }
+                continue;
+            }
+            unlockCodes.add(normalized);
+        }
+        return unlockCodes;
+    }
+
+    private async getActiveGroupMetadata(email: string): Promise<any | null> {
+        if (!email) return null;
+        const rows = await this.dataSource.query(
+            `SELECT g.metadata
+             FROM registrations r
+             JOIN users u ON u.id = r.user_id
+             JOIN tech_groups g ON g.name = r.metadata->>'groupName'
+             WHERE LOWER(u.email) = LOWER($1)
+               AND COALESCE(r.is_deleted, FALSE) = FALSE
+               AND COALESCE(g.is_active, TRUE) = TRUE
+               AND COALESCE(g.is_deleted, FALSE) = FALSE
+             ORDER BY r.id DESC
+             LIMIT 1`,
+            [email],
+        );
+        return rows?.length ? rows[0].metadata || {} : null;
+    }
+
+    private async getGroupAssessmentScope(email: string): Promise<{ visible: Set<string>; free: Set<string> }> {
+        const scope = { visible: new Set<string>(), free: new Set<string>() };
+        const metadata = await this.getActiveGroupMetadata(email);
+        if (!metadata) {
+            return scope;
+        }
+
+        const assignedAssessments = new Set<string>(
+            Array.isArray(metadata.assessments)
+                ? metadata.assessments
+                      .map((value: unknown) => String(value || "").trim())
+                      .filter(Boolean)
+                : [],
+        );
+        if (assignedAssessments.size === 0) {
+            return scope;
+        }
+
+        const assessmentRows = await this.dataSource.query(
+            `SELECT assessment_name, assessment_code, module_type
+             FROM tech_assessments`,
+        );
+
+        for (const row of assessmentRows as any[]) {
+            const assessmentName = String(row.assessment_name || "").trim();
+            if (!assignedAssessments.has(assessmentName)) {
+                continue;
+            }
+
+            const rowCode = this.normalizeAssessmentCode(
+                row.module_type || row.assessment_code,
+            );
+            if (!rowCode) {
+                continue;
+            }
+
+            scope.visible.add(rowCode === "coding" ? "coding" : rowCode);
+        }
+
+        if (metadata.isFree === true) {
+            scope.free = this.expandVisibleCodesToUnlockCodes(scope.visible);
+        }
+
+        return scope;
+    }
+
+    async getUserPricingPolicy(email: string): Promise<"free" | "pay" | null> {
+        if (!email) return null;
+        try {
+            const rows = await this.dataSource.query(
+                `SELECT r.metadata
+                 FROM registrations r
+                 JOIN users u ON u.id = r.user_id
+                 WHERE LOWER(u.email) = LOWER($1)
+                   AND COALESCE(r.is_deleted, FALSE) = FALSE
+                 ORDER BY r.id DESC
+                 LIMIT 1`,
+                [email],
+            );
+            if (!rows?.length) {
+                return null;
+            }
+            const metadata = rows[0].metadata || {};
+            if (metadata.pricingPolicy === "pay") {
+                return "pay";
+            }
+            if (metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
+                return "free";
+            }
+            return null;
+        } catch (err: any) {
+            this.logger.warn(
+                `getUserPricingPolicy lookup failed for ${email}: ${err.message}`,
+            );
+            return null;
+        }
+    }
+
     /**
      * Returns true if the user identified by `email` was registered by an
      * admin (registrations.registration_source = 'ADMIN'). Admin-registered
@@ -45,6 +178,95 @@ export class PurchaseService {
         }
     }
 
+    async isUserMarkedFree(email: string): Promise<boolean> {
+        return (await this.getUserPricingPolicy(email)) === "free";
+    }
+
+    /**
+     * Returns true if the candidate identified by `email` is part of a cohort group (tech_groups)
+     * which has a FREE pricing policy (metadata.isFree === true) and has the specified
+     * assessment assigned to it.
+     */
+    async isAssessmentFreeForCandidate(email: string, assessmentIdOrCode: string | number): Promise<boolean> {
+        if (!email) return false;
+        try {
+            // 1. Get the groupName the user is registered in
+            const regRows = await this.dataSource.query(
+                `SELECT r.metadata->>'groupName' as "groupName"
+                 FROM registrations r
+                 JOIN users u ON u.id = r.user_id
+                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                 LIMIT 1`,
+                [email]
+            );
+            if (!regRows || regRows.length === 0 || !regRows[0].groupName) {
+                return false;
+            }
+
+            const groupName = regRows[0].groupName;
+
+            // 2. Fetch the tech_groups metadata
+            const groupRows = await this.dataSource.query(
+                `SELECT metadata FROM tech_groups
+                 WHERE name = $1 AND is_active = true AND is_deleted = false
+                 LIMIT 1`,
+                [groupName]
+            );
+            if (!groupRows || groupRows.length === 0) {
+                return false;
+            }
+
+            const metadata = groupRows[0].metadata || {};
+            if (metadata.isFree !== true) {
+                return false;
+            }
+
+            // 3. Resolve the assessment name for the given assessmentIdOrCode
+            let assessmentName = "";
+            const idOrCodeStr = String(assessmentIdOrCode);
+            const lookupCode = this.resolveAssessmentLookupCode(idOrCodeStr);
+
+            // If it's a coding language purchase (e.g. coding:python), it maps to the Coding Assessment
+            if (lookupCode.startsWith("coding")) {
+                const codingRows = await this.dataSource.query(
+                    `SELECT assessment_name FROM tech_assessments WHERE module_type = 'coding' LIMIT 1`
+                );
+                if (codingRows && codingRows.length > 0) {
+                    assessmentName = codingRows[0].assessment_name;
+                }
+            } else {
+                let rows: any[] = [];
+                const isNumeric = /^\d+$/.test(idOrCodeStr);
+                if (isNumeric) {
+                    rows = await this.dataSource.query(
+                        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
+                        [Number(idOrCodeStr)]
+                    );
+                } else {
+                    rows = await this.dataSource.query(
+                        `SELECT assessment_name FROM tech_assessments WHERE assessment_code = $1 OR module_type = $1 LIMIT 1`,
+                        [lookupCode]
+                    );
+                }
+
+                if (rows && rows.length > 0) {
+                    assessmentName = rows[0].assessment_name;
+                }
+            }
+
+            if (!assessmentName) {
+                return false;
+            }
+
+            // 4. Check if the assessment is assigned to this group
+            const assignedAssessments = metadata.assessments || [];
+            return Array.isArray(assignedAssessments) && assignedAssessments.includes(assessmentName);
+        } catch (err: any) {
+            this.logger.warn(`Failed in isAssessmentFreeForCandidate check for ${email}: ${err.message}`);
+            return false;
+        }
+    }
+
     /**
      * Create a Razorpay order for Technical Assessment purchase
      */
@@ -58,21 +280,108 @@ export class PurchaseService {
         amount: number;
         currency: string;
         keyId: string;
+        isFree?: boolean;
         free?: boolean;
     }> {
-        // Admin-registered users skip Razorpay entirely.
-        if (await this.isAdminRegistered(email)) {
-            this.logger.log(
-                `Admin-registered free access: ${email} -> ${assessmentCode}`,
+        // Resolve the actual assessment amount from the database
+        let dbAmount = 0;
+        try {
+            const byIdRows = await this.dataSource.query(
+                `SELECT amount FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
+                [String(assessmentId)]
             );
-            await this.recordFreePurchase(email, assessmentId, assessmentCode);
-            return {
-                orderId: `free_admin_${Date.now()}`,
-                amount: 0,
-                currency: "INR",
-                keyId: "",
-                free: true,
-            };
+            if (byIdRows && byIdRows.length > 0) {
+                dbAmount = byIdRows[0].amount !== null && byIdRows[0].amount !== undefined ? Number(byIdRows[0].amount) : 0;
+            } else {
+                const byCodeRows = await this.dataSource.query(
+                    `SELECT amount FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
+                    [assessmentCode]
+                );
+                if (byCodeRows && byCodeRows.length > 0) {
+                    dbAmount = byCodeRows[0].amount !== null && byCodeRows[0].amount !== undefined ? Number(byCodeRows[0].amount) : 0;
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`Failed to resolve assessment amount for ${assessmentId}/${assessmentCode}: ${err.message}`);
+            dbAmount = amount;
+        }
+
+        let finalAmount = dbAmount;
+
+        // Check for Group-Based pricing overrides
+        let isFree = finalAmount === 0;
+        const userPricingPolicy = await this.getUserPricingPolicy(email);
+
+        try {
+            if (userPricingPolicy === "free") {
+                isFree = true;
+                finalAmount = 0;
+            }
+
+            // First check the corporate legacy overrides
+            if (!isFree && userPricingPolicy !== "pay") {
+                const overrideRows = await this.dataSource.query(
+                    `SELECT ga.metadata 
+                     FROM registrations r 
+                     JOIN users u ON r.user_id = u.id 
+                     JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
+                     WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                     LIMIT 1`,
+                    [email]
+                );
+
+                if (overrideRows && overrideRows.length > 0) {
+                    const metadata = overrideRows[0].metadata || {};
+                    if (metadata.isFree === true || metadata.is_free === true) {
+                        isFree = true;
+                        finalAmount = 0;
+                    }
+                }
+            }
+
+            // Then check the tech-specific cohort groups (tech_groups) which overrides the payment gate completely
+            if (!isFree && userPricingPolicy !== "pay") {
+                if (await this.isAssessmentFreeForCandidate(email, assessmentCode) || await this.isAssessmentFreeForCandidate(email, assessmentId)) {
+                    isFree = true;
+                    finalAmount = 0;
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`Failed to resolve group-based pricing override for ${email}: ${err.message}`);
+        }
+
+        // Admin-registered users skip Razorpay entirely.
+        const isAdmin = await this.isAdminRegistered(email);
+        if (isAdmin) {
+            isFree = true;
+            finalAmount = 0;
+        }
+
+        if (isFree || finalAmount === 0) {
+            if (isAdmin) {
+                this.logger.log(
+                    `Admin-registered free access: ${email} -> ${assessmentCode}`,
+                );
+                await this.recordFreePurchase(email, assessmentId, assessmentCode);
+                return {
+                    orderId: `free_admin_${Date.now()}`,
+                    amount: 0,
+                    currency: "INR",
+                    keyId: "",
+                    isFree: true,
+                    free: true,
+                };
+            } else {
+                this.logger.log(`[PricingOverride] Free tier assessment assigned for ${email}`);
+                return {
+                    orderId: "free_bypass",
+                    amount: 0,
+                    currency: "INR",
+                    keyId: "",
+                    isFree: true,
+                    free: true,
+                };
+            }
         }
 
         const razorpayKeyId = this.configService.get<string>("RAZORPAY_KEY_ID");
@@ -82,7 +391,7 @@ export class PurchaseService {
             throw new Error("Payment gateway not configured");
         }
 
-        const amountInPaise = Math.round(amount * 100);
+        const amountInPaise = Math.round(finalAmount * 100);
         const currency = "INR";
 
         // Create Razorpay order via API
@@ -119,6 +428,7 @@ export class PurchaseService {
             amount: order.amount,
             currency: order.currency,
             keyId: razorpayKeyId,
+            isFree: false,
         };
     }
 
@@ -140,11 +450,34 @@ export class PurchaseService {
             throw new Error("Payment gateway not configured");
         }
 
-        // Verify signature
-        const expectedSignature = crypto
-            .createHmac("sha256", razorpayKeySecret)
-            .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
-            .digest("hex");
+        // Resolve assessment_id and amount robustly (input can be id or code)
+        let resolvedAssessmentId: string | null = null;
+        let assessmentAmount = 0;
+        try {
+            const byIdRows = await this.dataSource.query(
+                `SELECT assessment_id, amount FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
+                [String(body.assessmentId)]
+            );
+            if (byIdRows && byIdRows.length > 0) {
+                resolvedAssessmentId = String(byIdRows[0].assessment_id);
+                assessmentAmount = byIdRows[0].amount !== null && byIdRows[0].amount !== undefined ? Number(byIdRows[0].amount) : 0;
+            } else {
+                const byCodeRows = await this.dataSource.query(
+                    `SELECT assessment_id, amount FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
+                    [body.assessmentCode]
+                );
+                if (byCodeRows && byCodeRows.length > 0) {
+                    resolvedAssessmentId = String(byCodeRows[0].assessment_id);
+                    assessmentAmount = byCodeRows[0].amount !== null && byCodeRows[0].amount !== undefined ? Number(byCodeRows[0].amount) : 0;
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`Failed to resolve assessment_id for ${body.assessmentCode}: ${err.message}`);
+        }
+
+        if (!resolvedAssessmentId && !this.isCodingCode(body.assessmentCode)) {
+            throw new BadRequestException("Invalid assessment reference for purchase");
+        }
 
         // Admin-registered users hit this endpoint via the sandbox/free path
         // (PaymentModal still calls verify-payment even after createOrder
@@ -163,9 +496,57 @@ export class PurchaseService {
             };
         }
 
-        if (expectedSignature !== body.razorpay_signature) {
-            this.logger.warn(`Signature verification failed for payment of ${body.email}`);
-            throw new BadRequestException("Payment signature verification failed");
+        // Verify signature (with secure fallback for free-tier bypasses)
+        if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
+            const userPricingPolicy = await this.getUserPricingPolicy(body.email);
+            let hasFreeOverride = assessmentAmount === 0 || userPricingPolicy === "free";
+
+            if (!hasFreeOverride && userPricingPolicy !== "pay") {
+                try {
+                    const overrideRows = await this.dataSource.query(
+                        `SELECT ga.metadata 
+                         FROM registrations r 
+                         JOIN users u ON r.user_id = u.id 
+                         JOIN group_assessments ga ON ga.group_id = r.group_id AND ga.program_id = r.program_id 
+                         WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                         LIMIT 1`,
+                        [body.email]
+                    );
+                    if (overrideRows && overrideRows.length > 0) {
+                        const metadata = overrideRows[0].metadata || {};
+                        if (metadata.isFree === true || metadata.is_free === true) {
+                            hasFreeOverride = true;
+                        }
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`Failed to resolve group-based pricing override for ${body.email}: ${err.message}`);
+                }
+            }
+
+            if (!hasFreeOverride && userPricingPolicy !== "pay") {
+                try {
+                    if (await this.isAssessmentFreeForCandidate(body.email, body.assessmentCode) || await this.isAssessmentFreeForCandidate(body.email, body.assessmentId)) {
+                        hasFreeOverride = true;
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`Failed to resolve group-based pricing override for ${body.email}: ${err.message}`);
+                }
+            }
+
+            if (!hasFreeOverride) {
+                throw new BadRequestException("User does not qualify for free tier assessment");
+            }
+            this.logger.log(`[PricingOverride] Bypassed Razorpay verification for free tier purchase of ${body.email}`);
+        } else {
+            const expectedSignature = crypto
+                .createHmac("sha256", razorpayKeySecret)
+                .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
+                .digest("hex");
+
+            if (expectedSignature !== body.razorpay_signature) {
+                this.logger.warn(`Signature verification failed for payment of ${body.email}`);
+                throw new BadRequestException("Payment signature verification failed");
+            }
         }
 
         // Resolve user_id from users table if available
@@ -180,36 +561,6 @@ export class PurchaseService {
             }
         } catch (err: any) {
             this.logger.warn(`Failed to resolve user_id for ${body.email}: ${err.message}`);
-        }
-
-        // Resolve assessment_id robustly (input can be id or code).
-        // Coding assessments live in the Go exam-engine (pricing_items) and
-        // therefore have no row in tech_assessments — we record the audit
-        // row with NULL assessment_id and let the exam-engine grant the
-        // actual entitlement via /v1/purchases/demo.
-        let resolvedAssessmentId: string | null = null;
-        try {
-            const byIdRows = await this.dataSource.query(
-                `SELECT assessment_id FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
-                [String(body.assessmentId)]
-            );
-            if (byIdRows && byIdRows.length > 0) {
-                resolvedAssessmentId = String(byIdRows[0].assessment_id);
-            } else {
-                const byCodeRows = await this.dataSource.query(
-                    `SELECT assessment_id FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
-                    [body.assessmentCode]
-                );
-                if (byCodeRows && byCodeRows.length > 0) {
-                    resolvedAssessmentId = String(byCodeRows[0].assessment_id);
-                }
-            }
-        } catch (err: any) {
-            this.logger.warn(`Failed to resolve assessment_id for ${body.assessmentCode}: ${err.message}`);
-        }
-
-        if (!resolvedAssessmentId && !this.isCodingCode(body.assessmentCode)) {
-            throw new BadRequestException("Invalid assessment reference for purchase");
         }
 
         const queryRunner = this.dataSource.createQueryRunner();
@@ -258,7 +609,7 @@ export class PurchaseService {
      * Fetch all purchased assessment codes for a user.
      * Admin-registered users are treated as having purchased every assessment.
      */
-    async getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+    async getPurchasedAssessments(email: string): Promise<{ purchased: string[]; visible: string[] }> {
         try {
             const rows = await this.dataSource.query(
                 `SELECT assessment_code FROM tech_assessment_purchases
@@ -269,17 +620,27 @@ export class PurchaseService {
             const purchased = new Set<string>(
                 (rows as any[]).map((row) => String(row.assessment_code)),
             );
+            const groupScope = await this.getGroupAssessmentScope(email);
+            const userPricingPolicy = await this.getUserPricingPolicy(email);
+            const visible = groupScope.visible.size > 0
+                ? new Set<string>(groupScope.visible)
+                : new Set<string>(this.knownBaseAssessmentCodes());
 
             if (await this.isAdminRegistered(email)) {
                 for (const code of this.knownAssessmentCodes()) {
                     purchased.add(code);
                 }
+                this.knownBaseAssessmentCodes().forEach((code) => visible.add(code));
+            } else if (userPricingPolicy === "free") {
+                this.expandVisibleCodesToUnlockCodes(visible).forEach((code) => purchased.add(code));
+            } else if (userPricingPolicy !== "pay") {
+                groupScope.free.forEach((code) => purchased.add(code));
             }
 
-            return { purchased: Array.from(purchased) };
+            return { purchased: Array.from(purchased), visible: Array.from(visible) };
         } catch (err: any) {
             this.logger.error(`Failed to retrieve purchases for ${email}: ${err.message}`);
-            return { purchased: [] };
+            return { purchased: [], visible: this.knownBaseAssessmentCodes() };
         }
     }
 

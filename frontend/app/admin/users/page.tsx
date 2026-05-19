@@ -17,7 +17,12 @@ import {
   Users as UsersIcon,
   X,
   Plus,
+  GraduationCap,
+  School,
+  Briefcase,
 } from "lucide-react";
+import ReactCountryFlag from "react-country-flag";
+import { COUNTRY_CODES } from "@/lib/countryCodes";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import BulkUploadRegistration from "@/components/admin/BulkUploadRegistration";
@@ -38,7 +43,7 @@ import {
   type ListAdminUsersParams,
 } from "@/lib/api";
 
-type RoleFilter = "all" | "admin" | "proctor" | "student";
+type RoleFilter = "all" | "admin" | "proctor" | "student" | "college" | "school" | "employee";
 
 const roleTones: Record<AdminUserRow["roleGroup"], "blue" | "purple" | "amber"> = {
   Student: "blue",
@@ -103,6 +108,9 @@ function UsersInner() {
   const [counts, setCounts] = useState<AdminUserCounts>({
     total: 0,
     students: 0,
+    college: 0,
+    school: 0,
+    employee: 0,
     admins: 0,
     proctors: 0,
     blocked: 0,
@@ -156,9 +164,9 @@ function UsersInner() {
   const tabs = useMemo(
     () => [
       { value: "all" as const, label: "All", count: counts.total },
-      { value: "student" as const, label: "Students", count: counts.students },
-      { value: "admin" as const, label: "Admins", count: counts.admins },
-      { value: "proctor" as const, label: "Proctors", count: counts.proctors },
+      { value: "college" as const, label: "College", count: counts.college },
+      { value: "school" as const, label: "School", count: counts.school },
+      { value: "employee" as const, label: "Employee", count: counts.employee },
     ],
     [counts],
   );
@@ -196,34 +204,34 @@ function UsersInner() {
         <StatCard
           label="Total Users"
           value={counts.total.toLocaleString()}
-          sub="Across all institutions"
+          sub="Registered accounts"
           icon={<UsersIcon size={18} />}
           iconBg="rgba(30,211,106,0.16)"
           iconColor="var(--admin-green)"
         />
         <StatCard
-          label="Students"
-          value={counts.students.toLocaleString()}
-          sub="Candidate accounts"
-          icon={<UsersIcon size={18} />}
+          label="College Students"
+          value={counts.college.toLocaleString()}
+          sub="Higher education"
+          icon={<GraduationCap size={18} />}
           iconBg="rgba(74,198,234,0.16)"
           iconColor="var(--admin-blue)"
         />
         <StatCard
-          label="Admins & Proctors"
-          value={(counts.admins + counts.proctors).toLocaleString()}
-          sub="Staff with elevated access"
-          icon={<ShieldCheck size={18} />}
+          label="School Students"
+          value={counts.school.toLocaleString()}
+          sub="K-12 education"
+          icon={<School size={18} />}
           iconBg="rgba(139,109,240,0.18)"
           iconColor="var(--admin-purple)"
         />
         <StatCard
-          label="Blocked"
-          value={counts.blocked.toLocaleString()}
-          sub="Awaiting review"
-          icon={<Lock size={18} />}
-          iconBg="rgba(237,47,52,0.14)"
-          iconColor="var(--admin-red)"
+          label="Employees"
+          value={counts.employee.toLocaleString()}
+          sub="Corporate / professional"
+          icon={<Briefcase size={18} />}
+          iconBg="rgba(255,183,3,0.18)"
+          iconColor="var(--admin-amber)"
         />
       </section>
 
@@ -309,7 +317,27 @@ function UsersInner() {
                         </div>
                       </td>
                       <td style={{ color: "var(--admin-fg)" }}>{u.email}</td>
-                      <td className="admin-mono" style={{ color: "var(--admin-fg)" }}>{u.mobileNumber || "—"}</td>
+                      <td>
+                        <div className="flex items-center gap-2 admin-mono" style={{ color: "var(--admin-fg)" }}>
+                          {u.mobileNumber && u.mobileNumber !== "—" ? (
+                            <>
+                              <ReactCountryFlag
+                                countryCode={COUNTRY_CODES.find(c => c.dial_code === (u.countryCode || "+91"))?.code || "IN"}
+                                svg
+                                style={{
+                                  width: "1.4em",
+                                  height: "1.4em",
+                                  borderRadius: "2px",
+                                }}
+                              />
+                              <span style={{ color: "var(--admin-muted-fg)" }}>{u.countryCode || "+91"}</span>
+                              <span>{u.mobileNumber}</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <Badge tone={roleTones[u.roleGroup] || "blue"}>{u.designation || u.roleGroup || "—"}</Badge>
                       </td>
@@ -448,6 +476,12 @@ function UsersInner() {
               <div>
                 <p className="admin-stat-label">Joined</p>
                 <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>{formatJoined(selected.createdAt)}</p>
+              </div>
+              <div>
+                <p className="admin-stat-label">Group / Cohort</p>
+                <p style={{ color: "var(--admin-fg)", fontSize: 14, marginTop: 4 }}>
+                  {selected.groupName || "—"}
+                </p>
               </div>
             </div>
 

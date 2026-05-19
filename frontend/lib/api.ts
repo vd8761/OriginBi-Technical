@@ -189,6 +189,7 @@ export interface RegisterRequest {
   roleDescription?: string;
   groupCode?: string;
   sendEmail?: boolean;
+  pricingPolicy?: "free" | "pay";
 }
 
 export interface Assignment {
@@ -582,7 +583,12 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
       }
     }
   }
-  const base = baseOverride ?? API_BASE;
+  const base =
+    path.startsWith("/admin-api") ||
+    path.startsWith("/auth-api") ||
+    path.startsWith("/student-api")
+      ? ""
+      : (baseOverride ?? API_BASE);
   const res = await fetch(`${base}${path}`, {
     ...rest,
     headers,
@@ -665,6 +671,7 @@ function errorMessageFrom(data: ErrorEnvelope | null): string | null {
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
   await assertRegistrationEmailAvailable(input.email);
   await assertRegistrationPhoneAvailable(input.mobileNumber);
+  const hasGroup = !!input.groupCode?.trim();
 
   await apiFetch<any>("/api/auth/register", {
     method: "POST",
@@ -685,6 +692,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       currentRole: input.currentRole,
       roleDescription: input.roleDescription,
       groupCode: input.groupCode,
+      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "free" }),
     }),
     baseOverride: TECH_API_BASE,
     auth: false,
@@ -1278,11 +1286,11 @@ export function getActiveEmail(): string {
 
 // ── Purchase + completion sync (backend source of truth) ──────────────────
 
-export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[] }> {
+export async function getPurchasedAssessments(email: string): Promise<{ purchased: string[]; visible?: string[] }> {
   if (!HAS_TECH_API) {
     return { purchased: [] };
   }
-  return apiFetch<{ purchased: string[] }>("/api/assessment/purchase/purchases", {
+  return apiFetch<{ purchased: string[]; visible?: string[] }>("/api/assessment/purchase/purchases", {
     method: "POST",
     body: JSON.stringify({ email }),
     baseOverride: TECH_API_BASE,
@@ -1321,11 +1329,15 @@ export interface AdminUserRow {
   departmentName: string;
   degreeName: string;
   currentYear: string;
+  groupName?: string; countryCode?: string;
 }
 
 export interface AdminUserCounts {
   total: number;
   students: number;
+  college: number;
+  school: number;
+  employee: number;
   admins: number;
   proctors: number;
   blocked: number;
@@ -1341,7 +1353,7 @@ export interface AdminUsersResponse {
 
 export interface ListAdminUsersParams {
   q?: string;
-  role?: "admin" | "proctor" | "student";
+  role?: "admin" | "proctor" | "student" | "college" | "school" | "employee";
   status?: "active" | "blocked" | "pending";
   tech?: boolean;
   limit?: number;
@@ -1453,6 +1465,42 @@ export async function getBulkAdminUsersJobStatus(importId: string) {
 export async function getBulkAdminUsersJobRows(importId: string) {
   return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
     method: "GET",
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+// ── Admin Groups & Cohorts Database-backed CRUD ─────────────────────────────
+export async function getAdminGroups(): Promise<any[]> {
+  return apiFetch<any[]>("/api/admin/groups", {
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function createAdminGroup(body: any): Promise<any> {
+  return apiFetch<any>("/api/admin/groups", {
+    method: "POST",
+    body: JSON.stringify(body),
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function updateAdminGroup(id: number | string, body: any): Promise<any> {
+  return apiFetch<any>(`/api/admin/groups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function deleteAdminGroup(id: number | string): Promise<any> {
+  return apiFetch<any>(`/api/admin/groups/${id}`, {
+    method: "DELETE",
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function getAdminAssessments(): Promise<any> {
+  return apiFetch<any>("/api/assessment/admin/assessments", {
     baseOverride: TECH_API_BASE,
   });
 }

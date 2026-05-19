@@ -49,7 +49,7 @@ const moduleConfig: Record<string, { icon: any; accentVar: string; accentBgVar: 
 
 const moduleTiles: ModuleTile[] = [
   {
-    href: "/admin/question-banks",
+    href: "/admin/questions",
     label: "Aptitude Assessment",
     desc: "Quantitative, logical, verbal and abstract reasoning.",
     icon: Brain,
@@ -60,7 +60,7 @@ const moduleTiles: ModuleTile[] = [
     categories: ["Quant", "Logic", "Verbal", "Abstract"],
   },
   {
-    href: "/admin/question-banks",
+    href: "/admin/questions",
     label: "MNC Career Prep",
     desc: "Company-style problem packs and case studies.",
     icon: Banknote,
@@ -71,7 +71,7 @@ const moduleTiles: ModuleTile[] = [
     categories: ["Aptitude", "Coding", "HR"],
   },
   {
-    href: "/admin/question-banks",
+    href: "/admin/questions",
     label: "Communication Skills",
     desc: "Email, comprehension and speaking prompts.",
     icon: MessageSquare,
@@ -82,7 +82,7 @@ const moduleTiles: ModuleTile[] = [
     categories: ["Reading", "Writing", "Speaking"],
   },
   {
-    href: "/admin/question-banks",
+    href: "/admin/questions",
     label: "Role-Based Technical",
     desc: "Curated bundles per job role and level.",
     icon: Target,
@@ -255,10 +255,10 @@ function DashboardInner() {
       <Card>
         <div className="admin-control-row" style={{ marginBottom: 16 }}>
           <div>
-            <h3 className="admin-card-title">Question Banks</h3>
+            <h3 className="admin-card-title">Assessments</h3>
             <p className="admin-card-subtitle">Tap a module to manage its questions.</p>
           </div>
-          <Link href="/admin/question-banks" className="admin-btn admin-btn-secondary">
+          <Link href="/admin/questions" className="admin-btn admin-btn-secondary">
             View all <ArrowRight size={14} />
           </Link>
         </div>
@@ -316,7 +316,7 @@ function DashboardInner() {
               <h3 className="admin-card-title">Live Assessments</h3>
               <p className="admin-card-subtitle">Currently active or scheduled</p>
             </div>
-            <Link href="/admin/exam-packages" className="admin-btn admin-btn-ghost" style={{ fontSize: 12 }}>
+            <Link href="/admin/groups" className="admin-btn admin-btn-ghost" style={{ fontSize: 12 }}>
               See all <ArrowRight size={13} />
             </Link>
           </div>

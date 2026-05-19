@@ -200,9 +200,10 @@ const computePaidStatus = (
         const total = CODING_LANGUAGES.length;
         const count = CODING_LANGUAGES.filter((lang) => {
             const key = codingPaymentKey(lang.id);
+            if (isPaid(key)) return true;
             return assignments.some((assignment) => (
                 assignment.assignmentRef === key &&
-                assignment.status === 'active'
+                (assignment.status === 'active' || assignment.status === 'completed' || assignment.completed)
             ));
         }).length;
         if (count === 0) return { kind: 'none' };

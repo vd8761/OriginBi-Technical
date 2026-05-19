@@ -34,7 +34,16 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
     const [summary, setSummary] = useState({ total: 0, success: 0, skipped: 0 });
 
     useEffect(() => {
-        // Mock groups since tech assessments typically don't map to dynamic groups in bulk (yet)
+        const stored = localStorage.getItem("originbi:groups");
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                setGroups(parsed.map((g: any) => ({ id: g.id || g.code, name: g.name })));
+                return;
+            } catch (e) {
+                console.error("Failed to parse stored groups in BulkUploadRegistration", e);
+            }
+        }
         setGroups([{ id: 1, name: 'Default Tech Group' }]);
     }, []);
 
@@ -133,15 +142,15 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
                 <div>
                     <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
                         <span>Dashboard</span>
-                        <span className="mx-2 text-gray-400 dark:text-gray-600">&gt;</span>
+                        <span className="mx-2 text-black dark:text-white">&gt;</span>
                         <button onClick={onCancel} className="hover:text-brand-text-light-primary dark:hover:text-white hover:underline cursor-pointer">
                             Users
                         </button>
-                        <span className="mx-2 text-gray-400 dark:text-gray-600">&gt;</span>
+                        <span className="mx-2 text-black dark:text-white">&gt;</span>
                         <span className="text-brand-green font-semibold">Bulk Upload</span>
                         {view === 'review' && (
                             <>
-                                <span className="mx-2 text-gray-400 dark:text-gray-600">&gt;</span>
+                                <span className="mx-2 text-black dark:text-white">&gt;</span>
                                 <span className="text-brand-green font-semibold">Review</span>
                             </>
                         )}
@@ -185,7 +194,7 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
                     <div className="flex flex-col items-center justify-center p-12 h-[400px]">
                         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#1ED36A] mb-4"></div>
                         <h3 className="text-xl font-medium text-gray-900 dark:text-white">Processing Registrations...</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-2">This may take a few moments.</p>
+                        <p className="text-black dark:text-white mt-2">This may take a few moments.</p>
                     </div>
                 )}
 

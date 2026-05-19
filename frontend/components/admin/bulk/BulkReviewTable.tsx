@@ -44,7 +44,7 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
         const isErrorSource = row.status === 'INVALID' && row.errorMessage && String(row.errorMessage).includes(String(val));
 
         return (
-            <span className={isErrorSource ? "text-red-500 font-medium" : "text-gray-600 dark:text-gray-300"}>
+            <span className={isErrorSource ? "text-red-500 font-medium" : "text-black dark:text-white"}>
                 {val}
             </span>
         );
@@ -52,15 +52,14 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
 
     const renderTable = (rows: any[], isValid: boolean) => (
         <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                <thead className="bg-gray-100 dark:bg-[#19211C] text-xs uppercase text-gray-500">
+            <table className="w-full text-left text-sm text-black dark:text-white whitespace-nowrap">
+                <thead className="bg-gray-100 dark:bg-[#19211C] text-xs uppercase text-black dark:text-white font-bold">
                     <tr>
                         <th className="px-4 py-3">S.No</th>
                         <th className="px-4 py-3">Name</th>
                         <th className="px-4 py-3">Gender</th>
                         <th className="px-4 py-3">Email</th>
                         <th className="px-4 py-3">Mobile</th>
-                        <th className="px-4 py-3">Program</th>
                         <th className="px-4 py-3">Group Match</th>
                         <th className="px-4 py-3">School Level</th>
                         <th className="px-4 py-3">Stream</th>
@@ -69,8 +68,6 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                         <th className="px-4 py-3">Year</th>
                         <th className="px-4 py-3">Current Role</th>
                         <th className="px-4 py-3">Role Description</th>
-                        <th className="px-4 py-3">Start Date</th>
-                        <th className="px-4 py-3">End Date</th>
                         <th className="px-4 py-3">Password</th>
                         <th className="px-4 py-3">Send Email</th>
                     </tr>
@@ -79,7 +76,7 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                     {rows.map((row, idx) => {
                         const hasError = row.status === 'INVALID' || row.errorMessage;
 
-                        const programVal = row.rawData['ProgramId'] || row.rawData['program_code'] || '';
+                        const programVal = row.normalizedData?.programCode || row.rawData['ProgramId'] || row.rawData['program_code'] || '';
                         const isCollege = String(programVal).toUpperCase().includes('COLLEGE');
                         const isSchool = String(programVal).toUpperCase().includes('SCHOOL');
 
@@ -93,7 +90,6 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                                     <td className="px-4 py-3">
                                         {renderCell(row, ['CountryCode', 'country_code'], (val) => String(val).startsWith('+') ? val : '+' + val)} {renderCell(row, ['Mobile', 'mobile', 'mobile_number'])}
                                     </td>
-                                    <td className="px-4 py-3">{renderCell(row, ['ProgramId', 'program_code'])}</td>
                                     <td className="px-4 py-3">
                                         {renderCell(row, ['GroupName', 'group_name'])}
                                     </td>
@@ -118,8 +114,6 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                                     <td className="px-4 py-3 max-w-[200px] truncate" title={String(row.rawData['RoleDescription'] || row.rawData['role_description'] || row.rawData['Role Description'] || '')}>
                                         {renderCell(row, ['RoleDescription', 'role_description', 'roleDescription', 'Role Description'])}
                                     </td>
-                                    <td className="px-4 py-3">{renderCell(row, ['ExamStart', 'exam_start_date'])}</td>
-                                    <td className="px-4 py-3">{renderCell(row, ['ExamEnd', 'exam_end_date'])}</td>
                                     <td className="px-4 py-3 blur-[2px] hover:blur-none transition-all cursor-pointer select-none">
                                         {renderCell(row, ['Password', 'password'])}
                                     </td>
@@ -127,7 +121,7 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                                 </tr>
                                 {hasError && (
                                     <tr>
-                                        <td colSpan={18} className="px-4 py-2 bg-red-500/10 border-b border-red-500/20">
+                                        <td colSpan={15} className="px-4 py-2 bg-red-500/10 border-b border-red-500/20">
                                             <div className="flex items-center gap-2 text-red-500 text-sm font-medium">
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -152,14 +146,14 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
             <div className="flex gap-4">
                 <button
                     onClick={() => setActiveTab('valid')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${activeTab === 'valid' ? 'bg-[#1ED36A]/10 border-[#1ED36A] text-[#1ED36A]' : 'border-transparent text-gray-500 dark:text-gray-400'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${activeTab === 'valid' ? 'bg-[#1ED36A]/10 border-[#1ED36A] text-[#1ED36A]' : 'border-transparent text-black dark:text-white'}`}
                 >
                     <span className="w-2 h-2 rounded-full bg-current" />
                     Valid Records ({validRows.length})
                 </button>
                 <button
                     onClick={() => setActiveTab('invalid')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${activeTab === 'invalid' ? 'bg-red-500/10 border-red-500 text-red-500' : 'border-transparent text-gray-500 dark:text-gray-400'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${activeTab === 'invalid' ? 'bg-red-500/10 border-red-500 text-red-500' : 'border-transparent text-black dark:text-white'}`}
                 >
                     <span className="w-2 h-2 rounded-full bg-current" />
                     Records Needing Attention ({invalidRows.length})
@@ -206,7 +200,7 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                                 link.click();
                                 document.body.removeChild(link);
                             }}
-                            className="text-xs flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white"
+                            className="text-xs flex items-center gap-1 text-black dark:text-white hover:underline"
                         >
                             Download Error Report
                         </button>
@@ -215,13 +209,13 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
             )}
 
             <div className="flex justify-end gap-4 pt-4">
-                <button onClick={onCancel} className="px-6 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5">Back</button>
+                <button onClick={onCancel} className="px-6 py-2 rounded-lg border border-black dark:border-white text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5">Back</button>
                 <button
                     onClick={handleRegister}
                     className={`px-6 py-2 rounded-lg font-medium transition-all
                         ${(validRows.length > 0)
                             ? 'bg-[#1ED36A] text-white hover:bg-[#1ED36A]/90'
-                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
+                            : 'bg-gray-300 dark:bg-gray-700 text-black dark:text-white cursor-not-allowed opacity-40'
                         }`}
                     disabled={!(validRows.length > 0) || isSubmitting}
                 >

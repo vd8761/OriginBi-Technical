@@ -30,7 +30,12 @@ export function Drawer({ open, onClose, title, subtitle, footer, children }: Pro
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="admin-drawer-overlay" role="dialog" aria-modal="true">
+    <div
+      className="admin-panel-root admin-drawer-overlay"
+      style={{ gridTemplateColumns: "1fr min(480px, 92vw)", minHeight: "auto" }}
+      role="dialog"
+      aria-modal="true"
+    >
       <button
         type="button"
         className="admin-drawer-backdrop"

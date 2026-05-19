@@ -16,10 +16,10 @@ const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin/coding": { title: "Coding Question Bank", section: "Question Banks" },
   "/admin/coding/new": { title: "New Coding Problem", section: "Question Banks" },
   "/admin/coding/bulk-import": { title: "Bulk Import", section: "Question Banks" },
-  "/admin/exam-packages": { title: "Exam Packages", section: "Assessments" },
+  "/admin/groups": { title: "Groups Management", section: "Workspace" },
   "/admin/plugins": { title: "Plugin Registry", section: "System" },
   "/admin/plugins/languages": { title: "Language Plugins", section: "System" },
-  "/admin/question-banks": { title: "Question Banks", section: "Content" },
+  "/admin/questions": { title: "Assessments", section: "Workspace" },
   "/admin/users": { title: "User Management", section: "Workspace" },
   "/admin/proctoring": { title: "Proctoring Live Monitor", section: "System" },
   "/admin/settings": { title: "Exam Settings", section: "System" },
@@ -29,7 +29,7 @@ function resolveRoute(pathname: string) {
   const exact = routeTitles[pathname];
   if (exact) return exact;
   if (pathname.startsWith("/admin/coding/")) return { title: "Coding Problem Editor", section: "Question Banks" };
-  if (pathname.startsWith("/admin/exam-packages/")) return { title: "Exam Package Builder", section: "Assessments" };
+  if (pathname.startsWith("/admin/groups/")) return { title: "Group Details", section: "Workspace" };
   if (pathname.startsWith("/admin/plugins/")) return { title: "Plugin Details", section: "System" };
   if (pathname.startsWith("/admin/users/")) return { title: "User Detail", section: "Workspace" };
   return { title: "Admin Panel", section: "Origin BI" };
@@ -42,8 +42,8 @@ function defaultBreadcrumb(pathname: string, sectionFallback: string): Breadcrum
     const top = part[1];
     const labelMap: Record<string, string> = {
       coding: "Question Banks",
-      questions: "MCQ Authoring",
-      "exam-packages": "Assessments",
+      questions: "Assessments",
+      groups: "Groups",
       plugins: "Plugins",
       proctoring: "Proctoring",
       settings: "Settings",
