@@ -1,357 +1,236 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  Camera,
-  CheckCircle2,
-  Clock,
+  Eye,
   Flag,
-  MapPin,
+  Keyboard,
   Maximize,
-  MessageSquare,
-  Mic,
+  MousePointerClick,
   PauseCircle,
-  ShieldCheck,
-  Wifi,
-  XCircle,
+  ShieldAlert,
+  type LucideIcon,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
-import { Avatar, Badge, Card, StatCard, StatusDot } from "@/components/admin/ui";
+import { Badge, Card, StatCard, StatusDot } from "@/components/admin/ui";
+import {
+  listActiveProctoringAttempts,
+  type AdminProctoringAttempt,
+} from "@/lib/api";
 
-interface LiveCandidate {
-  id: string;
-  name: string;
-  obId: string;
-  exam: string;
-  progress: number;
-  flags: number;
-  status: "ok" | "warning" | "danger";
-  time: string;
-  questionsTotal: number;
-  questionsDone: number;
+const POLL_INTERVAL_MS = 5_000;
+
+// Keep these short and admin-friendly; they're the column headers in the row.
+const COUNTER_DEFS: { key: string; label: string; icon: LucideIcon }[] = [
+  { key: "proctoring.tab.switched", label: "Tab", icon: Eye },
+  { key: "proctoring.copy.blocked", label: "Copy", icon: ShieldAlert },
+  { key: "proctoring.fullscreen.exit", label: "Fullscreen", icon: Maximize },
+  { key: "proctoring.devtools.opened", label: "Devtools", icon: ShieldAlert },
+  { key: "proctoring.focus.lost", label: "Focus", icon: MousePointerClick },
+  { key: "proctoring.keypress", label: "Keypress", icon: Keyboard },
+];
+
+function sumCounts(c: Record<string, number> | undefined) {
+  if (!c) return 0;
+  return Object.values(c).reduce((a, b) => a + (b || 0), 0);
 }
 
-const liveCandidates: LiveCandidate[] = [
-  { id: "lc1", name: "Aanya Sharma", obId: "OB-20345", exam: "Aptitude Round", progress: 67, flags: 0, status: "ok", time: "32m left", questionsTotal: 30, questionsDone: 20 },
-  { id: "lc2", name: "Rohan Mehta", obId: "OB-20346", exam: "TCS NQT Prep", progress: 42, flags: 1, status: "warning", time: "1h 12m", questionsTotal: 40, questionsDone: 17 },
-  { id: "lc3", name: "Karan Singh", obId: "OB-20289", exam: "SDE Round 2", progress: 88, flags: 3, status: "danger", time: "8m left", questionsTotal: 6, questionsDone: 5 },
-  { id: "lc4", name: "Sneha Patel", obId: "OB-20045", exam: "Aptitude Round", progress: 22, flags: 0, status: "ok", time: "44m left", questionsTotal: 30, questionsDone: 7 },
-  { id: "lc5", name: "Ankit Verma", obId: "OB-20102", exam: "SDE Round 2", progress: 56, flags: 0, status: "ok", time: "38m left", questionsTotal: 6, questionsDone: 3 },
-  { id: "lc6", name: "Tara Reddy", obId: "OB-19921", exam: "TCS NQT Prep", progress: 71, flags: 2, status: "warning", time: "26m left", questionsTotal: 40, questionsDone: 28 },
-  { id: "lc7", name: "Vikram Joshi", obId: "OB-19883", exam: "Aptitude Round", progress: 14, flags: 0, status: "ok", time: "52m left", questionsTotal: 30, questionsDone: 4 },
-  { id: "lc8", name: "Pooja Iyer", obId: "OB-19744", exam: "SDE Round 2", progress: 92, flags: 4, status: "danger", time: "3m left", questionsTotal: 6, questionsDone: 6 },
-];
+function elapsedSince(iso?: string | null) {
+  if (!iso) return "—";
+  const start = new Date(iso).getTime();
+  if (Number.isNaN(start)) return "—";
+  const ms = Date.now() - start;
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function rowTone(flags: number): "green" | "amber" | "red" {
+  if (flags >= 5) return "red";
+  if (flags >= 1) return "amber";
+  return "green";
+}
 
 function ProctoringInner() {
   useRegisterAdminPage({
     eyebrow: "System / Proctoring",
     title: "Proctoring Live Monitor",
-    subtitle: "Real-time candidate feed across all active sessions.",
+    subtitle: "Polled every 5s from /v1/admin/proctoring/active — stateless, no sticky sessions.",
     breadcrumb: [
       { label: "Admin Hub", href: "/admin" },
       { label: "Proctoring" },
     ],
   });
 
-  const [selected, setSelected] = useState<LiveCandidate>(liveCandidates[2]);
+  const [attempts, setAttempts] = useState<AdminProctoringAttempt[]>([]);
+  const [polledAt, setPolledAt] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const inflight = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      if (inflight.current) return;
+      if (document.hidden) return;
+      inflight.current = true;
+      try {
+        const res = await listActiveProctoringAttempts({ limit: 200 });
+        if (cancelled) return;
+        setAttempts(res.attempts);
+        setPolledAt(res.polled_at);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        inflight.current = false;
+        if (!cancelled) setLoading(false);
+      }
+    };
+    pull();
+    const id = window.setInterval(pull, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const stats = useMemo(() => {
-    const live = liveCandidates.length;
-    const flagged = liveCandidates.filter((c) => c.flags > 0).length;
-    const high = liveCandidates.filter((c) => c.status === "danger").length;
+    const live = attempts.length;
+    const flagged = attempts.filter((a) => sumCounts(a.event_counts) > 0).length;
+    const high = attempts.filter((a) => sumCounts(a.event_counts) >= 5).length;
     return { live, flagged, high };
-  }, []);
+  }, [attempts]);
 
   return (
     <div className="admin-page">
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
           gap: 14,
         }}
       >
         <StatCard
           label="Live now"
           value={stats.live.toString().padStart(2, "0")}
-          sub="Streaming sessions"
+          sub="In-progress attempts"
           icon={<Activity size={18} />}
           iconBg="var(--admin-green-soft)"
           iconColor="var(--admin-green)"
         />
         <StatCard
-          label="Flagged"
+          label="With incidents"
           value={stats.flagged}
-          sub="Needs review"
+          sub="At least one event"
           icon={<Flag size={18} />}
           iconBg="var(--admin-amber-soft)"
           iconColor="var(--admin-amber)"
         />
         <StatCard
-          label="Auto-paused"
-          value="3"
-          sub="Pending operator action"
-          icon={<PauseCircle size={18} />}
+          label="High alert"
+          value={stats.high}
+          sub="≥5 events recorded"
+          icon={<AlertTriangle size={18} />}
           iconBg="rgba(237,47,52,0.12)"
           iconColor="var(--admin-red)"
         />
         <StatCard
-          label="Completed today"
-          value="412"
-          sub="Across 12 exams"
-          icon={<CheckCircle2 size={18} />}
-          iconBg="var(--admin-blue-soft)"
-          iconColor="var(--admin-blue)"
-        />
-        <StatCard
-          label="Avg session"
-          value="47m"
-          sub="−4m vs yesterday"
-          icon={<Clock size={18} />}
+          label="Last poll"
+          value={polledAt ? elapsedSince(polledAt) : "—"}
+          sub={POLL_INTERVAL_MS / 1000 + "s interval"}
+          icon={<PauseCircle size={18} />}
           iconBg="rgba(255,255,255,0.06)"
           iconColor="var(--admin-fg-3)"
         />
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 16, alignItems: "flex-start" }}>
-        <Card>
-          <div className="admin-control-row" style={{ marginBottom: 14 }}>
-            <div>
-              <h3 className="admin-card-title">Live Candidates</h3>
-              <p className="admin-card-subtitle">Click a tile to inspect real-time signals.</p>
-            </div>
-            <Badge tone="green" dot>
-              <span className="admin-animate-pulse">{stats.live} live</span>
-            </Badge>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 12,
-            }}
-          >
-            {liveCandidates.map((c) => {
-              const tone = c.status === "ok" ? "green" : c.status === "warning" ? "amber" : "red";
-              const isSelected = c.id === selected.id;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setSelected(c)}
-                  className="admin-module-card"
-                  style={{
-                    padding: 0,
-                    overflow: "hidden",
-                    cursor: "pointer",
-                    borderColor: isSelected ? "rgba(30,211,106,0.45)" : undefined,
-                    background: isSelected ? "rgba(30,211,106,0.06)" : undefined,
-                    gap: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "relative",
-                      aspectRatio: "4/3",
-                      display: "grid",
-                      placeItems: "center",
-                      background:
-                        "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))",
-                      borderBottom: "1px solid var(--admin-border)",
-                    }}
-                  >
-                    <Avatar name={c.name} email={c.obId} size={48} />
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        left: 8,
-                      }}
-                    >
-                      <Badge tone={tone} dot>
-                        {c.status === "ok" ? "Live" : c.status === "warning" ? "Watch" : "High"}
-                      </Badge>
-                    </span>
-                    {c.flags > 0 && (
-                      <span style={{ position: "absolute", top: 8, right: 8 }}>
-                        <Badge tone="red">
-                          <Flag size={10} /> {c.flags}
-                        </Badge>
-                      </span>
-                    )}
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        padding: "6px 10px",
-                        background: "linear-gradient(180deg, transparent, rgba(0,0,0,0.5))",
-                      }}
-                    >
-                      <div className="admin-progress" style={{ height: 4 }}>
-                        <div
-                          className="admin-progress-fill"
-                          style={{
-                            width: `${c.progress}%`,
-                            background:
-                              c.status === "danger"
-                                ? "var(--admin-red)"
-                                : c.status === "warning"
-                                  ? "var(--admin-amber)"
-                                  : undefined,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ padding: 12, textAlign: "left" }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--admin-fg)" }}>{c.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--admin-fg-3)" }}>{c.exam}</div>
-                    <div style={{ fontSize: 11, color: "var(--admin-fg-4)", marginTop: 4 }}>{c.time}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card pad={false} style={{ position: "sticky", top: 88 }}>
-          <div
-            style={{
-              position: "relative",
-              aspectRatio: "16/10",
-              borderRadius: "var(--admin-r-lg) var(--admin-r-lg) 0 0",
-              background:
-                "linear-gradient(135deg, rgba(30,211,106,0.18), rgba(74,198,234,0.18))",
-              display: "grid",
-              placeItems: "center",
-              borderBottom: "1px solid var(--admin-border)",
-            }}
-          >
-            <Avatar name={selected.name} email={selected.obId} size={84} />
-            <Badge
-              tone={selected.status === "ok" ? "green" : selected.status === "warning" ? "amber" : "red"}
-              dot
-              style={{ position: "absolute", top: 14, left: 14 }}
-            >
-              {selected.status === "ok" ? "Healthy" : selected.status === "warning" ? "Watch" : "High risk"}
-            </Badge>
-          </div>
-          <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <h3 className="admin-card-title">{selected.name}</h3>
-              <p className="admin-card-subtitle admin-mono">
-                {selected.obId} · {selected.exam}
-              </p>
-            </div>
-            <div>
-              <div className="admin-control-row">
-                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-fg-3)" }}>
-                  Question {selected.questionsDone} / {selected.questionsTotal}
-                </span>
-                <span style={{ fontSize: 11.5, color: "var(--admin-fg-2)", fontWeight: 700 }}>
-                  {selected.progress}%
-                </span>
-              </div>
-              <div className="admin-progress" style={{ marginTop: 6 }}>
-                <div className="admin-progress-fill" style={{ width: `${selected.progress}%` }} />
-              </div>
-            </div>
-
-            <div>
-              <p className="admin-stat-label">Active flags</p>
-              {selected.flags === 0 ? (
-                <p style={{ color: "var(--admin-fg-3)", fontSize: 12.5, marginTop: 6 }}>
-                  No flags raised in this session.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                  {Array.from({ length: selected.flags }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="admin-row"
-                      style={{
-                        padding: "8px 10px",
-                        background: "var(--admin-amber-soft)",
-                        borderRadius: 8,
-                        border: "1px solid rgba(255,183,3,0.32)",
-                      }}
-                    >
-                      <AlertTriangle size={14} color="var(--admin-amber)" />
-                      <span style={{ flex: 1, fontSize: 12, color: "var(--admin-amber)", fontWeight: 700 }}>
-                        Excessive head movement
-                      </span>
-                      <span style={{ fontSize: 11, color: "var(--admin-fg-4)" }}>{i + 1}m ago</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p className="admin-stat-label" style={{ marginBottom: 8 }}>Live signals</p>
-              <div className="admin-grid-3" style={{ gap: 8 }}>
-                {[
-                  { icon: <Wifi size={13} />, label: "Network", ok: true },
-                  { icon: <Camera size={13} />, label: "Camera", ok: selected.status !== "danger" },
-                  { icon: <Mic size={13} />, label: "Mic", ok: true },
-                  { icon: <Maximize size={13} />, label: "Fullscreen", ok: selected.status !== "danger" },
-                  { icon: <MapPin size={13} />, label: "Location", ok: true },
-                  { icon: <ShieldCheck size={13} />, label: "Identity", ok: true },
-                ].map((s) => (
-                  <div
-                    key={s.label}
-                    className="admin-row"
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: 8,
-                      border: "1px solid var(--admin-border)",
-                      background: "rgba(255,255,255,0.025)",
-                      gap: 6,
-                    }}
-                  >
-                    <span style={{ color: s.ok ? "var(--admin-green)" : "var(--admin-red)" }}>
-                      {s.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                    </span>
-                    {s.icon}
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-fg-2)" }}>
-                      {s.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="admin-row" style={{ gap: 8, marginTop: 4 }}>
-              <button type="button" className="admin-btn admin-btn-secondary" style={{ flex: 1 }}>
-                <MessageSquare size={13} /> Message
-              </button>
-              <button type="button" className="admin-btn admin-btn-secondary" style={{ flex: 1 }}>
-                <AlertTriangle size={13} /> Warn
-              </button>
-              <button
-                type="button"
-                className="admin-btn"
-                style={{
-                  flex: 1,
-                  background: "var(--admin-red-soft)",
-                  color: "#ff8a8d",
-                  borderColor: "rgba(237,47,52,0.32)",
-                }}
-              >
-                <XCircle size={13} /> Terminate
-              </button>
-            </div>
-            <p style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--admin-fg-4)" }}>
-              <StatusDot tone="green" pulse /> Stream healthy · 0 dropped frames last 60s
+      <Card>
+        <div className="admin-control-row" style={{ marginBottom: 14 }}>
+          <div>
+            <h3 className="admin-card-title">Active Attempts</h3>
+            <p className="admin-card-subtitle">
+              {loading
+                ? "Loading…"
+                : error
+                  ? `Error: ${error}`
+                  : `Showing ${attempts.length} in-progress attempt${attempts.length === 1 ? "" : "s"}.`}
             </p>
           </div>
-        </Card>
-      </section>
+          <Badge tone="green" dot>
+            <StatusDot tone={error ? "red" : "green"} pulse={!error} />
+            <span style={{ marginLeft: 6 }}>{error ? "Unavailable" : "Polling"}</span>
+          </Badge>
+        </div>
+
+        {attempts.length === 0 && !loading && !error && (
+          <p style={{ color: "var(--admin-fg-3)", fontSize: 13, padding: "24px 0", textAlign: "center" }}>
+            No active attempts right now.
+          </p>
+        )}
+
+        {attempts.length > 0 && (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 12.5,
+              }}
+            >
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--admin-fg-3)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: 1.2 }}>
+                  <th style={{ padding: "8px 10px" }}>Candidate</th>
+                  <th style={{ padding: "8px 10px" }}>Exam</th>
+                  <th style={{ padding: "8px 10px" }}>Status</th>
+                  <th style={{ padding: "8px 10px" }}>Elapsed</th>
+                  {COUNTER_DEFS.map((c) => (
+                    <th key={c.key} style={{ padding: "8px 10px", textAlign: "center" }}>{c.label}</th>
+                  ))}
+                  <th style={{ padding: "8px 10px", textAlign: "right" }}>Last event</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attempts.map((a) => {
+                  const flagsTotal = sumCounts(a.event_counts);
+                  const tone = rowTone(flagsTotal);
+                  return (
+                    <tr key={a.attempt_id} style={{ borderTop: "1px solid var(--admin-border)" }}>
+                      <td style={{ padding: "10px" }}>
+                        <div style={{ fontWeight: 700, color: "var(--admin-fg)" }}>#{a.candidate_user_id}</div>
+                        <div className="admin-mono" style={{ fontSize: 10.5, color: "var(--admin-fg-4)" }}>{a.attempt_id.slice(0, 8)}</div>
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <div className="admin-mono" style={{ fontSize: 11, color: "var(--admin-fg-3)" }}>{a.exam_version_id.slice(0, 8)}</div>
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <Badge tone={tone} dot>
+                          {a.status}
+                        </Badge>
+                      </td>
+                      <td style={{ padding: "10px", color: "var(--admin-fg-2)" }}>{elapsedSince(a.started_at)}</td>
+                      {COUNTER_DEFS.map((c) => {
+                        const n = a.event_counts?.[c.key] ?? 0;
+                        return (
+                          <td key={c.key} style={{ padding: "10px", textAlign: "center", color: n > 0 ? "var(--admin-amber)" : "var(--admin-fg-4)", fontWeight: n > 0 ? 800 : 500 }}>
+                            {n}
+                          </td>
+                        );
+                      })}
+                      <td style={{ padding: "10px", textAlign: "right", color: "var(--admin-fg-3)" }}>{elapsedSince(a.last_event_at) + " ago"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

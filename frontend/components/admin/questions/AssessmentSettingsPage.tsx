@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Search, ListChecks, Code } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
 import {
   AssessmentType,
@@ -15,9 +16,6 @@ import {
   QuestionKindEnabledMap,
   serializeQuestionKindEnabledMap,
 } from "./types";
-import { AptitudeIcon, CommunicationIcon, MNCIcon, RoleIcon, ArrowRightWithoutLineIcon } from "@/components/icons";
-import Logo from "@/components/ui/Logo";
-import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/Switch";
@@ -26,10 +24,13 @@ type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" |
 
 // ... (Removed ProperToggle as it's replaced by the new Switch component)
 
-export default function AssessmentSettingsPage() {
-  const router = useRouter();
+interface AssessmentSettingsPageProps {
+  moduleOverride?: AssessmentType;
+}
+
+export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSettingsPageProps = {}) {
   const searchParams = useSearchParams();
-  const moduleParam = searchParams.get("module") as AssessmentType;
+  const moduleParam = (moduleOverride ?? (searchParams.get("module") as AssessmentType)) as AssessmentType;
   
   const [assessments, setAssessments] = useState<Record<string, ApiAssessment>>({});
   const [activeModule, setActiveModule] = useState<AssessmentType>(moduleParam || "aptitude");
@@ -75,6 +76,16 @@ export default function AssessmentSettingsPage() {
     numerical: false,
   });
 
+  // Proctoring
+  const [proctoringRequireFullscreen, setProctoringRequireFullscreen] = useState(false);
+  const [fullscreenExitLimit, setFullscreenExitLimit] = useState<number | "">(0);
+  const [proctoringBlockDevtools, setProctoringBlockDevtools] = useState(true);
+  const [devtoolsOpenLimit, setDevtoolsOpenLimit] = useState<number | "">(0);
+  const [mouseFocusLossLimit, setMouseFocusLossLimit] = useState<number | "">(0);
+  const [keypressLogEnabled, setKeypressLogEnabled] = useState(false);
+  const [requireCameraMic, setRequireCameraMic] = useState(false);
+  const [liveProctoringEnabled, setLiveProctoringEnabled] = useState(true);
+
   const handleSave = async () => {
     const a = assessments[activeModule];
     if (!a) return;
@@ -102,7 +113,15 @@ export default function AssessmentSettingsPage() {
         amount: amount === "" ? 0 : Number(amount),
         trialAttemptsLimit: trialAttemptsLimit === "" ? 5 : Number(trialAttemptsLimit),
         mainAttemptsLimit: mainAttemptsLimit === "" ? 2 : Number(mainAttemptsLimit),
-        enabled_question_types: serializeQuestionKindEnabledMap(enabledQuestionKinds)
+        enabled_question_types: serializeQuestionKindEnabledMap(enabledQuestionKinds),
+        proctoring_require_fullscreen: proctoringRequireFullscreen,
+        fullscreen_exit_limit: fullscreenExitLimit === "" ? 0 : Number(fullscreenExitLimit),
+        proctoring_block_devtools: proctoringBlockDevtools,
+        devtools_open_limit: devtoolsOpenLimit === "" ? 0 : Number(devtoolsOpenLimit),
+        mouse_focus_loss_limit: mouseFocusLossLimit === "" ? 0 : Number(mouseFocusLossLimit),
+        keypress_log_enabled: keypressLogEnabled,
+        require_camera_mic: requireCameraMic,
+        live_proctoring_enabled: liveProctoringEnabled,
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -119,7 +138,7 @@ export default function AssessmentSettingsPage() {
     eyebrow: "Configuration",
     breadcrumb: [
       { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/questions" },
+      { label: "Question Banks", href: "/admin/question-banks" },
     ],
     hideSearch: true,
   });
@@ -255,7 +274,16 @@ export default function AssessmentSettingsPage() {
     const n = parseMap(a.difficulty_negative_marks, { easy: 0, medium: 0.25, hard: 0.25 });
     setEasyMarks(Number(m.easy)); setMediumMarks(Number(m.medium)); setHardMarks(Number(m.hard));
     setEasyNeg(Number(n.easy)); setMediumNeg(Number(n.medium)); setHardNeg(Number(n.hard));
-    
+
+    setProctoringRequireFullscreen(Boolean(a.proctoring_require_fullscreen));
+    setFullscreenExitLimit(a.fullscreen_exit_limit ?? 0);
+    setProctoringBlockDevtools(a.proctoring_block_devtools !== false);
+    setDevtoolsOpenLimit(a.devtools_open_limit ?? 0);
+    setMouseFocusLossLimit(a.mouse_focus_loss_limit ?? 0);
+    setKeypressLogEnabled(Boolean(a.keypress_log_enabled));
+    setRequireCameraMic(Boolean(a.require_camera_mic));
+    setLiveProctoringEnabled(a.live_proctoring_enabled !== false);
+
     // Populate Question Types
     setEnabledQuestionKinds(parseQuestionKindEnabledMap(activeModule, a.enabled_question_types));
 
@@ -396,6 +424,39 @@ export default function AssessmentSettingsPage() {
                         <div className="sm:max-w-md"><label className={labelCls}>Main Attempts Limit</label><p className={descCls}>Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
                         <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
                       </div>
+
+                      {activeModule === "coding" && (
+                        <div className="pt-10 mt-2 border-t border-slate-100 dark:border-white/[0.04]">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Code className="w-4 h-4 text-brand-green" />
+                            <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Coding-Specific Settings</h3>
+                          </div>
+                          <p className={descCls + " mb-6"}>
+                            Question authoring, language toggles, and Judge0 runtime limits for coding challenges
+                            live in their own surfaces. Use the shortcuts below.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
+                            <Link
+                              href="/admin/coding"
+                              className="block p-5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-brand-green/40 transition-all"
+                            >
+                              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Manage Coding Questions</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Problems, test cases, starter code, and visibility per question.
+                              </p>
+                            </Link>
+                            <Link
+                              href="/admin/plugins/languages"
+                              className="block p-5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-brand-green/40 transition-all"
+                            >
+                              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Languages & Judge0 Limits</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Allowed languages and per-language time and memory caps.
+                              </p>
+                            </Link>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -452,6 +513,61 @@ export default function AssessmentSettingsPage() {
                         <div className="sm:max-w-md"><label className={labelCls}>Shuffle Question Options</label><p className={descCls}>Randomize option ordering on multiple-choice cards.</p></div>
                         <div className="sm:max-w-[400px] w-full flex justify-end">
                           <Switch checked={shuffleOptions} onCheckedChange={(val) => { setShuffleOptions(val); markDirty(); }} />
+                        </div>
+                      </div>
+
+                      <div className="pt-10 mt-2 border-t border-slate-100 dark:border-white/[0.04]">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="w-4 h-4 text-brand-green" />
+                          <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Proctoring</h3>
+                        </div>
+                        <p className={descCls + " mb-6"}>
+                          Per-exam capture and limits. Counters live-stream to the admin Proctoring page (5s polling).
+                        </p>
+
+                        <div className="space-y-12">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Live proctoring to admin panel</label><p className={descCls}>When off, events still record but are hidden from the admin live monitor.</p></div>
+                            <div className="sm:max-w-[400px] w-full flex justify-end">
+                              <Switch checked={liveProctoringEnabled} onCheckedChange={(val) => { setLiveProctoringEnabled(val); markDirty(); }} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Require Camera &amp; Mic</label><p className={descCls}>Prompt the candidate for camera and microphone access and show a self-view tile. Audio and video stay on the device — nothing is uploaded.</p></div>
+                            <div className="sm:max-w-[400px] w-full flex justify-end">
+                              <Switch checked={requireCameraMic} onCheckedChange={(val) => { setRequireCameraMic(val); markDirty(); }} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Require Fullscreen</label><p className={descCls}>Force fullscreen on entry; count exits.</p></div>
+                            <div className="sm:max-w-[400px] w-full flex justify-end">
+                              <Switch checked={proctoringRequireFullscreen} onCheckedChange={(val) => { setProctoringRequireFullscreen(val); markDirty(); }} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Fullscreen exit limit</label><p className={descCls}>Auto-flag after this many fullscreen exits. 0 = log only.</p></div>
+                            <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={fullscreenExitLimit} onChange={e => { const v = e.target.value; setFullscreenExitLimit(v === "" ? "" : Number(v)); markDirty(); }} className={inputCls} /></div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Detect Developer Tools</label><p className={descCls}>Heuristic: window outer/inner size delta + F12/Inspector shortcut counter.</p></div>
+                            <div className="sm:max-w-[400px] w-full flex justify-end">
+                              <Switch checked={proctoringBlockDevtools} onCheckedChange={(val) => { setProctoringBlockDevtools(val); markDirty(); }} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Devtools-open limit</label><p className={descCls}>Auto-flag after this many devtools-open events. 0 = log only.</p></div>
+                            <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={devtoolsOpenLimit} onChange={e => { const v = e.target.value; setDevtoolsOpenLimit(v === "" ? "" : Number(v)); markDirty(); }} className={inputCls} /></div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                            <div className="sm:max-w-md"><label className={labelCls}>Mouse focus-loss limit</label><p className={descCls}>Count window-blur and mouse-leave events. 0 = log only.</p></div>
+                            <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mouseFocusLossLimit} onChange={e => { const v = e.target.value; setMouseFocusLossLimit(v === "" ? "" : Number(v)); markDirty(); }} className={inputCls} /></div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                            <div className="sm:max-w-md"><label className={labelCls}>Log keypress activity</label><p className={descCls}>Throttled keystroke counter (max 1 event / 250 ms). Off by default.</p></div>
+                            <div className="sm:max-w-[400px] w-full flex justify-end">
+                              <Switch checked={keypressLogEnabled} onCheckedChange={(val) => { setKeypressLogEnabled(val); markDirty(); }} />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

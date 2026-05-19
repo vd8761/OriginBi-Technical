@@ -108,6 +108,30 @@ export class TechAssessment {
     @Column({ name: "enabled_question_types", type: "jsonb", nullable: true })
     enabledQuestionTypes!: any;
 
+    @Column({ name: "proctoring_require_fullscreen", type: "boolean", default: false })
+    proctoringRequireFullscreen!: boolean;
+
+    @Column({ name: "fullscreen_exit_limit", type: "int", default: 0 })
+    fullscreenExitLimit!: number;
+
+    @Column({ name: "proctoring_block_devtools", type: "boolean", default: true })
+    proctoringBlockDevtools!: boolean;
+
+    @Column({ name: "devtools_open_limit", type: "int", default: 0 })
+    devtoolsOpenLimit!: number;
+
+    @Column({ name: "mouse_focus_loss_limit", type: "int", default: 0 })
+    mouseFocusLossLimit!: number;
+
+    @Column({ name: "keypress_log_enabled", type: "boolean", default: false })
+    keypressLogEnabled!: boolean;
+
+    @Column({ name: "require_camera_mic", type: "boolean", default: false })
+    requireCameraMic!: boolean;
+
+    @Column({ name: "live_proctoring_enabled", type: "boolean", default: true })
+    liveProctoringEnabled!: boolean;
+
     @ManyToOne(() => UserEntity, { nullable: false })
     @JoinColumn({ name: "created_by" })
     createdBy!: UserEntity;

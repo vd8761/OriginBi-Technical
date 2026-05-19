@@ -39,12 +39,12 @@ interface ModuleTile {
 }
 
 const moduleConfig: Record<string, { icon: any; accentVar: string; accentBgVar: string; href: string }> = {
-  "mcq.aptitude": { icon: Brain, accentVar: "--admin-acc-aptitude", accentBgVar: "rgba(30, 211, 106, 0.14)", href: "/admin/questions" },
-  "mcq.verbal": { icon: MessageSquare, accentVar: "--admin-acc-comm", accentBgVar: "rgba(6, 182, 212, 0.16)", href: "/admin/questions" },
-  "mcq.technical": { icon: Target, accentVar: "--admin-acc-role", accentBgVar: "rgba(132, 204, 22, 0.16)", href: "/admin/questions" },
+  "mcq.aptitude": { icon: Brain, accentVar: "--admin-acc-aptitude", accentBgVar: "rgba(30, 211, 106, 0.14)", href: "/admin/question-banks/aptitude" },
+  "mcq.verbal": { icon: MessageSquare, accentVar: "--admin-acc-comm", accentBgVar: "rgba(6, 182, 212, 0.16)", href: "/admin/question-banks/communication" },
+  "mcq.technical": { icon: Target, accentVar: "--admin-acc-role", accentBgVar: "rgba(132, 204, 22, 0.16)", href: "/admin/question-banks/role" },
   "assessment.coding": { icon: Code2, accentVar: "--admin-acc-coding", accentBgVar: "rgba(255, 183, 3, 0.18)", href: "/admin/coding" },
-  "essay": { icon: Banknote, accentVar: "--admin-acc-mnc", accentBgVar: "rgba(139, 109, 240, 0.16)", href: "/admin/questions" },
-  "default": { icon: Database, accentVar: "--admin-acc-role", accentBgVar: "rgba(132, 204, 22, 0.16)", href: "/admin/questions" },
+  "essay": { icon: Banknote, accentVar: "--admin-acc-mnc", accentBgVar: "rgba(139, 109, 240, 0.16)", href: "/admin/question-banks/mnc" },
+  "default": { icon: Database, accentVar: "--admin-acc-role", accentBgVar: "rgba(132, 204, 22, 0.16)", href: "/admin/question-banks" },
 };
 
 const moduleTiles: ModuleTile[] = [

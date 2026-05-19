@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Archive,
-  Check,
+  ArchiveRestore,
   Code2,
   Download,
-  FileText,
   Plus,
   Search,
   Upload,
@@ -20,18 +19,20 @@ import {
   EmptyState,
   ErrorState,
   SegmentedToggle,
-  StatusDot,
 } from "@/components/admin/ui";
+import CustomSelect from "@/components/ui/CustomSelect";
+import { Switch } from "@/components/ui/Switch";
 import {
-  archiveAdminQuestion,
   listAdminQuestions,
+  setAdminQuestionArchived,
+  updateAdminQuestion,
   type AdminQuestion,
 } from "@/lib/api";
 
-const topics = ["Arrays", "Strings", "Trees", "Graphs", "Dynamic Programming", "Greedy"];
+const PAGE_SIZE = 25;
 
 function difficultyLabel(n: number) {
-  return ["-", "Easy", "Easy+", "Medium", "Hard", "Hard+"][n] ?? "?";
+  return ["—", "Easy", "Easy+", "Medium", "Hard", "Hard+"][n] ?? "?";
 }
 
 function difficultyTone(n: number): "green" | "amber" | "red" {
@@ -45,14 +46,35 @@ function getBodyText(q: AdminQuestion, key: string, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
+function getBodyArray(q: AdminQuestion, key: string): string[] {
+  const value = q.body?.[key];
+  return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
+}
+
+function getQuestionMode(q: AdminQuestion): "trial" | "main" {
+  return getBodyText(q, "mode", "main") === "trial" ? "trial" : "main";
+}
+
+function downloadBlob(filename: string, contents: string, mime: string) {
+  const blob = new Blob([contents], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function CodingListInner() {
   useRegisterAdminPage({
     eyebrow: "Question Banks",
     title: "Coding Question Bank",
-    subtitle: "Manage problems, judge limits, and test cases for the assessment.coding plugin.",
+    subtitle: "List of problems with inline status and pool toggles, filterable by language, topic, and difficulty.",
     breadcrumb: [
       { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/coding" },
+      { label: "Question Banks", href: "/admin/question-banks" },
       { label: "Coding" },
     ],
   });
@@ -60,49 +82,138 @@ function CodingListInner() {
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [search, setSearch] = useState("");
-  const [difficulty, setDifficulty] = useState<number>(0);
+  const [difficulty, setDifficulty] = useState<string>("0");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [mode, setMode] = useState<"trial" | "main">("main");
   const [topic, setTopic] = useState("all");
+  const [language, setLanguage] = useState("all");
+  // Pagination is reset whenever any filter changes by including the filter
+  // signature in a memoized key; the rendered page is `Math.min(page, totalPages)`
+  // so a filter change naturally clamps without an extra effect.
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [pendingToggle, setPendingToggle] = useState<Record<string, boolean>>({});
 
-  const reload = React.useCallback(() => {
+  const reload = useCallback(() => {
     setLoading(true);
     setError(null);
     listAdminQuestions({
       pluginSlug: "assessment.coding",
       search: search.trim() || undefined,
-      difficulty: difficulty || undefined,
+      difficulty: Number(difficulty) || undefined,
       includeArchived,
     })
       .then((data) => setQuestions(data.questions))
       .catch((err) => setError(err))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includeArchived]);
+  }, [includeArchived, search, difficulty]);
 
+  // Initial + filter-driven reload. Reload talks to the server, so it must
+  // run from an effect — the rule-of-thumb exception to set-state-in-effect.
+   
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     reload();
   }, [reload]);
 
+  const allTopics = useMemo(() => {
+    const set = new Set<string>();
+    questions.forEach((q) => {
+      const t = getBodyText(q, "category", "") || getBodyText(q, "section", "");
+      if (t) set.add(t);
+    });
+    return Array.from(set).sort();
+  }, [questions]);
+
+  const allLanguages = useMemo(() => {
+    const set = new Set<string>();
+    questions.forEach((q) => {
+      getBodyArray(q, "allowedLanguages").forEach((l) =>
+        set.add(l.replace(/^language\./, "")),
+      );
+    });
+    return Array.from(set).sort();
+  }, [questions]);
+
   const filtered = useMemo(() => {
     return questions.filter((q) => {
-      if (topic === "all") return true;
-      return getBodyText(q, "category", "").toLowerCase() === topic.toLowerCase();
+      if (mode !== getQuestionMode(q)) return false;
+      if (topic !== "all") {
+        const cat = (getBodyText(q, "category", "") || getBodyText(q, "section", "")).toLowerCase();
+        if (cat !== topic.toLowerCase()) return false;
+      }
+      if (language !== "all") {
+        const langs = getBodyArray(q, "allowedLanguages").map((l) => l.replace(/^language\./, ""));
+        if (!langs.includes(language)) return false;
+      }
+      return true;
     });
-  }, [questions, topic]);
+  }, [questions, topic, language, mode]);
 
-  const onArchive = async (id: string) => {
-    if (!confirm("Archive this question? It will be hidden from new exams but in-flight attempts continue.")) {
-      return;
-    }
+  // Derive the effective page during render — when filters shrink the list
+  // below the current page, clamp instead of triggering a setState effect.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages);
+  const pageStart = (effectivePage - 1) * PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  const toggleArchived = async (q: AdminQuestion, nextActive: boolean) => {
+    setPendingToggle((p) => ({ ...p, [q.id]: true }));
+    const archived = !nextActive;
+    // Optimistic update
+    setQuestions((curr) => curr.map((x) => (x.id === q.id ? { ...x, isArchived: archived } : x)));
     try {
-      await archiveAdminQuestion(id);
-      reload();
+      await setAdminQuestionArchived(q.id, archived);
     } catch (err) {
+      setQuestions((curr) => curr.map((x) => (x.id === q.id ? { ...x, isArchived: !archived } : x)));
       setError(err);
+    } finally {
+      setPendingToggle((p) => {
+        const next = { ...p };
+        delete next[q.id];
+        return next;
+      });
     }
+  };
+
+  const toggleMode = async (q: AdminQuestion, nextSample: boolean) => {
+    setPendingToggle((p) => ({ ...p, [q.id + ":mode"]: true }));
+    const newMode = nextSample ? "trial" : "main";
+    const optimistic: AdminQuestion = { ...q, body: { ...q.body, mode: newMode } };
+    setQuestions((curr) => curr.map((x) => (x.id === q.id ? optimistic : x)));
+    try {
+      await updateAdminQuestion(q.id, {
+        title: q.title,
+        body: { ...q.body, mode: newMode } as Record<string, unknown>,
+        max_score: q.maxScore,
+        is_negative_marked: q.isNegativeMarked,
+        negative_score: q.negativeScore,
+        difficulty: q.difficulty,
+      });
+    } catch (err) {
+      setQuestions((curr) => curr.map((x) => (x.id === q.id ? q : x)));
+      setError(err);
+    } finally {
+      setPendingToggle((p) => {
+        const next = { ...p };
+        delete next[q.id + ":mode"];
+        return next;
+      });
+    }
+  };
+
+  const onExport = () => {
+    const exportSet = filtered.map((q) => ({
+      title: q.title,
+      plugin_slug: q.pluginSlug,
+      body: q.body,
+      max_score: q.maxScore,
+      is_negative_marked: q.isNegativeMarked,
+      negative_score: q.negativeScore,
+      difficulty: q.difficulty,
+    }));
+    const payload = JSON.stringify({ questions: exportSet }, null, 2);
+    const today = new Date().toISOString().slice(0, 10);
+    downloadBlob(`coding-questions-${today}.json`, payload, "application/json");
   };
 
   return (
@@ -112,145 +223,94 @@ function CodingListInner() {
           <p className="admin-page-eyebrow">Content / Question Banks</p>
           <h2 className="admin-page-title">Coding Question Bank</h2>
           <p className="admin-page-copy">
-            Manage coding problems from the redesigned admin surface. The data stays backed by the
-            assessment.coding plugin, versioned questions, and test-case APIs.
+            Backed by the assessment.coding plugin. Toggle pool membership and visibility inline; use Export to snapshot the filtered set.
           </p>
         </div>
         <div className="admin-row">
           <Link href="/admin/coding/bulk-import" className="admin-btn admin-btn-secondary">
             <Upload size={14} /> Bulk Import
           </Link>
+          <button type="button" onClick={onExport} className="admin-btn admin-btn-secondary" disabled={filtered.length === 0}>
+            <Download size={14} /> Export
+          </button>
           <Link href="/admin/coding/new" className="admin-btn admin-btn-primary">
             <Plus size={14} /> New Problem
           </Link>
         </div>
       </div>
 
-      <section className="admin-grid-3">
-        <Card className="admin-module-card" pad={false}>
-          <div className="admin-control-row">
-            <span
-              className="admin-module-icon"
-              style={{ background: "var(--admin-amber-soft)", color: "var(--admin-amber)" }}
-            >
-              <Code2 size={20} />
-            </span>
-            <Badge tone="amber">Primary</Badge>
-          </div>
-          <div>
-            <h3 className="admin-card-title">Coding Problems</h3>
-            <p className="admin-card-subtitle">
-              Starter code, limits, judge options, and test cases.
-            </p>
-          </div>
-          <div className="admin-row">
-            <Badge tone="neutral">Trial 12</Badge>
-            <Badge tone="neutral">Main {questions.length}</Badge>
-          </div>
-        </Card>
-        <Card className="admin-module-card" pad={false}>
-          <div className="admin-control-row">
-            <span
-              className="admin-module-icon"
-              style={{ background: "var(--admin-green-soft)", color: "var(--admin-green)" }}
-            >
-              <FileText size={20} />
-            </span>
-            <Badge tone="green">Versioned</Badge>
-          </div>
-          <div>
-            <h3 className="admin-card-title">Question Snapshots</h3>
-            <p className="admin-card-subtitle">
-              Published attempts keep their original frozen version.
-            </p>
-          </div>
-          <div className="admin-row">
-            <Badge tone="neutral">Draft safe</Badge>
-            <Badge tone="neutral">Immutable attempts</Badge>
-          </div>
-        </Card>
-        <Card className="admin-module-card" pad={false}>
-          <div className="admin-control-row">
-            <span
-              className="admin-module-icon"
-              style={{ background: "var(--admin-blue-soft)", color: "var(--admin-blue)" }}
-            >
-              <Archive size={20} />
-            </span>
-            <Badge tone="blue">Archive</Badge>
-          </div>
-          <div>
-            <h3 className="admin-card-title">Lifecycle Controls</h3>
-            <p className="admin-card-subtitle">
-              Hide questions without breaking in-flight assessments.
-            </p>
-          </div>
-          <label className="admin-row" style={{ fontSize: 12, color: "var(--admin-fg-3)", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(event) => setIncludeArchived(event.target.checked)}
-              style={{ accentColor: "var(--admin-green)" }}
+      <Card>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            reload();
+          }}
+          className="admin-control-row"
+          style={{ flexWrap: "wrap", gap: 12 }}
+        >
+          <div className="admin-row" style={{ flexWrap: "wrap", gap: 12, alignItems: "flex-end", flex: 1 }}>
+            <SegmentedToggle
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: "trial", label: "Trial / Sample" },
+                { value: "main", label: "Main" },
+              ]}
             />
-            Show archived
-          </label>
-        </Card>
-      </section>
-
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          reload();
-        }}
-        className="admin-control-row"
-      >
-        <div className="admin-row" style={{ flexWrap: "wrap", gap: 10 }}>
-          <SegmentedToggle
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "trial", label: "Trial" },
-              { value: "main", label: "Main" },
-            ]}
-          />
-          <select className="admin-select" value={topic} onChange={(event) => setTopic(event.target.value)}>
-            <option value="all">All topics</option>
-            {topics.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <select
-            className="admin-select"
-            value={difficulty}
-            onChange={(event) => setDifficulty(Number(event.target.value))}
-          >
-            <option value={0}>Any difficulty</option>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <option key={value} value={value}>
-                {difficultyLabel(value)}
-              </option>
-            ))}
-          </select>
-          <label className="admin-search" style={{ width: 280 }}>
-            <Search size={14} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search problems..."
-            />
-          </label>
-        </div>
-        <div className="admin-row">
+            <div style={{ width: 180 }}>
+              <CustomSelect
+                label="Language"
+                value={language}
+                onChange={setLanguage}
+                options={[{ value: "all", label: "All languages" }, ...allLanguages.map((l) => ({ value: l, label: l }))]}
+              />
+            </div>
+            <div style={{ width: 180 }}>
+              <CustomSelect
+                label="Topic"
+                value={topic}
+                onChange={setTopic}
+                options={[{ value: "all", label: "All topics" }, ...allTopics.map((t) => ({ value: t, label: t }))]}
+              />
+            </div>
+            <div style={{ width: 160 }}>
+              <CustomSelect
+                label="Difficulty"
+                value={difficulty}
+                onChange={setDifficulty}
+                options={[
+                  { value: "0", label: "Any difficulty" },
+                  { value: "1", label: "Easy" },
+                  { value: "2", label: "Easy+" },
+                  { value: "3", label: "Medium" },
+                  { value: "4", label: "Hard" },
+                  { value: "5", label: "Hard+" },
+                ]}
+              />
+            </div>
+            <label className="admin-search" style={{ width: 280 }}>
+              <Search size={14} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search problems…"
+              />
+            </label>
+            <label className="admin-row" style={{ fontSize: 12, color: "var(--admin-fg-3)", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+                style={{ accentColor: "var(--admin-green)" }}
+              />
+              Show archived
+            </label>
+          </div>
           <button type="submit" className="admin-btn admin-btn-secondary">
             <Search size={14} /> Search
           </button>
-          <button type="button" className="admin-btn admin-btn-secondary">
-            <Download size={14} /> Export
-          </button>
-        </div>
-      </form>
+        </form>
+      </Card>
 
       {error !== null ? (
         <ErrorState
@@ -262,103 +322,117 @@ function CodingListInner() {
       ) : null}
 
       {!error && (
-        <section className="admin-grid-2">
-          {filtered.map((q) => {
-            const category = getBodyText(q, "category", "Coding");
-            const description = getBodyText(
-              q,
-              "description",
-              "No description has been added for this problem yet.",
-            );
-            const tags = Array.isArray(q.body?.tags)
-              ? (q.body.tags as string[]).slice(0, 4)
-              : [];
-            return (
-              <article key={q.id} className="admin-problem-card">
-                <div className="admin-control-row">
-                  <div className="admin-row">
-                    <span className="admin-mono" style={{ fontSize: 11.5, color: "var(--admin-fg-3)" }}>
-                      {q.id.slice(0, 8)}
-                    </span>
-                    <Badge tone={q.isArchived ? "neutral" : "green"} dot>
-                      {q.isArchived ? "archived" : "active"}
-                    </Badge>
-                  </div>
-                  <Badge tone={difficultyTone(q.difficulty)}>{difficultyLabel(q.difficulty)}</Badge>
-                </div>
-
-                <div>
-                  <Link
-                    href={`/admin/coding/${q.id}`}
-                    style={{ fontSize: 16, fontWeight: 800, color: "var(--admin-fg)", textDecoration: "none" }}
-                  >
-                    {q.title}
-                  </Link>
-                  <p
-                    className="admin-card-subtitle"
-                    style={{ lineHeight: 1.55, marginTop: 6 }}
-                  >
-                    {description.replace(/[`*]/g, "").slice(0, 170)}
-                    {description.length > 170 ? "..." : ""}
-                  </p>
-                </div>
-
-                <div className="admin-grid-4" style={{ gap: 8 }}>
-                  {[
-                    { label: "Score", value: q.maxScore },
-                    { label: "Version", value: `v${q.versionNumber}` },
-                    { label: "Topic", value: category },
-                    { label: "Mode", value: mode },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      style={{
-                        padding: "10px 12px",
-                        border: "1px solid var(--admin-border)",
-                        borderRadius: "var(--admin-r-md)",
-                        background: "rgba(255,255,255,0.025)",
-                      }}
-                    >
-                      <p className="admin-stat-label">{stat.label}</p>
-                      <strong style={{ color: "var(--admin-fg)", fontSize: 13 }}>{stat.value}</strong>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="admin-control-row">
-                  <div className="admin-row" style={{ flexWrap: "wrap", gap: 6 }}>
-                    {(tags.length > 0 ? tags : [category]).map((tag) => (
-                      <Badge key={tag} tone="neutral">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="admin-row">
-                    <Link href={`/admin/coding/${q.id}`} className="admin-btn admin-btn-secondary">
-                      Edit
-                    </Link>
-                    {!q.isArchived && (
-                      <button
-                        type="button"
-                        onClick={() => onArchive(q.id)}
-                        className="admin-btn admin-btn-ghost"
-                      >
-                        <Archive size={13} /> Archive
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
+        <Card>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--admin-fg-3)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: 1.2 }}>
+                  <th style={{ padding: "8px 10px" }}>Title</th>
+                  <th style={{ padding: "8px 10px" }}>Topic</th>
+                  <th style={{ padding: "8px 10px" }}>Languages</th>
+                  <th style={{ padding: "8px 10px" }}>Difficulty</th>
+                  <th style={{ padding: "8px 10px" }}>Score</th>
+                  <th style={{ padding: "8px 10px", textAlign: "center" }}>Active</th>
+                  <th style={{ padding: "8px 10px", textAlign: "center" }}>Sample</th>
+                  <th style={{ padding: "8px 10px", textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((q) => {
+                  const cat = getBodyText(q, "category", "") || getBodyText(q, "section", "") || "—";
+                  const langs = getBodyArray(q, "allowedLanguages").map((l) => l.replace(/^language\./, ""));
+                  const active = !q.isArchived;
+                  const sample = getQuestionMode(q) === "trial";
+                  return (
+                    <tr key={q.id} style={{ borderTop: "1px solid var(--admin-border)" }}>
+                      <td style={{ padding: "10px" }}>
+                        <Link href={`/admin/coding/${q.id}`} style={{ color: "var(--admin-fg)", fontWeight: 700, textDecoration: "none" }}>
+                          {q.title}
+                        </Link>
+                        <div className="admin-mono" style={{ fontSize: 10.5, color: "var(--admin-fg-4)" }}>
+                          {q.id.slice(0, 8)} · v{q.versionNumber}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px", color: "var(--admin-fg-2)" }}>{cat}</td>
+                      <td style={{ padding: "10px", color: "var(--admin-fg-2)" }}>
+                        {langs.length === 0 ? <span style={{ color: "var(--admin-fg-4)" }}>any</span> : langs.slice(0, 3).join(", ") + (langs.length > 3 ? `+${langs.length - 3}` : "")}
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <Badge tone={difficultyTone(q.difficulty)}>{difficultyLabel(q.difficulty)}</Badge>
+                      </td>
+                      <td style={{ padding: "10px", color: "var(--admin-fg-2)" }}>{q.maxScore}</td>
+                      <td style={{ padding: "10px", textAlign: "center" }}>
+                        <Switch
+                          checked={active}
+                          disabled={pendingToggle[q.id]}
+                          onCheckedChange={(val) => toggleArchived(q, val)}
+                        />
+                      </td>
+                      <td style={{ padding: "10px", textAlign: "center" }}>
+                        <Switch
+                          checked={sample}
+                          disabled={pendingToggle[q.id + ":mode"]}
+                          onCheckedChange={(val) => toggleMode(q, val)}
+                        />
+                      </td>
+                      <td style={{ padding: "10px", textAlign: "right" }}>
+                        <div className="admin-row" style={{ justifyContent: "flex-end", gap: 6 }}>
+                          <Link href={`/admin/coding/${q.id}`} className="admin-btn admin-btn-secondary">
+                            Edit
+                          </Link>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-ghost"
+                            onClick={() => toggleArchived(q, !active)}
+                            disabled={pendingToggle[q.id]}
+                            title={active ? "Archive" : "Restore"}
+                          >
+                            {active ? <Archive size={13} /> : <ArchiveRestore size={13} />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length > 0 && (
+            <div className="admin-control-row" style={{ marginTop: 12 }}>
+              <span style={{ fontSize: 12, color: "var(--admin-fg-3)" }}>
+                Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <div className="admin-row" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-secondary"
+                  disabled={effectivePage <= 1}
+                  onClick={() => setPage(Math.max(1, effectivePage - 1))}
+                >
+                  Prev
+                </button>
+                <span style={{ fontSize: 12, padding: "0 10px", color: "var(--admin-fg-3)" }}>
+                  Page {effectivePage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-secondary"
+                  disabled={effectivePage >= totalPages}
+                  onClick={() => setPage(Math.min(totalPages, effectivePage + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {!error && !loading && filtered.length === 0 && (
         <EmptyState
           icon={<Code2 size={26} />}
           title="No coding problems found"
-          description="Try adjusting the filters above or create your first redesigned problem."
+          description="Try adjusting the filters above or create your first problem."
           action={
             <Link href="/admin/coding/new" className="admin-btn admin-btn-primary">
               <Plus size={14} /> New Problem
@@ -370,17 +444,9 @@ function CodingListInner() {
       {loading && !error && (
         <div className="admin-grid-2">
           {[0, 1].map((i) => (
-            <div key={i} className="admin-skeleton" style={{ height: 200 }} />
+            <div key={i} className="admin-skeleton" style={{ height: 120 }} />
           ))}
         </div>
-      )}
-
-      {!loading && !error && questions.length > 0 && (
-        <p style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--admin-fg-3)", fontSize: 12 }}>
-          <Check size={13} color="var(--admin-green)" />
-          Showing {filtered.length} of {questions.length} problems · {mode} pool
-          <StatusDot tone="green" />
-        </p>
       )}
     </div>
   );
