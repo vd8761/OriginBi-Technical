@@ -665,7 +665,33 @@ func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, 
 		ORDER BY CASE WHEN cognito_sub = $1 THEN 0 ELSE 1 END, id
 		LIMIT 1
 	`, claims.Sub, identity).Scan(&user.ID, &user.Email, &role)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Older registrations created users with cognito_sub = '' so we
+		// can't match by sub yet. The Cognito access token in our hand is
+		// proof of identity — call Cognito GetUser (it uses the access
+		// token itself as the credential, no IAM keys required) to fetch
+		// the real email, then resolve the local user by email and
+		// backfill the sub so the next request takes the fast path.
+		email, fetchErr := s.cognito.FetchUserEmail(ctx, parts[1])
+		if fetchErr != nil {
+			s.logger.Warn("auth: GetUser backfill failed", "path", r.URL.Path, "sub", claims.Sub, "err", fetchErr)
+			return userDTO{}, time.Time{}, false
+		}
+		err = s.pool.QueryRow(dbCtx, `
+			SELECT id, COALESCE(email, ''), role
+			FROM users
+			WHERE lower(COALESCE(email, '')) = lower($1)
+			  AND COALESCE(cognito_sub, '') = ''
+			  AND is_active = TRUE
+			  AND is_blocked = FALSE
+			LIMIT 1
+		`, email).Scan(&user.ID, &user.Email, &role)
+		if err != nil {
+			s.logger.Warn("auth: email-fallback lookup failed", "path", r.URL.Path, "sub", claims.Sub, "email", email, "err", err)
+			return userDTO{}, time.Time{}, false
+		}
+		s.logger.Info("auth: backfilling cognito_sub via GetUser", "user_id", user.ID, "email", email)
+	} else if err != nil {
 		s.logger.Warn("auth: user lookup failed", "path", r.URL.Path, "sub", claims.Sub, "identity", identity, "err", err)
 		return userDTO{}, time.Time{}, false
 	}
