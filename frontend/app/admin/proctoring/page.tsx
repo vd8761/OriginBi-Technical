@@ -11,6 +11,7 @@ import {
   MousePointerClick,
   PauseCircle,
   ShieldAlert,
+  type LucideIcon,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
@@ -23,7 +24,7 @@ import {
 const POLL_INTERVAL_MS = 5_000;
 
 // Keep these short and admin-friendly; they're the column headers in the row.
-const COUNTER_DEFS: { key: string; label: string; icon: any }[] = [
+const COUNTER_DEFS: { key: string; label: string; icon: LucideIcon }[] = [
   { key: "proctoring.tab.switched", label: "Tab", icon: Eye },
   { key: "proctoring.copy.blocked", label: "Copy", icon: ShieldAlert },
   { key: "proctoring.fullscreen.exit", label: "Fullscreen", icon: Maximize },

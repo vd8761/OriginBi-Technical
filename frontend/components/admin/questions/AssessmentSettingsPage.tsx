@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Search, ListChecks, Code } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
 import {
   AssessmentType,
@@ -16,9 +16,6 @@ import {
   QuestionKindEnabledMap,
   serializeQuestionKindEnabledMap,
 } from "./types";
-import { AptitudeIcon, CommunicationIcon, MNCIcon, RoleIcon, ArrowRightWithoutLineIcon } from "@/components/icons";
-import Logo from "@/components/ui/Logo";
-import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/Switch";
@@ -32,7 +29,6 @@ interface AssessmentSettingsPageProps {
 }
 
 export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSettingsPageProps = {}) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const moduleParam = (moduleOverride ?? (searchParams.get("module") as AssessmentType)) as AssessmentType;
   

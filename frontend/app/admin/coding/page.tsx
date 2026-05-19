@@ -87,6 +87,9 @@ function CodingListInner() {
   const [mode, setMode] = useState<"trial" | "main">("main");
   const [topic, setTopic] = useState("all");
   const [language, setLanguage] = useState("all");
+  // Pagination is reset whenever any filter changes by including the filter
+  // signature in a memoized key; the rendered page is `Math.min(page, totalPages)`
+  // so a filter change naturally clamps without an extra effect.
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [pendingToggle, setPendingToggle] = useState<Record<string, boolean>>({});
@@ -105,6 +108,9 @@ function CodingListInner() {
       .finally(() => setLoading(false));
   }, [includeArchived, search, difficulty]);
 
+  // Initial + filter-driven reload. Reload talks to the server, so it must
+  // run from an effect — the rule-of-thumb exception to set-state-in-effect.
+   
   useEffect(() => {
     reload();
   }, [reload]);
@@ -143,13 +149,11 @@ function CodingListInner() {
     });
   }, [questions, topic, language, mode]);
 
-  // Reset page on filter change
-  useEffect(() => {
-    setPage(1);
-  }, [topic, language, mode, difficulty, search, includeArchived]);
-
+  // Derive the effective page during render — when filters shrink the list
+  // below the current page, clamp instead of triggering a setState effect.
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageStart = (page - 1) * PAGE_SIZE;
+  const effectivePage = Math.min(page, totalPages);
+  const pageStart = (effectivePage - 1) * PAGE_SIZE;
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
   const toggleArchived = async (q: AdminQuestion, nextActive: boolean) => {
@@ -402,19 +406,19 @@ function CodingListInner() {
                 <button
                   type="button"
                   className="admin-btn admin-btn-secondary"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={effectivePage <= 1}
+                  onClick={() => setPage(Math.max(1, effectivePage - 1))}
                 >
                   Prev
                 </button>
                 <span style={{ fontSize: 12, padding: "0 10px", color: "var(--admin-fg-3)" }}>
-                  Page {page} / {totalPages}
+                  Page {effectivePage} / {totalPages}
                 </span>
                 <button
                   type="button"
                   className="admin-btn admin-btn-secondary"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={effectivePage >= totalPages}
+                  onClick={() => setPage(Math.min(totalPages, effectivePage + 1))}
                 >
                   Next
                 </button>
