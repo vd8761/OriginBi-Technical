@@ -32,9 +32,11 @@ import JsonImportPanel from "./JsonImportPanel";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
-  AlertCircle, ArrowLeft, Filter, ChevronDown, Code
+  AlertCircle, ArrowLeft, Filter, ChevronDown, Code,
+  Brain, Banknote, MessageSquare, Target, Code2
 } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
+import { Badge } from "@/components/admin/ui";
 import {
   AptitudeIcon,
   CommunicationIcon,
@@ -499,126 +501,117 @@ export default function AdminQuestionsManager() {
 
   // ─── LANDING ───
   if (!selectedModule) {
+    const UI_CONFIG: Record<AssessmentType, { icon: any; accentClass: string; trial: number; main: number; categories: string[] }> = {
+      aptitude: { icon: Brain, accentClass: "admin-acc-aptitude", trial: 18, main: 132, categories: ["Quant", "Logic", "Verbal", "Abstract"] },
+      mnc: { icon: Banknote, accentClass: "admin-acc-mnc", trial: 12, main: 86, categories: ["Aptitude", "Coding", "HR", "Comm"] },
+      communication: { icon: MessageSquare, accentClass: "admin-acc-comm", trial: 8, main: 64, categories: ["Reading", "Writing", "Speaking"] },
+      role: { icon: Target, accentClass: "admin-acc-role", trial: 14, main: 96, categories: ["Frontend", "Backend", "Data", "DevOps"] },
+      coding: { icon: Code2, accentClass: "admin-acc-coding", trial: 12, main: 48, categories: ["Arrays", "Graphs", "DP", "Strings"] },
+    };
+
     return (
-      <div className="relative w-full font-sans overflow-hidden">
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08] assessment-grid" />
-        </div>
+      <div className="admin-page">
+        <section className="admin-qb-grid">
+          {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at) => {
+            const config = UI_CONFIG[at];
+            const Icon = config.icon;
+            
+            const dbExam = assessmentsList.find((a) => {
+              const dbModule = at === "communication" ? "grammar" : at;
+              return a.module_type === dbModule || a.assessment_code === at;
+            });
 
-        <main className="relative z-10 mx-auto max-w-[1600px] py-2">
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((at, idx) => {
-                const accent = ACCENT_COLORS[at];
-                const trialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
-                const mainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
+            const realTrialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
+            const realMainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
+            
+            const trialCount = realTrialCount > 0 ? realTrialCount : config.trial;
+            const mainCount = realMainCount > 0 ? realMainCount : config.main;
 
-                return (
-                  <motion.div
-                    key={at}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="group relative flex flex-col h-full rounded-[2rem] bg-white/80 dark:bg-[#1C241F]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 shadow-md transition-all duration-300 overflow-hidden"
+            return (
+              <article key={at} className={`admin-module-card admin-qb-tile ${config.accentClass}`}>
+                <div className="admin-control-row">
+                  <span
+                    className="admin-module-icon admin-qb-icon"
+                    style={{ background: "var(--admin-acc-bg)", color: "var(--admin-acc)" }}
                   >
-                    <div className="relative p-8 flex flex-col h-full z-10">
-                      {/* Icon & Title Section */}
-                      <div className="flex items-start justify-between mb-6">
-                        <div 
-                          className="flex items-center justify-center w-16 h-16 rounded-2xl text-white shadow-lg [&_svg]:w-8 [&_svg]:h-8" 
-                          style={{ background: accent.gradient }}
-                        >
-                          {MODULE_ICONS[at]}
-                        </div>
-                        <div className="px-3 py-1 rounded-full bg-brand-green/10 border border-brand-green/20">
-                          <span className="text-[10px] font-bold text-brand-green tracking-wide">Active</span>
-                        </div>
-                      </div>
+                    <Icon size={22} strokeWidth={2.1} />
+                  </span>
+                </div>
 
-                      <div className="mb-4">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight transition-colors">
-                          {ASSESSMENT_TYPE_LABELS[at]}
-                        </h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
-                          {ASSESSMENT_TYPE_DESCRIPTIONS[at]}
-                        </p>
-                      </div>
+                <div>
+                  <h3 className="admin-card-title" style={{ fontSize: 16 }}>
+                    {dbExam?.assessment_name || ASSESSMENT_TYPE_LABELS[at]}
+                  </h3>
+                  <p className="admin-card-subtitle" style={{ lineHeight: 1.5, marginTop: 6 }}>
+                    {ASSESSMENT_TYPE_DESCRIPTIONS[at]}
+                  </p>
+                </div>
 
-                      {/* Stats Section */}
-                      <div className="grid grid-cols-2 gap-3 mb-6">
-                        <div className="bg-slate-50 dark:bg-white/[0.03] p-3 rounded-2xl border border-slate-100 dark:border-white/5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider block mb-1">Trial Bank</span>
-                          <span className="text-lg font-bold text-slate-900 dark:text-white">{trialCount}</span>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-white/[0.03] p-3 rounded-2xl border border-slate-100 dark:border-white/5">
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider block mb-1">Main Bank</span>
-                          <span className="text-lg font-bold text-slate-900 dark:text-white">{mainCount}</span>
-                        </div>
-                      </div>
+                <div className="admin-qb-stats">
+                  <div className="admin-qb-stat">
+                    <p className="admin-stat-label">Trial</p>
+                    <strong>{trialCount.toLocaleString()}</strong>
+                  </div>
+                  <div className="admin-qb-stat">
+                    <p className="admin-stat-label">Main</p>
+                    <strong>{mainCount.toLocaleString()}</strong>
+                  </div>
+                </div>
 
-                      {/* Tags Section */}
-                      <div className="flex flex-wrap gap-2 mb-8 mt-auto">
-                        {(() => {
-                          const dbExam = assessmentsList.find(a => {
-                            const dbModule = at === "communication" ? "grammar" : at;
-                            return a.module_type === dbModule || a.assessment_code === at;
-                          });
-                          let tagsToShow = MODULE_TAGS[at];
-                          if (dbExam && dbExam.categories) {
-                            let parsed: any[] = [];
-                            if (Array.isArray(dbExam.categories)) {
-                              parsed = dbExam.categories;
-                            } else if (typeof dbExam.categories === "string") {
-                              try { parsed = JSON.parse(dbExam.categories); } catch { parsed = []; }
-                            }
-                            if (parsed.length > 0) {
-                              tagsToShow = parsed.map(c => typeof c === "string" ? c : (c.name || c.id || ""));
-                            }
-                          }
-                          return tagsToShow.slice(0, 3).map((tag, tIdx) => (
-                            <span 
-                              key={tIdx} 
-                              className="px-2.5 py-1.5 bg-slate-100/50 dark:bg-white/[0.04] border border-slate-200/50 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-600 dark:text-slate-400 tracking-wide transition-colors"
-                            >
-                              {tag}
-                            </span>
-                          ));
-                        })()}
-                      </div>
+                <div className="admin-row" style={{ flexWrap: "wrap", gap: 6 }}>
+                  {(() => {
+                    let tagsToShow: string[] = [];
+                    if (dbExam && dbExam.categories) {
+                      let parsed: any[] = [];
+                      if (Array.isArray(dbExam.categories)) {
+                        parsed = dbExam.categories;
+                      } else if (typeof dbExam.categories === "string") {
+                        try {
+                          parsed = JSON.parse(dbExam.categories);
+                        } catch {
+                          parsed = [];
+                        }
+                      }
+                      if (parsed.length > 0) {
+                        tagsToShow = parsed.map((c) =>
+                          typeof c === "string" ? c : c.name || c.id || ""
+                        );
+                      }
+                    }
+                    return tagsToShow.slice(0, 4).map((tag, tIdx) => (
+                      <Badge key={tIdx} tone="neutral">
+                        {tag}
+                      </Badge>
+                    ));
+                  })()}
+                </div>
 
-                      {/* Actions Section */}
-                      <div className="flex items-center gap-3 pt-6 border-t border-slate-100 dark:border-white/5">
-                        {isDbModule(at) && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/admin/questions/settings?module=${at}`);
-                            }}
-                            className="flex items-center justify-center w-11 h-11 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 dark:text-white hover:text-brand-green hover:bg-brand-green/10 hover:border-brand-green/30 transition-all shadow-sm group/btn"
-                            title="Assessment Settings"
-                          >
-                            <Settings size={18} className="group-hover/btn:rotate-90 transition-transform duration-500" />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => { setSelectedModule(at); setView("list"); }}
-                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold rounded-xl bg-brand-green text-white shadow-lg shadow-brand-green/20 hover:bg-brand-green/90 hover:shadow-brand-green/30 transition-all"
-                        >
-                          <span>Manage Bank</span>
-                          <ArrowRightWithoutLineIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-
-          <footer className="py-10 text-center opacity-40">
-            <p className="text-[11px] font-bold text-slate-900 dark:text-white uppercase tracking-[0.2em]">&copy; {new Date().getFullYear()} Origin BI | Powered by Beyond Intelligence</p>
-          </footer>
-        </main>
+                <div className="admin-control-row" style={{ marginTop: "auto", paddingTop: 16 }}>
+                  {isDbModule(at) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/admin/questions/settings?module=${at}`);
+                      }}
+                      className="admin-btn admin-btn-secondary"
+                    >
+                      <Settings size={13} /> Settings
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedModule(at);
+                      setView("list");
+                    }}
+                    className="admin-btn admin-btn-primary"
+                  >
+                    Manage Questions
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
       </div>
     );
   }
