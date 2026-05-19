@@ -43,8 +43,8 @@ const baseTiles: Omit<ModuleTile, "main">[] = [
     accentClass: "admin-acc-aptitude",
     trial: 18,
     categories: ["Quant", "Logic", "Verbal", "Abstract"],
-    manageHref: "/admin/questions?pool=aptitude",
-    settingsHref: "/admin/settings?tab=scoring",
+    manageHref: "/admin/question-banks/aptitude",
+    settingsHref: "/admin/question-banks/aptitude/settings",
   },
   {
     slug: "mnc",
@@ -54,8 +54,8 @@ const baseTiles: Omit<ModuleTile, "main">[] = [
     accentClass: "admin-acc-mnc",
     trial: 12,
     categories: ["Aptitude", "Coding", "HR", "Comm"],
-    manageHref: "/admin/questions?pool=mnc",
-    settingsHref: "/admin/settings?tab=scoring",
+    manageHref: "/admin/question-banks/mnc",
+    settingsHref: "/admin/question-banks/mnc/settings",
   },
   {
     slug: "comm",
@@ -65,8 +65,8 @@ const baseTiles: Omit<ModuleTile, "main">[] = [
     accentClass: "admin-acc-comm",
     trial: 8,
     categories: ["Reading", "Writing", "Speaking"],
-    manageHref: "/admin/questions?pool=comm",
-    settingsHref: "/admin/settings?tab=scoring",
+    manageHref: "/admin/question-banks/communication",
+    settingsHref: "/admin/question-banks/communication/settings",
   },
   {
     slug: "role",
@@ -76,8 +76,8 @@ const baseTiles: Omit<ModuleTile, "main">[] = [
     accentClass: "admin-acc-role",
     trial: 14,
     categories: ["Frontend", "Backend", "Data", "DevOps"],
-    manageHref: "/admin/questions?pool=role",
-    settingsHref: "/admin/settings?tab=scoring",
+    manageHref: "/admin/question-banks/role",
+    settingsHref: "/admin/question-banks/role/settings",
   },
   {
     slug: "coding",
@@ -88,7 +88,7 @@ const baseTiles: Omit<ModuleTile, "main">[] = [
     trial: 12,
     categories: ["Arrays", "Graphs", "DP", "Strings"],
     manageHref: "/admin/coding",
-    settingsHref: "/admin/settings?tab=scoring",
+    settingsHref: "/admin/question-banks/coding/settings",
     isNew: true,
   },
 ];

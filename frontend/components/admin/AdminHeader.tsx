@@ -19,7 +19,7 @@ const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin/exam-packages": { title: "Exam Packages", section: "Assessments" },
   "/admin/plugins": { title: "Plugin Registry", section: "System" },
   "/admin/plugins/languages": { title: "Language Plugins", section: "System" },
-  "/admin/questions": { title: "MCQ Authoring", section: "Question Banks" },
+  "/admin/question-banks": { title: "Question Banks", section: "Content" },
   "/admin/users": { title: "User Management", section: "Workspace" },
   "/admin/proctoring": { title: "Proctoring Live Monitor", section: "System" },
   "/admin/settings": { title: "Exam Settings", section: "System" },

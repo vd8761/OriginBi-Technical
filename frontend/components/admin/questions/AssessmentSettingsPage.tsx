@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
@@ -26,10 +27,14 @@ type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" |
 
 // ... (Removed ProperToggle as it's replaced by the new Switch component)
 
-export default function AssessmentSettingsPage() {
+interface AssessmentSettingsPageProps {
+  moduleOverride?: AssessmentType;
+}
+
+export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSettingsPageProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const moduleParam = searchParams.get("module") as AssessmentType;
+  const moduleParam = (moduleOverride ?? (searchParams.get("module") as AssessmentType)) as AssessmentType;
   
   const [assessments, setAssessments] = useState<Record<string, ApiAssessment>>({});
   const [activeModule, setActiveModule] = useState<AssessmentType>(moduleParam || "aptitude");
@@ -119,7 +124,7 @@ export default function AssessmentSettingsPage() {
     eyebrow: "Configuration",
     breadcrumb: [
       { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/questions" },
+      { label: "Question Banks", href: "/admin/question-banks" },
     ],
     hideSearch: true,
   });
@@ -391,6 +396,39 @@ export default function AssessmentSettingsPage() {
                         <div className="sm:max-w-md"><label className={labelCls}>Main Attempts Limit</label><p className={descCls}>Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
                         <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
                       </div>
+
+                      {activeModule === "coding" && (
+                        <div className="pt-10 mt-2 border-t border-slate-100 dark:border-white/[0.04]">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Code className="w-4 h-4 text-brand-green" />
+                            <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Coding-Specific Settings</h3>
+                          </div>
+                          <p className={descCls + " mb-6"}>
+                            Question authoring, language toggles, and Judge0 runtime limits for coding challenges
+                            live in their own surfaces. Use the shortcuts below.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
+                            <Link
+                              href="/admin/coding"
+                              className="block p-5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-brand-green/40 transition-all"
+                            >
+                              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Manage Coding Questions</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Problems, test cases, starter code, and visibility per question.
+                              </p>
+                            </Link>
+                            <Link
+                              href="/admin/plugins/languages"
+                              className="block p-5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-brand-green/40 transition-all"
+                            >
+                              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Languages & Judge0 Limits</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Allowed languages and per-language time and memory caps.
+                              </p>
+                            </Link>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

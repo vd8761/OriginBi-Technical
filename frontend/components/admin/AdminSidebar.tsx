@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Banknote,
   Blocks,
   Code2,
   Database,
@@ -38,7 +37,6 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
       { href: "/admin/question-banks", label: "Question Banks", icon: Database, countKey: "questions" },
       { href: "/admin/exam-packages", label: "Assessments", icon: PackageCheck, countKey: "exam-packages" },
-      { href: "/admin/questions", label: "MCQ Authoring", icon: Banknote },
     ],
   },
   {
