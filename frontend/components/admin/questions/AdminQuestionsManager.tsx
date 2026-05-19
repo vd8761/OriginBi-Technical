@@ -178,9 +178,13 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
 const isDbModule = (m: AssessmentType | null): m is AssessmentType => 
   m === "aptitude" || m === "mnc" || m === "communication" || m === "role" || m === "coding";
 
-export default function AdminQuestionsManager() {
+interface AdminQuestionsManagerProps {
+  initialModule?: AssessmentType | null;
+}
+
+export default function AdminQuestionsManager({ initialModule = null }: AdminQuestionsManagerProps = {}) {
   const router = useRouter();
-  const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(null);
+  const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(initialModule);
   const [mode, setMode] = useState<QuestionMode>("trial");
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
   const [moduleCounts, setModuleCounts] = useState<Record<AssessmentType, { trial: number; main: number }>>({
