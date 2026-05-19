@@ -650,8 +650,12 @@ export class AdminQuestionService {
     const requireCameraMic = data.require_camera_mic;
     const liveProctoringEnabled = data.live_proctoring_enabled;
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      await this.dataSource.query(
+      await queryRunner.query(
         `UPDATE tech_assessments
          SET assessment_name = COALESCE($1, assessment_name),
              total_time_minutes = COALESCE($2, total_time_minutes),
@@ -703,15 +707,37 @@ export class AdminQuestionService {
           liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
         ]
       );
-      
-      const rows = await this.dataSource.query(
+
+      const rows = await queryRunner.query(
         `SELECT * FROM tech_assessments WHERE assessment_id = $1`,
         [id]
       );
+
+      const updatedAssessment = rows[0];
+      if (updatedAssessment?.module_type === 'coding' && amount !== undefined) {
+        const pricingTable = await queryRunner.query(
+          `SELECT to_regclass('public.pricing_items') AS table_name`,
+        );
+        if (pricingTable?.[0]?.table_name) {
+          await queryRunner.query(
+            `UPDATE pricing_items
+             SET price_cents = $1,
+                 currency = COALESCE(currency, 'INR')
+             WHERE item_kind = 'coding_language'
+               AND item_ref LIKE 'coding:%'`,
+            [Math.round(Number(amount) * 100)],
+          );
+        }
+      }
+
+      await queryRunner.commitTransaction();
       return rows[0];
     } catch (error) {
+      await queryRunner.rollbackTransaction();
       this.logger.error(`updateAssessment (${id}) error:`, error);
       throw new InternalServerErrorException('Failed to update assessment configurations');
+    } finally {
+      await queryRunner.release();
     }
   }
   async clearQuestions(module: ModuleType, mode?: string) {

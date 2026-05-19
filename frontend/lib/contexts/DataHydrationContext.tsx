@@ -72,7 +72,9 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
           throw err;
         })
       ]);
-      const nextPurchases = new Set(purchased);
+      const nextPurchases = new Set(
+        purchased.filter((code) => !String(code).startsWith("coding:")),
+      );
       (assignments ?? []).forEach(a => {
         if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
           nextPurchases.add(a.assignmentRef);
