@@ -52,7 +52,7 @@ interface StarterFile {
   lockedRegions?: LockedRegion[];
 }
 
-interface MediaAsset {
+interface AttachmentAsset {
   url: string;
   key?: string;
   fileName?: string;
@@ -77,7 +77,10 @@ interface QuestionBody {
   samples?: { input: string; output: string; explanation?: string }[];
   constraints?: string;
   hints?: { afterFailures: number; text: string }[];
-  media?: MediaAsset[];
+  // The plugin schema reserves `media` for a single embedded video/audio
+  // object, so multi-file question attachments live under `attachments`.
+  // Schema root allows additionalProperties so the backend accepts it.
+  attachments?: AttachmentAsset[];
   judgeConfig?: {
     strictWhitespace?: boolean;
     showDiff?: boolean;
@@ -362,7 +365,7 @@ function ProblemTab({
   const [pane, setPane] = useState<"edit" | "preview">("edit");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const media = state.body.media ?? [];
+  const attachments = state.body.attachments ?? [];
 
   const promptFormat = state.body.promptFormat;
   const monacoLang =
@@ -373,7 +376,7 @@ function ProblemTab({
     setUploadError(null);
     setUploading(true);
     try {
-      const uploaded: MediaAsset[] = [];
+      const uploaded: AttachmentAsset[] = [];
       for (const file of Array.from(files)) {
         const res = await uploadQuestionAsset("coding", file);
         uploaded.push({
@@ -384,7 +387,7 @@ function ProblemTab({
           mime: file.type,
         });
       }
-      setBody({ media: [...media, ...uploaded] });
+      setBody({ attachments: [...attachments, ...uploaded] });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -392,7 +395,7 @@ function ProblemTab({
     }
   };
 
-  const snippetFor = (m: MediaAsset): string => {
+  const snippetFor = (m: AttachmentAsset): string => {
     const alt = (m.alt ?? m.fileName ?? "media").replace(/[\]\\]/g, "");
     if (promptFormat === "html") return `<img src="${m.url}" alt="${alt}" />`;
     if (promptFormat === "plain") return `[media: ${m.url}]`;
@@ -412,8 +415,8 @@ function ProblemTab({
     }
   };
 
-  const removeMedia = (idx: number) => {
-    setBody({ media: media.filter((_, i) => i !== idx) });
+  const removeAttachment = (idx: number) => {
+    setBody({ attachments: attachments.filter((_, i) => i !== idx) });
   };
 
   return (
@@ -476,7 +479,7 @@ function ProblemTab({
         <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <ImageIcon size={12} /> Media ({media.length})
+              <ImageIcon size={12} /> Media ({attachments.length})
             </span>
             <label className="cursor-pointer text-xs font-bold text-emerald-600 hover:underline">
               <UploadIcon size={11} className="inline mr-1" />
@@ -496,13 +499,13 @@ function ProblemTab({
           {uploadError && (
             <p className="text-[11px] text-red-500">{uploadError}</p>
           )}
-          {media.length === 0 ? (
+          {attachments.length === 0 ? (
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
               Optional. Upload images / video / audio, then insert into the statement using the snippet for the selected format. Inserted media renders inline in the candidate&apos;s preview.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {media.map((m, i) => (
+              {attachments.map((m, i) => (
                 <li key={i} className="flex items-center gap-2 text-[11px] bg-slate-50 dark:bg-white/5 rounded-lg p-2">
                   {m.mime?.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -519,7 +522,7 @@ function ProblemTab({
                       <button type="button" className="text-slate-500 hover:underline" onClick={() => copy(snippetFor(m))}>Copy</button>
                     </div>
                   </div>
-                  <button type="button" className="text-red-500 hover:text-red-700" onClick={() => removeMedia(i)} title="Remove">
+                  <button type="button" className="text-red-500 hover:text-red-700" onClick={() => removeAttachment(i)} title="Remove">
                     <Trash2 size={12} />
                   </button>
                 </li>
