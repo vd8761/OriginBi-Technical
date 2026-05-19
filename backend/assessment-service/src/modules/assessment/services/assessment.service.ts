@@ -1260,11 +1260,30 @@ export class AssessmentService {
       return orderA - orderB;
     });
 
+    let attemptMode = 'main';
+    if (config.hasMode) {
+      try {
+        const modeRows = await queryRunner.query(
+          `SELECT q.mode
+           FROM ${config.junction} aq
+           JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+           WHERE aq.${config.attemptIdCol} = $1 LIMIT 1`,
+          [attemptId]
+        );
+        if (modeRows.length > 0 && String(modeRows[0].mode).toLowerCase() === 'trial') {
+          attemptMode = 'trial';
+        }
+      } catch (err) {}
+    } else {
+      if (totalCount <= 5) attemptMode = 'trial';
+    }
+
     return {
       success: true,
       token: attempt.attempt_token,
       attemptToken: attempt.attempt_token,
       module: moduleType,
+      mode: attemptMode,
       overallScore: totalScore,
       overallScorePercent,
       totalScore,

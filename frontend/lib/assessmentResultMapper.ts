@@ -9,6 +9,7 @@ export interface BackendAssessmentSubmissionResult {
   token?: string;
   attemptToken?: string;
   module?: string;
+  mode?: string;
   overallScore?: number;
   overallScorePercent?: number;
   totalScore?: number;
@@ -271,8 +272,7 @@ export const mapSubmissionToAssessmentResult = ({
     new Date().toISOString(),
   );
   const attemptToken = asString(submission.attemptToken ?? submission.token, "");
-  const submissionModule = asString(submission.module, "");
-
+  const submissionModule = asString(submission.module, "");    const submissionMode = asString(submission.mode, "main");
   const rawTotalScore = toNumber(
     submission.totalScore,
     toNumber(submission.overallScore, 0),

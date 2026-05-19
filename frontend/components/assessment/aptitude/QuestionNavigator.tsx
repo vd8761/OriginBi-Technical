@@ -53,8 +53,9 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     const unlockedQs  = questions.filter((q) => !q.isLocked);
     const answeredCount = unlockedQs.filter((q) => q.isAnswered).length;
     const markedCount   = unlockedQs.filter((q) => q.isMarked).length;
-    const leftCount     = unlockedQs.filter((q) => !q.isAnswered).length;
     const displayTotal  = totalQuestions ?? questions.length;
+    // Left = total questions (including locked future blocks) minus answered and marked
+    const leftCount     = Math.max(0, displayTotal - answeredCount - markedCount);
 
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const progressRingStyle = {

@@ -8,7 +8,6 @@ import { usePaidAssessments, codingPaymentKey, type PaymentKey } from "@/lib/pay
 import { useAssessmentResults, deriveCareerIdentity, type AssessmentResult, type SectionResult } from "@/lib/progress";
 import { useAssessmentTracker } from "@/lib/assessmentTracker";
 import dynamic from "next/dynamic";
-import AssessmentNotifications from "./AssessmentNotifications";
 
 const GoogleStyleAnalysisModal = dynamic(() => import("./GoogleStyleAnalysisModal"), { ssr: false });
 const CertificatePreviewModal = dynamic(() => import("../certificate/CertificatePreviewModal"), { ssr: false });
@@ -255,11 +254,15 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   const baseExamsList = dynamicExams || EXAMS;
   const purchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
   const unpurchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
-  const completedIds = Object.keys(results) as AssessmentId[];
+  const completedIds = Object.keys(results).filter(
+    (key) => results[key as AssessmentId]?.mode !== 'trial'
+  ) as AssessmentId[];
   const identity = deriveCareerIdentity(completedIds);
 
-  const statusOf = (exam: Exam): "completed" | "pending" =>
-    isCompleted(exam.id as AssessmentId) ? "completed" : "pending";
+  const statusOf = (exam: Exam): "completed" | "pending" => {
+    const res = getResult(exam.id as AssessmentId);
+    return res && res.mode !== 'trial' ? "completed" : "pending";
+  };
 
   const completedCount = completedIds.length;
   const purchasedCount = purchasedExams.length;
@@ -392,17 +395,6 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           </motion.section>
         )}
       </div>
-
-      {/* ===== NOTIFICATIONS & PROGRESS ===== */}
-      {notifications.length > 0 && (
-        <div>
-          <AssessmentNotifications
-            notifications={notifications}
-            onMarkRead={markNotificationRead}
-            onClearAll={clearAllNotifications}
-          />
-        </div>
-      )}
 
       {/* ===== RESULTS: Clean list layout (NOT card grid) ===== */}
       <motion.section
@@ -551,96 +543,6 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
         </div>
       </motion.section>
 
-      {/* ===== MORE ASSESSMENTS ===== */}
-      {unpurchasedExams.length > 0 && (
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="rounded-3xl bg-white/80 dark:bg-[#1a2520] backdrop-blur-xl border border-gray-200 dark:border-white/[0.12] p-6 sm:p-10"
-        >
-          <div className="flex items-center justify-between gap-4 mb-8">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Explore Assessments</h2>
-              <p className="text-sm text-gray-700 dark:text-slate-300 font-semibold mt-1">
-                Complete these to strengthen your professional profile
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {unpurchasedExams.map((exam, idx) => {
-              const detail = EXAM_DETAILS[exam.id as AssessmentId];
-              return (
-                <motion.div
-                  key={exam.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 + idx * 0.1 }}
-                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="group bg-white dark:bg-[#243028] backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/[0.12] p-6 hover:shadow-lg hover:border-gray-300 dark:hover:border-white/25 transition-all"
-                >
-                  {/* Top row: Icon + Difficulty */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
-                      style={{ background: `${exam.accentColor}15`, color: exam.accentColor }}
-                    >
-                      {exam.icon}
-                    </div>
-                    <span
-                      className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide"
-                      style={{ background: `${exam.accentColor}15`, color: exam.accentColor }}
-                    >
-                      {exam.difficulty}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2 leading-snug">
-                    {exam.title}
-                  </h3>
-
-                  {/* Description */}
-                  <p className="text-sm text-gray-600 dark:text-slate-300 font-medium leading-relaxed mb-4 line-clamp-2">
-                    {exam.description}
-                  </p>
-
-                  {/* Stats row */}
-                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-300 font-semibold mb-4">
-                    <span className="flex items-center gap-1">
-                      <ClockIcon c="w-3.5 h-3.5" />
-                      {exam.duration}
-                    </span>
-                    <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-slate-500" />
-                    <span>{exam.questions} Qs</span>
-                  </div>
-
-                  {/* Outcome preview */}
-                  {detail && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/[0.06] mb-4">
-                      <TrendUpIcon c="w-4 h-4 text-[#1ed36a] shrink-0" />
-                      <p className="text-xs text-gray-700 dark:text-slate-200 font-semibold leading-snug">
-                        {detail.outcomes[0]}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* CTA - Redirect to explore page */}
-                  <button
-                    onClick={() => router.push(`/explore/${exam.id}`)}
-                    className="w-full py-2.5 rounded-xl bg-[#1ed36a] text-white text-sm font-bold hover:bg-[#17b55a] transition-colors flex items-center justify-center gap-1"
-                  >
-                    Get Started
-                    <ChevronRightIcon c="w-4 h-4" />
-                  </button>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.section>
-      )}
-
       {/* ===== YOUR CERTIFICATES ===== */}
       {completedCount > 0 && (
         <motion.section
@@ -658,7 +560,10 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
           <div className="space-y-4">
             {purchasedExams
-              .filter(e => isCompleted(e.id as AssessmentId))
+              .filter(e => {
+                const res = getResult(e.id as AssessmentId);
+                return res && res.mode !== 'trial';
+              })
               .map((exam, idx) => {
                 const result = getResult(exam.id as AssessmentId);
                 if (!result) return null;
