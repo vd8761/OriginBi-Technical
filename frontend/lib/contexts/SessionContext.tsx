@@ -14,7 +14,19 @@ export interface UserProfile {
   joinedAt?: string;
   mobile_number?: string;
   programCode?: string;
+  // 'SELF' | 'ADMIN' | 'CORPORATE' | 'RESELLER' | 'AFFILIATE'. Drives the
+  // "ADMIN-registered users get all assessments free" gate — used by
+  // PaymentModal to skip Razorpay and by ExploreDetailView to render
+  // assessments as already unlocked.
+  registrationSource?: string;
 }
+
+export const isAdminRegisteredProfile = (
+  user: UserProfile | null | undefined,
+): boolean => {
+  if (!user?.registrationSource) return false;
+  return user.registrationSource.toUpperCase() === "ADMIN";
+};
 
 interface SessionContextType {
   user: UserProfile | null;
@@ -85,9 +97,10 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
             const { getSession } = await import("@/lib/api");
             const session = await getSession();
             if (session) {
-              const profile = {
+              const profile: UserProfile = {
                 name: session.registration?.fullName || session.user.email,
                 email: session.user.email,
+                registrationSource: session.registration?.registrationSource,
               };
               setUser(profile);
               setIsLoggedIn(true);
@@ -102,9 +115,10 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
           if (accessToken) {
             const session = await getSession();
             if (session) {
-              const profile = {
+              const profile: UserProfile = {
                 name: session.registration?.fullName || session.user.email,
                 email: session.user.email,
+                registrationSource: session.registration?.registrationSource,
               };
               setUser(profile);
               setIsLoggedIn(true);

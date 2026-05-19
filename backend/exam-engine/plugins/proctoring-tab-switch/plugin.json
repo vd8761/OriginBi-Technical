@@ -8,7 +8,7 @@
   "enabledByDefault": true,
   "requiresLicense": false,
   "requires": ["runtime.exam-session"],
-  "extends": ["assessment.coding"],
+  "extends": [],
   "provides": ["proctoring.constraint.tab-focus"],
   "emits": [
     { "kind": "proctoring.tab.switched", "severity": "warn", "payload_schema_ref": "#/schemas/tab_switched" },

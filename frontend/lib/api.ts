@@ -152,6 +152,9 @@ export interface ApiRegistration {
   mobileNumber: string;
   status: string;
   isTechAssessment: number;
+  // 'SELF' | 'ADMIN' | 'CORPORATE' | 'RESELLER' | 'AFFILIATE'
+  // Backend may omit this on older sessions; treat missing as 'SELF'.
+  registrationSource?: string;
 }
 
 export interface AuthTokens {

@@ -27,7 +27,7 @@ import {
 import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
 import { Loader2 } from "lucide-react";
-import { useSession } from "@/lib/contexts/SessionContext";
+import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
 
 const TECH_API_BASE =
   (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
@@ -50,6 +50,7 @@ const codingStatusRank: Record<CodingLangStatus, number> = {
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
     const { user } = useSession();
+    const isAdminFree = isAdminRegisteredProfile(user);
     const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
     const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
@@ -84,7 +85,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             .map((lang) => {
                 const key = codingPaymentKey(lang.id);
                 const assignment = serverAssignments.find((a) => a.assignmentRef === key);
-                const paid = !!assignment && assignment.status === "active";
+                const paid = isAdminFree || (!!assignment && assignment.status === "active");
                 const completed = !!assignment?.completed;
                 const status: CodingLangStatus = completed
                     ? "completed"
@@ -94,7 +95,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 return { lang, paid, completed, status, assignment };
             })
             .sort((a, b) => codingStatusRank[a.status] - codingStatusRank[b.status]);
-    }, [exam.id, serverAssignments]);
+    }, [exam.id, serverAssignments, isAdminFree]);
 
     const codingSummary = useMemo(() => {
         const completed = codingEntries.filter((e) => e.status === "completed").length;
@@ -121,7 +122,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const gradient = exam.gradient;
 
     const isCoding = exam.id === "coding";
-    const examPaid = !isCoding && isPaid(exam.id as PaymentKey);
+    const examPaid = !isCoding && (isAdminFree || isPaid(exam.id as PaymentKey));
     const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey);
 
     const startNonCodingAssessment = () => {
@@ -145,6 +146,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
 
+        // examPaid is already true for admin-registered users (see definition),
+        // so they will fall through to startNonCodingAssessment without ever
+        // hitting the payment modal.
         if (examPaid) {
             setAssessmentMode("main");
             startNonCodingAssessment();
@@ -223,6 +227,22 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             setPendingCodingLang(language);
             return;
         }
+        // Admin-registered users skip the payment modal — the exam-engine
+        // auto-grants the assignment on listAssignments / startAttempt.
+        if (isAdminFree) {
+            setShowLanguageModal(false);
+            setIsConnecting(true);
+            (async () => {
+                try {
+                    await demoPurchase(key).catch(() => undefined);
+                    await refreshAssignments();
+                } finally {
+                    setIsConnecting(false);
+                    setPendingCodingLang(language);
+                }
+            })();
+            return;
+        }
 
         if (exam.price === 0 || !exam.price) {
             setIsConnecting(true);
@@ -272,7 +292,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 return;
             }
         }
-
         setIsConnecting(true);
         setPaymentTarget({
             kind: "coding",
@@ -338,8 +357,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     };
 
     const isCodingPaid = useCallback(
-        (key: PaymentKey) => serverAssignments.some((a) => a.assignmentRef === key && a.status === "active"),
-        [serverAssignments],
+        (key: PaymentKey) =>
+            isAdminFree ||
+            serverAssignments.some((a) => a.assignmentRef === key && a.status === "active"),
+        [serverAssignments, isAdminFree],
     );
 
     const isCodingCompleted = useCallback(
@@ -350,7 +371,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const primaryLabel = (() => {
         if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
-        if (isCoding) return exam.price === 0 || !exam.price ? "Pick Language & Start" : `Pick Language & Pay`;
+        if (isCoding) {
+            if (isAdminFree) return "Pick Language";
+            return exam.price === 0 || !exam.price ? "Pick Language & Start" : "Pick Language & Pay";
+        }
         if (examCompleted) return "View Results";
         if (examPaid) return "Start Assessment";
         return exam.price === 0 || !exam.price ? "Unlock for Free" : `Pay ₹${exam.price}`;

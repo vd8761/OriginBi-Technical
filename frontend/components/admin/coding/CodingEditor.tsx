@@ -116,6 +116,61 @@ interface CodingEditorProps {
   questionId?: string;
 }
 
+// Canonicalise a language slug to the `language.<name>` form the backend
+// authoring validator uses. Mirrors NormalizeLanguageSlug in the runner-judge0
+// Go package — keep these two in sync.
+function canonicalLanguageSlug(slug: string): string {
+  const s = slug.trim().toLowerCase();
+  if (!s || s.startsWith("language.")) return s;
+  return `language.${s}`;
+}
+
+// Reshape body before it leaves the form so it matches the backend contract:
+//   1. Canonicalise every language key (e.g. "python" -> "language.python") so
+//      starterCode["python"] and starterCode["language.python"] don't both end
+//      up in the payload — the form's edit lifecycle was leaving both forms.
+//   2. Drop starterCode / starterFiles / entryFile entries whose canonical key
+//      isn't in allowedLanguages. The form hides toggled-off language tabs but
+//      preserves their starters in state in case the admin toggles them back
+//      on; without this step those stale entries ship to the backend and
+//      trigger LANGUAGE_NOT_ALLOWED.
+//   3. Canonicalise allowedLanguages itself and de-dup.
+function sanitizeBodyForPayload(body: QuestionBody): QuestionBody {
+  const allowed = (body.allowedLanguages ?? [])
+    .map(canonicalLanguageSlug)
+    .filter((s) => s.length > 0);
+  const allowedSet = new Set(allowed);
+  const allowedUnique = Array.from(allowedSet);
+
+  // When the admin hasn't restricted the language list at all, treat every
+  // language present in the starters as implicitly permitted.
+  const permits = (slug: string) =>
+    allowedSet.size === 0 || allowedSet.has(canonicalLanguageSlug(slug));
+
+  const filterMap = <V,>(
+    src: Record<string, V> | undefined,
+  ): Record<string, V> | undefined => {
+    if (!src) return src;
+    const out: Record<string, V> = {};
+    for (const [k, v] of Object.entries(src)) {
+      if (!permits(k)) continue;
+      const canonical = canonicalLanguageSlug(k);
+      // If both "python" and "language.python" exist, the last write wins —
+      // good enough; the duplicate is a form-state artefact, not real data.
+      out[canonical] = v;
+    }
+    return out;
+  };
+
+  return {
+    ...body,
+    allowedLanguages: allowedUnique,
+    starterCode: filterMap(body.starterCode),
+    starterFiles: filterMap(body.starterFiles),
+    entryFile: filterMap(body.entryFile),
+  };
+}
+
 export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("problem");
@@ -157,10 +212,11 @@ export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
     setSaving(true);
     setError("");
     try {
+      const sanitizedBody = sanitizeBodyForPayload(state.body);
       const payload = {
         title: state.title,
         plugin_slug: "assessment.coding",
-        body: state.body as unknown as Record<string, unknown>,
+        body: sanitizedBody as unknown as Record<string, unknown>,
         max_score: state.maxScore,
         is_negative_marked: state.isNegativeMarked,
         negative_score: state.negativeScore,

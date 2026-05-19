@@ -71,6 +71,10 @@ const fetchServerPaidSet = async (): Promise<Set<string>> => {
     const email = resolveCurrentEmail();
     if (email) {
         try {
+            // The backend now returns the full catalog of assessment codes
+            // when the user's registrations.registration_source is 'ADMIN',
+            // so the regular hydration path covers the admin free-access
+            // case without a separate client check.
             const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/purchase/purchases`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

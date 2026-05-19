@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useSession } from "@/lib/contexts/SessionContext";
+import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, AlertCircle, Copy, Check } from "lucide-react";
 import { TECH_API_BASE } from "@/lib/api";
@@ -75,6 +75,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
         const email = user?.email || "candidate@originbi.com";
         const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
+        const isAdminFree = isAdminRegisteredProfile(user);
 
         try {
             // Frontend-only sandbox mode: bypass backend order creation entirely.
@@ -104,31 +105,41 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             if (!orderRes.ok) throw new Error("Gateway failed to issue order.");
             const order = await orderRes.json();
 
-            if (order.isFree || order.amount === 0) {
-                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        email,
-                        assessmentId: assessmentId || 1,
-                        assessmentCode: assessmentCode || "general",
-                        razorpay_order_id: "free_bypass",
-                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-                        razorpay_signature: "signature_free",
-                        amount: 0,
-                    }),
-                });
+            if (order?.free || order?.isFree || order?.amount === 0 || isAdminFree) {
+                if (order?.orderId === "free_bypass") {
+                    const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            email,
+                            assessmentId: assessmentId || 1,
+                            assessmentCode: assessmentCode || "general",
+                            razorpay_order_id: "free_bypass",
+                            razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                            razorpay_signature: "signature_free",
+                            amount: 0,
+                        }),
+                    });
 
-                if (!verifyRes.ok) {
-                    throw new Error("Free entitlement activation failed on server.");
-                }
+                    if (!verifyRes.ok) {
+                        throw new Error("Free entitlement activation failed on server.");
+                    }
 
-                await onSuccess();
-                successHandledRef.current = true;
-                if (mountedRef.current) {
-                    setRefId(`FREE-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
-                    setPaidAt(new Date());
-                    setStage("success");
+                    await onSuccess();
+                    successHandledRef.current = true;
+                    if (mountedRef.current) {
+                        setRefId(`FREE-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                        setPaidAt(new Date());
+                        setStage("success");
+                    }
+                } else {
+                    await onSuccess();
+                    successHandledRef.current = true;
+                    if (mountedRef.current) {
+                        setRefId(`FREE-ADMIN-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                        setPaidAt(new Date());
+                        setStage("success");
+                    }
                 }
                 return;
             }

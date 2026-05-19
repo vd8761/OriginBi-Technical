@@ -13,6 +13,13 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import {
+    DEFAULT_PROCTORING,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
 
 const COMMUNICATION_TOTAL_TIME = 45 * 60;
 const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
@@ -144,6 +151,8 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
     const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
     useEffect(() => {
         const fetchEngineStats = async () => {
@@ -188,7 +197,8 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                     if (found) {
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
-                        
+                        setProctoringSettings(resolveProctoringForPackage(found));
+
                         let eqt = found.enabled_question_types;
                         if (eqt) {
                             if (typeof eqt === "string") {
@@ -730,7 +740,15 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     };
 
     return (
+        <AssessmentPluginHost packageSlug="grammar">
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
+            {/* Hand-rolled proctoring rules (right-click, copy-paste, etc.).
+                Tab-switch is now plugin-driven through AssessmentPluginHost. */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && !isBlocked}
+            />
+
             {/* ── Cache Restored Banner ──────────────────────────────── */}
             <AnimatePresence>
                 {showRestoredBanner && (
@@ -985,6 +1003,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 )}
             </AnimatePresence>
         </div>
+        </AssessmentPluginHost>
     );
 };
 
