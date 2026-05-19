@@ -671,6 +671,7 @@ function errorMessageFrom(data: ErrorEnvelope | null): string | null {
 export async function registerUser(input: RegisterRequest): Promise<AuthResponse> {
   await assertRegistrationEmailAvailable(input.email);
   await assertRegistrationPhoneAvailable(input.mobileNumber);
+  const hasGroup = !!input.groupCode?.trim();
 
   await apiFetch<any>("/api/auth/register", {
     method: "POST",
@@ -691,7 +692,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       currentRole: input.currentRole,
       roleDescription: input.roleDescription,
       groupCode: input.groupCode,
-      pricingPolicy: input.pricingPolicy || "free",
+      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "free" }),
     }),
     baseOverride: TECH_API_BASE,
     auth: false,

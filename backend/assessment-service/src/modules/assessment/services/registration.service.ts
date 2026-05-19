@@ -34,6 +34,8 @@ export class RegistrationService {
 
   async registerUser(dto: RegisterUserDto) {
     const email = dto.email.trim().toLowerCase();
+    const hasGroup = !!dto.groupName?.trim();
+    const effectivePricingPolicy = hasGroup ? null : dto.pricingPolicy;
 
     try {
       this.logger.log(`Forwarding tech assessment registration to student-service for: ${email}`);
@@ -55,8 +57,12 @@ export class RegistrationService {
           currentRole: dto.currentRole || null,
           roleDescription: dto.roleDescription || null,
           groupName: dto.groupName || null,
-          isFree: dto.pricingPolicy !== 'pay',
-          pricingPolicy: dto.pricingPolicy === 'pay' ? 'pay' : 'free',
+          ...(effectivePricingPolicy
+            ? {
+                isFree: effectivePricingPolicy !== 'pay',
+                pricingPolicy: effectivePricingPolicy === 'pay' ? 'pay' : 'free',
+              }
+            : {}),
         },
       });
 

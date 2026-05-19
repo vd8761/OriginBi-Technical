@@ -381,6 +381,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
   const toggleButtonBase = "flex-1 text-[10px] md:text-xs font-semibold rounded-full transition-all duration-300 cursor-pointer";
   const activeToggleClasses = "bg-brand-green text-white";
   const inactiveToggleClasses = "text-black dark:text-white hover:text-brand-green";
+  const isGroupPricingManaged = !!formData.groupCode?.trim();
 
   return (
     <div className="w-full font-sans animate-fade-in pb-12">
@@ -553,24 +554,34 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
             {/* Pricing Policy Toggle */}
             <div className="space-y-1.5">
               <label className={baseLabelClasses}>Pricing Policy</label>
-              <div className={toggleWrapperClasses} style={{ borderRadius: "9999px" }}>
+              <div
+                className={`${toggleWrapperClasses} ${isGroupPricingManaged ? "opacity-60" : ""}`}
+                style={{ borderRadius: "9999px" }}
+              >
                 <button
                   type="button"
+                  disabled={isGroupPricingManaged}
                   onClick={() => handleInputChange("pricingPolicy", "free")}
                   style={{ borderRadius: "9999px" }}
-                  className={`${toggleButtonBase} ${formData.pricingPolicy !== "pay" ? activeToggleClasses : inactiveToggleClasses}`}
+                  className={`${toggleButtonBase} ${formData.pricingPolicy !== "pay" ? activeToggleClasses : inactiveToggleClasses} ${isGroupPricingManaged ? "cursor-not-allowed" : ""}`}
                 >
                   Free
                 </button>
                 <button
                   type="button"
+                  disabled={isGroupPricingManaged}
                   onClick={() => handleInputChange("pricingPolicy", "pay")}
                   style={{ borderRadius: "9999px" }}
-                  className={`${toggleButtonBase} ${formData.pricingPolicy === "pay" ? activeToggleClasses : inactiveToggleClasses}`}
+                  className={`${toggleButtonBase} ${formData.pricingPolicy === "pay" ? activeToggleClasses : inactiveToggleClasses} ${isGroupPricingManaged ? "cursor-not-allowed" : ""}`}
                 >
                   Pay
                 </button>
               </div>
+              <p className="text-[11px] text-black/60 dark:text-white/50 ml-1">
+                {isGroupPricingManaged
+                  ? "Disabled because this user belongs to a group. Pricing is controlled by that group's settings."
+                  : "Applied only to standalone users who are not attached to a group."}
+              </p>
             </div>
 
           </div>
