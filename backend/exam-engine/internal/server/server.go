@@ -164,6 +164,7 @@ func (s *Server) routes() chi.Router {
 			r.Post("/admin/pricing-items", s.createPricingItem)
 			r.Get("/admin/users/{user_id}/entitlements", s.adminUserEntitlements)
 			r.Get("/admin/judge0/health", s.judge0Health)
+			r.Get("/admin/proctoring/active", s.listActiveAttemptsForProctoring)
 		})
 	})
 

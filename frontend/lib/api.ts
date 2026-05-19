@@ -1060,6 +1060,37 @@ export async function listMyLanguages(): Promise<{ languages: MeLanguage[] }> {
   return apiFetch<{ languages: MeLanguage[] }>("/v1/me/languages");
 }
 
+// ── Admin proctoring monitor ──────────────────────────────────────────────
+
+export interface AdminProctoringAttempt {
+  attempt_id: string;
+  candidate_user_id: number;
+  exam_version_id: string;
+  status: string;
+  started_at?: string | null;
+  last_seen_at?: string | null;
+  last_event_at?: string | null;
+  event_counts: Record<string, number>;
+}
+
+export interface AdminProctoringActiveResponse {
+  attempts: AdminProctoringAttempt[];
+  polled_at: string;
+}
+
+export async function listActiveProctoringAttempts(opts: {
+  since?: string;
+  limit?: number;
+} = {}): Promise<AdminProctoringActiveResponse> {
+  const params = new URLSearchParams();
+  if (opts.since) params.set("since", opts.since);
+  if (opts.limit) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  return apiFetch<AdminProctoringActiveResponse>(
+    `/v1/admin/proctoring/active${qs ? `?${qs}` : ""}`,
+  );
+}
+
 // ── Admin question authoring ──────────────────────────────────────────────
 
 export async function listAdminQuestions(

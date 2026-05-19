@@ -596,6 +596,10 @@ export class AdminQuestionService {
                 a.categories, a.difficulty_marks, a.difficulty_negative_marks,
                 a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
                 a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
+                a.proctoring_require_fullscreen, a.fullscreen_exit_limit,
+                a.proctoring_block_devtools, a.devtools_open_limit,
+                a.mouse_focus_loss_limit, a.keypress_log_enabled,
+                a.require_camera_mic, a.live_proctoring_enabled,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -636,7 +640,16 @@ export class AdminQuestionService {
     const trialAttemptsLimit = data.trialAttemptsLimit !== undefined ? data.trialAttemptsLimit : data.trial_attempts_limit;
     const mainAttemptsLimit = data.mainAttemptsLimit !== undefined ? data.mainAttemptsLimit : data.main_attempts_limit;
     const enabledQuestionTypes = data.enabledQuestionTypes !== undefined ? data.enabledQuestionTypes : data.enabled_question_types;
-    
+
+    const proctoringRequireFullscreen = data.proctoring_require_fullscreen;
+    const fullscreenExitLimit = data.fullscreen_exit_limit;
+    const proctoringBlockDevtools = data.proctoring_block_devtools;
+    const devtoolsOpenLimit = data.devtools_open_limit;
+    const mouseFocusLossLimit = data.mouse_focus_loss_limit;
+    const keypressLogEnabled = data.keypress_log_enabled;
+    const requireCameraMic = data.require_camera_mic;
+    const liveProctoringEnabled = data.live_proctoring_enabled;
+
     try {
       await this.dataSource.query(
         `UPDATE tech_assessments
@@ -654,6 +667,14 @@ export class AdminQuestionService {
              trial_attempts_limit = COALESCE($12, trial_attempts_limit),
              main_attempts_limit = COALESCE($13, main_attempts_limit),
              enabled_question_types = COALESCE($14, enabled_question_types),
+             proctoring_require_fullscreen = COALESCE($16, proctoring_require_fullscreen),
+             fullscreen_exit_limit = COALESCE($17, fullscreen_exit_limit),
+             proctoring_block_devtools = COALESCE($18, proctoring_block_devtools),
+             devtools_open_limit = COALESCE($19, devtools_open_limit),
+             mouse_focus_loss_limit = COALESCE($20, mouse_focus_loss_limit),
+             keypress_log_enabled = COALESCE($21, keypress_log_enabled),
+             require_camera_mic = COALESCE($22, require_camera_mic),
+             live_proctoring_enabled = COALESCE($23, live_proctoring_enabled),
              updated_at = NOW()
          WHERE assessment_id = $15`,
         [
@@ -671,7 +692,15 @@ export class AdminQuestionService {
           trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : null,
           mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : null,
           enabledQuestionTypes !== undefined ? (typeof enabledQuestionTypes === 'string' ? enabledQuestionTypes : JSON.stringify(enabledQuestionTypes)) : null,
-          id
+          id,
+          proctoringRequireFullscreen !== undefined ? Boolean(proctoringRequireFullscreen) : null,
+          fullscreenExitLimit !== undefined ? Number(fullscreenExitLimit) : null,
+          proctoringBlockDevtools !== undefined ? Boolean(proctoringBlockDevtools) : null,
+          devtoolsOpenLimit !== undefined ? Number(devtoolsOpenLimit) : null,
+          mouseFocusLossLimit !== undefined ? Number(mouseFocusLossLimit) : null,
+          keypressLogEnabled !== undefined ? Boolean(keypressLogEnabled) : null,
+          requireCameraMic !== undefined ? Boolean(requireCameraMic) : null,
+          liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
         ]
       );
       
