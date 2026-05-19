@@ -592,7 +592,7 @@ export default function AdminQuestionsManager() {
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              router.push(`/admin/questions/settings?module=${at}`);
+                              router.push(`/admin/question-banks/${at}/settings`);
                             }}
                             className="flex items-center justify-center w-11 h-11 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 dark:text-white hover:text-brand-green hover:bg-brand-green/10 hover:border-brand-green/30 transition-all shadow-sm group/btn"
                             title="Assessment Settings"
@@ -710,7 +710,7 @@ export default function AdminQuestionsManager() {
  
             {isDbModule(selectedModule) && (
               <button 
-                onClick={() => router.push(`/admin/questions/settings?module=${selectedModule}`)}
+                onClick={() => router.push(`/admin/question-banks/${selectedModule}/settings`)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
               >
                 <Settings size={16} className="text-brand-green" />
