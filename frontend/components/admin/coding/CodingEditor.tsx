@@ -16,6 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import MonacoEditor from "@/components/assessment/coding/MonacoEditor";
+import CustomSelect from "@/components/ui/CustomSelect";
 import {
   createAdminQuestion,
   updateAdminQuestion,
@@ -1150,23 +1151,20 @@ function FieldSelect<T extends string | number>({
   onBlur?: () => void;
   options: { value: T; label: string }[];
 }) {
+  const isNumeric = typeof value === "number" || options.some((o) => typeof o.value === "number");
   return (
     <Field label={label}>
-      <select
-        value={value as unknown as string}
-        onChange={(e) => {
-          const v = typeof value === "number" ? (Number(e.target.value) as T) : (e.target.value as T);
-          onChange(v);
+      <CustomSelect
+        value={String(value)}
+        options={options.map((o) => ({ value: String(o.value), label: o.label }))}
+        onChange={(v) => {
+          const next = (isNumeric ? Number(v) : v) as T;
+          onChange(next);
         }}
-        onBlur={onBlur}
-        className="input-base"
-      >
-        {options.map((o) => (
-          <option key={String(o.value)} value={String(o.value)}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        onOpenChange={(open) => {
+          if (!open) onBlur?.();
+        }}
+      />
     </Field>
   );
 }

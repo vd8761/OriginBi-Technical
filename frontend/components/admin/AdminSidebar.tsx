@@ -187,6 +187,15 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
 
   const displayRole = useMemo(() => prettyRole(user.role), [user.role]);
 
+  // Pick the longest matching nav href so a child route doesn't also light up its parent.
+  const activeHref = useMemo(() => {
+    const candidates = sections.flatMap((s) => s.items.map((i) => i.href));
+    const matches = candidates.filter(
+      (h) => pathname === h || (h !== "/admin" && pathname.startsWith(`${h}/`)),
+    );
+    return matches.sort((a, b) => b.length - a.length)[0];
+  }, [pathname]);
+
   const containerVariants: Variants = {
     expanded: {
       transition: {
@@ -227,9 +236,7 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
           <ul className="admin-nav-list">
             {section.items.map((item) => {
               const Icon = item.icon;
-              const active =
-                pathname === item.href ||
-                (item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
+              const active = item.href === activeHref;
               const count = item.countKey ? counts[item.countKey] : undefined;
               return (
                 <li key={item.href}>
