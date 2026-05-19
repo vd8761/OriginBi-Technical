@@ -1290,6 +1290,9 @@ export interface AdminUserRow {
 export interface AdminUserCounts {
   total: number;
   students: number;
+  college: number;
+  school: number;
+  employee: number;
   admins: number;
   proctors: number;
   blocked: number;
@@ -1305,7 +1308,7 @@ export interface AdminUsersResponse {
 
 export interface ListAdminUsersParams {
   q?: string;
-  role?: "admin" | "proctor" | "student";
+  role?: "admin" | "proctor" | "student" | "college" | "school" | "employee";
   status?: "active" | "blocked" | "pending";
   tech?: boolean;
   limit?: number;

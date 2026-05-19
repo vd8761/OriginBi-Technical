@@ -6,12 +6,11 @@ import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 
 function MCQAuthoringInner() {
   useRegisterAdminPage({
-    eyebrow: "Question Banks",
-    title: "MCQ Authoring",
+    eyebrow: "Workspace",
+    title: "Assessments",
     breadcrumb: [
       { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/coding" },
-      { label: "MCQ Authoring" },
+      { label: "Assessments" },
     ],
   });
   return <AdminQuestionsManager />;

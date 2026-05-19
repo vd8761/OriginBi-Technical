@@ -17,6 +17,9 @@ import {
   Users as UsersIcon,
   X,
   Plus,
+  GraduationCap,
+  School,
+  Briefcase,
 } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
 import { COUNTRY_CODES } from "@/lib/countryCodes";
@@ -40,7 +43,7 @@ import {
   type ListAdminUsersParams,
 } from "@/lib/api";
 
-type RoleFilter = "all" | "admin" | "proctor" | "student";
+type RoleFilter = "all" | "admin" | "proctor" | "student" | "college" | "school" | "employee";
 
 const roleTones: Record<AdminUserRow["roleGroup"], "blue" | "purple" | "amber"> = {
   Student: "blue",
@@ -105,6 +108,9 @@ function UsersInner() {
   const [counts, setCounts] = useState<AdminUserCounts>({
     total: 0,
     students: 0,
+    college: 0,
+    school: 0,
+    employee: 0,
     admins: 0,
     proctors: 0,
     blocked: 0,
@@ -158,9 +164,9 @@ function UsersInner() {
   const tabs = useMemo(
     () => [
       { value: "all" as const, label: "All", count: counts.total },
-      { value: "student" as const, label: "Students", count: counts.students },
-      { value: "admin" as const, label: "Admins", count: counts.admins },
-      { value: "proctor" as const, label: "Proctors", count: counts.proctors },
+      { value: "college" as const, label: "College", count: counts.college },
+      { value: "school" as const, label: "School", count: counts.school },
+      { value: "employee" as const, label: "Employee", count: counts.employee },
     ],
     [counts],
   );
@@ -198,34 +204,34 @@ function UsersInner() {
         <StatCard
           label="Total Users"
           value={counts.total.toLocaleString()}
-          sub="Across all institutions"
+          sub="Registered accounts"
           icon={<UsersIcon size={18} />}
           iconBg="rgba(30,211,106,0.16)"
           iconColor="var(--admin-green)"
         />
         <StatCard
-          label="Students"
-          value={counts.students.toLocaleString()}
-          sub="Candidate accounts"
-          icon={<UsersIcon size={18} />}
+          label="College Students"
+          value={counts.college.toLocaleString()}
+          sub="Higher education"
+          icon={<GraduationCap size={18} />}
           iconBg="rgba(74,198,234,0.16)"
           iconColor="var(--admin-blue)"
         />
         <StatCard
-          label="Admins & Proctors"
-          value={(counts.admins + counts.proctors).toLocaleString()}
-          sub="Staff with elevated access"
-          icon={<ShieldCheck size={18} />}
+          label="School Students"
+          value={counts.school.toLocaleString()}
+          sub="K-12 education"
+          icon={<School size={18} />}
           iconBg="rgba(139,109,240,0.18)"
           iconColor="var(--admin-purple)"
         />
         <StatCard
-          label="Blocked"
-          value={counts.blocked.toLocaleString()}
-          sub="Awaiting review"
-          icon={<Lock size={18} />}
-          iconBg="rgba(237,47,52,0.14)"
-          iconColor="var(--admin-red)"
+          label="Employees"
+          value={counts.employee.toLocaleString()}
+          sub="Corporate / professional"
+          icon={<Briefcase size={18} />}
+          iconBg="rgba(255,183,3,0.18)"
+          iconColor="var(--admin-amber)"
         />
       </section>
 

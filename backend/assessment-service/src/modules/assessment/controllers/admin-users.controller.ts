@@ -26,7 +26,7 @@ export class AdminUsersController {
   @Get()
   async listAdminUsers(
     @Query('q') q?: string,
-    @Query('role') role?: 'admin' | 'proctor' | 'student',
+    @Query('role') role?: 'admin' | 'proctor' | 'student' | 'college' | 'school' | 'employee',
     @Query('status') status?: 'active' | 'blocked' | 'pending',
     @Query('tech') tech?: string,
     @Query('limit') limit?: string,

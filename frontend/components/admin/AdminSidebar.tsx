@@ -16,6 +16,7 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  BookOpen,
 } from "lucide-react";
 import { API_BASE, listAdminQuestions, listExamPackages } from "@/lib/api";
 import { Avatar } from "./ui";
@@ -37,9 +38,8 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
-      { href: "/admin/question-banks", label: "Question Banks", icon: Database },
       { href: "/admin/groups", label: "Groups", icon: Layers },
-      { href: "/admin/questions", label: "MCQ Authoring", icon: Banknote },
+      { href: "/admin/questions", label: "Assessments", icon: BookOpen },
     ],
   },
   {

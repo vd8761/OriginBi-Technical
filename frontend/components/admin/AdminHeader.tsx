@@ -19,7 +19,7 @@ const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin/groups": { title: "Groups Management", section: "Workspace" },
   "/admin/plugins": { title: "Plugin Registry", section: "System" },
   "/admin/plugins/languages": { title: "Language Plugins", section: "System" },
-  "/admin/questions": { title: "MCQ Authoring", section: "Question Banks" },
+  "/admin/questions": { title: "Assessments", section: "Workspace" },
   "/admin/users": { title: "User Management", section: "Workspace" },
   "/admin/proctoring": { title: "Proctoring Live Monitor", section: "System" },
   "/admin/settings": { title: "Exam Settings", section: "System" },
@@ -42,7 +42,7 @@ function defaultBreadcrumb(pathname: string, sectionFallback: string): Breadcrum
     const top = part[1];
     const labelMap: Record<string, string> = {
       coding: "Question Banks",
-      questions: "MCQ Authoring",
+      questions: "Assessments",
       groups: "Groups",
       plugins: "Plugins",
       proctoring: "Proctoring",

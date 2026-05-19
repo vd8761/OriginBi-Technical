@@ -27,6 +27,9 @@ export interface AdminUserRow {
 export interface AdminUserCounts {
   total: number;
   students: number;
+  college: number;
+  school: number;
+  employee: number;
   admins: number;
   proctors: number;
   blocked: number;
@@ -42,7 +45,7 @@ export interface AdminUsersResponse {
 
 export interface ListAdminUsersParams {
   q?: string;
-  role?: 'admin' | 'proctor' | 'student';
+  role?: 'admin' | 'proctor' | 'student' | 'college' | 'school' | 'employee';
   status?: 'active' | 'blocked' | 'pending';
   tech?: boolean;
   limit?: number;
@@ -86,7 +89,16 @@ export class AdminUsersService {
           where.push("u.role = 'PROCTOR'");
           break;
         case 'student':
-          where.push("u.role NOT IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'PROCTOR') OR u.role IS NULL");
+          where.push("(u.role NOT IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'PROCTOR') OR u.role IS NULL)");
+          break;
+        case 'college':
+          where.push("p.code = 'COLLEGE_STUDENT'");
+          break;
+        case 'school':
+          where.push("p.code = 'SCHOOL_STUDENT'");
+          break;
+        case 'employee':
+          where.push("p.code = 'EMPLOYEE'");
           break;
       }
 
@@ -111,11 +123,15 @@ export class AdminUsersService {
         SELECT
             COUNT(*)::bigint AS total,
             COUNT(*) FILTER (WHERE u.role NOT IN ('ADMIN','SUPER_ADMIN','STAFF','PROCTOR') OR u.role IS NULL)::bigint AS students,
+            COUNT(*) FILTER (WHERE p.code = 'COLLEGE_STUDENT')::bigint AS college,
+            COUNT(*) FILTER (WHERE p.code = 'SCHOOL_STUDENT')::bigint AS school,
+            COUNT(*) FILTER (WHERE p.code = 'EMPLOYEE')::bigint AS employee,
             COUNT(*) FILTER (WHERE u.role IN ('ADMIN','SUPER_ADMIN','STAFF'))::bigint AS admins,
             COUNT(*) FILTER (WHERE u.role = 'PROCTOR')::bigint AS proctors,
             COUNT(*) FILTER (WHERE u.is_blocked = TRUE)::bigint AS blocked
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
+        LEFT JOIN programs p ON p.id = r.program_id
         WHERE r.is_tech_assessment IN (1, 2)
       `);
       const countsRaw = countsResult[0];
@@ -123,6 +139,9 @@ export class AdminUsersService {
       const counts: AdminUserCounts = {
         total: Number(countsRaw.total),
         students: Number(countsRaw.students),
+        college: Number(countsRaw.college),
+        school: Number(countsRaw.school),
+        employee: Number(countsRaw.employee),
         admins: Number(countsRaw.admins),
         proctors: Number(countsRaw.proctors),
         blocked: Number(countsRaw.blocked),
@@ -133,6 +152,7 @@ export class AdminUsersService {
         SELECT COUNT(*)::bigint as total
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
+        LEFT JOIN programs p ON p.id = r.program_id
         ${whereSQL}
       `, args);
       const total = Number(totalResult[0]?.total || 0);
