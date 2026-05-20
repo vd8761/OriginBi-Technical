@@ -43,6 +43,13 @@ export class TechAssessmentPurchase {
     @Column({ name: "status", type: "varchar", length: 50, default: "active" })
     status!: string;
 
+    // Frozen copy of the tech_assessments configuration (proctoring + exam
+    // settings) as it stood when this purchase was made. The exam runs against
+    // this snapshot so later admin edits never alter an already-scheduled
+    // exam. NULL on legacy rows — callers fall back to the live row.
+    @Column({ name: "settings_snapshot", type: "jsonb", nullable: true })
+    settingsSnapshot!: Record<string, unknown> | null;
+
     @CreateDateColumn({ name: "purchased_at" })
     purchasedAt!: Date;
 

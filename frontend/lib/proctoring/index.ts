@@ -386,3 +386,56 @@ export function resolveProctoringForPackage(
         requireCameraMic,
     };
 }
+
+// ─── Effective (purchase-snapshot-aware) settings ────────────────────────
+//
+// When a candidate pays for an assessment, the backend freezes the
+// tech_assessments config onto tech_assessment_purchases.settings_snapshot.
+// The exam must run against that snapshot — not the live admin row — so a
+// later admin edit never changes an already-scheduled exam.
+//
+// fetchEffectiveAssessmentSettings asks the backend for the right row: the
+// snapshot frozen at purchase, or the live config when none exists (legacy or
+// never-purchased). The returned object uses the same snake_case field names
+// as a tech_assessments row, so resolveProctoringForPackage and the engines'
+// attempt-limit reads consume it unchanged.
+
+// Reads the signed-in candidate's email from localStorage. Mirrors the inline
+// parsing the assessment engines already do.
+export function readCandidateEmail(): string | null {
+    if (typeof window === "undefined") return null;
+    for (const key of ["originbi:user-profile", "user"]) {
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            if (parsed?.email) return String(parsed.email);
+        } catch {
+            /* ignore */
+        }
+    }
+    return null;
+}
+
+export async function fetchEffectiveAssessmentSettings(
+    apiBase: string,
+    assessmentCode: string,
+    email: string | null | undefined,
+): Promise<Record<string, unknown> | null> {
+    if (!email) return null;
+    try {
+        const res = await fetch(
+            `${apiBase}/api/assessment/purchase/effective-settings`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, assessmentCode }),
+            },
+        );
+        if (!res.ok) return null;
+        const json = await res.json();
+        return (json?.settings as Record<string, unknown> | null) ?? null;
+    } catch {
+        return null;
+    }
+}

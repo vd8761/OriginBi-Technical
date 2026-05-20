@@ -12,6 +12,8 @@ import ProctoringHost from "@/lib/proctoring/ProctoringHost";
 import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
 import {
   DEFAULT_PROCTORING,
+  fetchEffectiveAssessmentSettings,
+  readCandidateEmail,
   resolveProctoringForPackage,
   type ProctoringSettings,
 } from "@/lib/proctoring";
@@ -289,7 +291,18 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
           (a: { module_type?: string; assessment_code?: string }) =>
             a.module_type === "aptitude" || a.assessment_code === "aptitude",
         );
-        if (found) setProctoringSettings(resolveProctoringForPackage(found));
+        if (found) {
+          // Prefer the config frozen at the candidate's purchase time over the
+          // live admin row, so a later admin edit never changes a scheduled exam.
+          const effective = await fetchEffectiveAssessmentSettings(
+            API_BASE,
+            "aptitude",
+            readCandidateEmail(),
+          );
+          setProctoringSettings(
+            resolveProctoringForPackage(effective ? { ...found, ...effective } : found),
+          );
+        }
       } catch {
         /* keep defaults */
       }
