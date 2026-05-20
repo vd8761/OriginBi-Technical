@@ -6,6 +6,7 @@ import {
     Trash2, Edit2, Check
 } from "lucide-react";
 import { ApiAssessment, updateAssessment } from "./api";
+import { useConfirm } from "@/components/admin/ui";
 
 interface AssessmentSettingsModalProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ export default function AssessmentSettingsModal({
     assessment,
     onUpdateSuccess
 }: AssessmentSettingsModalProps) {
+    const confirm = useConfirm();
     const [activeTab, setActiveTab] = useState<TabType>("general");
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -136,8 +138,15 @@ export default function AssessmentSettingsModal({
         setError(null);
     };
 
-    const handleRemoveCategory = (catToRemove: Category) => {
-        if (window.confirm(`Are you sure you want to delete "${catToRemove.name}"?`)) {
+    const handleRemoveCategory = async (catToRemove: Category) => {
+        const confirmed = await confirm({
+            title: "Delete Category?",
+            message: `Are you sure you want to delete "${catToRemove.name}"?`,
+            confirmLabel: "Delete",
+            cancelLabel: "Cancel",
+            variant: "danger",
+        });
+        if (confirmed) {
             setCategoriesList(categoriesList.filter(c => c.id !== catToRemove.id));
         }
     };

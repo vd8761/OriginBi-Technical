@@ -1864,8 +1864,6 @@
   padding: 12px 32px;
   border-bottom: 1px solid var(--admin-border);
   background: var(--admin-bg-soft);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
@@ -2748,6 +2746,43 @@
   .admin-stat-card {
     padding: 16px;
   }
+  .admin-pagination-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+  }
+  .admin-pagination-info {
+    text-align: center;
+  }
+  .admin-pagination-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    gap: 4px !important;
+  }
+  .admin-pagination-btn {
+    flex: none !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border-radius: 8px !important;
+  }
+  .admin-pagination-pages {
+    gap: 2px !important;
+  }
+  .admin-pagination-page {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 12px !important;
+  }
 }
 
 
@@ -2842,10 +2877,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--admin-fg-4);
 }
 

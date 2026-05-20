@@ -35,7 +35,6 @@ function AdminPluginsInner() {
     title: "Plugin Registry",
     subtitle: "Platform controls for assessment plugins, language runtimes, evaluators, runners, and addons.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
       { label: "Plugins" },
     ],
   });

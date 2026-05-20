@@ -36,7 +36,7 @@ function resolveRoute(pathname: string) {
 }
 
 function defaultBreadcrumb(pathname: string, sectionFallback: string): BreadcrumbSegment[] {
-  const segments: BreadcrumbSegment[] = [{ label: "Admin Hub", href: "/admin" }];
+  const segments: BreadcrumbSegment[] = [];
   const part = pathname.split("/").filter(Boolean);
   if (part.length > 1) {
     const top = part[1];
@@ -49,16 +49,28 @@ function defaultBreadcrumb(pathname: string, sectionFallback: string): Breadcrum
       settings: "Settings",
       users: "Users",
     };
-    segments.push({ label: labelMap[top] ?? sectionFallback, href: `/admin/${top}` });
+    const isMainPage = part.length === 2;
+    if (isMainPage) {
+      segments.push({ label: labelMap[top] ?? sectionFallback });
+    } else {
+      segments.push({ label: labelMap[top] ?? sectionFallback, href: `/admin/${top}` });
+      if (part.length > 2) {
+        const leaf = part[2];
+        const leafLabel = leaf === "new" ? "New" : leaf === "bulk-import" ? "Bulk Import" : "Details";
+        segments.push({ label: leafLabel });
+      }
+    }
   }
   return segments;
 }
 
 import ThemeToggle from "../ui/ThemeToggle";
+import { useTheme } from "@/lib/contexts/ThemeContext";
 
 export default function AdminHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme } = useTheme();
   const [open, setOpen] = useState(false);
   const route = useMemo(() => resolveRoute(pathname), [pathname]);
   const { meta } = useAdminPageMeta();
@@ -122,7 +134,10 @@ export default function AdminHeader() {
 
   return (
     <>
-      <header className="admin-topbar">
+      <header 
+        className="admin-topbar"
+        style={{ backgroundColor: theme === 'dark' ? '#141a17' : '#ffffff', opacity: 1, backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
+      >
         <div className="admin-topbar-title">
           <button
             type="button"
@@ -171,9 +186,9 @@ export default function AdminHeader() {
                 <div className="w-9 h-9 rounded-full bg-white/5 animate-pulse"></div>
               ) : (
                 <img
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser.name)}&background=1ed36a&color=000&bold=true&length=2`}
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser.name)}&background=1ed36a&color=fff&bold=true&length=2`}
                   alt="User Avatar"
-                  className="w-9 h-9 sm:w-10 h-10 rounded-full border border-black/5 dark:border-white/10"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-black/5 dark:border-white/10 shrink-0 object-cover aspect-square"
                 />
               )}
               <div className="hidden lg:block text-left mr-1">
@@ -199,7 +214,10 @@ export default function AdminHeader() {
             {isProfileOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                <div className="absolute right-0 top-full mt-4 w-64 bg-white dark:bg-[#19211C] rounded-[16px] shadow-2xl z-50 border border-black/[0.05] dark:border-white/[0.08] overflow-hidden animate-slide-down">
+                <div 
+                  className="absolute right-0 top-full mt-4 w-64 bg-white dark:bg-[#212824] rounded-[16px] shadow-2xl z-50 border border-black/[0.05] dark:border-white/[0.08] overflow-hidden animate-slide-down"
+                  style={{ backgroundColor: theme === 'dark' ? '#212824' : '#ffffff', opacity: 1, backdropFilter: 'none' }}
+                >
                   <div className="px-5 py-4 border-b border-black/[0.05] dark:border-white/[0.06] bg-black/[0.01] dark:bg-white/[0.02]">
                     <p className="text-sm font-bold text-gray-900 dark:text-white truncate tracking-tight">{adminUser?.name}</p>
                     <p className="text-xs text-gray-500 truncate mt-1 font-medium tracking-tight">{adminUser?.email}</p>

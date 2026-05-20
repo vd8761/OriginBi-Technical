@@ -385,27 +385,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
 
   return (
     <div className="w-full font-sans animate-fade-in pb-12">
-      {/* Header & Breadcrumbs */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-8">
-        <div>
-          <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
-            <span>Dashboard</span>
-            <span className="mx-2 text-gray-400 dark:text-gray-600">
-              <ArrowRight className="w-3 h-3 text-black dark:text-white" />
-            </span>
-            <button onClick={onCancel} className="hover:text-brand-text-light-primary dark:hover:text-white hover:underline cursor-pointer">
-              Users
-            </button>
-            <span className="mx-2 text-gray-400 dark:text-gray-600">
-              <ArrowRight className="w-3 h-3 text-black dark:text-white" />
-            </span>
-            <span className="text-brand-green font-semibold">Add User</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-brand-text-light-primary dark:text-white tracking-tight">
-            Add User
-          </h1>
-        </div>
-      </div>
+
 
       {/* Main Form Card - full container width (w-full) matching the registration table */}
       <div 
