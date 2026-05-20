@@ -168,14 +168,9 @@ export class AdaptiveBlockService {
       if (!cfg) throw new BadRequestException(`Module ${row.module_type} not supported for blocks`);
 
       const rawBC = row.block_config ?? {};
-      let qpb = Number(rawBC.questionsPerBlock ?? rawBC.questions_per_block ?? 5);
-      let totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 1);
+      const qpb = Number(rawBC.questionsPerBlock ?? rawBC.questions_per_block ?? 5);
+      const totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 1);
       const qLimit = Number(row.question_limit ?? 0);
-
-      if (req.mode === 'trial') {
-        qpb = 5;
-        totalBlocks = 1;
-      }
 
       // 2. Resolve attempt + used IDs
       let attemptId: number | null = null;
@@ -418,7 +413,7 @@ export class AdaptiveBlockService {
         `SELECT block_id FROM adaptive_blocks WHERE assessment_id=$1 AND block_number=$2`,
         [assessmentId, blockNumber + 1],
       );
-      const canProceed = attemptMode !== 'trial' && nextBlockRow.length > 0;
+      const canProceed = nextBlockRow.length > 0;
 
       await qr.commitTransaction();
       return {

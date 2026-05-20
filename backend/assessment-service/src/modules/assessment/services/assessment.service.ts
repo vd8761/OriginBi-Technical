@@ -1952,19 +1952,13 @@ export class AssessmentService {
 
       // 3. Compute block layout
       const rawBlockConfig = assessment.block_config ?? {};
-      let questionsPerBlock = Math.max(
+      const questionsPerBlock = Math.max(
         1,
         Number(rawBlockConfig.questionsPerBlock ?? rawBlockConfig.questions_per_block ?? 5),
       );
       const qLimit = Number(assessment.question_limit ?? 0);
       if (qLimit > 0) totalQuestions = Math.min(totalQuestions, qLimit);
-      let totalBlocks = Math.ceil(totalQuestions / questionsPerBlock);
-
-      if (mode === 'trial') {
-        questionsPerBlock = 5;
-        totalQuestions = Math.min(5, totalQuestions);
-        totalBlocks = 1;
-      }
+      const totalBlocks = Math.ceil(totalQuestions / questionsPerBlock);
 
       // 4. Persist updated block_config so generateBlock can read it
       const newBlockConfig = {
