@@ -28,12 +28,13 @@ import {
 import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
-import JsonImportPanel from "./JsonImportPanel";
+import CsvImportPanel from "./CsvImportPanel";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
   AlertCircle, ArrowLeft, Filter, ChevronDown, Code,
-  Brain, Banknote, MessageSquare, Target, Code2
+  Brain, Banknote, MessageSquare, Target, Code2,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 import { Badge } from "@/components/admin/ui";
@@ -45,6 +46,25 @@ import {
   ArrowRightWithoutLineIcon,
 } from "@/components/icons";
 import { motion, AnimatePresence } from "framer-motion";
+
+function getPaginationRange(currentPage: number, totalPages: number): (number | string)[] {
+  const range: (number | string)[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) {
+      range.push(i);
+    }
+    return range;
+  }
+
+  if (currentPage <= 3) {
+    range.push(1, 2, 3, "...", totalPages - 1, totalPages);
+  } else if (currentPage >= totalPages - 2) {
+    range.push(1, 2, "...", totalPages - 2, totalPages - 1, totalPages);
+  } else {
+    range.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
+  }
+  return range;
+}
 
 const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }> = {
   aptitude: { color: "#1ed36a", gradient: "linear-gradient(135deg, #1ed36a 0%, #17b85c 100%)" },
@@ -124,10 +144,36 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
       return { ...common, category: q.category, subcategory: q.subcategory } as AptitudeQuestion;
     case "mnc":
       return { ...common, topic: q.category } as MNCQuestion;
-    case "communication":
-      return { ...common, taskType: q.category as CommTaskType, instructions: q.questionText } as unknown as CommQuestion;
-    case "role":
-      return { ...common, questionType: q.category as RoleQuestionType } as RoleQuestion;
+    case "communication": {
+      const commQ: any = {
+        ...common,
+        taskType: q.category as CommTaskType,
+        instructions: q.questionText,
+        passage: q.metadata?.passage,
+        audioUrl: q.metadata?.audioUrl,
+        prompt: q.metadata?.prompt,
+        prepTimeSeconds: q.metadata?.prepTimeSeconds,
+        recordTimeSeconds: q.metadata?.recordTimeSeconds,
+        minWords: q.metadata?.minWords,
+        maxWords: q.metadata?.maxWords,
+        questions: q.metadata?.questions,
+      };
+      return commQ as CommQuestion;
+    }
+    case "role": {
+      const roleQ: any = {
+        ...common,
+        questionType: q.category as RoleQuestionType,
+        category: q.subcategory,
+        subCategory: q.subcategory,
+        title: q.metadata?.title,
+        scenarioContext: q.metadata?.scenarioContext,
+        ticketId: q.metadata?.ticketId,
+        priority: q.metadata?.priority,
+        reportedBy: q.metadata?.reportedBy,
+      };
+      return roleQ as RoleQuestion;
+    }
     case "coding":
       return { ...common, category: q.category } as unknown as CodingQuestion;
     default:
@@ -154,6 +200,29 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     case "coding": category = (q as CodingQuestion).category; break;
   }
 
+  // Build the complete metadata object containing all assessment-specific fields
+  const metadata: any = {
+    kind: common.kind || "mcq",
+    correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+  };
+
+  if (module === "communication") {
+    if (common.passage) metadata.passage = common.passage;
+    if (common.audioUrl) metadata.audioUrl = common.audioUrl;
+    if (common.prompt) metadata.prompt = common.prompt;
+    if (common.prepTimeSeconds) metadata.prepTimeSeconds = common.prepTimeSeconds;
+    if (common.recordTimeSeconds) metadata.recordTimeSeconds = common.recordTimeSeconds;
+    if (common.minWords) metadata.minWords = common.minWords;
+    if (common.maxWords) metadata.maxWords = common.maxWords;
+    if (common.questions) metadata.questions = common.questions;
+  } else if (module === "role") {
+    if (common.title) metadata.title = common.title;
+    if (common.scenarioContext) metadata.scenarioContext = common.scenarioContext;
+    if (common.ticketId) metadata.ticketId = common.ticketId;
+    if (common.priority) metadata.priority = common.priority;
+    if (common.reportedBy) metadata.reportedBy = common.reportedBy;
+  }
+
   return {
     category,
     subcategory,
@@ -167,10 +236,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     status: common.status || "active",
     imageUrl: common.imageUrl,
     assessmentId: common.assessmentId,
-    metadata: {
-      kind: common.kind || "mcq",
-      correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
-    }
+    metadata
   };
 }
 
@@ -205,6 +271,12 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const [loading, setLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
   const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset page when category, subcategory, search query or mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedModule, mode, filterCategory, filterSubCategory, searchQuery]);
 
 
 
@@ -380,6 +452,12 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     }
     return result;
   }, [questions, filterCategory, filterSubCategory, searchQuery, selectedModule]);
+
+  const limit = 10;
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * limit;
+    return filtered.slice(start, start + limit);
+  }, [filtered, currentPage]);
 
   const categoryCounts = useMemo(() => {
     if (!selectedModule) return {};
@@ -631,30 +709,50 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
 
       <main className="relative z-10 py-2">
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
-        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-end mb-6 mt-4">
-          {/* Filter Tabs & Mode Toggle */}
-          <div className="flex flex-wrap items-end gap-6 w-full xl:w-auto">
-            <div className="w-full sm:w-64">
-              <CustomSelect
-                label="Filter by Category"
-                value={filterCategory}
-                onChange={setFilterCategory}
-                options={[
-                  { label: `All Categories (${questions.length})`, value: "all" },
-                  ...filterCats.map(cat => ({
-                    label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
-                    value: cat.key
-                  }))
-                ]}
-              />
+        {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
+        <div className="space-y-4 mb-6 mt-4">
+          {/* Row 1: Filters (Left) & Bank Toggle (Right) */}
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-end">
+            <div className="flex flex-wrap items-end gap-6 w-full sm:w-auto">
+              <div className="w-full sm:w-64">
+                <CustomSelect
+                  label="Filter by Category"
+                  value={filterCategory}
+                  onChange={setFilterCategory}
+                  options={[
+                    { label: `All Categories (${questions.length})`, value: "all" },
+                    ...filterCats.map(cat => ({
+                      label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
+                      value: cat.key
+                    }))
+                  ]}
+                />
+              </div>
+
+              {selectedModule === "aptitude" && filterCategory !== "all" && (
+                <div className="w-full sm:w-64">
+                  <CustomSelect
+                    label="Filter by Subcategory"
+                    value={filterSubCategory}
+                    onChange={setFilterSubCategory}
+                    options={[
+                      { label: "All Subcategories", value: "all" },
+                      ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
+                        label: sc.name,
+                        value: sc.id
+                      }))
+                    ]}
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner shrink-0 sm:self-end">
               {(["trial", "main"] as QuestionMode[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className={`px-6 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
                     mode === m 
                       ? "bg-brand-green text-white" 
                       : "text-slate-400 hover:text-white"
@@ -664,54 +762,41 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 </button>
               ))}
             </div>
-
-            {selectedModule === "aptitude" && filterCategory !== "all" && (
-              <div className="w-full sm:w-64">
-                <CustomSelect
-                  label="Filter by Subcategory"
-                  value={filterSubCategory}
-                  onChange={setFilterSubCategory}
-                  options={[
-                    { label: "All Subcategories", value: "all" },
-                    ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
-                      label: sc.name,
-                      value: sc.id
-                    }))
-                  ]}
-                />
-              </div>
-            )}
           </div>
-          
-          {/* Action Buttons: Export, Clear, Bulk Import, Add New */}
-          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-            <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
-              <Download size={16} className="text-brand-green" />
-              <span>Export JSON</span>
-            </button>
 
-            <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
-              <Trash2 size={16} />
-              <span>Clear Bank</span>
-            </button>
+          {/* Row 2: Secondary buttons (Left) & Primary Action buttons (Right) */}
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center border-t border-slate-200 dark:border-white/5 pt-4">
+            {/* Left side actions: Export, Clear */}
+            <div className="flex flex-row items-center gap-3 shrink-0 flex-nowrap overflow-x-auto pb-1">
+              <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0">
+                <Download size={16} className="text-brand-green" />
+                <span>Export JSON</span>
+              </button>
 
-            <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden xl:block mx-1" />
-  
-            <button 
-              onClick={() => setView("json-import")} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
-            >
-              <span>Bulk Import</span>
-              <Upload size={16} className="text-brand-green" />
-            </button>
+              <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0">
+                <Trash2 size={16} />
+                <span>Clear Bank</span>
+              </button>
+            </div>
 
-            <button 
-              onClick={() => setEditingQuestion("new")} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all"
-            >
-              <span>Add New</span>
-              <Plus size={16} />
-            </button>
+            {/* Right side actions: Bulk Import, Add New */}
+            <div className="flex flex-row items-center gap-3 shrink-0 flex-nowrap overflow-x-auto pb-1 w-full sm:w-auto justify-start sm:justify-end">
+              <button 
+                onClick={() => setView("json-import")} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0"
+              >
+                <span>Bulk Import</span>
+                <Upload size={16} className="text-brand-green" />
+              </button>
+
+              <button 
+                onClick={() => setEditingQuestion("new")} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all shrink-0"
+              >
+                <span>Add New</span>
+                <Plus size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -719,7 +804,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         {/* LIST CONTAINER */}
         <div className="min-h-[600px]">
           {view === "json-import" ? (
-            <JsonImportPanel
+            <CsvImportPanel
               assessmentType={selectedModule}
               allowedQuestionKinds={allowedQuestionKinds}
               onImport={handleImport}
@@ -768,14 +853,62 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Clear Filters</button>
                 </div>
               ) : (
-                <QuestionTable 
-                  questions={filtered} 
-                  loading={loading} 
-                  assessmentType={selectedModule!} 
-                  onEdit={(q) => setEditingQuestion(q)} 
-                  onDelete={(id) => setDeleteConfirm(id)} 
-                  categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
-                />
+                <>
+                  <QuestionTable 
+                    questions={paginated} 
+                    loading={loading} 
+                    assessmentType={selectedModule!} 
+                    onEdit={(q) => setEditingQuestion(q)} 
+                    onDelete={(id) => setDeleteConfirm(id)} 
+                    categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
+                  />
+
+                  {filtered.length > limit && (
+                    <div className="admin-pagination-row mt-4">
+                      <div className="admin-pagination-info">
+                        Showing <strong>{Math.min((currentPage - 1) * limit + 1, filtered.length)}</strong> to{" "}
+                        <strong>{Math.min(currentPage * limit, filtered.length)}</strong> of{" "}
+                        <strong>{filtered.length.toLocaleString()}</strong> questions
+                      </div>
+                      <div className="admin-pagination-actions">
+                        <button
+                          className="admin-pagination-btn"
+                          disabled={currentPage <= 1 || loading}
+                          onClick={() => setCurrentPage((p) => p - 1)}
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <div className="admin-pagination-pages">
+                          {getPaginationRange(currentPage, Math.ceil(filtered.length / limit)).map((page, idx) => {
+                            if (page === "...") {
+                              return (
+                                <span key={`ell-${idx}`} className="px-1 sm:px-2 text-slate-400 font-bold select-none text-xs">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return (
+                              <button
+                                key={page}
+                                className={`admin-pagination-page ${currentPage === page ? "active" : ""}`}
+                                onClick={() => setCurrentPage(page as number)}
+                              >
+                                {page}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button
+                          className="admin-pagination-btn"
+                          disabled={currentPage >= Math.ceil(filtered.length / limit) || loading}
+                          onClick={() => setCurrentPage((p) => p + 1)}
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

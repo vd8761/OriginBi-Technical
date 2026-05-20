@@ -2748,6 +2748,43 @@
   .admin-stat-card {
     padding: 16px;
   }
+  .admin-pagination-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+  }
+  .admin-pagination-info {
+    text-align: center;
+  }
+  .admin-pagination-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    gap: 4px !important;
+  }
+  .admin-pagination-btn {
+    flex: none !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border-radius: 8px !important;
+  }
+  .admin-pagination-pages {
+    gap: 2px !important;
+  }
+  .admin-pagination-page {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 12px !important;
+  }
 }
 
 

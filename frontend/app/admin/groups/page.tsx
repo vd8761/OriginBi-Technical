@@ -53,6 +53,25 @@ import {
   getAdminAssessments,
 } from "@/lib/api";
 
+function getPaginationRange(currentPage: number, totalPages: number): (number | string)[] {
+  const range: (number | string)[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) {
+      range.push(i);
+    }
+    return range;
+  }
+
+  if (currentPage <= 3) {
+    range.push(1, 2, 3, "...", totalPages - 1, totalPages);
+  } else if (currentPage >= totalPages - 2) {
+    range.push(1, 2, "...", totalPages - 2, totalPages - 1, totalPages);
+  } else {
+    range.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
+  }
+  return range;
+}
+
 interface GroupMember {
   id: string;
   fullName: string;
@@ -930,18 +949,24 @@ function GroupsInner() {
                     disabled={studentPage <= 1}
                     onClick={() => setStudentPage((p) => p - 1)}
                   >
-                    <ChevronLeft size={16} /> Previous
+                    <ChevronLeft size={16} />
                   </button>
                   <div className="admin-pagination-pages">
-                    {Array.from({ length: Math.ceil(displayedMembers.length / studentLimit) }, (_, i) => {
-                      const pageNum = i + 1;
+                    {getPaginationRange(studentPage, Math.ceil(displayedMembers.length / studentLimit)).map((page, idx) => {
+                      if (page === "...") {
+                        return (
+                          <span key={`ell-${idx}`} className="px-1 sm:px-2 text-slate-400 font-bold select-none text-xs">
+                            ...
+                          </span>
+                        );
+                      }
                       return (
                         <button
-                          key={pageNum}
-                          className={`admin-pagination-page ${studentPage === pageNum ? "active" : ""}`}
-                          onClick={() => setStudentPage(pageNum)}
+                          key={page}
+                          className={`admin-pagination-page ${studentPage === page ? "active" : ""}`}
+                          onClick={() => setStudentPage(page as number)}
                         >
-                          {pageNum}
+                          {page}
                         </button>
                       );
                     })}
@@ -951,7 +976,7 @@ function GroupsInner() {
                     disabled={studentPage >= Math.ceil(displayedMembers.length / studentLimit)}
                     onClick={() => setStudentPage((p) => p + 1)}
                   >
-                    Next <ChevronRight size={16} />
+                    <ChevronRight size={16} />
                   </button>
                 </div>
               </div>
@@ -1185,18 +1210,24 @@ function GroupsInner() {
                 disabled={currentPage <= 1 || loading}
                 onClick={() => setCurrentPage((p) => p - 1)}
               >
-                <ChevronLeft size={16} /> Previous
+                <ChevronLeft size={16} />
               </button>
               <div className="admin-pagination-pages">
-                {Array.from({ length: Math.ceil(filteredGroups.length / limit) }, (_, i) => {
-                  const pageNum = i + 1;
+                {getPaginationRange(currentPage, Math.ceil(filteredGroups.length / limit)).map((page, idx) => {
+                  if (page === "...") {
+                    return (
+                      <span key={`ell-${idx}`} className="px-1 sm:px-2 text-slate-400 font-bold select-none text-xs">
+                        ...
+                      </span>
+                    );
+                  }
                   return (
                     <button
-                      key={pageNum}
-                      className={`admin-pagination-page ${currentPage === pageNum ? "active" : ""}`}
-                      onClick={() => setCurrentPage(pageNum)}
+                      key={page}
+                      className={`admin-pagination-page ${currentPage === page ? "active" : ""}`}
+                      onClick={() => setCurrentPage(page as number)}
                     >
-                      {pageNum}
+                      {page}
                     </button>
                   );
                 })}
@@ -1206,7 +1237,7 @@ function GroupsInner() {
                 disabled={currentPage >= Math.ceil(filteredGroups.length / limit) || loading}
                 onClick={() => setCurrentPage((p) => p + 1)}
               >
-                Next <ChevronRight size={16} />
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
