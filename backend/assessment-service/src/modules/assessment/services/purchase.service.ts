@@ -97,10 +97,14 @@ export class PurchaseService {
         }
         try {
             const cols = PurchaseService.SETTINGS_SNAPSHOT_COLUMNS.join(", ");
+            // tech_assessments.assessment_code holds an internal label
+            // (TECH_APT_001 …); the module is identified by module_type, which
+            // is the candidate-facing code ('aptitude', 'mnc', …) except
+            // 'communication' which is stored as 'grammar'.
             const liveRows = await this.dataSource.query(
                 `SELECT to_jsonb(s) AS settings FROM (
                      SELECT ${cols} FROM tech_assessments
-                     WHERE LOWER(assessment_code) IN (LOWER($1), LOWER($2))
+                     WHERE LOWER(module_type::text) IN (LOWER($1), LOWER($2))
                      LIMIT 1
                  ) s`,
                 [assessmentCode, lookupCode],
