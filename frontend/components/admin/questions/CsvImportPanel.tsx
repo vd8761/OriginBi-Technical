@@ -13,7 +13,7 @@ import CustomSelect from "@/components/ui/CustomSelect";
 import { uploadQuestionAsset } from "./api";
 import { 
   AlertCircle, CheckCircle2, Upload, Trash2, Plus, Download,
-  FileSpreadsheet, Edit3, HelpCircle, Check, AlertTriangle, X, UploadCloud
+  FileSpreadsheet, Edit3, HelpCircle, Check, AlertTriangle, X, UploadCloud, Loader2
 } from "lucide-react";
 
 interface CsvImportPanelProps {
@@ -504,6 +504,168 @@ function csvToQuestions(rows: string[][], assessmentType: AssessmentType): AnyQu
   });
 }
 
+// ─── Virtualized Question List (renders only visible items) ───────────────────
+const ITEM_HEIGHT = 56; // 48px row + 8px gap
+const OVERSCAN = 5;
+
+interface VirtualizedQuestionListProps {
+  filteredQuestions: AnyQuestion[];
+  validationMap: Record<string, ValidationError[]>;
+  activeQuestionId: string | null;
+  assessmentType: AssessmentType;
+  onSelectQuestion: (id: string) => void;
+  onDeleteQuestion: (id: string) => void;
+}
+
+function VirtualizedQuestionList({
+  filteredQuestions,
+  validationMap,
+  activeQuestionId,
+  assessmentType,
+  onSelectQuestion,
+  onDeleteQuestion,
+}: VirtualizedQuestionListProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(0);
+
+  // Measure container height on mount and resize
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    setContainerHeight(el.clientHeight);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  }, []);
+
+  // Scroll active item into view when it changes
+  useEffect(() => {
+    if (!activeQuestionId || !containerRef.current) return;
+    const idx = filteredQuestions.findIndex(q => q.id === activeQuestionId);
+    if (idx === -1) return;
+    const itemTop = idx * ITEM_HEIGHT;
+    const itemBottom = itemTop + ITEM_HEIGHT;
+    const el = containerRef.current;
+    if (itemTop < el.scrollTop) {
+      el.scrollTop = itemTop;
+    } else if (itemBottom > el.scrollTop + el.clientHeight) {
+      el.scrollTop = itemBottom - el.clientHeight;
+    }
+  }, [activeQuestionId, filteredQuestions]);
+
+  const totalHeight = filteredQuestions.length * ITEM_HEIGHT;
+  const startIdx = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
+  const endIdx = Math.min(
+    filteredQuestions.length,
+    Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + OVERSCAN
+  );
+
+  if (filteredQuestions.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center p-8 bg-white/50 dark:bg-white/[0.01] border border-slate-200 dark:border-white/5 rounded-2xl h-48 text-center">
+          <p className="text-xs font-bold text-slate-400">No questions found in this tab.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const visibleItems = [];
+  for (let i = startIdx; i < endIdx; i++) {
+    const q = filteredQuestions[i];
+    const errors = validationMap[q.id] || [];
+    const isValid = errors.length === 0;
+    const isActive = q.id === activeQuestionId;
+
+    let titleText = (q as any).text || (q as any).instructions || "Untitled Question";
+    if (assessmentType === "communication") {
+      titleText = (q as CommQuestion).prompt || (q as CommQuestion).instructions;
+    }
+
+    visibleItems.push(
+      <div
+        key={q.id}
+        style={{
+          position: "absolute",
+          top: i * ITEM_HEIGHT,
+          left: 0,
+          right: 4,
+          height: ITEM_HEIGHT - 8,
+        }}
+        onClick={() => onSelectQuestion(q.id)}
+        className={`group relative flex items-center justify-between p-3 pl-4 rounded-xl border cursor-pointer transition-colors overflow-hidden
+          ${isActive
+            ? "bg-brand-green/10 border-brand-green shadow-sm"
+            : "bg-white dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/30 hover:bg-brand-green/[0.02]"
+          }
+        `}
+      >
+        {isActive && (
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-green rounded-l-xl" />
+        )}
+
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] font-black
+            ${isActive ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"}
+          `}>
+            {i + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className={`text-[11px] font-bold truncate ${isActive ? "text-brand-green" : "text-slate-800 dark:text-white/80"}`}>
+              {titleText}
+            </p>
+            <span className="text-[8px] font-black uppercase tracking-wider text-slate-400">
+              {(q as any).category || (q as any).topic || (q as any).taskType || "General"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {isValid ? (
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-green/10 text-brand-green" title="Valid Row">
+              <Check size={9} className="stroke-[3]" />
+            </div>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded-md bg-red-500/10 text-red-500 text-[8px] font-black uppercase tracking-wider border border-red-500/20" title={`${errors.length} validation errors`}>
+              Fix
+            </span>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDeleteQuestion(q.id); }}
+            className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+            title="Discard question"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto pr-1 custom-scrollbar"
+    >
+      <div style={{ position: "relative", height: totalHeight, width: "100%" }}>
+        {visibleItems}
+      </div>
+    </div>
+  );
+}
+
+
+
 export default function CsvImportPanel({
   assessmentType,
   allowedQuestionKinds,
@@ -518,6 +680,14 @@ export default function CsvImportPanel({
   // Drag & Drop Upload States
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Processing progress state
+  const [processing, setProcessing] = useState<{
+    active: boolean;
+    step: string;
+    progress: number;
+    total: number;
+  }>({ active: false, step: "", progress: 0, total: 0 });
 
   // Dynamic Validation Map (Question ID -> Validation Errors)
   const validationMap = useMemo<Record<string, ValidationError[]>>(() => {
@@ -556,25 +726,64 @@ export default function CsvImportPanel({
     }
   }, [filteredQuestions, activeQuestionId]);
 
-  const handleCsvParsing = (text: string) => {
+  const handleCsvParsing = useCallback(async (text: string) => {
     setErrorMsg(null);
+    setProcessing({ active: true, step: "Parsing CSV structure...", progress: 0, total: 0 });
+
+    // Yield to the UI so the overlay renders before heavy work starts
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
     try {
       const parsed = parseCSV(text);
       if (parsed.length < 2) {
         throw new Error("CSV file does not contain a header row or data records.");
       }
-      const mapped = csvToQuestions(parsed, assessmentType);
-      if (mapped.length === 0) {
+
+      const totalDataRows = parsed.length - 1;
+      setProcessing({ active: true, step: "Mapping question fields...", progress: 0, total: totalDataRows });
+      await new Promise(resolve => requestAnimationFrame(resolve));
+
+      // Process in chunks to keep UI responsive
+      const CHUNK_SIZE = 200;
+      const headerRow = parsed[0];
+      const dataRows = parsed.slice(1);
+      const allMapped: AnyQuestion[] = [];
+
+      for (let i = 0; i < dataRows.length; i += CHUNK_SIZE) {
+        const chunk = dataRows.slice(i, i + CHUNK_SIZE);
+        const chunkWithHeader = [headerRow, ...chunk];
+        const mapped = csvToQuestions(chunkWithHeader, assessmentType);
+        allMapped.push(...mapped);
+
+        const processed = Math.min(i + CHUNK_SIZE, dataRows.length);
+        setProcessing({
+          active: true,
+          step: `Processing questions (${processed.toLocaleString()} / ${totalDataRows.toLocaleString()})...`,
+          progress: processed,
+          total: totalDataRows,
+        });
+
+        // Yield to the browser to repaint progress
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+
+      if (allMapped.length === 0) {
         throw new Error("No valid question records could be resolved from CSV.");
       }
-      setQuestions(mapped);
-      if (mapped.length > 0) {
-        setActiveQuestionId(mapped[0].id);
+
+      setProcessing({ active: true, step: "Running validations...", progress: totalDataRows, total: totalDataRows });
+      await new Promise(resolve => requestAnimationFrame(resolve));
+
+      setQuestions(allMapped);
+      if (allMapped.length > 0) {
+        setActiveQuestionId(allMapped[0].id);
       }
     } catch (e: any) {
       setErrorMsg(e.message || "Failed parsing CSV. Check file structure.");
+    } finally {
+      setProcessing({ active: false, step: "", progress: 0, total: 0 });
     }
-  };
+  }, [assessmentType]);
 
   const handleFile = (file: File) => {
     const reader = new FileReader();
@@ -666,21 +875,108 @@ export default function CsvImportPanel({
     }
   };
 
-  const handleFinishImport = () => {
+  const handleFinishImport = async () => {
     if (stats.invalid > 0) {
       alert("Please fix all validation errors before importing.");
       return;
     }
-    onImport(questions);
+
+    setProcessing({
+      active: true,
+      step: `Preparing ${questions.length.toLocaleString()} questions for database ingestion...`,
+      progress: 10,
+      total: 100
+    });
+
+    try {
+      // Short delay for smooth UI transition
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setProcessing({
+        active: true,
+        step: `Ingesting questions into the database... Please do not close this tab.`,
+        progress: 50,
+        total: 100
+      });
+
+      await onImport(questions);
+
+      setProcessing({
+        active: true,
+        step: "Refreshing assessment configuration and inventory...",
+        progress: 95,
+        total: 100
+      });
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (err) {
+      console.error("Import failed:", err);
+    } finally {
+      setProcessing({ active: false, step: "", progress: 0, total: 0 });
+    }
   };
 
   const currentErrors = useMemo(() => {
     if (!activeQuestionId) return [];
     return validationMap[activeQuestionId] || [];
   }, [activeQuestionId, validationMap]);
-
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 relative">
+      {/* Non-Glassmorphic Application Theme Progress Overlay */}
+      {processing.active && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0b100d]/80 animate-in fade-in duration-200">
+          <div 
+            className="w-full max-w-md mx-4 border border-slate-200 dark:border-white/10 rounded-2xl p-8 shadow-2xl"
+            style={{ backgroundColor: "var(--admin-bg-soft)" }}
+          >
+            {/* Spinner */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full border-[3px] border-slate-100 dark:border-white/5" />
+                <div className="absolute inset-0 w-16 h-16 rounded-full border-[3px] border-transparent border-t-brand-green animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <FileSpreadsheet size={20} className="text-brand-green" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-center text-base font-bold text-slate-900 dark:text-white mb-1">
+              Processing Questions
+            </h3>
+            <p className="text-center text-xs font-semibold text-slate-500 dark:text-white/40 mb-6">
+              {processing.step}
+            </p>
+
+            {/* Progress Bar */}
+            {processing.total > 0 && (
+              <div className="space-y-2">
+                <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-brand-green to-emerald-400 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${Math.round((processing.progress / processing.total) * 100)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-white/30">
+                    {processing.progress.toLocaleString()} / {processing.total.toLocaleString()} rows
+                  </span>
+                  <span className="text-[10px] font-black text-brand-green">
+                    {Math.round((processing.progress / processing.total) * 100)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Indeterminate pulse for steps without numeric progress */}
+            {processing.total === 0 && (
+              <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full w-1/3 bg-gradient-to-r from-brand-green to-emerald-400 rounded-full animate-pulse" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {questions.length === 0 ? (
         // ─── UPLOAD VIEW ─────────────────────────────────────────────────────────────
         <div className="flex flex-col gap-5">
@@ -798,77 +1094,15 @@ export default function CsvImportPanel({
                 ))}
               </div>
 
-              {/* Roster list */}
-              <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 custom-scrollbar">
-                {filteredQuestions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 bg-white/50 dark:bg-white/[0.01] border border-slate-200 dark:border-white/5 rounded-2xl h-48 text-center">
-                    <p className="text-xs font-bold text-slate-400">No questions found in this tab.</p>
-                  </div>
-                ) : (
-                  filteredQuestions.map((q, idx) => {
-                    const errors = validationMap[q.id] || [];
-                    const isValid = errors.length === 0;
-                    const isActive = q.id === activeQuestionId;
-                    
-                    let titleText = (q as any).text || (q as any).instructions || "Untitled Question";
-                    if (assessmentType === "communication") {
-                      titleText = (q as CommQuestion).prompt || (q as CommQuestion).instructions;
-                    }
-
-                    return (
-                      <div
-                        key={q.id}
-                        onClick={() => setActiveQuestionId(q.id)}
-                        className={`group relative flex items-center justify-between p-3 pl-4 rounded-xl border cursor-pointer transition-all duration-300 overflow-hidden
-                          ${isActive 
-                            ? "bg-brand-green/10 border-brand-green shadow-sm" 
-                            : "bg-white dark:bg-white/[0.02] border-slate-200 dark:border-white/5 hover:border-brand-green/30 hover:bg-brand-green/[0.02]"
-                          }
-                        `}
-                      >
-                        {isActive && (
-                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-green rounded-l-xl" />
-                        )}
-                        
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] font-black
-                            ${isActive ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"}
-                          `}>
-                            {idx + 1}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className={`text-[11px] font-bold truncate ${isActive ? "text-brand-green" : "text-slate-800 dark:text-white/80"}`}>
-                              {titleText}
-                            </p>
-                            <span className="text-[8px] font-black uppercase tracking-wider text-slate-400">
-                              {(q as any).category || (q as any).topic || (q as any).taskType || "General"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          {isValid ? (
-                            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-green/10 text-brand-green" title="Valid Row">
-                              <Check size={9} className="stroke-[3]" />
-                            </div>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded-md bg-red-500/10 text-red-500 text-[8px] font-black uppercase tracking-wider border border-red-500/20" title={`${errors.length} validation errors`}>
-                              Fix
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q.id); }}
-                            className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                            title="Discard question"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              {/* Virtualized Roster list */}
+              <VirtualizedQuestionList
+                filteredQuestions={filteredQuestions}
+                validationMap={validationMap}
+                activeQuestionId={activeQuestionId}
+                assessmentType={assessmentType}
+                onSelectQuestion={setActiveQuestionId}
+                onDeleteQuestion={handleDeleteQuestion}
+              />
             </div>
 
             {/* ─── RIGHT PANEL: LIVE QUESTION FIELD EDITOR (8 Cols) ─── */}

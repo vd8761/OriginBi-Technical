@@ -614,6 +614,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         await refreshModuleCounts(selectedModule!);
       } catch (err) {
         showToast((err as Error).message || "Import failed", "error");
+        throw err;
       } finally {
         setLoading(false);
       }
