@@ -1117,7 +1117,7 @@ function GroupsInner() {
                 <th>Assigned Packages</th>
                 <th>Candidates</th>
                 <th>Pricing Policy</th>
-                <th>Status</th>
+                <th>Enabled Assessments</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
@@ -1175,16 +1175,8 @@ function GroupsInner() {
                       </Badge>
                     </td>
                     <td>
-                      <Badge
-                        tone={
-                          g.status === "active"
-                            ? "green"
-                            : g.status === "draft"
-                            ? "amber"
-                            : "neutral"
-                        }
-                      >
-                        {g.status}
+                      <Badge tone={g.assessments.length > 0 ? "green" : "neutral"}>
+                        {g.assessments.length} {g.assessments.length === 1 ? "Enabled" : "Enabled"}
                       </Badge>
                     </td>
                     <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>

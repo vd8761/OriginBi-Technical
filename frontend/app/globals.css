@@ -1864,8 +1864,6 @@
   padding: 12px 32px;
   border-bottom: 1px solid var(--admin-border);
   background: var(--admin-bg-soft);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
