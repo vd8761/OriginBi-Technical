@@ -12,19 +12,20 @@
 // State shape mirrors the assessment.coding question-body.schema.json. On save
 // the editor POSTs / PUTs to /v1/admin/questions with the body + test_cases.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import MonacoEditor from "@/components/assessment/coding/MonacoEditor";
+import MonacoEditor, { type MonacoEditorApi } from "@/components/assessment/coding/MonacoEditor";
 import CustomSelect from "@/components/ui/CustomSelect";
 import { Switch } from "@/components/ui/Switch";
-import { Image as ImageIcon, Trash2, Upload as UploadIcon, Eye, Code } from "lucide-react";
+import { Image as ImageIcon, Trash2, Upload as UploadIcon } from "lucide-react";
+import FormatAwareEditor, { type FormattedText } from "./FormatAwareEditor";
+import TagChips from "./TagChips";
 import {
   createAdminQuestion,
   updateAdminQuestion,
   getAdminQuestion,
+  listAdminQuestions,
   listAdminTestCases,
   listPlugins,
   appendAdminTestCase,
@@ -77,6 +78,13 @@ interface QuestionBody {
   samples?: { input: string; output: string; explanation?: string }[];
   constraints?: string;
   hints?: { afterFailures: number; text: string }[];
+  // Authoring-spec fields (mirror plugins/assessment-coding/types.go).
+  tags?: string[];
+  inputFormat?: FormattedText;
+  outputFormat?: FormattedText;
+  constraintsFormat?: FormattedText;
+  hintsEnabled?: boolean;
+  multiFile?: boolean;
   // The plugin schema reserves `media` for a single embedded video/audio
   // object, so multi-file question attachments live under `attachments`.
   // Schema root allows additionalProperties so the backend accepts it.
@@ -116,6 +124,13 @@ const EMPTY: FormState = {
     prompt: "## Problem\n\nDescribe the problem here.",
     samples: [],
     hints: [],
+    tags: [],
+    mode: "main",
+    hintsEnabled: false,
+    multiFile: false,
+    inputFormat: { kind: "markdown", content: "" },
+    outputFormat: { kind: "markdown", content: "" },
+    constraintsFormat: { kind: "markdown", content: "" },
     allowedLanguages: [],
     starterFiles: {},
     entryFile: {},
@@ -128,6 +143,33 @@ const EMPTY: FormState = {
     uxSettings: { disableCopyPaste: true, lineNumbers: true, lockOnSubmit: false },
   },
 };
+
+const EMPTY_FORMAT: FormattedText = { kind: "markdown", content: "" };
+
+// migrateBodyOnLoad heals a question body loaded from the backend so the
+// editor always has the authoring-spec fields. Legacy bodies (migration
+// 011/021) round-trip: missing fields default empty, and a legacy plain
+// `constraints` string is lifted into `constraintsFormat` (kind: plain) so the
+// admin still sees what was there.
+function migrateBodyOnLoad(raw: QuestionBody): QuestionBody {
+  const body: QuestionBody = { ...EMPTY.body, ...raw };
+  body.tags = raw.tags ?? [];
+  body.inputFormat = raw.inputFormat ?? { ...EMPTY_FORMAT };
+  body.outputFormat = raw.outputFormat ?? { ...EMPTY_FORMAT };
+  if (raw.constraintsFormat) {
+    body.constraintsFormat = raw.constraintsFormat;
+  } else if (raw.constraints && raw.constraints.trim()) {
+    body.constraintsFormat = { kind: "plain", content: raw.constraints };
+  } else {
+    body.constraintsFormat = { ...EMPTY_FORMAT };
+  }
+  body.hintsEnabled = raw.hintsEnabled ?? (raw.hints?.length ?? 0) > 0;
+  body.multiFile =
+    raw.multiFile ??
+    Object.values(raw.starterFiles ?? {}).some((files) => (files?.length ?? 0) > 1);
+  body.mode = raw.mode ?? "main";
+  return body;
+}
 
 type Tab = "problem" | "tests" | "languages" | "limits" | "settings";
 
@@ -201,10 +243,23 @@ export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
 
   // Initial load.
   useEffect(() => {
     listPlugins({ category: "language" }).then((d) => setLanguages(d.plugins));
+    // Pull the union of tags used across existing coding questions so the tag
+    // input can autocomplete. Best-effort — failures just yield no suggestions.
+    listAdminQuestions({ pluginSlug: "assessment.coding" })
+      .then((d) => {
+        const set = new Set<string>();
+        for (const q of d.questions) {
+          const tags = (q.body as { tags?: string[] } | undefined)?.tags ?? [];
+          for (const t of tags) if (typeof t === "string") set.add(t);
+        }
+        setTagSuggestions(Array.from(set).sort());
+      })
+      .catch(() => setTagSuggestions([]));
     if (mode === "edit" && questionId) {
       Promise.all([getAdminQuestion(questionId), listAdminTestCases(questionId)])
         .then(([q, tc]) => {
@@ -214,7 +269,7 @@ export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
             maxScore: q.maxScore,
             isNegativeMarked: q.isNegativeMarked,
             negativeScore: q.negativeScore,
-            body: { ...EMPTY.body, ...(q.body as unknown as QuestionBody) },
+            body: migrateBodyOnLoad(q.body as unknown as QuestionBody),
           });
           setTests(tc.testCases);
           setLoading(false);
@@ -286,6 +341,20 @@ export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
           </div>
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
             {savedAt && <span className="text-xs text-slate-500">Saved {savedAt}</span>}
+            <label className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/10 px-3 py-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {(state.body.mode ?? "main") === "trial" ? "Trial pool" : "Main pool"}
+              </span>
+              <Switch
+                checked={(state.body.mode ?? "main") === "trial"}
+                onCheckedChange={(val) =>
+                  setState({
+                    ...state,
+                    body: { ...state.body, mode: val ? "trial" : "main" },
+                  })
+                }
+              />
+            </label>
             <button
               type="button"
               onClick={save}
@@ -321,7 +390,11 @@ export default function CodingEditor({ mode, questionId }: CodingEditorProps) {
         </nav>
 
         {tab === "problem" && (
-          <ProblemTab state={state} onChange={setState} />
+          <ProblemTab
+            state={state}
+            onChange={setState}
+            tagSuggestions={tagSuggestions}
+          />
         )}
         {tab === "tests" && (
           <TestsTab
@@ -352,24 +425,38 @@ const tabLabels: Record<Tab, string> = {
 
 // ── PROBLEM TAB ───────────────────────────────────────────────────────────
 
+// Difficulty is stored as an integer (question_versions.difficulty); the
+// authoring UI exposes three named buckets. easy=1, medium=3, hard=5.
+function difficultyToWord(n: number): "easy" | "medium" | "hard" {
+  if (n <= 2) return "easy";
+  if (n === 3) return "medium";
+  return "hard";
+}
+function wordToDifficulty(w: string): number {
+  return w === "easy" ? 1 : w === "medium" ? 3 : 5;
+}
+
 function ProblemTab({
   state,
   onChange,
+  tagSuggestions,
 }: {
   state: FormState;
   onChange: (s: FormState) => void;
+  tagSuggestions: string[];
 }) {
   const setBody = (patch: Partial<QuestionBody>) =>
     onChange({ ...state, body: { ...state.body, ...patch } });
 
-  const [pane, setPane] = useState<"edit" | "preview">("edit");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const attachments = state.body.attachments ?? [];
 
+  // The Statement editor hands back an imperative API so the media chips can
+  // insert a snippet at the caret instead of appending to end-of-file.
+  const statementApiRef = useRef<MonacoEditorApi | null>(null);
+
   const promptFormat = state.body.promptFormat;
-  const monacoLang =
-    promptFormat === "markdown" ? "markdown" : promptFormat === "html" ? "html" : "plaintext";
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -402,9 +489,16 @@ function ProblemTab({
     return `![${alt}](${m.url})`;
   };
 
-  const appendToPrompt = (snippet: string) => {
-    const sep = state.body.prompt && !state.body.prompt.endsWith("\n") ? "\n\n" : "";
-    setBody({ prompt: state.body.prompt + sep + snippet + "\n" });
+  const insertSnippet = (m: AttachmentAsset) => {
+    const snippet = snippetFor(m);
+    if (statementApiRef.current) {
+      statementApiRef.current.insertAtCursor(snippet);
+    } else {
+      // Fallback when the statement editor is in preview mode.
+      const sep =
+        state.body.prompt && !state.body.prompt.endsWith("\n") ? "\n\n" : "";
+      setBody({ prompt: state.body.prompt + sep + snippet + "\n" });
+    }
   };
 
   const copy = async (text: string) => {
@@ -420,185 +514,314 @@ function ProblemTab({
   };
 
   return (
-    <section className="grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-6">
-      <div className="flex flex-col gap-4">
-        <FieldSelect
-          label="Difficulty"
-          value={state.difficulty}
-          onChange={(v) => onChange({ ...state, difficulty: v })}
-          options={[
-            { value: 1, label: "Easy" },
-            { value: 2, label: "Easy+" },
-            { value: 3, label: "Medium" },
-            { value: 4, label: "Hard" },
-            { value: 5, label: "Hard+" },
-          ]}
-        />
-        <FieldSelect
-          label="Prompt format"
-          value={state.body.promptFormat}
-          onChange={(v) => setBody({ promptFormat: v as QuestionBody["promptFormat"] })}
-          options={[
-            { value: "markdown", label: "Markdown (recommended)" },
-            { value: "html", label: "HTML" },
-            { value: "plain", label: "Plain text" },
-          ]}
-        />
-        <Field label="Section / topic">
-          <input
-            value={state.body.section ?? ""}
-            onChange={(e) => setBody({ section: e.target.value, category: e.target.value })}
-            placeholder="Arrays & Hashing"
-            className="input-base"
-          />
-        </Field>
-        <Field label="Constraints" hint="Free-form text shown below the prompt.">
-          <textarea
-            value={state.body.constraints ?? ""}
-            onChange={(e) => setBody({ constraints: e.target.value })}
-            rows={4}
-            className="input-base font-mono text-xs"
-          />
-        </Field>
-
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <ImageIcon size={12} /> Question Pool
-            </span>
-            <Switch
-              checked={(state.body.mode ?? "main") === "trial"}
-              onCheckedChange={(val) => setBody({ mode: val ? "trial" : "main" })}
-            />
-          </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            On = Sample / Trial pool (visible during practice); Off = Main pool (live exam set).
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <ImageIcon size={12} /> Media ({attachments.length})
-            </span>
-            <label className="cursor-pointer text-xs font-bold text-emerald-600 hover:underline">
-              <UploadIcon size={11} className="inline mr-1" />
-              {uploading ? "Uploading…" : "Add"}
+    <section className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6">
+        {/* Main stacked column */}
+        <div className="flex flex-col gap-5 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="Topic">
               <input
-                type="file"
-                multiple
-                accept="image/*,video/*,audio/*"
-                className="hidden"
-                onChange={(e) => {
-                  handleFiles(e.target.files);
-                  e.target.value = "";
-                }}
+                value={state.body.section ?? ""}
+                onChange={(e) =>
+                  setBody({ section: e.target.value, category: e.target.value })
+                }
+                placeholder="Arrays & Hashing"
+                className="input-base"
               />
-            </label>
+            </Field>
+            <FieldSelect
+              label="Difficulty"
+              value={difficultyToWord(state.difficulty)}
+              onChange={(v) =>
+                onChange({ ...state, difficulty: wordToDifficulty(v) })
+              }
+              options={[
+                { value: "easy", label: "Easy" },
+                { value: "medium", label: "Medium" },
+                { value: "hard", label: "Hard" },
+              ]}
+            />
+            <Field label="Marks">
+              <input
+                type="number"
+                min={1}
+                value={state.maxScore}
+                onChange={(e) =>
+                  onChange({ ...state, maxScore: Number(e.target.value) })
+                }
+                className="input-base"
+              />
+            </Field>
           </div>
-          {uploadError && (
-            <p className="text-[11px] text-red-500">{uploadError}</p>
-          )}
-          {attachments.length === 0 ? (
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Optional. Upload images / video / audio, then insert into the statement using the snippet for the selected format. Inserted media renders inline in the candidate&apos;s preview.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {attachments.map((m, i) => (
-                <li key={i} className="flex items-center gap-2 text-[11px] bg-slate-50 dark:bg-white/5 rounded-lg p-2">
-                  {m.mime?.startsWith("image/") ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.url} alt={m.alt ?? ""} style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4 }} />
-                  ) : (
-                    <div style={{ width: 32, height: 32, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.1)", borderRadius: 4 }}>
-                      <ImageIcon size={14} />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold truncate text-slate-900 dark:text-white">{m.fileName ?? m.url}</div>
-                    <div className="flex gap-1.5">
-                      <button type="button" className="text-emerald-600 hover:underline" onClick={() => appendToPrompt(snippetFor(m))}>Insert</button>
-                      <button type="button" className="text-slate-500 hover:underline" onClick={() => copy(snippetFor(m))}>Copy</button>
-                    </div>
-                  </div>
-                  <button type="button" className="text-red-500 hover:text-red-700" onClick={() => removeAttachment(i)} title="Remove">
-                    <Trash2 size={12} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+
+          <Field label="Tags">
+            <TagChips
+              value={state.body.tags ?? []}
+              onChange={(tags) => setBody({ tags })}
+              suggestions={tagSuggestions}
+            />
+          </Field>
+
+          <FormatAwareEditor
+            label="Question Statement"
+            monacoPathKey="statement"
+            height={480}
+            value={{ kind: promptFormat, content: state.body.prompt }}
+            onChange={(ft) =>
+              setBody({ promptFormat: ft.kind, prompt: ft.content })
+            }
+            onReady={(api) => {
+              statementApiRef.current = api;
+            }}
+          />
+
+          <FormatAwareEditor
+            label="Input Format"
+            monacoPathKey="input-format"
+            height={200}
+            value={state.body.inputFormat ?? { kind: "markdown", content: "" }}
+            onChange={(ft) => setBody({ inputFormat: ft })}
+          />
+
+          <FormatAwareEditor
+            label="Output Format"
+            monacoPathKey="output-format"
+            height={200}
+            value={state.body.outputFormat ?? { kind: "markdown", content: "" }}
+            onChange={(ft) => setBody({ outputFormat: ft })}
+          />
+
+          <FormatAwareEditor
+            label="Constraints"
+            monacoPathKey="constraints"
+            height={200}
+            value={
+              state.body.constraintsFormat ?? { kind: "markdown", content: "" }
+            }
+            onChange={(ft) =>
+              // Keep the legacy plain `constraints` string in sync so older
+              // candidate renderers still have something to show.
+              setBody({
+                constraintsFormat: ft,
+                constraints: ft.kind === "plain" ? ft.content : state.body.constraints,
+              })
+            }
+          />
         </div>
+
+        {/* Sticky media rail */}
+        <aside className="lg:sticky lg:top-4 self-start">
+          <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <ImageIcon size={12} /> Media ({attachments.length})
+              </span>
+              <label className="cursor-pointer text-xs font-bold text-emerald-600 hover:underline">
+                <UploadIcon size={11} className="inline mr-1" />
+                {uploading ? "Uploading…" : "Add"}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,audio/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            {uploadError && <p className="text-[11px] text-red-500">{uploadError}</p>}
+            {attachments.length === 0 ? (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Optional. Upload images / video / audio, then click Insert to
+                drop the snippet at your cursor in the statement.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {attachments.map((m, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-2 text-[11px] bg-slate-50 dark:bg-white/5 rounded-lg p-2"
+                  >
+                    {m.mime?.startsWith("image/") ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={m.url}
+                        alt={m.alt ?? ""}
+                        style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4 }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          display: "grid",
+                          placeItems: "center",
+                          background: "rgba(0,0,0,0.1)",
+                          borderRadius: 4,
+                        }}
+                      >
+                        <ImageIcon size={14} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold truncate text-slate-900 dark:text-white">
+                        {m.fileName ?? m.url}
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          className="text-emerald-600 hover:underline"
+                          onClick={() => insertSnippet(m)}
+                        >
+                          Insert
+                        </button>
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:underline"
+                          onClick={() => copy(snippetFor(m))}
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-red-500 hover:text-red-700"
+                      onClick={() => removeAttachment(i)}
+                      title="Remove"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
       </div>
 
-      <div className="flex flex-col gap-2 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Statement ({promptFormat})
-          </span>
-          <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => setPane("edit")}
-              className={`flex items-center gap-1 px-3 py-1.5 ${pane === "edit" ? "bg-emerald-600 text-white" : "text-slate-600 dark:text-slate-300"}`}
-            >
-              <Code size={12} /> Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => setPane("preview")}
-              className={`flex items-center gap-1 px-3 py-1.5 ${pane === "preview" ? "bg-emerald-600 text-white" : "text-slate-600 dark:text-slate-300"}`}
-            >
-              <Eye size={12} /> Preview
-            </button>
-          </div>
-        </div>
-        {pane === "edit" ? (
-          <div className="border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden" style={{ height: 520 }}>
-            <MonacoEditor
-              path={`prompt.${promptFormat}`}
-              value={state.body.prompt}
-              language={monacoLang}
-              fontSize={13}
-              theme={typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"}
-              suggestionsEnabled={false}
-              lintsEnabled={false}
-              onChange={(v) => setBody({ prompt: v })}
-            />
-          </div>
-        ) : (
-          <div className="border border-slate-200 dark:border-white/10 rounded-lg p-4 overflow-auto bg-white dark:bg-[#0f1411]" style={{ height: 520 }}>
-            <PromptPreview prompt={state.body.prompt} format={promptFormat} />
-          </div>
-        )}
-        <p className="text-xs text-slate-400">
-          The candidate-side renderer matches the selected format. HTML preview is sandboxed.
-        </p>
-      </div>
+      <HintsCard state={state} onChange={onChange} />
     </section>
   );
 }
 
-function PromptPreview({ prompt, format }: { prompt: string; format: QuestionBody["promptFormat"] }) {
-  if (format === "markdown") {
-    return (
-      <div className="prose prose-sm dark:prose-invert max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{prompt}</ReactMarkdown>
+// ── HINTS ─────────────────────────────────────────────────────────────────
+
+function HintsCard({
+  state,
+  onChange,
+}: {
+  state: FormState;
+  onChange: (s: FormState) => void;
+}) {
+  const setBody = (patch: Partial<QuestionBody>) =>
+    onChange({ ...state, body: { ...state.body, ...patch } });
+  const hints = state.body.hints ?? [];
+  const enabled = state.body.hintsEnabled ?? false;
+
+  const setHint = (i: number, patch: Partial<{ afterFailures: number; text: string }>) =>
+    setBody({ hints: hints.map((h, idx) => (idx === i ? { ...h, ...patch } : h)) });
+
+  const addHint = () => {
+    const last = hints[hints.length - 1];
+    const next = last ? last.afterFailures + 2 : 2;
+    setBody({ hints: [...hints, { afterFailures: next, text: "" }] });
+  };
+
+  const removeHint = (i: number) =>
+    setBody({ hints: hints.filter((_, idx) => idx !== i) });
+
+  // Non-monotonic afterFailures is allowed by the backend but usually a
+  // mistake; surface a soft warning.
+  const nonMonotonic = hints.some(
+    (h, i) => i > 0 && h.afterFailures <= hints[i - 1].afterFailures,
+  );
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-white/10 p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+          Hints
+        </span>
+        <label className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Show hints to candidate
+          </span>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(v) => setBody({ hintsEnabled: v })}
+          />
+        </label>
       </div>
-    );
-  }
-  if (format === "html") {
-    return (
-      <iframe
-        title="HTML preview"
-        srcDoc={prompt}
-        sandbox="allow-same-origin"
-        style={{ width: "100%", height: "100%", border: 0, background: "white" }}
-      />
-    );
-  }
-  return <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed">{prompt}</pre>;
+
+      {enabled && (
+        <>
+          {nonMonotonic && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              Tip: &quot;Show after N failures&quot; values usually increase
+              hint-by-hint so each hint unlocks later than the previous one.
+            </p>
+          )}
+          <ul className="flex flex-col gap-2">
+            {hints.map((h, i) => (
+              <li
+                key={i}
+                className="flex flex-col sm:flex-row gap-2 sm:items-start rounded-lg bg-slate-50 dark:bg-white/[0.04] p-2"
+              >
+                <label className="flex flex-col gap-1 shrink-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    After N failures
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={h.afterFailures}
+                    onChange={(e) =>
+                      setHint(i, {
+                        afterFailures: Math.max(1, Number(e.target.value)),
+                      })
+                    }
+                    className="input-base w-28"
+                  />
+                </label>
+                <label className="flex flex-1 flex-col gap-1 min-w-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Hint text
+                  </span>
+                  <textarea
+                    value={h.text}
+                    maxLength={2000}
+                    rows={2}
+                    onChange={(e) => setHint(i, { text: e.target.value })}
+                    className="input-base text-xs"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => removeHint(i)}
+                  className="text-xs text-slate-400 hover:text-red-500 sm:pt-5"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+            {hints.length === 0 && (
+              <p className="text-xs text-slate-400">No hints yet.</p>
+            )}
+          </ul>
+          <button
+            type="button"
+            onClick={addHint}
+            className="self-start rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700"
+          >
+            + Add hint
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
 // ── TEST CASES TAB ────────────────────────────────────────────────────────
@@ -611,6 +834,7 @@ function testToInput(tc: AdminTestCase) {
     weight: tc.weight,
     stdin: tc.stdin,
     expected_stdout: tc.expectedStdout,
+    explanation: tc.explanation,
     comparator: tc.comparator,
     comparator_config: tc.comparatorConfig,
   };
@@ -651,16 +875,19 @@ function TestsTab({
   };
 
   const addTest = () => {
+    // The first case defaults to a visible sample; every later one is hidden.
+    const isFirst = tests.length === 0;
     const next: AdminTestCase = {
       id: "__pending__",
       questionVersionId: "",
       ordinal: tests.length + 1,
       name: `Case ${tests.length + 1}`,
-      isSample: tests.length < 2,
-      isHidden: tests.length >= 2,
+      isSample: isFirst,
+      isHidden: !isFirst,
       weight: 1,
       stdin: "",
       expectedStdout: "",
+      explanation: "",
       comparator: "trim_equal",
       comparatorConfig: {},
     };
@@ -715,7 +942,7 @@ function TestsTab({
                   #{i + 1} {t.name || "Unnamed"}
                 </span>
                 <span className={`text-[10px] uppercase tracking-wider ${selected === i ? "text-white/70" : "text-slate-400"}`}>
-                  {t.isHidden ? "hidden" : "visible"} · weight {t.weight}
+                  {t.isSample ? "sample" : "hidden"} · weight {t.weight}
                 </span>
               </button>
             </li>
@@ -759,30 +986,25 @@ function TestsTab({
                 { value: "regex", label: "Regex" },
               ]}
             />
-            <div className="flex flex-col gap-2 sm:pt-6">
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-emerald-600"
+            <div className="flex flex-col gap-1.5 sm:pt-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Visibility
+              </span>
+              <label className="flex items-center gap-2">
+                <Switch
                   checked={current.isSample}
-                  onChange={(e) => {
-                    updateLocal(selected, { isSample: e.target.checked });
+                  onCheckedChange={(v) => {
+                    // Sample on → visible; off → hidden. The two flags are kept
+                    // mutually exclusive so the candidate side is unambiguous.
+                    updateLocal(selected, { isSample: v, isHidden: !v });
                     persistTest(selected);
                   }}
                 />
-                Sample (shown to candidate)
-              </label>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-emerald-600"
-                  checked={current.isHidden}
-                  onChange={(e) => {
-                    updateLocal(selected, { isHidden: e.target.checked });
-                    persistTest(selected);
-                  }}
-                />
-                Hidden (not shown — final scoring only)
+                <span className="text-xs">
+                  {current.isSample
+                    ? "Shown to candidate as a sample"
+                    : "Hidden — final scoring only"}
+                </span>
               </label>
             </div>
           </div>
@@ -806,6 +1028,18 @@ function TestsTab({
               />
             </Field>
           </div>
+          <Field
+            label="Explanation"
+            hint="Shown to the candidate beneath this case's I/O when it is a sample."
+          >
+            <textarea
+              value={current.explanation}
+              onChange={(e) => updateLocal(selected, { explanation: e.target.value })}
+              onBlur={() => persistTest(selected)}
+              rows={3}
+              className="input-base text-xs"
+            />
+          </Field>
           <div className="flex">
             <button
               type="button"
@@ -825,6 +1059,27 @@ function TestsTab({
 
 // ── LANGUAGES TAB ─────────────────────────────────────────────────────────
 
+// Default runner-file extension per bare language slug. Mirrors
+// solutionExtForLang in the Go CSV decoder — keep the two in sync.
+const SOLUTION_EXT: Record<string, string> = {
+  python: "py",
+  python3: "py",
+  java: "java",
+  cpp: "cpp",
+  javascript: "js",
+  c: "c",
+  go: "go",
+  csharp: "cs",
+  typescript: "ts",
+};
+
+function solutionExtFor(slug: string, schemaExt?: string): string {
+  const bare = slug.replace(/^language\./, "").toLowerCase();
+  if (SOLUTION_EXT[bare]) return SOLUTION_EXT[bare];
+  if (schemaExt) return schemaExt.replace(/^\./, "");
+  return "txt";
+}
+
 function LanguagesTab({
   state,
   onChange,
@@ -834,18 +1089,31 @@ function LanguagesTab({
   onChange: (s: FormState) => void;
   languages: Plugin[];
 }) {
-  const allowed = state.body.allowedLanguages ?? [];
-  const [activeLangState, setActiveLang] = useState<string>("");
-  // Derive (instead of effect-syncing) so the active tab follows the allowed
-  // set without a cascading render.
-  const activeLang =
-    activeLangState && allowed.includes(activeLangState) ? activeLangState : allowed[0] ?? "";
+  // Single language per question — the first (and only) allowedLanguages entry.
+  const activeLang = (state.body.allowedLanguages ?? [])[0] ?? "";
+  const multiFile = state.body.multiFile ?? false;
 
-  const toggleLang = (slug: string) => {
-    const next = allowed.includes(slug)
-      ? allowed.filter((s) => s !== slug)
-      : [...allowed, slug];
-    onChange({ ...state, body: { ...state.body, allowedLanguages: next } });
+  const langSchema: LanguageSchema | undefined = useMemo(() => {
+    const plug = languages.find((p) => p.slug === activeLang);
+    return plug?.schema as LanguageSchema | undefined;
+  }, [activeLang, languages]);
+
+  const ext = solutionExtFor(activeLang, langSchema?.fileExtension);
+  const solutionPath = `solution.${ext}`;
+
+  // Switching language wipes all language-keyed starters so a stale Python
+  // starter never leaks into a Java question.
+  const selectLanguage = (slug: string) => {
+    onChange({
+      ...state,
+      body: {
+        ...state.body,
+        allowedLanguages: slug ? [slug] : [],
+        starterCode: {},
+        starterFiles: {},
+        entryFile: {},
+      },
+    });
   };
 
   const files = state.body.starterFiles?.[activeLang] ?? [];
@@ -858,6 +1126,16 @@ function LanguagesTab({
       },
     });
 
+  const singleContent = state.body.starterCode?.[activeLang] ?? "";
+  const setSingleContent = (content: string) =>
+    onChange({
+      ...state,
+      body: {
+        ...state.body,
+        starterCode: { ...(state.body.starterCode ?? {}), [activeLang]: content },
+      },
+    });
+
   const setEntryFile = (path: string) =>
     onChange({
       ...state,
@@ -867,82 +1145,140 @@ function LanguagesTab({
       },
     });
 
-  const langSchema: LanguageSchema | undefined = useMemo(() => {
-    const plug = languages.find((p) => p.slug === activeLang);
-    return plug?.schema as LanguageSchema | undefined;
-  }, [activeLang, languages]);
+  // Toggling multi-file converts the starter representation in place so no
+  // content is lost.
+  const toggleMultiFile = (on: boolean) => {
+    if (!activeLang) {
+      onChange({ ...state, body: { ...state.body, multiFile: on } });
+      return;
+    }
+    if (on) {
+      // Single → multi: seed the protected solution file with whatever the
+      // single-file editor held.
+      const existing = state.body.starterFiles?.[activeLang] ?? [];
+      const hasSolution = existing.some((f) =>
+        f.path.split(/[\\/]/).pop()?.toLowerCase().startsWith("solution."),
+      );
+      const seeded: StarterFile[] = hasSolution
+        ? existing
+        : [{ path: solutionPath, content: singleContent, readOnly: false }, ...existing];
+      onChange({
+        ...state,
+        body: {
+          ...state.body,
+          multiFile: true,
+          starterFiles: { ...(state.body.starterFiles ?? {}), [activeLang]: seeded },
+          starterCode: {},
+        },
+      });
+    } else {
+      // Multi → single: collapse to the solution file's content.
+      const solution = files.find((f) =>
+        f.path.split(/[\\/]/).pop()?.toLowerCase().startsWith("solution."),
+      );
+      onChange({
+        ...state,
+        body: {
+          ...state.body,
+          multiFile: false,
+          starterCode: {
+            ...(state.body.starterCode ?? {}),
+            [activeLang]: solution?.content ?? singleContent,
+          },
+          starterFiles: {},
+          entryFile: {},
+        },
+      });
+    }
+  };
 
   return (
     <section className="flex flex-col gap-6">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Allowed languages
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {languages.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              onClick={() => toggleLang(l.slug)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                allowed.includes(l.slug)
-                  ? "bg-emerald-600 text-white"
-                  : "border border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 dark:border-white/10 dark:text-slate-300"
-              }`}
-            >
-              {(l.schema as LanguageSchema | undefined)?.displayName ?? l.name}
-            </button>
-          ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field
+          label="Language"
+          hint="One language per question. Changing it clears starter code."
+        >
+          <CustomSelect
+            value={activeLang}
+            placeholder="Select a language"
+            options={languages.map((l) => ({
+              value: l.slug,
+              label: (l.schema as LanguageSchema | undefined)?.displayName ?? l.name,
+            }))}
+            onChange={selectLanguage}
+          />
+        </Field>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Multi-file workspace
+          </span>
+          <label className="flex items-center gap-2">
+            <Switch checked={multiFile} onCheckedChange={toggleMultiFile} />
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {multiFile
+                ? `On — protected runner file ${solutionPath}`
+                : "Off — single starter file"}
+            </span>
+          </label>
         </div>
       </div>
 
-      {allowed.length > 0 && (
-        <>
-          <div className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-white/10">
-            {allowed.map((slug) => (
-              <button
-                key={slug}
-                type="button"
-                onClick={() => setActiveLang(slug)}
-                className={`px-3 py-2 text-xs font-mono transition border-b-2 ${
-                  activeLang === slug
-                    ? "border-emerald-600 text-emerald-600 dark:text-emerald-300"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {slug}
-              </button>
-            ))}
+      {!activeLang && (
+        <p className="text-sm text-slate-500">
+          Pick a language to author starter code.
+        </p>
+      )}
+
+      {activeLang && !multiFile && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Starter code ({solutionPath})
+          </span>
+          <div className="h-[440px] rounded-md border border-slate-200 dark:border-white/10 overflow-hidden">
+            <MonacoEditor
+              path={`single::${activeLang}`}
+              value={singleContent}
+              language={langSchema?.monacoLanguageId ?? "plaintext"}
+              fontSize={13}
+              theme="dark"
+              suggestionsEnabled={false}
+              lintsEnabled={false}
+              onChange={setSingleContent}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeLang && multiFile && (
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field
+              label="Entry file"
+              hint="The file Judge0 runs. Defaults to the language's default."
+            >
+              <input
+                value={(state.body.entryFile ?? {})[activeLang] ?? ""}
+                onChange={(e) => setEntryFile(e.target.value)}
+                placeholder={langSchema?.defaultEntryFile ?? solutionPath}
+                className="input-base font-mono"
+              />
+            </Field>
+            <div className="text-xs text-slate-500 sm:pt-6">
+              Default extension{" "}
+              <span className="font-mono">{langSchema?.fileExtension ?? `.${ext}`}</span>
+            </div>
           </div>
 
-          {activeLang && (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Entry file" hint="The file Judge0 runs. Defaults to the language's default.">
-                  <input
-                    value={(state.body.entryFile ?? {})[activeLang] ?? ""}
-                    onChange={(e) => setEntryFile(e.target.value)}
-                    placeholder={langSchema?.defaultEntryFile ?? ""}
-                    className="input-base font-mono"
-                  />
-                </Field>
-                <div className="text-xs text-slate-500 sm:pt-6">
-                  Default extension <span className="font-mono">{langSchema?.fileExtension ?? "?"}</span>{" "}
-                  · multi-file{" "}
-                  <span className="font-mono">{langSchema?.supportsMultiFile ? "yes" : "no"}</span>
-                </div>
-              </div>
-
-              <StarterFilesEditor
-                files={files}
-                setFiles={setFiles}
-                extension={langSchema?.fileExtension ?? ""}
-                monacoLanguageId={langSchema?.monacoLanguageId ?? "plaintext"}
-                editorKey={activeLang}
-              />
-            </div>
-          )}
-        </>
+          <StarterFilesEditor
+            files={files}
+            setFiles={setFiles}
+            extension={langSchema?.fileExtension ?? `.${ext}`}
+            monacoLanguageId={langSchema?.monacoLanguageId ?? "plaintext"}
+            editorKey={activeLang}
+            protectedBasename="solution."
+          />
+        </div>
       )}
     </section>
   );
@@ -954,16 +1290,26 @@ function StarterFilesEditor({
   extension,
   monacoLanguageId,
   editorKey,
+  protectedBasename,
 }: {
   files: StarterFile[];
   setFiles: (next: StarterFile[]) => void;
   extension: string;
   monacoLanguageId: string;
   editorKey: string;
+  /** Files whose basename starts with this prefix cannot be renamed or
+   * deleted (the protected runner file, e.g. "solution."). */
+  protectedBasename?: string;
 }) {
   const [activeIdxState, setActiveIdx] = useState(0);
   // Clamp inline rather than syncing via effect.
   const activeIdx = Math.min(activeIdxState, Math.max(0, files.length - 1));
+
+  const isProtected = (f: StarterFile) =>
+    !!protectedBasename &&
+    (f.path.split(/[\\/]/).pop() ?? "")
+      .toLowerCase()
+      .startsWith(protectedBasename.toLowerCase());
 
   const update = (i: number, patch: Partial<StarterFile>) =>
     setFiles(files.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
@@ -972,7 +1318,7 @@ function StarterFilesEditor({
     setFiles([
       ...files,
       {
-        path: `solution${extension || ".py"}`,
+        path: `helper${extension || ".txt"}`,
         content: "",
         readOnly: false,
       },
@@ -981,10 +1327,12 @@ function StarterFilesEditor({
   };
 
   const removeFile = (i: number) => {
+    if (isProtected(files[i])) return;
     setFiles(files.filter((_, idx) => idx !== i));
   };
 
   const current = files[activeIdx];
+  const currentProtected = current ? isProtected(current) : false;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-4">
@@ -1013,7 +1361,7 @@ function StarterFilesEditor({
             }`}
           >
             <span className="font-mono truncate">{f.path}</span>
-            {f.readOnly && (
+            {(f.readOnly || isProtected(f)) && (
               <span className={activeIdx === i ? "text-white/70" : "text-slate-400"}>🔒</span>
             )}
           </button>
@@ -1030,7 +1378,8 @@ function StarterFilesEditor({
               <input
                 value={current.path}
                 onChange={(e) => update(activeIdx, { path: e.target.value })}
-                className="input-base font-mono"
+                readOnly={currentProtected}
+                className={`input-base font-mono ${currentProtected ? "opacity-60" : ""}`}
               />
             </Field>
             <label className="flex items-center gap-2 text-xs sm:pt-6">
@@ -1042,13 +1391,17 @@ function StarterFilesEditor({
               />
               File read-only
             </label>
-            <button
-              type="button"
-              onClick={() => removeFile(activeIdx)}
-              className="text-xs text-slate-400 hover:text-red-500 sm:pt-6"
-            >
-              Delete
-            </button>
+            {currentProtected ? (
+              <span className="text-xs text-slate-400 sm:pt-6">🔒 Runner file</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => removeFile(activeIdx)}
+                className="text-xs text-slate-400 hover:text-red-500 sm:pt-6"
+              >
+                Delete
+              </button>
+            )}
           </div>
 
           <div className="h-[440px] rounded-md border border-slate-200 dark:border-white/10 overflow-hidden">

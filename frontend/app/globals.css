@@ -3716,3 +3716,35 @@
   flex-direction: column;
   gap: var(--space-4);
 }
+
+/* ── Coding-question authoring preview ──────────────────────────────
+   Scoped overrides so Markdown previews in the admin coding editor pick
+   up the dark brand palette and tidy code-block tints. */
+.admin-coding-preview pre {
+  background: #111a15;
+  border: 1px solid rgba(30, 211, 106, 0.18);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.admin-coding-preview code {
+  font-size: 0.85em;
+}
+.admin-coding-preview :not(pre) > code {
+  background: rgba(30, 211, 106, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.admin-coding-preview blockquote {
+  border-left: 3px solid var(--admin-green, #1ed36a);
+  padding-left: 12px;
+  opacity: 0.85;
+}
+.admin-coding-preview table {
+  border-collapse: collapse;
+}
+.admin-coding-preview th,
+.admin-coding-preview td {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 4px 8px;
+}

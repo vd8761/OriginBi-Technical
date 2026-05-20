@@ -563,6 +563,12 @@ export class PurchaseService {
             this.logger.warn(`Failed to resolve user_id for ${body.email}: ${err.message}`);
         }
 
+        // `resolvedAssessmentId` and the coding-code guard were already
+        // computed before signature verification above — no need to repeat
+        // the lookup. Coding has a tech_assessments row for admin settings,
+        // but the start entitlement comes from an exam-engine assignment
+        // created via /v1/purchases/demo.
+
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
