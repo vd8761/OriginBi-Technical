@@ -10,7 +10,8 @@ import {
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   CodingQuestion, CODING_CATEGORIES,
-  getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind
+  getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind,
+  matchCategory, matchSubcategory
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
 import {
@@ -514,10 +515,10 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const filtered = useMemo(() => {
     if (!selectedModule) return [];
     let result = questions;
-    if (filterCategory !== "all") result = result.filter(q => getCatKey(q, selectedModule) === filterCategory);
+    if (filterCategory !== "all") result = result.filter(q => matchCategory(getCatKey(q, selectedModule), filterCategory));
     if (filterSubCategory !== "all") {
        result = result.filter(q => {
-         if (selectedModule === "aptitude") return (q as AptitudeQuestion).subcategory === filterSubCategory;
+         if (selectedModule === "aptitude") return matchSubcategory((q as AptitudeQuestion).subcategory, filterSubCategory);
          return true;
        });
     }
@@ -537,7 +538,9 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const categoryCounts = useMemo(() => {
     if (!selectedModule) return {};
     const counts: Record<string, number> = { all: questions.length };
-    filterCats.forEach(c => { counts[c.key] = questions.filter(q => getCatKey(q, selectedModule) === c.key).length; });
+    filterCats.forEach(c => {
+      counts[c.key] = questions.filter(q => matchCategory(getCatKey(q, selectedModule), c.key)).length;
+    });
     return counts;
   }, [questions, filterCats, selectedModule]);
 

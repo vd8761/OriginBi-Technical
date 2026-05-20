@@ -7,6 +7,7 @@ import {
   APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS, MNC_TOPICS,
   COMM_TASK_LABELS, CommTaskType, RoleQuestionType,
   DifficultyLevel, QuestionStatus, QuestionKind, QUESTION_KIND_LABELS,
+  matchCategory, matchSubcategory
 } from "./types";
 import { generateId } from "./storage";
 import { uploadQuestionAsset } from "./api";
@@ -21,7 +22,7 @@ interface QuestionEditorProps {
   question: AnyQuestion | null;
   assessmentType: AssessmentType;
   allowedQuestionKinds?: QuestionKind[];
-  categories?: { id: string; name: string }[];
+  categories?: { id: string; name: string; subcategories?: any[] }[];
   onSave: (q: AnyQuestion) => void;
   onCancel: () => void;
 }
@@ -121,8 +122,27 @@ export default function QuestionEditor({
     switch (assessmentType) {
       case "aptitude": {
         const aq = question as AptitudeQuestion;
-        setAptCategory(aq.category);
-        setAptSubCategory(aq.subcategory || "");
+        let resolvedCategory = aq.category;
+        if (categories && categories.length > 0) {
+          const matched = categories.find(c => matchCategory(aq.category, c.id));
+          if (matched) {
+            resolvedCategory = matched.id;
+          }
+        }
+        setAptCategory(resolvedCategory);
+
+        let resolvedSubCategory = aq.subcategory || "";
+        if (categories && categories.length > 0) {
+          const matchedCat = categories.find(c => matchCategory(resolvedCategory, c.id));
+          if (matchedCat && matchedCat.subcategories) {
+            const matchedSub = matchedCat.subcategories.find((sc: any) => matchSubcategory(resolvedSubCategory, sc.id) || matchSubcategory(resolvedSubCategory, sc.name));
+            if (matchedSub) {
+              resolvedSubCategory = matchedSub.id;
+            }
+          }
+        }
+        setAptSubCategory(resolvedSubCategory);
+
         setText(aq.text); setOptions(aq.options); setCorrectId(aq.correctOptionId);
         setExplanation(aq.explanation || "");
         setImageUrl(aq.imageUrl || null);

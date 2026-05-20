@@ -12,6 +12,39 @@ interface ModuleConfig {
   readonly subcategoryColumn?: string;
 }
 
+function norm(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function matchCategory(qCat: string | undefined, targetCat: string): boolean {
+  if (!qCat) return false;
+  const nQ = norm(qCat);
+  const nT = norm(targetCat);
+  if (nQ === nT) return true;
+
+  const shortToLong: Record<string, string[]> = {
+    qa: ["quantitativeaptitude", "quantitative"],
+    lr: ["logicalreasoning", "logical"],
+    di: ["datainterpretation", "data"],
+    ar: ["abstractreasoning", "abstract"],
+    va: ["verbalability", "verbal"]
+  };
+
+  for (const [short, longs] of Object.entries(shortToLong)) {
+    if (nT === short || longs.includes(nT)) {
+      if (nQ === short || longs.includes(nQ)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function matchSubcategory(qSub: string | undefined, targetSub: string): boolean {
+  if (!qSub) return false;
+  return norm(qSub) === norm(targetSub);
+}
+
 const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
   aptitude: {
     questionTable: 'tech_aptitude_questions',
@@ -655,6 +688,86 @@ export class AdminQuestionService {
     await queryRunner.startTransaction();
 
     try {
+      // 1. Fetch old assessment categories
+      const oldRows = await queryRunner.query(
+        `SELECT categories, module_type FROM tech_assessments WHERE assessment_id = $1`,
+        [id]
+      );
+      const oldAssessment = oldRows[0];
+      const moduleType = oldAssessment?.module_type as ModuleType;
+
+      if (categories !== undefined && oldAssessment) {
+        let oldCats: any[] = [];
+        try {
+          oldCats = typeof oldAssessment.categories === 'string' 
+            ? JSON.parse(oldAssessment.categories) 
+            : (oldAssessment.categories || []);
+        } catch (e) {
+          oldCats = [];
+        }
+        if (!Array.isArray(oldCats)) oldCats = [];
+
+        let newCats: any[] = [];
+        try {
+          newCats = typeof categories === 'string' 
+            ? JSON.parse(categories) 
+            : (categories || []);
+        } catch (e) {
+          newCats = [];
+        }
+        if (!Array.isArray(newCats)) newCats = [];
+
+        const newCatIds = new Set(newCats.map(c => c.id?.toLowerCase().trim()));
+        const deletedCats = oldCats.filter(c => c.id && !newCatIds.has(c.id.toLowerCase().trim()));
+
+        const deletedSubs: { catId: string; subId: string }[] = [];
+        for (const oldCat of oldCats) {
+          if (!oldCat.id) continue;
+          const newCat = newCats.find(c => c.id?.toLowerCase().trim() === oldCat.id.toLowerCase().trim());
+          if (newCat) {
+            const oldSubs = oldCat.subcategories || [];
+            const newSubIds = new Set((newCat.subcategories || []).map((s: any) => s.id?.toLowerCase().trim()));
+            for (const oldSub of oldSubs) {
+              if (oldSub.id && !newSubIds.has(oldSub.id.toLowerCase().trim())) {
+                deletedSubs.push({ catId: oldCat.id, subId: oldSub.id });
+              }
+            }
+          }
+        }
+
+        const config = MODULE_CONFIGS[moduleType];
+        if (config && (deletedCats.length > 0 || deletedSubs.length > 0)) {
+          const questions = await queryRunner.query(
+            `SELECT * FROM ${config.questionTable} WHERE assessment_id = $1`,
+            [id]
+          );
+
+          const questionIdsToDelete: number[] = [];
+          for (const q of questions) {
+            const qId = q[config.idColumn];
+            const qCat = q[config.categoryColumn];
+            const qSub = config.subcategoryColumn ? q[config.subcategoryColumn] : undefined;
+
+            const isCatDeleted = deletedCats.some(dc => matchCategory(qCat, dc.id));
+            if (isCatDeleted) {
+              questionIdsToDelete.push(qId);
+              continue;
+            }
+
+            const isSubDeleted = deletedSubs.some(ds => matchCategory(qCat, ds.catId) && matchSubcategory(qSub, ds.subId));
+            if (isSubDeleted) {
+              questionIdsToDelete.push(qId);
+            }
+          }
+
+          if (questionIdsToDelete.length > 0) {
+            throw new BadRequestException(
+              `Cannot delete category/subcategory because it has ${questionIdsToDelete.length} allocated question(s). Please delete or reassign them first.`
+            );
+          }
+        }
+      }
+
       await queryRunner.query(
         `UPDATE tech_assessments
          SET assessment_name = COALESCE($1, assessment_name),
