@@ -489,7 +489,19 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     const resumeModule = attempt.module === "grammar" ? "communication" : attempt.module;
     const mode = attempt.mode ?? "main";
     if (resumeModule === "aptitude" && attempt.isBlockBased) {
-      router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      const matchingAssessment = assessmentsList.find(
+        (a) => a.assessment_code === attempt.assessmentCode
+      );
+      const assessmentId = matchingAssessment?.assessment_id || 1;
+      const isV2 = matchingAssessment?.block_config?.enabled ?? true;
+
+      if (isV2) {
+        router.push(
+          `/assessment/aptitude/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${attempt.attemptToken}`
+        );
+      } else {
+        router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      }
       return;
     }
     router.push(`/assessment/${resumeModule}?mode=${mode}`);
@@ -777,24 +789,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {showAptitudeModal && (() => {
         const exam = dynamicExams.find(e => e.id === 'aptitude') as any;
-        const qCount = assessmentMode === 'trial' 
-          ? 5 
-          : (exam?.questionLimit > 0 ? exam.questionLimit : (exam?.mainQuestionsCount > 0 ? exam.mainQuestionsCount : exam?.questions));
         const stats = attemptsStats['aptitude'] || { trial: 0, main: 0 };
-        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
         return (
-          <AptitudePreTest
+          <AdaptiveAptitudePreTest
             mode={assessmentMode}
             onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
             onClose={() => setShowAptitudeModal(false)}
             accentColor={exam?.accentColor}
             gradient={exam?.gradient}
-            questions={qCount}
-            duration={exam?.duration}
-            trialAttemptsLimit={exam?.trialAttemptsLimit}
-            mainAttemptsLimit={exam?.mainAttemptsLimit}
-            attemptsCount={currentCount}
-            skills={exam?.tags}
           />
         );
       })()}

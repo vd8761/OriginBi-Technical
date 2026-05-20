@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AdaptiveEngineService } from './adaptive-engine.service';
+import { AdaptiveBlueprintService } from './adaptive-blueprint.service';
 import {
   Difficulty,
   AdaptiveQuestion,
@@ -33,6 +34,7 @@ export class AdaptiveBlockGeneratorService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly engine: AdaptiveEngineService,
+    private readonly blueprintService: AdaptiveBlueprintService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -95,8 +97,34 @@ export class AdaptiveBlockGeneratorService {
         idCol: 'mnc_question_id',
         options: 'tech_mnc_options',
         attemptIdCol: 'mnc_attempt_id',
-        categoryCol: 'topic_group',
-        subcategoryCol: 'topic_group',
+        categoryCol: 'category',
+        subcategoryCol: 'subcategory',
+        hasMode: true,
+      },
+      role: {
+        attempts: 'tech_role_attempts',
+        questions: 'tech_role_questions',
+        junction: 'tech_role_attempt_questions',
+        idCol: 'role_question_id',
+        options: 'tech_role_options',
+        attemptIdCol: 'role_attempt_id',
+        // category/subcategory columns were added via migration; domain is the fallback
+        categoryCol: 'domain',
+        subcategoryCol: 'domain',
+        hasMode: false,
+      },
+      // 'communication' assessments are stored with module_type='grammar' in the DB
+      // (tech_module_type enum only has 'grammar'), so this entry handles any edge-case
+      // where the string 'communication' reaches this service directly.
+      communication: {
+        attempts: 'tech_grammar_attempts',
+        questions: 'tech_grammar_questions',
+        junction: 'tech_grammar_attempt_questions',
+        idCol: 'grammar_question_id',
+        options: 'tech_grammar_options',
+        attemptIdCol: 'grammar_attempt_id',
+        categoryCol: 'task_type',
+        subcategoryCol: 'task_type',
         hasMode: true,
       },
     };
@@ -104,7 +132,8 @@ export class AdaptiveBlockGeneratorService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Load blueprint from DB (or build default)
+  // Load blueprint from DB — delegates to AdaptiveBlueprintService
+  // which auto-builds it from the question bank if missing/stale
   // ─────────────────────────────────────────────────────────────────────────
 
   async loadBlueprint(assessmentId: number): Promise<BlueprintConfig | null> {
@@ -117,13 +146,13 @@ export class AdaptiveBlockGeneratorService {
     if (!rows.length) return null;
     const r = rows[0];
     return {
-      totalMarks: Number(r.total_marks),
-      totalBlocks: Number(r.total_blocks),
-      marksPerBlock: Number(r.marks_per_block),
-      secondsPerMark: Number(r.seconds_per_mark),
-      categoryBlueprint: r.category_blueprint ?? {},
+      totalMarks:           Number(r.total_marks),
+      totalBlocks:          Number(r.total_blocks),
+      marksPerBlock:        Number(r.marks_per_block),
+      secondsPerMark:       Number(r.seconds_per_mark),
+      categoryBlueprint:    r.category_blueprint ?? {},
       subcategoryBlueprint: r.subcategory_blueprint ?? {},
-      difficultyProfiles: r.difficulty_profiles ?? this.engine.DEFAULT_DIFFICULTY_PROFILES,
+      difficultyProfiles:   r.difficulty_profiles ?? this.engine.DEFAULT_DIFFICULTY_PROFILES,
     };
   }
 
@@ -216,6 +245,7 @@ export class AdaptiveBlockGeneratorService {
     usedIds: number[],
     mode: 'trial' | 'main',
     modeExists: boolean,
+    difficultyExists: boolean,
   ): Promise<any | null> {
     if (!cfg) return null;
 
@@ -243,16 +273,21 @@ export class AdaptiveBlockGeneratorService {
 
     const baseWhere = `assessment_id=${assessmentId} AND status='active' ${modeClause} ${excludeClause}`;
 
+    // Select difficulty column — fall back to literal 'medium' when column doesn't exist
+    const diffSelect = difficultyExists ? 'difficulty' : `'medium' AS difficulty`;
+
     const tryFetch = async (
       diffList: Difficulty[],
       marksList: number[],
       catFilter: string,
       subFilter: string,
     ): Promise<any | null> => {
-      const diffIn = diffList.map(d => `'${d}'`).join(',');
+      const diffFilter = difficultyExists
+        ? `AND difficulty IN (${diffList.map(d => `'${d}'`).join(',')})`
+        : ''; // no difficulty column — skip filter, treat all as 'medium'
       const marksIn = marksList.join(',');
       const rows = await this.dataSource.query(
-        `SELECT ${cfg.idCol} AS id, question_text, difficulty,
+        `SELECT ${cfg.idCol} AS id, question_text, ${diffSelect},
                 ${cfg.categoryCol} AS category,
                 ${cfg.subcategoryCol} AS subcategory,
                 marks, negative_marks, metadata, image_url
@@ -260,7 +295,7 @@ export class AdaptiveBlockGeneratorService {
          WHERE ${baseWhere}
            ${catFilter}
            ${subFilter}
-           AND difficulty IN (${diffIn})
+           ${diffFilter}
            AND marks IN (${marksIn})
          ORDER BY RANDOM() LIMIT 1`,
       );
@@ -376,11 +411,11 @@ export class AdaptiveBlockGeneratorService {
       const totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 4);
       const isLastBlock = blockNumber === totalBlocks;
 
-      // 2. Load blueprint
-      const blueprint = await this.loadBlueprint(assessmentId);
+      // 2. Load blueprint — auto-builds from question bank if missing or stale
+      const blueprint = await this.blueprintService.ensureBlueprint(assessmentId);
       if (!blueprint) {
         throw new BadRequestException(
-          `No blueprint found for assessment ${assessmentId}. Run setup-blueprint first.`,
+          `Could not build blueprint for assessment ${assessmentId}. Ensure questions are added first.`,
         );
       }
 
@@ -410,13 +445,14 @@ export class AdaptiveBlockGeneratorService {
 
       // 6. Fetch questions for each slot
       const modeExists = await this.columnExists(cfg.questions, 'mode');
+      const difficultyExists = await this.columnExists(cfg.questions, 'difficulty');
       const fetchedQuestions: any[] = [];
       const localUsedIds = new Set(usedIds);
 
       for (const slot of slots) {
         const q = await this.fetchQuestionForSlot(
           cfg, assessmentId, slot,
-          Array.from(localUsedIds), mode, modeExists,
+          Array.from(localUsedIds), mode, modeExists, difficultyExists,
         );
         if (q) {
           localUsedIds.add(Number(q.id));

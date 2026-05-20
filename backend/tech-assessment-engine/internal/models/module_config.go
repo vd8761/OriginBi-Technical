@@ -45,7 +45,7 @@ var ModuleConfigs = map[string]ModuleConfig{
 		IDCol:         "mnc_question_id",
 		Options:       "tech_mnc_options",
 		AttemptIDCol:  "mnc_attempt_id",
-		CatCol:        "topic_group",
+		CatCol:        "subcategory",
 		HasDifficulty: true,
 		HasMode:       true,
 		TextColumn:    "question_text",

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   BadRequestException,
@@ -15,11 +16,11 @@ import { AdaptiveSnapshotService } from '../services/adaptive-snapshot.service';
 import { AdaptiveAnalyticsService } from '../services/adaptive-analytics.service';
 import { AdaptiveBlueprintService } from '../services/adaptive-blueprint.service';
 import {
-  SetupBlueprintDto,
   GenerateBlockDto,
   CompleteBlockDto,
   SaveBlockAnswersDto,
   FinalSubmitDto,
+  StartAdaptiveAttemptDto,
 } from '../dto/adaptive.dto';
 import { Difficulty } from '../interfaces/adaptive.interfaces';
 
@@ -29,17 +30,33 @@ import { Difficulty } from '../interfaces/adaptive.interfaces';
  * Route prefix: 'adaptive/v2'
  * With global 'api' prefix: /api/adaptive/v2/...
  *
+ * Blueprint is FULLY AUTOMATIC — no manual setup endpoint.
+ * It is built/refreshed from the question bank automatically.
+ *
  * Endpoints:
- *   POST /api/adaptive/v2/blueprint/setup
+ *   GET  /api/adaptive/v2/health
+ *
+ *   -- Assessment adaptive settings (replaces blueprint admin UI) --
+ *   PUT  /api/adaptive/v2/settings/:assessmentId
+ *   GET  /api/adaptive/v2/settings/:assessmentId
+ *
+ *   -- Blueprint (read-only + manual refresh) --
  *   GET  /api/adaptive/v2/blueprint/:assessmentId
+ *   POST /api/adaptive/v2/blueprint/:assessmentId/refresh
+ *
+ *   -- Block flow --
  *   POST /api/adaptive/v2/block/generate
  *   POST /api/adaptive/v2/block/complete
  *   POST /api/adaptive/v2/block/save-answers
  *   GET  /api/adaptive/v2/block/:attemptToken/:blockNumber
  *   GET  /api/adaptive/v2/status/:attemptToken
+ *
+ *   -- Submission --
  *   POST /api/adaptive/v2/submit
  *   GET  /api/adaptive/v2/report/:attemptToken
- *   GET  /api/adaptive/v2/health
+ *
+ *   -- Debug --
+ *   GET  /api/adaptive/v2/snapshot/:attemptToken/:blockNumber
  */
 @Controller('adaptive/v2')
 export class AdaptiveController {
@@ -61,61 +78,224 @@ export class AdaptiveController {
     try {
       const tables = await this.dataSource.query(`
         SELECT
-          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_blueprint')    AS blueprint,
-          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='block_snapshots')       AS snapshots,
-          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_blocks')       AS blocks,
-          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='block_attempts')        AS attempts,
-          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_subcategory_coverage') AS coverage
+          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_blueprint')           AS blueprint,
+          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='block_snapshots')              AS snapshots,
+          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_blocks')              AS blocks,
+          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='block_attempts')               AS attempts,
+          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_subcategory_coverage') AS coverage,
+          EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='adaptive_performance_analytics') AS analytics,
+          EXISTS(SELECT 1 FROM information_schema.columns
+                 WHERE table_name='tech_assessments' AND column_name='adaptive_total_marks')              AS settings_cols
       `);
       const t = tables[0];
-      const allReady = t.blueprint && t.snapshots && t.blocks && t.attempts && t.coverage;
+      const allReady = t.blueprint && t.snapshots && t.blocks && t.attempts && t.coverage && t.analytics && t.settings_cols;
       return {
         success: true,
         status: allReady ? 'healthy' : 'degraded',
         tables: t,
         message: allReady
-          ? 'All adaptive v2 tables are ready'
-          : 'Run migration 003_adaptive_engine_v2.sql to create missing tables',
+          ? 'All adaptive v2 tables are ready. Blueprint is fully automatic.'
+          : 'Run migration 003_adaptive_settings_and_auto_blueprint.sql to create missing tables/columns.',
       };
     } catch (e) {
       return { success: false, status: 'failed', error: String(e) };
     }
   }
 
-  // ── Blueprint ─────────────────────────────────────────────────────────────
+  // ── Assessment Adaptive Settings ──────────────────────────────────────────
 
   /**
-   * POST /api/adaptive/v2/blueprint/setup
-   * Admin sets up the marks blueprint for an assessment.
+   * PUT /api/adaptive/v2/settings/:assessmentId
+   *
+   * Update adaptive settings for an assessment.
+   * Changing these settings automatically invalidates and rebuilds the blueprint.
+   *
+   * Body: {
+   *   adaptiveEnabled: boolean,
+   *   adaptiveTotalMarks: number,      // default 100
+   *   adaptiveTotalBlocks: number,     // default 4
+   *   adaptiveSecondsPerMark: number,  // default 45
+   * }
    */
-  @Post('blueprint/setup')
-  async setupBlueprint(@Body() dto: SetupBlueprintDto) {
-    if (!dto.assessmentId || !dto.totalMarks || !dto.totalBlocks) {
-      throw new BadRequestException('assessmentId, totalMarks, and totalBlocks are required');
+  @Put('settings/:assessmentId')
+  async updateAdaptiveSettings(
+    @Param('assessmentId') assessmentId: string,
+    @Body() body: {
+      adaptiveEnabled?: boolean;
+      adaptiveTotalMarks?: number;
+      adaptiveTotalBlocks?: number;
+      adaptiveSecondsPerMark?: number;
+    },
+  ) {
+    const id = parseInt(assessmentId);
+    if (isNaN(id)) throw new BadRequestException('Invalid assessment ID');
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let pIdx = 1;
+
+    if (body.adaptiveEnabled !== undefined) {
+      updates.push(`adaptive_enabled = $${pIdx++}`);
+      params.push(Boolean(body.adaptiveEnabled));
     }
-    const config = await this.blueprint.setupBlueprint(dto);
-    return { success: true, blueprint: config };
+    if (body.adaptiveTotalMarks !== undefined) {
+      const marks = Number(body.adaptiveTotalMarks);
+      if (marks <= 0) throw new BadRequestException('adaptiveTotalMarks must be > 0');
+      updates.push(`adaptive_total_marks = $${pIdx++}`);
+      params.push(marks);
+    }
+    if (body.adaptiveTotalBlocks !== undefined) {
+      const blocks = Number(body.adaptiveTotalBlocks);
+      if (blocks < 1 || blocks > 20) throw new BadRequestException('adaptiveTotalBlocks must be 1–20');
+      updates.push(`adaptive_total_blocks = $${pIdx++}`);
+      params.push(blocks);
+    }
+    if (body.adaptiveSecondsPerMark !== undefined) {
+      const spm = Number(body.adaptiveSecondsPerMark);
+      if (spm < 10 || spm > 300) throw new BadRequestException('adaptiveSecondsPerMark must be 10–300');
+      updates.push(`adaptive_seconds_per_mark = $${pIdx++}`);
+      params.push(spm);
+    }
+
+    if (!updates.length) throw new BadRequestException('No settings provided to update');
+
+    updates.push('updated_at = NOW()');
+    params.push(id);
+
+    await this.dataSource.query(
+      `UPDATE tech_assessments SET ${updates.join(', ')} WHERE assessment_id = $${pIdx}`,
+      params,
+    );
+
+    // If adaptive is being enabled or settings changed, rebuild blueprint immediately
+    const shouldRebuild = body.adaptiveEnabled === true ||
+      body.adaptiveTotalMarks !== undefined ||
+      body.adaptiveTotalBlocks !== undefined ||
+      body.adaptiveSecondsPerMark !== undefined;
+
+    let newBlueprint = null;
+    if (shouldRebuild) {
+      try {
+        newBlueprint = await this.blueprint.refreshBlueprint(id);
+      } catch (e: any) {
+        // Blueprint rebuild may fail if no questions yet — that's OK
+        this.logger.warn(`Blueprint rebuild after settings update: ${e.message}`);
+      }
+    }
+
+    const rows = await this.dataSource.query(
+      `SELECT assessment_id, adaptive_enabled, adaptive_total_marks,
+              adaptive_total_blocks, adaptive_seconds_per_mark
+       FROM tech_assessments WHERE assessment_id=$1`,
+      [id],
+    );
+
+    return {
+      success: true,
+      settings: rows[0],
+      blueprint: newBlueprint,
+      message: newBlueprint
+        ? 'Settings updated and blueprint rebuilt from question bank.'
+        : 'Settings updated. Blueprint will be built automatically when questions are available.',
+    };
   }
 
   /**
+   * GET /api/adaptive/v2/settings/:assessmentId
+   * Returns current adaptive settings for an assessment.
+   */
+  @Get('settings/:assessmentId')
+  async getAdaptiveSettings(@Param('assessmentId') assessmentId: string) {
+    const id = parseInt(assessmentId);
+    if (isNaN(id)) throw new BadRequestException('Invalid assessment ID');
+
+    const rows = await this.dataSource.query(
+      `SELECT assessment_id, assessment_name, module_type,
+              adaptive_enabled, adaptive_total_marks,
+              adaptive_total_blocks, adaptive_seconds_per_mark
+       FROM tech_assessments WHERE assessment_id=$1`,
+      [id],
+    );
+    if (!rows.length) throw new NotFoundException(`Assessment ${id} not found`);
+
+    const categoriesInfo = await this.blueprint.getCategoriesForAssessment(id).catch(() => null);
+
+    // Auto-build blueprint on first settings page load when adaptive is enabled
+    // and questions are available — so the UI shows the blueprint immediately.
+    let existingBlueprint = await this.blueprint.getBlueprint(id);
+    if (!existingBlueprint && rows[0].adaptive_enabled && (categoriesInfo?.totalActiveQuestions ?? 0) > 0) {
+      existingBlueprint = await this.blueprint.ensureBlueprint(id).catch(() => null);
+    }
+
+    return {
+      success: true,
+      settings: rows[0],
+      questionBank: categoriesInfo,
+      blueprint: existingBlueprint
+        ? {
+            exists: true,
+            totalMarks: existingBlueprint.totalMarks,
+            totalBlocks: existingBlueprint.totalBlocks,
+            categories: Object.keys(existingBlueprint.categoryBlueprint),
+            categoryBlueprint: existingBlueprint.categoryBlueprint,
+            subcategoryBlueprint: existingBlueprint.subcategoryBlueprint,
+          }
+        : { exists: false },
+    };
+  }
+
+  // ── Blueprint (read-only + manual refresh) ────────────────────────────────
+
+  /**
    * GET /api/adaptive/v2/blueprint/:assessmentId
+   * Returns the current auto-computed blueprint.
    */
   @Get('blueprint/:assessmentId')
   async getBlueprint(@Param('assessmentId') assessmentId: string) {
     const id = parseInt(assessmentId);
     if (isNaN(id)) throw new BadRequestException('Invalid assessment ID');
     const config = await this.blueprint.getBlueprint(id);
-    if (!config) throw new NotFoundException(`No blueprint found for assessment ${id}`);
+    if (!config) {
+      throw new NotFoundException(
+        `No blueprint found for assessment ${id}. ` +
+        `Enable adaptive mode and add questions — blueprint is built automatically.`,
+      );
+    }
     return { success: true, blueprint: config };
+  }
+
+  /**
+   * POST /api/adaptive/v2/blueprint/:assessmentId/refresh
+   * Manually trigger a blueprint rebuild from the current question bank.
+   * Useful after bulk-importing questions.
+   */
+  @Post('blueprint/:assessmentId/refresh')
+  async refreshBlueprint(@Param('assessmentId') assessmentId: string) {
+    const id = parseInt(assessmentId);
+    if (isNaN(id)) throw new BadRequestException('Invalid assessment ID');
+
+    const config = await this.blueprint.refreshBlueprint(id);
+    if (!config) {
+      throw new BadRequestException(
+        `Assessment ${id} does not have adaptive mode enabled, or has no active questions.`,
+      );
+    }
+    return {
+      success: true,
+      blueprint: config,
+      message: 'Blueprint rebuilt from question bank.',
+    };
   }
 
   // ── Block generation ──────────────────────────────────────────────────────
 
   /**
    * POST /api/adaptive/v2/block/generate
+   *
    * Generate the next block for a candidate.
-   * Block 1 always uses 'easy' difficulty.
-   * Subsequent blocks use the difficulty decided by the previous block's snapshot.
+   * Block 1 always starts at 'easy'.
+   * Subsequent blocks use the difficulty decided by the previous block snapshot.
+   * Blueprint is auto-built from the question bank if not yet created.
    */
   @Post('block/generate')
   async generateBlock(@Body() dto: GenerateBlockDto) {
@@ -126,7 +306,6 @@ export class AdaptiveController {
     // Determine target difficulty
     let targetDifficulty: Difficulty = 'easy';
     if (dto.blockNumber > 1) {
-      // Read from previous block's snapshot
       const prevSnap = await this.dataSource.query(
         `SELECT next_block_difficulty FROM block_snapshots
          WHERE attempt_token=$1 AND block_number=$2`,
@@ -135,7 +314,6 @@ export class AdaptiveController {
       if (prevSnap.length) {
         targetDifficulty = prevSnap[0].next_block_difficulty as Difficulty;
       } else {
-        // Fallback: read from block_attempts
         const prevAttempt = await this.dataSource.query(
           `SELECT next_block_difficulty FROM block_attempts
            WHERE attempt_token=$1 AND block_number=$2`,
@@ -164,8 +342,8 @@ export class AdaptiveController {
   /**
    * POST /api/adaptive/v2/block/complete
    * Called when candidate clicks "Next Block" for the first time.
-   * Writes the immutable snapshot. Adaptive decision is made here.
-   * If snapshot already exists (user clicked Next Block again), returns existing decision.
+   * Writes the immutable snapshot. Adaptive decision is locked here.
+   * If snapshot already exists (idempotent), returns existing decision.
    */
   @Post('block/complete')
   async completeBlock(@Body() dto: CompleteBlockDto) {
@@ -173,7 +351,7 @@ export class AdaptiveController {
       throw new BadRequestException('attemptToken and blockNumber are required');
     }
 
-    // Load blueprint for secondsPerMark
+    // Load secondsPerMark from blueprint
     const bpRows = await this.dataSource.query(
       `SELECT ab.seconds_per_mark
        FROM adaptive_blueprint ab
@@ -207,7 +385,7 @@ export class AdaptiveController {
    * POST /api/adaptive/v2/block/save-answers
    * Called when candidate navigates back to a completed block and changes answers.
    * Does NOT change the snapshot or adaptive decision.
-   * Final marks will use these updated answers.
+   * Final marks use these updated answers.
    */
   @Post('block/save-answers')
   async saveBlockAnswers(@Body() dto: SaveBlockAnswersDto) {
@@ -227,7 +405,7 @@ export class AdaptiveController {
 
   /**
    * GET /api/adaptive/v2/block/:attemptToken/:blockNumber
-   * Returns questions for a block with current saved answers (for navigation back).
+   * Returns questions for a block with current saved answers (for back-navigation).
    */
   @Get('block/:attemptToken/:blockNumber')
   async getBlockQuestions(
@@ -291,17 +469,21 @@ export class AdaptiveController {
    */
   @Post('submit')
   async finalSubmit(@Body() dto: FinalSubmitDto) {
-    if (!dto.attemptToken || !dto.assessmentId || !dto.userId) {
-      throw new BadRequestException('attemptToken, assessmentId, and userId are required');
+    try {
+      if (!dto.attemptToken || !dto.assessmentId || !dto.userId) {
+        throw new BadRequestException('attemptToken, assessmentId, and userId are required');
+      }
+
+      const report = await this.analytics.computeAndPersistFinalReport(
+        dto.attemptToken,
+        dto.assessmentId,
+        dto.userId,
+      );
+
+      return { success: true, report };
+    } catch (e: any) {
+      return { success: false, error: e.message, stack: e.stack };
     }
-
-    const report = await this.analytics.computeAndPersistFinalReport(
-      dto.attemptToken,
-      dto.assessmentId,
-      dto.userId,
-    );
-
-    return { success: true, report };
   }
 
   // ── Get report ────────────────────────────────────────────────────────────
@@ -321,7 +503,7 @@ export class AdaptiveController {
     return { success: true, report };
   }
 
-  // ── Snapshot (for debugging / admin) ─────────────────────────────────────
+  // ── Snapshot (debug / admin) ──────────────────────────────────────────────
 
   /**
    * GET /api/adaptive/v2/snapshot/:attemptToken/:blockNumber

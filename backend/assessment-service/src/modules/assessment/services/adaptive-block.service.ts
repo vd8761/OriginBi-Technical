@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ interface ModuleTableConfig {
   attempts: string; questions: string; junction: string;
   idCol: string; options: string; attemptIdCol: string;
   categoryCol: string; hasMode: boolean;
+  hasImageUrl?: boolean;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ export class AdaptiveBlockService {
         attempts: 'tech_aptitude_attempts', questions: 'tech_aptitude_questions',
         junction: 'tech_aptitude_attempt_questions', idCol: 'aptitude_question_id',
         options: 'tech_aptitude_options', attemptIdCol: 'aptitude_attempt_id',
-        categoryCol: 'subcategory', hasMode: true,
+        categoryCol: 'subcategory', hasMode: true, hasImageUrl: true,
       },
       grammar: {
         attempts: 'tech_grammar_attempts', questions: 'tech_grammar_questions',
@@ -79,10 +80,18 @@ export class AdaptiveBlockService {
         attempts: 'tech_mnc_attempts', questions: 'tech_mnc_questions',
         junction: 'tech_mnc_attempt_questions', idCol: 'mnc_question_id',
         options: 'tech_mnc_options', attemptIdCol: 'mnc_attempt_id',
-        categoryCol: 'topic_group', hasMode: true,
+        categoryCol: 'subcategory', hasMode: true,
       },
     };
     return map[moduleType] ?? null;
+  }
+
+  getModuleFromToken(attemptToken: string): string {
+    const token = (attemptToken || '').toUpperCase();
+    if (token.startsWith('APT')) return 'aptitude';
+    if (token.startsWith('GRA') || token.startsWith('COM')) return 'grammar';
+    if (token.startsWith('MNC')) return 'mnc';
+    return 'aptitude'; // default fallback
   }
 
   // ── Column existence (cached) ──────────────────────────────────────────────
@@ -314,27 +323,31 @@ export class AdaptiveBlockService {
     await qr.connect();
     await qr.startTransaction();
     try {
+      const moduleType = this.getModuleFromToken(attemptToken);
+      const cfg = this.getModuleConfig(moduleType);
+      if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
+
       // 1. Resolve attempt
       const ar = await qr.query(
-        `SELECT aptitude_attempt_id, assessment_id FROM tech_aptitude_attempts WHERE attempt_token=$1`,
+        `SELECT ${cfg.attemptIdCol} AS attempt_id, assessment_id FROM ${cfg.attempts} WHERE attempt_token=$1`,
         [attemptToken],
       );
       if (!ar.length) throw new NotFoundException('Attempt not found');
-      const attemptId = Number(ar[0].aptitude_attempt_id);
+      const attemptId = Number(ar[0].attempt_id);
       const assessmentId = Number(ar[0].assessment_id);
 
       // 2. Load this block's questions with correct answers + marks
       const bqs = await qr.query(
-        `SELECT aq.attempt_question_id, aq.aptitude_question_id,
+        `SELECT aq.attempt_question_id, aq.${cfg.idCol} AS aptitude_question_id,
                 aq.metadata as attempt_metadata,
                 q.correct_option_id, q.marks, q.negative_marks,
                 q.metadata as question_metadata,
-                q.subcategory AS category,
+                q.${cfg.categoryCol} AS category,
                 ass.negative_mark_enabled, ass.negative_mark_value
-         FROM tech_aptitude_attempt_questions aq
-         JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
+         FROM ${cfg.junction} aq
+         JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
          JOIN tech_assessments ass ON ass.assessment_id=q.assessment_id
-         WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2`,
+         WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2`,
         [attemptId, blockNumber],
       );
 
@@ -390,7 +403,7 @@ export class AdaptiveBlockService {
           if (isCorrect) { correctCount++; categoryMap[cat].correct++; }
           // Save draft answer — NOT final, will be re-evaluated at submit
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
+            `UPDATE ${cfg.junction}
              SET selected_option_id=$1, metadata=$2, is_correct=$3,
                  score_awarded=$4, negative_applied=$5, answered_at=NOW()
              WHERE attempt_question_id=$6`,
@@ -409,7 +422,7 @@ export class AdaptiveBlockService {
         } else {
           // User left this question unanswered — clear any previous draft
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
+            `UPDATE ${cfg.junction}
              SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
                  score_awarded=0, negative_applied=0, answered_at=NULL
              WHERE attempt_question_id=$1`,
@@ -503,12 +516,16 @@ export class AdaptiveBlockService {
     await qr.connect();
     await qr.startTransaction();
     try {
+      const moduleType = this.getModuleFromToken(attemptToken);
+      const cfg = this.getModuleConfig(moduleType);
+      if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
+
       const ar = await qr.query(
-        `SELECT aptitude_attempt_id FROM tech_aptitude_attempts WHERE attempt_token=$1`,
+        `SELECT ${cfg.attemptIdCol} AS attempt_id FROM ${cfg.attempts} WHERE attempt_token=$1`,
         [attemptToken],
       );
       if (!ar.length) throw new NotFoundException('Attempt not found');
-      const attemptId = Number(ar[0].aptitude_attempt_id);
+      const attemptId = Number(ar[0].attempt_id);
 
       // Verify this block exists and is accessible (was generated)
       const blockRow = await qr.query(
@@ -522,10 +539,10 @@ export class AdaptiveBlockService {
 
       // Load the questions for this block
       const bqs = await qr.query(
-        `SELECT aq.attempt_question_id, aq.aptitude_question_id, aq.metadata as attempt_metadata, q.metadata as question_metadata
-         FROM tech_aptitude_attempt_questions aq
-         JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
-         WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2`,
+        `SELECT aq.attempt_question_id, aq.${cfg.idCol} AS aptitude_question_id, aq.metadata as attempt_metadata, q.metadata as question_metadata
+         FROM ${cfg.junction} aq
+         JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
+         WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2`,
         [attemptId, blockNumber],
       );
 
@@ -545,7 +562,7 @@ export class AdaptiveBlockService {
 
         if (hasAnswer) {
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
+            `UPDATE ${cfg.junction}
              SET selected_option_id=$1, metadata=$2, answered_at=NOW()
              WHERE attempt_question_id=$3`,
             [
@@ -561,7 +578,7 @@ export class AdaptiveBlockService {
         } else {
           // Explicitly cleared
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
+            `UPDATE ${cfg.junction}
              SET selected_option_id=NULL, metadata=NULL, answered_at=NULL
              WHERE attempt_question_id=$1`,
             [aq.attempt_question_id],
@@ -600,24 +617,30 @@ export class AdaptiveBlockService {
       throw new BadRequestException(`Block ${blockNumber} has not been unlocked yet`);
     }
 
+    const moduleType = this.getModuleFromToken(attemptToken);
+    const cfg = this.getModuleConfig(moduleType);
+    if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
+
     const ar = await this.dataSource.query(
-      `SELECT a.aptitude_attempt_id, a.assessment_id
-       FROM tech_aptitude_attempts a WHERE a.attempt_token=$1`,
+      `SELECT a.${cfg.attemptIdCol} AS attempt_id, a.assessment_id
+       FROM ${cfg.attempts} a WHERE a.attempt_token=$1`,
       [attemptToken],
     );
     if (!ar.length) throw new NotFoundException('Attempt not found');
-    const attemptId = Number(ar[0].aptitude_attempt_id);
+    const attemptId = Number(ar[0].attempt_id);
     const assessmentId = Number(ar[0].assessment_id);
 
+    const imgCol = cfg.hasImageUrl ? ', q.image_url' : '';
+
     const rows = await this.dataSource.query(
-      `SELECT aq.attempt_question_id, aq.aptitude_question_id,
+      `SELECT aq.attempt_question_id, aq.${cfg.idCol} AS aptitude_question_id,
               aq.selected_option_id, aq.metadata as attempt_metadata, aq.answered_at,
               aq.block_sequence_order, aq.display_order,
-              q.question_text, q.difficulty, q.subcategory AS category, q.metadata as question_metadata,
-              q.marks, q.negative_marks, q.image_url
-       FROM tech_aptitude_attempt_questions aq
-       JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
-       WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2
+              q.question_text, q.difficulty, q.${cfg.categoryCol} AS category, q.metadata as question_metadata,
+              q.marks, q.negative_marks${imgCol}
+       FROM ${cfg.junction} aq
+       JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
+       WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2
        ORDER BY aq.block_sequence_order ASC`,
       [attemptId, blockNumber],
     );
@@ -626,7 +649,7 @@ export class AdaptiveBlockService {
     for (const r of rows) {
       const opts = await this.dataSource.query(
         `SELECT option_id::text AS id, option_text AS text
-         FROM tech_aptitude_options WHERE aptitude_question_id=$1 ORDER BY option_id`,
+         FROM ${cfg.options} WHERE ${cfg.idCol}=$1 ORDER BY option_id`,
         [r.aptitude_question_id],
       );
       const questionMetadata = this.asObject(r.question_metadata);
@@ -644,7 +667,7 @@ export class AdaptiveBlockService {
         category: r.category ?? '',
         marks: Number(r.marks) || 1,
         negativeMarks: Number(r.negative_marks) || 0,
-        imageUrl: r.image_url ?? undefined,
+        imageUrl: cfg.hasImageUrl ? (r.image_url ?? undefined) : undefined,
         options: opts,
         blockSequenceOrder: r.block_sequence_order,
         displayOrder: r.display_order,
@@ -846,9 +869,10 @@ export class AdaptiveBlockService {
       const params: any[] = [assessmentId];
       const where = buildWhere(params, diff, excl, topic);
       params.push(need);
+      const imgSelect = cfg.hasImageUrl ? ', q.image_url' : '';
       const rows = await qr.query(
         `SELECT q.${cfg.idCol}, q.question_text, q.difficulty,
-                q.${cfg.categoryCol} AS category, q.marks, q.negative_marks, q.image_url,
+                q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
                 json_agg(
                   json_build_object('option_id', o.option_id, 'option_text', o.option_text)
                   ORDER BY o.option_id
@@ -872,13 +896,13 @@ export class AdaptiveBlockService {
         category: q.category ?? '',
         marks: Number(q.marks) || 1,
         negativeMarks: Number(q.negative_marks) || 0,
-        imageUrl: q.image_url ?? undefined,
+        imageUrl: cfg.hasImageUrl ? (q.image_url ?? undefined) : undefined,
       }));
     };
 
     // ── Phase 1: 1 question per topic at target difficulty ─────────────────
     // Only applies to aptitude (4 known topics). For grammar/mnc we skip this.
-    const isAptitude = cfg.categoryCol === 'subcategory';
+    const isAptitude = cfg.questions === 'tech_aptitude_questions';
     const results: BlockQuestion[] = [];
     const usedIds = [...excludeIds];
 

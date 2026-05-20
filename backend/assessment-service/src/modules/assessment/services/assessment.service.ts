@@ -217,6 +217,7 @@ export class AssessmentService {
         catCol: 'subcategory',
         hasDifficulty: true,
         hasMode: true,
+        hasImageUrl: true,
       },
       grammar: {
         attempts: 'tech_grammar_attempts',
@@ -236,7 +237,7 @@ export class AssessmentService {
         idCol: 'mnc_question_id',
         options: 'tech_mnc_options',
         attemptIdCol: 'mnc_attempt_id',
-        catCol: 'topic_group',
+        catCol: 'category',
         hasDifficulty: true,
         hasMode: true,
       },
@@ -614,7 +615,7 @@ export class AssessmentService {
       // tech_role_questions has NO difficulty column
       extraSelect = ', q.domain, q.question_type, q.scenario_context, q.marks, q.negative_marks';
     } else if (isMnc) {
-      extraSelect = ', q.topic_group, q.marks, q.negative_marks';
+      extraSelect = ', q.topic_group, q.category, q.subcategory, q.marks, q.negative_marks';
     }
     extraSelect += ', q.metadata';
 
@@ -684,6 +685,8 @@ export class AssessmentService {
       }
       if (isMnc) {
         base.topic = q.topic_group;
+        base.category = q.category || q.topic_group;
+        base.subcategory = q.subcategory || q.topic_group;
       }
 
       questions.push(base);
@@ -737,12 +740,14 @@ export class AssessmentService {
     const currentBlockNumber = blockRow[0].block_number;
     const currentDifficulty = blockRow[0].difficulty_achieved;
 
+    const imgCol = config.hasImageUrl ? ', q.image_url' : '';
+
     // Fetch only the current block's questions — filter by block_number, NOT is_locked.
     // Previous blocks are locked in DB but the UI only ever sees the current block.
     const questionRows = await this.dataSource.query(
       `SELECT aq.display_order, aq.block_sequence_order, aq.block_number,
               q.${config.idCol} AS question_id, q.question_text, q.difficulty,
-              q.${config.catCol} AS category, q.marks, q.negative_marks, q.image_url
+              q.${config.catCol} AS category, q.marks, q.negative_marks${imgCol}
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
@@ -773,7 +778,7 @@ export class AssessmentService {
         category: q.category,
         marks: Number(q.marks),
         negativeMarks: Number(q.negative_marks),
-        imageUrl: q.image_url ?? undefined,
+        imageUrl: config.hasImageUrl ? (q.image_url ?? undefined) : undefined,
         options: finalOptions,
         blockNumber: q.block_number,
         blockSequenceOrder: q.block_sequence_order,
@@ -2194,38 +2199,42 @@ export class AssessmentService {
           );
           const currentBlockNumber = blockRow[0]?.block_number ?? 1;
 
-          await queryRunner.commitTransaction();
+          try {
+            const blockInfo = await this.adaptiveBlockService.getBlockQuestions(
+              existing.attempt_token,
+              currentBlockNumber,
+            );
+            const timeLeftSeconds = Math.max(
+              0,
+              Math.round((existingExpires.getTime() - Date.now()) / 1000),
+            );
 
-          const blockInfo = await this.adaptiveBlockService.getBlockQuestions(
-            existing.attempt_token,
-            currentBlockNumber,
-          );
-          const timeLeftSeconds = Math.max(
-            0,
-            Math.round((existingExpires.getTime() - Date.now()) / 1000),
-          );
+            await queryRunner.commitTransaction();
 
-          return {
-            attemptToken: existing.attempt_token,
-            expiresAt: existing.expires_at,
-            durationSeconds: durationMinutes * 60,
-            timeLeftSeconds,
-            mode,
-            totalBlocks,
-            questionsPerBlock,
-            totalQuestions,
-            currentBlockNumber,
-            currentBlock: {
-              blockId: blockInfo.blockNumber,
-              blockNumber: blockInfo.blockNumber,
-              questions: blockInfo.questions,
-              difficulty: blockInfo.difficulty,
-              timeLimit: blockInfo.questions.length * 2,
-              isAdaptive: true,
-            },
-            isBlockBased: true,
-            resumed: true,
-          };
+            return {
+              attemptToken: existing.attempt_token,
+              expiresAt: existing.expires_at,
+              durationSeconds: durationMinutes * 60,
+              timeLeftSeconds,
+              mode,
+              totalBlocks,
+              questionsPerBlock,
+              totalQuestions,
+              currentBlockNumber,
+              currentBlock: {
+                blockId: blockInfo.blockNumber,
+                blockNumber: blockInfo.blockNumber,
+                questions: blockInfo.questions,
+                difficulty: blockInfo.difficulty,
+                timeLimit: blockInfo.questions.length * 2,
+                isAdaptive: true,
+              },
+              isBlockBased: true,
+              resumed: true,
+            };
+          } catch (e) {
+            this.logger.warn(`Stale block attempt detected for token ${existing.attempt_token}: ${(e as any)?.message}`);
+          }
         }
 
         await queryRunner.query(
@@ -2311,9 +2320,20 @@ export class AssessmentService {
       };
     }
 
-    // 2. Load attempt details for next-block generation
+    // 2. Load attempt details for next-block generation dynamically
+    const moduleType =
+      attemptToken.includes('BLOCK') && attemptToken.startsWith('APT') ? 'aptitude' :
+      attemptToken.includes('BLOCK') && attemptToken.startsWith('GRA') ? 'grammar' :
+      attemptToken.includes('BLOCK') && attemptToken.startsWith('MNC') ? 'mnc' :
+      attemptToken.startsWith('APT-') ? 'aptitude' :
+      attemptToken.startsWith('GRA-') || attemptToken.startsWith('COM-') ? 'grammar' :
+      attemptToken.startsWith('MNC-') ? 'mnc' : 'aptitude';
+    const tableMap = this.getTableMap();
+    const config = tableMap[moduleType];
+    if (!config) throw new BadRequestException(`Unknown module for token: ${attemptToken}`);
+
     const attemptRows = await this.dataSource.query(
-      `SELECT assessment_id, user_id FROM tech_aptitude_attempts WHERE attempt_token = $1`,
+      `SELECT assessment_id, user_id FROM ${config.attempts} WHERE attempt_token = $1`,
       [attemptToken],
     );
     if (!attemptRows.length) throw new NotFoundException('Attempt not found');

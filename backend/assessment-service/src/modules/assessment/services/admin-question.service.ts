@@ -38,7 +38,7 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'mnc_question_id',
     optionsTable: 'tech_mnc_options',
     optionsFk: 'mnc_question_id',
-    categoryColumn: 'topic_group',
+    categoryColumn: 'category',
   },
   role: {
     questionTable: 'tech_role_questions',
@@ -599,6 +599,9 @@ export class AdminQuestionService {
                 a.keypress_log_enabled,
                 a.require_camera_mic, a.live_proctoring_enabled,
                 a.adaptive_enabled,
+                a.adaptive_total_marks,
+                a.adaptive_total_blocks,
+                a.adaptive_seconds_per_mark,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -649,6 +652,9 @@ export class AdminQuestionService {
     const requireCameraMic = data.require_camera_mic;
     const liveProctoringEnabled = data.live_proctoring_enabled;
     const adaptiveEnabled = data.adaptive_enabled;
+    const adaptiveTotalMarks     = data.adaptive_total_marks     ?? data.adaptiveTotalMarks;
+    const adaptiveTotalBlocks    = data.adaptive_total_blocks    ?? data.adaptiveTotalBlocks;
+    const adaptiveSecondsPerMark = data.adaptive_seconds_per_mark ?? data.adaptiveSecondsPerMark;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -680,6 +686,9 @@ export class AdminQuestionService {
              require_camera_mic = COALESCE($22, require_camera_mic),
              live_proctoring_enabled = COALESCE($23, live_proctoring_enabled),
              adaptive_enabled = COALESCE($24, adaptive_enabled),
+             adaptive_total_marks = COALESCE($25, adaptive_total_marks),
+             adaptive_total_blocks = COALESCE($26, adaptive_total_blocks),
+             adaptive_seconds_per_mark = COALESCE($27, adaptive_seconds_per_mark),
              updated_at = NOW()
          WHERE assessment_id = $15`,
         [
@@ -707,6 +716,9 @@ export class AdminQuestionService {
           requireCameraMic !== undefined ? Boolean(requireCameraMic) : null,
           liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
           adaptiveEnabled !== undefined ? Boolean(adaptiveEnabled) : null,
+          adaptiveTotalMarks !== undefined ? Number(adaptiveTotalMarks) : null,
+          adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : null,
+          adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : null,
         ]
       );
 

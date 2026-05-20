@@ -38,10 +38,12 @@ export class AdaptiveSnapshotService {
   private getModuleConfig(moduleType: string): {
     attempts: string; questions: string; junction: string;
     idCol: string; attemptIdCol: string; hasNegative: boolean;
+    categoryCol: string; subcategoryCol: string;
   } | null {
     const map: Record<string, {
       attempts: string; questions: string; junction: string;
       idCol: string; attemptIdCol: string; hasNegative: boolean;
+      categoryCol: string; subcategoryCol: string;
     }> = {
       aptitude: {
         attempts: 'tech_aptitude_attempts',
@@ -50,6 +52,8 @@ export class AdaptiveSnapshotService {
         idCol: 'aptitude_question_id',
         attemptIdCol: 'aptitude_attempt_id',
         hasNegative: true,
+        categoryCol: 'category',
+        subcategoryCol: 'subcategory',
       },
       grammar: {
         attempts: 'tech_grammar_attempts',
@@ -58,6 +62,8 @@ export class AdaptiveSnapshotService {
         idCol: 'grammar_question_id',
         attemptIdCol: 'grammar_attempt_id',
         hasNegative: false,
+        categoryCol: 'task_type',
+        subcategoryCol: 'task_type',
       },
       mnc: {
         attempts: 'tech_mnc_attempts',
@@ -66,6 +72,30 @@ export class AdaptiveSnapshotService {
         idCol: 'mnc_question_id',
         attemptIdCol: 'mnc_attempt_id',
         hasNegative: false,
+        categoryCol: 'category',
+        subcategoryCol: 'subcategory',
+      },
+      role: {
+        attempts: 'tech_role_attempts',
+        questions: 'tech_role_questions',
+        junction: 'tech_role_attempt_questions',
+        idCol: 'role_question_id',
+        attemptIdCol: 'role_attempt_id',
+        hasNegative: true,
+        categoryCol: 'domain',
+        subcategoryCol: 'domain',
+      },
+      // 'communication' assessments are stored as module_type='grammar' in the DB enum.
+      // This alias handles any edge-case where the string reaches this service directly.
+      communication: {
+        attempts: 'tech_grammar_attempts',
+        questions: 'tech_grammar_questions',
+        junction: 'tech_grammar_attempt_questions',
+        idCol: 'grammar_question_id',
+        attemptIdCol: 'grammar_attempt_id',
+        hasNegative: false,
+        categoryCol: 'task_type',
+        subcategoryCol: 'task_type',
       },
     };
     return map[moduleType] ?? null;
@@ -81,11 +111,12 @@ export class AdaptiveSnapshotService {
     moduleType: string;
     cfg: ReturnType<AdaptiveSnapshotService['getModuleConfig']>;
   }> {
-    // Try aptitude first (most common), then grammar, then mnc
+    // Try each module's attempts table in order
     const tables = [
       { table: 'tech_aptitude_attempts', idCol: 'aptitude_attempt_id', module: 'aptitude' },
       { table: 'tech_grammar_attempts',  idCol: 'grammar_attempt_id',  module: 'grammar' },
       { table: 'tech_mnc_attempts',      idCol: 'mnc_attempt_id',      module: 'mnc' },
+      { table: 'tech_role_attempts',     idCol: 'role_attempt_id',     module: 'role' },
     ];
 
     for (const t of tables) {
@@ -141,8 +172,8 @@ export class AdaptiveSnapshotService {
               q.difficulty, q.marks, q.negative_marks,
               q.metadata AS question_meta,
               q.correct_option_id,
-              COALESCE(q.category, q.subcategory, q.task_type, q.topic_group, 'General') AS category,
-              COALESCE(q.subcategory, q.task_type, q.topic_group, 'General') AS subcategory
+              COALESCE(q.${cfg.categoryCol}, 'General') AS category,
+              COALESCE(q.${cfg.subcategoryCol}, 'General') AS subcategory
        FROM ${cfg.junction} aq
        JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
        WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2
@@ -550,9 +581,11 @@ export class AdaptiveSnapshotService {
 
   private async getUserId(attemptToken: string, moduleType: string): Promise<number> {
     const tableMap: Record<string, { table: string; col: string }> = {
-      aptitude: { table: 'tech_aptitude_attempts', col: 'user_id' },
-      grammar:  { table: 'tech_grammar_attempts',  col: 'user_id' },
-      mnc:      { table: 'tech_mnc_attempts',       col: 'user_id' },
+      aptitude:      { table: 'tech_aptitude_attempts', col: 'user_id' },
+      grammar:       { table: 'tech_grammar_attempts',  col: 'user_id' },
+      mnc:           { table: 'tech_mnc_attempts',      col: 'user_id' },
+      role:          { table: 'tech_role_attempts',     col: 'user_id' },
+      communication: { table: 'tech_grammar_attempts',  col: 'user_id' },
     };
     const t = tableMap[moduleType];
     if (!t) return 0;

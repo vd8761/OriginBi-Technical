@@ -290,6 +290,7 @@ export class AdaptiveAnalyticsService {
     const tableMap: Record<string, {
       attempts: string; junction: string; questions: string;
       idCol: string; attemptIdCol: string;
+      categoryCol: string; subcategoryCol: string;
     }> = {
       aptitude: {
         attempts: 'tech_aptitude_attempts',
@@ -297,6 +298,8 @@ export class AdaptiveAnalyticsService {
         questions: 'tech_aptitude_questions',
         idCol: 'aptitude_question_id',
         attemptIdCol: 'aptitude_attempt_id',
+        categoryCol: 'category',
+        subcategoryCol: 'subcategory',
       },
       grammar: {
         attempts: 'tech_grammar_attempts',
@@ -304,6 +307,8 @@ export class AdaptiveAnalyticsService {
         questions: 'tech_grammar_questions',
         idCol: 'grammar_question_id',
         attemptIdCol: 'grammar_attempt_id',
+        categoryCol: 'task_type',
+        subcategoryCol: 'task_type',
       },
       mnc: {
         attempts: 'tech_mnc_attempts',
@@ -311,6 +316,27 @@ export class AdaptiveAnalyticsService {
         questions: 'tech_mnc_questions',
         idCol: 'mnc_question_id',
         attemptIdCol: 'mnc_attempt_id',
+        categoryCol: 'category',
+        subcategoryCol: 'subcategory',
+      },
+      role: {
+        attempts: 'tech_role_attempts',
+        junction: 'tech_role_attempt_questions',
+        questions: 'tech_role_questions',
+        idCol: 'role_question_id',
+        attemptIdCol: 'role_attempt_id',
+        categoryCol: 'domain',
+        subcategoryCol: 'domain',
+      },
+      // 'communication' assessments are stored as module_type='grammar' in the DB enum.
+      communication: {
+        attempts: 'tech_grammar_attempts',
+        junction: 'tech_grammar_attempt_questions',
+        questions: 'tech_grammar_questions',
+        idCol: 'grammar_question_id',
+        attemptIdCol: 'grammar_attempt_id',
+        categoryCol: 'task_type',
+        subcategoryCol: 'task_type',
       },
     };
 
@@ -331,8 +357,8 @@ export class AdaptiveAnalyticsService {
               aq.expected_time_seconds,
               q.difficulty, q.marks, q.negative_marks,
               q.metadata AS question_meta, q.correct_option_id,
-              COALESCE(q.category, q.subcategory, q.task_type, q.topic_group, 'General') AS category,
-              COALESCE(q.subcategory, q.task_type, q.topic_group, 'General') AS subcategory
+              COALESCE(q.${t.categoryCol}, 'General') AS category,
+              COALESCE(q.${t.subcategoryCol}, 'General') AS subcategory
        FROM ${t.junction} aq
        JOIN ${t.questions} q ON q.${t.idCol}=aq.${t.idCol}
        WHERE aq.${t.attemptIdCol}=$1 AND aq.block_number IS NOT NULL
@@ -379,13 +405,13 @@ export class AdaptiveAnalyticsService {
 
   private async persistReport(report: AdaptiveFinalReport): Promise<void> {
     await this.dataSource.query(
+      `DELETE FROM adaptive_performance_analytics WHERE attempt_token=$1`,
+      [report.attemptToken]
+    );
+
+    await this.dataSource.query(
       `INSERT INTO adaptive_performance_analytics (
          attempt_token, assessment_id, user_id,
-         total_score, positive_score, negative_score,
-         total_questions, correct_count, accuracy_pct, time_taken_seconds,
-         total_blocks_completed, difficulty_path, accuracy_path, time_path,
-         block_scores, category_breakdown, weak_categories, strong_categories,
-         difficulty_upgrades, difficulty_downgrades, difficulty_stays, adaptation_score,
          obtained_marks, total_marks, marks_percentage, final_evaluation_score,
          performance_level, skipped_count, skipped_marks, wrong_count,
          skip_impact, skip_confidence, difficulty_handling, speed_efficiency,
@@ -395,60 +421,17 @@ export class AdaptiveAnalyticsService {
          metadata
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-         $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,
-         $35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46
-       )
-       ON CONFLICT (attempt_token) DO UPDATE SET
-         total_score=$4, positive_score=$5, negative_score=$6,
-         total_questions=$7, correct_count=$8, accuracy_pct=$9,
-         time_taken_seconds=$10, total_blocks_completed=$11,
-         difficulty_path=$12, accuracy_path=$13, time_path=$14,
-         block_scores=$15, category_breakdown=$16, weak_categories=$17,
-         strong_categories=$18, difficulty_upgrades=$19, difficulty_downgrades=$20,
-         difficulty_stays=$21, adaptation_score=$22, obtained_marks=$23,
-         total_marks=$24, marks_percentage=$25, final_evaluation_score=$26,
-         performance_level=$27, skipped_count=$28, skipped_marks=$29,
-         wrong_count=$30, skip_impact=$31, skip_confidence=$32,
-         difficulty_handling=$33, speed_efficiency=$34, topic_mastery_score=$35,
-         reliability_score=$36, reliability_level=$37, topic_mastery=$38,
-         block_performance=$39, category_performance=$40, strong_topics=$41,
-         weak_topics=$42, slow_topics=$43, skipped_topics=$44,
-         recommended_topics=$45, metadata=$46`,
+         $19,$20,$21,$22,$23,$24,$25,$26,$27
+       )`,
       [
         report.attemptToken, report.assessmentId, report.userId,
-        report.obtainedMarks, report.obtainedMarks, 0,
-        report.totalQuestions, report.correctAnswers,
-        report.marksPercentage, report.timeTakenSeconds,
-        report.blockPerformance.length,
-        JSON.stringify(report.adaptivePath),
-        JSON.stringify(report.blockPerformance.map(b => b.adaptiveAccuracy / 100)),
-        JSON.stringify(report.blockPerformance.map(b => b.timeTakenSeconds)),
-        JSON.stringify(report.blockPerformance),
-        JSON.stringify(report.categoryPerformance),
-        JSON.stringify(report.weakTopics),
-        JSON.stringify(report.strongTopics),
-        0, 0, 0, // upgrades/downgrades/stays — computed from path if needed
-        report.reliabilityScore / 100,
-        report.obtainedMarks, report.totalMarks, report.marksPercentage,
-        report.finalEvaluationScore, report.performanceLevel,
-        report.skippedQuestions, 0, report.wrongAnswers,
-        report.skipImpact, report.skipConfidence,
-        report.difficultyHandling, report.speedEfficiency,
-        report.topicMasteryScore, report.reliabilityScore,
-        report.reliabilityLevel,
-        JSON.stringify(report.topicMastery),
-        JSON.stringify(report.blockPerformance),
-        JSON.stringify(report.categoryPerformance),
-        JSON.stringify(report.strongTopics),
-        JSON.stringify(report.weakTopics),
-        JSON.stringify(report.slowTopics),
-        JSON.stringify(report.skippedTopics),
-        JSON.stringify(report.recommendedTopics),
-        JSON.stringify({
-          reliabilityDetail: report.reliabilityDetail,
-          avgTimePerQuestion: report.avgTimePerQuestion,
-          avgTimePerMark: report.avgTimePerMark,
-        }),
+        report.obtainedMarks, report.totalMarks, report.marksPercentage, report.finalEvaluationScore,
+        report.performanceLevel, report.skippedQuestions, 0, 
+        report.wrongAnswers, report.skipImpact, report.skipConfidence, report.difficultyHandling,
+        report.speedEfficiency, report.topicMasteryScore, report.reliabilityScore, report.reliabilityLevel,
+        JSON.stringify(report.topicMastery), JSON.stringify(report.blockPerformance), JSON.stringify(report.categoryPerformance),
+        JSON.stringify(report.strongTopics), JSON.stringify(report.weakTopics), JSON.stringify(report.slowTopics),
+        JSON.stringify(report.skippedTopics), JSON.stringify(report.recommendedTopics), JSON.stringify(report.reliabilityDetail)
       ],
     );
   }

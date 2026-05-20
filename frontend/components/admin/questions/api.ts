@@ -80,6 +80,9 @@ export interface ApiAssessment {
     require_camera_mic?: boolean;
     live_proctoring_enabled?: boolean;
     adaptive_enabled?: boolean;
+    adaptive_total_marks?: number;
+    adaptive_total_blocks?: number;
+    adaptive_seconds_per_mark?: number;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

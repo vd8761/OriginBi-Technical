@@ -17,8 +17,9 @@ import { AdaptiveBlueprintService } from './services/adaptive-blueprint.service'
  * Self-contained module for the Snapshot-Based Marks Blueprint
  * Block Adaptive Assessment Engine (v2).
  *
- * Registered in AppModule alongside AssessmentModule.
- * No circular dependencies with AssessmentModule.
+ * Blueprint is fully automatic — computed from the question bank
+ * whenever a candidate starts an adaptive attempt. No manual admin
+ * setup step required.
  *
  * Routes: /api/adaptive/v2/...
  */
@@ -31,17 +32,17 @@ import { AdaptiveBlueprintService } from './services/adaptive-blueprint.service'
   ],
   providers: [
     AdaptiveEngineService,
+    AdaptiveBlueprintService,
     AdaptiveBlockGeneratorService,
     AdaptiveSnapshotService,
     AdaptiveAnalyticsService,
-    AdaptiveBlueprintService,
   ],
   exports: [
     AdaptiveEngineService,
+    AdaptiveBlueprintService,
     AdaptiveBlockGeneratorService,
     AdaptiveSnapshotService,
     AdaptiveAnalyticsService,
-    AdaptiveBlueprintService,
   ],
 })
 export class AdaptiveModule {}
