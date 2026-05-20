@@ -147,6 +147,50 @@
         "code":     { "type": "string" }
       }
     },
+    "category": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Topic/category label. Kept in sync with 'section' by the authoring editor."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Free-form authoring tags. Trimmed, lowercased, de-duplicated. At most 32 tags, 32 chars each.",
+      "items": { "type": "string", "minLength": 1, "maxLength": 32 },
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "inputFormat": { "$ref": "#/$defs/formattedText" },
+    "outputFormat": { "$ref": "#/$defs/formattedText" },
+    "constraintsFormat": { "$ref": "#/$defs/formattedText" },
+    "hintsEnabled": {
+      "type": "boolean",
+      "description": "Master switch for the hints panel. When false the candidate never sees hints even if the hints array is populated."
+    },
+    "multiFile": {
+      "type": "boolean",
+      "description": "When true the question uses a multi-file workspace. starterFiles for the selected language must include a protected solution.<ext> runner file."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["trial", "main"],
+      "description": "Question pool: 'trial' (practice) or 'main' (graded)."
+    },
+    "attachments": {
+      "type": "array",
+      "description": "Uploaded media files attached to the question. Files live in object storage (R2); these are references the editor and candidate renderer use.",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url":      { "type": "string" },
+          "key":      { "type": "string" },
+          "fileName": { "type": "string" },
+          "alt":      { "type": "string" },
+          "mime":     { "type": "string" }
+        }
+      }
+    },
     "judgeConfig": {
       "type": "object",
       "description": "Per-question overrides for judging behavior. Defaults inherit from the language plugin's runtime config.",
@@ -158,6 +202,22 @@
         "stopOnFirstFailure":   { "type": "boolean" },
         "partialCredit":        { "type": "boolean" },
         "showWrongAnswerDiff":  { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "formattedText": {
+      "type": "object",
+      "description": "A content blob plus a renderer hint. Used for the per-question Input Format / Output Format / Constraints sections so each can independently be markdown, html, or plain text.",
+      "required": ["kind", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["markdown", "html", "plain"],
+          "default": "markdown"
+        },
+        "content": { "type": "string" }
       }
     }
   }

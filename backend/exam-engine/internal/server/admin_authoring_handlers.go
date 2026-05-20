@@ -67,6 +67,7 @@ type adminTestCaseInput struct {
 	Weight           float64         `json:"weight"`
 	Stdin            string          `json:"stdin"`
 	ExpectedStdout   string          `json:"expected_stdout"`
+	Explanation      string          `json:"explanation"`
 	Comparator       string          `json:"comparator"`
 	ComparatorConfig json.RawMessage `json:"comparator_config"`
 }
@@ -81,6 +82,7 @@ type adminTestCaseDTO struct {
 	Weight            float64         `json:"weight"`
 	Stdin             string          `json:"stdin"`
 	ExpectedStdout    string          `json:"expectedStdout"`
+	Explanation       string          `json:"explanation"`
 	Comparator        string          `json:"comparator"`
 	ComparatorConfig  json.RawMessage `json:"comparatorConfig"`
 }
@@ -609,11 +611,11 @@ func insertQuestionTestCases(ctx context.Context, tx pgx.Tx, versionID uuid.UUID
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO question_test_cases (
 			    id, question_version_id, ordinal, name, is_sample, is_hidden,
-			    weight, stdin, expected_stdout, comparator, comparator_config
+			    weight, stdin, expected_stdout, explanation, comparator, comparator_config
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
 		`, uuid.New(), versionID, i+1, nullEmpty(tc.Name), tc.IsSample, tc.IsHidden,
-			weight, tc.Stdin, tc.ExpectedStdout, comparator, []byte(config)); err != nil {
+			weight, tc.Stdin, tc.ExpectedStdout, tc.Explanation, comparator, []byte(config)); err != nil {
 			return err
 		}
 	}
@@ -679,7 +681,7 @@ func (s *Server) testCasesForCurrentVersion(ctx context.Context, questionID uuid
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, question_version_id, ordinal, COALESCE(name, ''), is_sample, is_hidden,
-		       weight::float8, stdin, expected_stdout, comparator, comparator_config
+		       weight::float8, stdin, expected_stdout, COALESCE(explanation, ''), comparator, comparator_config
 		FROM question_test_cases
 		WHERE question_version_id = $1
 		ORDER BY ordinal
@@ -705,7 +707,7 @@ func scanAdminTestCase(row sqlScanner) (adminTestCaseDTO, error) {
 	var config []byte
 	if err := row.Scan(
 		&id, &versionID, &tc.Ordinal, &tc.Name, &tc.IsSample, &tc.IsHidden,
-		&tc.Weight, &tc.Stdin, &tc.ExpectedStdout, &tc.Comparator, &config,
+		&tc.Weight, &tc.Stdin, &tc.ExpectedStdout, &tc.Explanation, &tc.Comparator, &config,
 	); err != nil {
 		return adminTestCaseDTO{}, err
 	}
@@ -735,14 +737,14 @@ func (s *Server) appendTestCase(ctx context.Context, questionID uuid.UUID, req a
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO question_test_cases (
 		    id, question_version_id, ordinal, name, is_sample, is_hidden,
-		    weight, stdin, expected_stdout, comparator, comparator_config
+		    weight, stdin, expected_stdout, explanation, comparator, comparator_config
 		)
-		SELECT $1, $2, COALESCE(MAX(ordinal), 0) + 1, $3, $4, $5, $6, $7, $8, $9, $10::jsonb
+		SELECT $1, $2, COALESCE(MAX(ordinal), 0) + 1, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb
 		FROM question_test_cases WHERE question_version_id = $2
 		RETURNING id, question_version_id, ordinal, COALESCE(name, ''), is_sample, is_hidden,
-		          weight::float8, stdin, expected_stdout, comparator, comparator_config
+		          weight::float8, stdin, expected_stdout, COALESCE(explanation, ''), comparator, comparator_config
 	`, uuid.New(), versionID, nullEmpty(req.Name), req.IsSample, req.IsHidden, weight,
-		req.Stdin, req.ExpectedStdout, comparator, []byte(config))
+		req.Stdin, req.ExpectedStdout, req.Explanation, comparator, []byte(config))
 	return scanAdminTestCase(row)
 }
 
@@ -766,12 +768,13 @@ func (s *Server) updateTestCase(ctx context.Context, questionID uuid.UUID, tcID 
 	row := s.pool.QueryRow(ctx, `
 		UPDATE question_test_cases
 		SET name = $3, is_sample = $4, is_hidden = $5, weight = $6,
-		    stdin = $7, expected_stdout = $8, comparator = $9, comparator_config = $10::jsonb
+		    stdin = $7, expected_stdout = $8, explanation = $9,
+		    comparator = $10, comparator_config = $11::jsonb
 		WHERE id = $1 AND question_version_id = $2
 		RETURNING id, question_version_id, ordinal, COALESCE(name, ''), is_sample, is_hidden,
-		          weight::float8, stdin, expected_stdout, comparator, comparator_config
+		          weight::float8, stdin, expected_stdout, COALESCE(explanation, ''), comparator, comparator_config
 	`, tcID, versionID, nullEmpty(req.Name), req.IsSample, req.IsHidden, weight,
-		req.Stdin, req.ExpectedStdout, comparator, []byte(config))
+		req.Stdin, req.ExpectedStdout, req.Explanation, comparator, []byte(config))
 	return scanAdminTestCase(row)
 }
 
@@ -826,9 +829,65 @@ func decodeQuestionJSON(r io.Reader) ([]adminQuestionRequest, error) {
 	return rows, nil
 }
 
+// difficultyWord maps the CSV's human difficulty string to the integer scale
+// stored on question_versions.difficulty (1 = easy, 3 = medium, 5 = hard).
+func difficultyWordToInt(word string) int {
+	switch strings.ToLower(strings.TrimSpace(word)) {
+	case "easy":
+		return 1
+	case "medium":
+		return 3
+	case "hard":
+		return 5
+	default:
+		// Allow a bare integer too, so legacy CSVs still import.
+		if n, err := strconv.Atoi(strings.TrimSpace(word)); err == nil {
+			return n
+		}
+		return 1
+	}
+}
+
+// csvBool parses a permissive boolean cell ("true"/"1"/"yes" → true).
+func csvBool(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+// solutionExtForLang returns the default runner-file extension for a bare
+// language slug. Used to synthesize the protected solution.<ext> file when a
+// CSV row enables multi_file.
+func solutionExtForLang(lang string) string {
+	switch strings.ToLower(strings.TrimSpace(lang)) {
+	case "python", "python3":
+		return "py"
+	case "java":
+		return "java"
+	case "cpp", "c++":
+		return "cpp"
+	case "javascript", "js", "node", "nodejs":
+		return "js"
+	case "c":
+		return "c"
+	case "go", "golang":
+		return "go"
+	case "csharp", "c#":
+		return "cs"
+	case "typescript", "ts":
+		return "ts"
+	default:
+		return "txt"
+	}
+}
+
 func decodeQuestionCSV(r io.Reader) ([]adminQuestionRequest, error) {
 	cr := csv.NewReader(r)
 	cr.TrimLeadingSpace = true
+	cr.FieldsPerRecord = -1 // tolerate ragged rows
 	records, err := cr.ReadAll()
 	if err != nil {
 		return nil, err
@@ -847,30 +906,168 @@ func decodeQuestionCSV(r io.Reader) ([]adminQuestionRequest, error) {
 		}
 		return strings.TrimSpace(row[i])
 	}
+	// firstNonEmpty lets callers accept either the new column name or a legacy
+	// alias without duplicating lookups.
+	firstNonEmpty := func(row []string, names ...string) string {
+		for _, n := range names {
+			if v := get(row, n); v != "" {
+				return v
+			}
+		}
+		return ""
+	}
+	formatKind := func(v string) assessmentcoding.PromptFormat {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "html":
+			return assessmentcoding.PromptFormatHTML
+		case "plain", "plaintext", "text":
+			return assessmentcoding.PromptFormatPlain
+		default:
+			return assessmentcoding.PromptFormatMarkdown
+		}
+	}
+	formatted := func(kindCell, contentCell string) *assessmentcoding.FormattedText {
+		content := contentCell
+		if strings.TrimSpace(content) == "" {
+			return nil
+		}
+		return &assessmentcoding.FormattedText{
+			Kind:    formatKind(kindCell),
+			Content: content,
+		}
+	}
+
 	out := []adminQuestionRequest{}
-	for _, row := range records[1:] {
+	for rowNum, row := range records[1:] {
 		title := get(row, "title")
+		if title == "" {
+			continue // skip blank trailing rows
+		}
 		prompt := get(row, "prompt")
-		difficulty, _ := strconv.Atoi(get(row, "difficulty"))
-		maxScore, _ := strconv.ParseFloat(get(row, "max_score"), 64)
+		difficultyWord := firstNonEmpty(row, "difficulty")
+		difficulty := difficultyWordToInt(difficultyWord)
+		maxScore, _ := strconv.ParseFloat(firstNonEmpty(row, "marks", "max_score"), 64)
+		if maxScore == 0 {
+			maxScore = 1
+		}
+
+		// Single language per question — accept either the new `language`
+		// column (bare slug) or the legacy semicolon list `allowed_languages`.
 		langs := []string{}
-		for _, lang := range strings.FieldsFunc(get(row, "allowed_languages"), func(r rune) bool { return r == ';' || r == ',' }) {
+		for _, lang := range strings.FieldsFunc(firstNonEmpty(row, "language", "allowed_languages"), func(r rune) bool { return r == ';' || r == ',' }) {
 			if strings.TrimSpace(lang) != "" {
 				langs = append(langs, runnerjudge0.NormalizeLanguageSlug(lang))
 			}
 		}
-		body, _ := json.Marshal(assessmentcoding.QuestionBody{
-			Type:             "coding",
-			ResponseType:     "code",
-			Title:            title,
-			Prompt:           prompt,
-			PromptFormat:     assessmentcoding.PromptFormatMarkdown,
-			AllowedLanguages: langs,
-		})
+
+		// Tags — semicolon or comma separated, trimmed + lowercased.
+		tags := []string{}
+		seenTag := map[string]bool{}
+		for _, t := range strings.FieldsFunc(get(row, "tags"), func(r rune) bool { return r == ';' || r == ',' }) {
+			t = strings.ToLower(strings.TrimSpace(t))
+			if t != "" && !seenTag[t] {
+				seenTag[t] = true
+				tags = append(tags, t)
+			}
+		}
+
+		multiFile := csvBool(get(row, "multi_file"))
+		mode := strings.ToLower(get(row, "mode"))
+		hintsEnabled := csvBool(get(row, "hints_enabled"))
+
+		var hints []assessmentcoding.Hint
+		if raw := get(row, "hints"); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &hints); err != nil {
+				return nil, fmt.Errorf("row %d (%q): invalid hints JSON: %w", rowNum+2, title, err)
+			}
+		}
+
+		var testCases []adminTestCaseInput
+		if raw := get(row, "test_cases"); raw != "" {
+			// The test_cases cell carries its own JSON objects; decode into a
+			// loose shape first so a bare `is_sample` flips is_hidden too.
+			var rawCases []struct {
+				Name           string `json:"name"`
+				Input          string `json:"input"`
+				Stdin          string `json:"stdin"`
+				Output         string `json:"output"`
+				ExpectedStdout string `json:"expected_stdout"`
+				Explanation    string `json:"explanation"`
+				IsSample       bool   `json:"is_sample"`
+				Weight         float64 `json:"weight"`
+			}
+			if err := json.Unmarshal([]byte(raw), &rawCases); err != nil {
+				return nil, fmt.Errorf("row %d (%q): invalid test_cases JSON: %w", rowNum+2, title, err)
+			}
+			for _, rc := range rawCases {
+				stdin := rc.Stdin
+				if stdin == "" {
+					stdin = rc.Input
+				}
+				expected := rc.ExpectedStdout
+				if expected == "" {
+					expected = rc.Output
+				}
+				testCases = append(testCases, adminTestCaseInput{
+					Name:           rc.Name,
+					IsSample:       rc.IsSample,
+					IsHidden:       !rc.IsSample,
+					Weight:         rc.Weight,
+					Stdin:          stdin,
+					ExpectedStdout: expected,
+					Explanation:    rc.Explanation,
+				})
+			}
+		}
+
+		qb := assessmentcoding.QuestionBody{
+			Type:              "coding",
+			ResponseType:      "code",
+			Title:             title,
+			Section:           get(row, "topic"),
+			Category:          get(row, "topic"),
+			Difficulty:        strings.ToLower(strings.TrimSpace(difficultyWord)),
+			PromptFormat:      formatKind(firstNonEmpty(row, "prompt_format")),
+			Prompt:            prompt,
+			AllowedLanguages:  langs,
+			Tags:              tags,
+			InputFormat:       formatted(get(row, "input_format_kind"), get(row, "input_format")),
+			OutputFormat:      formatted(get(row, "output_format_kind"), get(row, "output_format")),
+			ConstraintsFormat: formatted(get(row, "constraints_kind"), get(row, "constraints")),
+			Hints:             hints,
+		}
+		if hintsEnabled {
+			qb.HintsEnabled = &hintsEnabled
+		}
+		if multiFile {
+			qb.MultiFile = &multiFile
+			// Synthesize the protected runner file so the body passes the
+			// MISSING_SOLUTION_FILE validator rule. The editor lets the admin
+			// fill in starter content later.
+			if len(langs) == 1 {
+				ext := solutionExtForLang(strings.TrimPrefix(langs[0], "language."))
+				qb.StarterFiles = map[string][]assessmentcoding.StarterFile{
+					langs[0]: {{
+						Path:     "solution." + ext,
+						Content:  "",
+						ReadOnly: false,
+					}},
+				}
+			}
+		}
+		if mode == "trial" || mode == "main" {
+			qb.Mode = mode
+		}
+
+		body, err := json.Marshal(qb)
+		if err != nil {
+			return nil, fmt.Errorf("row %d (%q): marshal body: %w", rowNum+2, title, err)
+		}
 		out = append(out, adminQuestionRequest{
 			Title:      title,
 			PluginSlug: assessmentcoding.Slug,
 			Body:       body,
+			TestCases:  testCases,
 			Difficulty: difficulty,
 			MaxScore:   maxScore,
 		})

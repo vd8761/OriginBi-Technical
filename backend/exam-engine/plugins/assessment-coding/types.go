@@ -116,6 +116,26 @@ type JudgeConfig struct {
 	ShowWrongAnswerDiff *bool `json:"showWrongAnswerDiff,omitempty"`
 }
 
+// FormattedText is a content blob plus a renderer hint. Used for the
+// per-question Input Format / Output Format / Constraints sections so each
+// can independently be markdown, html, or plain text.
+type FormattedText struct {
+	Kind    PromptFormat `json:"kind"`    // markdown | html | plain
+	Content string       `json:"content"`
+}
+
+// AttachmentMeta is one uploaded media file attached to a question. The file
+// itself lives in object storage (R2); we only keep the reference here so the
+// admin editor can re-list / re-insert it and the candidate side can render
+// it. Distinct from the legacy single-object `Image`/`Media` fields.
+type AttachmentMeta struct {
+	URL      string `json:"url"`
+	Key      string `json:"key,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+	Alt      string `json:"alt,omitempty"`
+	Mime     string `json:"mime,omitempty"`
+}
+
 // QuestionBody is the in-process realization of question_versions.body for
 // coding-type questions. Lossless w.r.t. the JSON Schema in schemas/.
 type QuestionBody struct {
@@ -123,6 +143,7 @@ type QuestionBody struct {
 	ResponseType     string                   `json:"responseType,omitempty"`
 	Title            string                   `json:"title"`
 	Section          string                   `json:"section,omitempty"`
+	Category         string                   `json:"category,omitempty"`
 	Difficulty       string                   `json:"difficulty,omitempty"`
 	PromptFormat     PromptFormat             `json:"promptFormat,omitempty"`
 	Prompt           string                   `json:"prompt"`
@@ -134,6 +155,17 @@ type QuestionBody struct {
 	Constraints      string                   `json:"constraints,omitempty"`
 	Hints            []Hint                   `json:"hints,omitempty"`
 	JudgeConfig      *JudgeConfig             `json:"judgeConfig,omitempty"`
+
+	// Authoring-spec fields (see schemas/question-body.schema.json). All
+	// optional so legacy bodies (migration 011/021) round-trip unchanged.
+	Tags              []string         `json:"tags,omitempty"`
+	InputFormat       *FormattedText   `json:"inputFormat,omitempty"`
+	OutputFormat      *FormattedText   `json:"outputFormat,omitempty"`
+	ConstraintsFormat *FormattedText   `json:"constraintsFormat,omitempty"`
+	HintsEnabled      *bool            `json:"hintsEnabled,omitempty"`
+	MultiFile         *bool            `json:"multiFile,omitempty"`
+	Mode              string           `json:"mode,omitempty"` // trial | main
+	Attachments       []AttachmentMeta `json:"attachments,omitempty"`
 
 	// The following are passthrough fields kept so existing seeded bodies
 	// (migration 011) round-trip unchanged through the new schema.
