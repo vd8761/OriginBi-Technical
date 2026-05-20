@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -168,9 +168,14 @@ export class AdaptiveBlockService {
       if (!cfg) throw new BadRequestException(`Module ${row.module_type} not supported for blocks`);
 
       const rawBC = row.block_config ?? {};
-      const qpb = Number(rawBC.questionsPerBlock ?? rawBC.questions_per_block ?? 5);
-      const totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 1);
+      let qpb = Number(rawBC.questionsPerBlock ?? rawBC.questions_per_block ?? 5);
+      let totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 1);
       const qLimit = Number(row.question_limit ?? 0);
+
+      if (req.mode === 'trial') {
+        qpb = 5;
+        totalBlocks = 1;
+      }
 
       // 2. Resolve attempt + used IDs
       let attemptId: number | null = null;
@@ -295,12 +300,13 @@ export class AdaptiveBlockService {
     try {
       // 1. Resolve attempt
       const ar = await qr.query(
-        `SELECT aptitude_attempt_id, assessment_id FROM tech_aptitude_attempts WHERE attempt_token=$1`,
+        `SELECT aptitude_attempt_id, assessment_id, mode FROM tech_aptitude_attempts WHERE attempt_token=$1`,
         [attemptToken],
       );
       if (!ar.length) throw new NotFoundException('Attempt not found');
       const attemptId = Number(ar[0].aptitude_attempt_id);
       const assessmentId = Number(ar[0].assessment_id);
+      const attemptMode = ar[0].mode || 'main';
 
       // 2. Load this block's questions with correct answers + marks
       const bqs = await qr.query(
@@ -412,7 +418,7 @@ export class AdaptiveBlockService {
         `SELECT block_id FROM adaptive_blocks WHERE assessment_id=$1 AND block_number=$2`,
         [assessmentId, blockNumber + 1],
       );
-      const canProceed = nextBlockRow.length > 0;
+      const canProceed = attemptMode !== 'trial' && nextBlockRow.length > 0;
 
       await qr.commitTransaction();
       return {

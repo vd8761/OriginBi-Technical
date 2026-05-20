@@ -38,35 +38,18 @@ export class AssessmentService {
         stats[module] = { trial: 0, main: 0 };
         
         try {
-          if (!config.hasMode) {
-            const rows = await queryRunner.query(
-              `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1`,
-              [resolvedUserId]
-            );
-            const count = Number(rows[0]?.count || 0);
-            stats[module] = { trial: count, main: count };
-          } else {
-            const trialRows = await queryRunner.query(
-              `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
-               FROM ${config.attempts} a
-               JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
-               JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-               WHERE a.user_id = $1 AND q.mode = 'trial'`,
-              [resolvedUserId]
-            );
-            const mainRows = await queryRunner.query(
-              `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
-               FROM ${config.attempts} a
-               JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
-               JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-               WHERE a.user_id = $1 AND q.mode = 'main'`,
-              [resolvedUserId]
-            );
-            stats[module] = {
-              trial: Number(trialRows[0]?.count || 0),
-              main: Number(mainRows[0]?.count || 0)
-            };
-          }
+          const trialRows = await queryRunner.query(
+            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND mode = 'trial'`,
+            [resolvedUserId]
+          );
+          const mainRows = await queryRunner.query(
+            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND (mode = 'main' OR mode IS NULL)`,
+            [resolvedUserId]
+          );
+          stats[module] = {
+            trial: Number(trialRows[0]?.count || 0),
+            main: Number(mainRows[0]?.count || 0)
+          };
         } catch (err: any) {
           this.logger.error(`Error querying attempts count for ${module}: ${err.message}`);
         }
@@ -355,9 +338,9 @@ export class AssessmentService {
       // If there is an active in-progress attempt for this user+assessment, resume it.
       const existingRows = await queryRunner.query(
         `SELECT * FROM ${config.attempts}
-         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress'
+         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress' AND mode = $3
          ORDER BY started_at DESC LIMIT 1`,
-        [assessment.assessment_id, resolvedUserId],
+        [assessment.assessment_id, resolvedUserId, requestedMode],
       );
 
       if (existingRows.length > 0) {
@@ -398,26 +381,15 @@ export class AssessmentService {
 
       // Check if user has already completed the assessment (submitted or evaluated)
       // and enforce attempt limits to prevent re-taking
-      const completedAttemptsQuery = config.hasMode
-        ? `
-          SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
-          FROM ${config.attempts} a
-          JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
-          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-          WHERE a.user_id = $1 AND a.assessment_id = $2 
-            AND a.status IN ('submitted', 'evaluated')
-            AND q.mode = $3
-        `
-        : `
-          SELECT COUNT(*) as count
-          FROM ${config.attempts}
-          WHERE user_id = $1 AND assessment_id = $2 
-            AND status IN ('submitted', 'evaluated')
-        `;
+      const completedAttemptsQuery = `
+        SELECT COUNT(*) as count
+        FROM ${config.attempts}
+        WHERE user_id = $1 AND assessment_id = $2 
+          AND status IN ('submitted', 'evaluated')
+          AND mode = $3
+      `;
 
-      const completedAttemptsParams = config.hasMode
-        ? [resolvedUserId, assessment.assessment_id, requestedMode]
-        : [resolvedUserId, assessment.assessment_id];
+      const completedAttemptsParams = [resolvedUserId, assessment.assessment_id, requestedMode];
 
       const completedAttemptsResult = await queryRunner.query(
         completedAttemptsQuery,
@@ -444,18 +416,18 @@ export class AssessmentService {
       if (module === 'coding') {
         attemptResult = await queryRunner.query(
           `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, status, started_at, expires_at, created_at, updated_at)
-           VALUES ($1, $2, $3, 'in_progress', $4, $5, NOW(), NOW())
+              (assessment_id, user_id, attempt_token, status, started_at, expires_at, mode, created_at, updated_at)
+           VALUES ($1, $2, $3, 'in_progress', $4, $5, $6, NOW(), NOW())
            RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt],
+          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt, requestedMode],
         );
       } else {
         attemptResult = await queryRunner.query(
           `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
+              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, mode, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, NOW(), NOW())
            RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, requestedMode],
         );
       }
       const attemptId = attemptResult[0][config.attemptIdCol];
@@ -1980,13 +1952,19 @@ export class AssessmentService {
 
       // 3. Compute block layout
       const rawBlockConfig = assessment.block_config ?? {};
-      const questionsPerBlock = Math.max(
+      let questionsPerBlock = Math.max(
         1,
         Number(rawBlockConfig.questionsPerBlock ?? rawBlockConfig.questions_per_block ?? 5),
       );
       const qLimit = Number(assessment.question_limit ?? 0);
       if (qLimit > 0) totalQuestions = Math.min(totalQuestions, qLimit);
-      const totalBlocks = Math.ceil(totalQuestions / questionsPerBlock);
+      let totalBlocks = Math.ceil(totalQuestions / questionsPerBlock);
+
+      if (mode === 'trial') {
+        questionsPerBlock = 5;
+        totalQuestions = Math.min(5, totalQuestions);
+        totalBlocks = 1;
+      }
 
       // 4. Persist updated block_config so generateBlock can read it
       const newBlockConfig = {
@@ -2004,14 +1982,14 @@ export class AssessmentService {
       if (!resolvedUserId) throw new BadRequestException('No users found.');
       const durationMinutes = Number(assessment.total_time_minutes || 60);
 
-      // Resume existing block-based attempt if one is in progress
+      // Resume existing block-based attempt if one is in progress with the requested mode
       const blockPrefix = `${dbModule.substring(0, 3).toUpperCase()}-BLOCK-%`;
       const existingBlockRows = await queryRunner.query(
         `SELECT * FROM ${config.attempts}
          WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress'
-           AND attempt_token LIKE $3
+           AND attempt_token LIKE $3 AND mode = $4
          ORDER BY started_at DESC LIMIT 1`,
-        [assessment.assessment_id, resolvedUserId, blockPrefix],
+        [assessment.assessment_id, resolvedUserId, blockPrefix, mode],
       );
 
       if (existingBlockRows.length > 0) {
@@ -2075,9 +2053,9 @@ export class AssessmentService {
 
       await queryRunner.query(
         `INSERT INTO ${config.attempts}
-           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())`,
-        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, mode, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, NOW(), NOW())`,
+        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, mode],
       );
 
       // 7. Commit so generateBlock can read the attempt row
@@ -2145,12 +2123,12 @@ export class AssessmentService {
 
     // 2. Load attempt details for next-block generation
     const attemptRows = await this.dataSource.query(
-      `SELECT assessment_id, user_id FROM tech_aptitude_attempts WHERE attempt_token = $1`,
+      `SELECT assessment_id, user_id, mode FROM tech_aptitude_attempts WHERE attempt_token = $1`,
       [attemptToken],
     );
     if (!attemptRows.length) throw new NotFoundException('Attempt not found');
 
-    const { assessment_id, user_id } = attemptRows[0];
+    const { assessment_id, user_id, mode: attemptMode } = attemptRows[0];
 
     // 3. Use the difficulty_achieved returned directly from completeBlock
     const difficultyAchieved = completionResult.difficultyAchieved ?? 'medium';
@@ -2165,7 +2143,7 @@ export class AssessmentService {
         difficultyAchieved,
       },
       userId: Number(user_id),
-      mode: 'main',
+      mode: (attemptMode || 'main') as 'trial' | 'main',
       attemptToken,
     });
 

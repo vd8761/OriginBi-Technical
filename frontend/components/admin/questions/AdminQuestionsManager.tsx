@@ -963,7 +963,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                       }
                     }} 
                     onView={(q) => router.push(`/admin/questions/${(q as any).id}?module=${selectedModule}`)}
-                    categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
+                    categories={filterCats.map(c => ({ id: c.key, name: c.label, subcategories: c.subcategories }))}
                   />
 
                   {filtered.length > limit && (
@@ -1024,7 +1024,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
             question={editingQuestion === "new" ? null : editingQuestion} 
             assessmentType={selectedModule} 
             allowedQuestionKinds={allowedQuestionKinds}
-            categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
+            categories={filterCats.map(c => ({ id: c.key, name: c.label, subcategories: c.subcategories }))}
             onSave={handleSaveQuestion} 
             onCancel={() => setEditingQuestion(null)} 
           />

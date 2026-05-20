@@ -127,7 +127,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-snug">
                   {state.options.title}
                 </h3>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                <p className="mt-2 text-xs text-slate-950 dark:text-white leading-relaxed font-medium">
                   {state.options.message}
                 </p>
 
@@ -135,7 +135,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => handleClose(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95"
+                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-black dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-95"
                   >
                     {state.options.cancelLabel || "Cancel"}
                   </button>

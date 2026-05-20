@@ -440,22 +440,7 @@ export function matchCategory(qCat: string, filterCat: string): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[\s_\-()&]+/g, "");
   const n1 = norm(qCat);
   const n2 = norm(filterCat);
-  if (n1 === n2) return true;
-
-  const shortToLong: Record<string, string[]> = {
-    qa: ["quantitativeaptitude", "quantitative"],
-    lr: ["logicalreasoning", "logical"],
-    di: ["datainterpretation", "data"],
-    ar: ["abstractreasoning", "abstract"],
-    va: ["verbalability", "verbal"]
-  };
-
-  const checkMapping = (code: string, target: string) => {
-    const list = shortToLong[code];
-    return list && list.includes(target);
-  };
-
-  return !!(checkMapping(n1, n2) || checkMapping(n2, n1));
+  return n1 === n2;
 }
 
 export function matchSubcategory(qSub: string | undefined, filterSub: string): boolean {

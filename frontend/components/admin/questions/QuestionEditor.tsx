@@ -495,7 +495,11 @@ export default function QuestionEditor({
                        onChange={setAptSubCategory}
                        options={(() => {
                          if (!categories || categories.length === 0) return [];
-                         const selectedCat = (categories as any).find((c: any) => c.id === aptCategory);
+                         const selectedCat = (categories as any).find((c: any) => 
+                            c.id === aptCategory || 
+                            matchCategory(aptCategory, c.id) || 
+                            String(c.id) === String(aptCategory)
+                          );
                          if (selectedCat && selectedCat.subcategories) {
                            return selectedCat.subcategories.map((sc: any) => ({ label: sc.name, value: sc.id }));
                          }
