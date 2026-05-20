@@ -553,3 +553,22 @@ export const ExploreIcon: React.FC<{ className?: string }> = ({ className = "w-5
     <path d="M16.2 7.8l-2 6.3-6.4 2.1 2-6.3z" />
   </svg>
 );
+
+export const AwardIcon: React.FC<{ className?: string; strokeColor?: string }> = ({
+  className = "w-5 h-5",
+  strokeColor = "currentColor",
+}) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={strokeColor}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <circle cx="12" cy="8" r="7" />
+    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+  </svg>
+);

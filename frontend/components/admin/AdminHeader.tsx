@@ -162,7 +162,7 @@ export default function AdminHeader() {
           {meta.actions}
           <MountPoint id="topbar.actions" />
           
-          {/* Notifications */}
+          {/* Notifications - temporarily disabled
            <div className="relative">
              <button
                className="w-8.5 h-8.5 rounded-full flex items-center justify-center transition-all relative cursor-pointer bg-black/[0.02] dark:bg-white/[0.04] border border-black/[0.05] dark:border-white/[0.08] text-brand-green hover:bg-brand-green/5 dark:hover:bg-white/[0.08]"
@@ -173,6 +173,7 @@ export default function AdminHeader() {
                </span>
              </button>
            </div>
+          */}
 
           <div className="w-px h-6 bg-black/[0.05] dark:bg-white/[0.08] hidden lg:block mx-2"></div>
 
@@ -215,8 +216,8 @@ export default function AdminHeader() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
                 <div 
-                  className="absolute right-0 top-full mt-4 w-64 bg-white dark:bg-[#212824] rounded-[16px] shadow-2xl z-50 border border-black/[0.05] dark:border-white/[0.08] overflow-hidden animate-slide-down"
-                  style={{ backgroundColor: theme === 'dark' ? '#212824' : '#ffffff', opacity: 1, backdropFilter: 'none' }}
+                  className="absolute right-0 top-full mt-4 w-64 rounded-[16px] shadow-2xl z-50 border border-black/[0.05] dark:border-white/[0.08] overflow-hidden animate-slide-down"
+                  style={{ backgroundColor: theme === 'dark' ? '#212824' : '#ffffff', opacity: 1, backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
                 >
                   <div className="px-5 py-4 border-b border-black/[0.05] dark:border-white/[0.06] bg-black/[0.01] dark:bg-white/[0.02]">
                     <p className="text-sm font-bold text-gray-900 dark:text-white truncate tracking-tight">{adminUser?.name}</p>
