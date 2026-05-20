@@ -11,6 +11,15 @@ import EnvWarning from "@/components/admin/EnvWarning";
 import { fetchAdminPluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAdminPageMeta } from "@/components/admin/AdminPageContext";
+import { BreadcrumbBar } from "@/components/admin/ui";
+
+function BreadcrumbsWrapper() {
+  const { meta } = useAdminPageMeta();
+  const breadcrumb = meta.breadcrumb;
+  if (!breadcrumb || breadcrumb.length === 0) return null;
+  return <BreadcrumbBar segments={breadcrumb} className="mb-4" />;
+}
 
 /**
  * AdminLoginCard
@@ -111,7 +120,10 @@ export default function AdminLoginCard({ children }: { children: ReactNode }) {
         <section className="admin-main-shell">
           <AdminHeader />
           <EnvWarning />
-          <main className="admin-content">{children}</main>
+          <main className="admin-content">
+            <BreadcrumbsWrapper />
+            {children}
+          </main>
         </section>
       </div>
     </PluginProvider>

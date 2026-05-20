@@ -139,8 +139,8 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     title: `${ASSESSMENT_TYPE_LABELS[activeModule]} Settings`,
     eyebrow: "Configuration",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/question-banks" },
+      { label: "Question Banks", href: "/admin/questions" },
+      { label: `${ASSESSMENT_TYPE_LABELS[activeModule]} Settings` },
     ],
     hideSearch: true,
   });

@@ -110,11 +110,24 @@ function getPaginationRange(currentPage: number, totalPages: number): (number | 
 
 function UsersInner() {
   const router = useRouter();
-  useRegisterAdminPage({
-    title: "User Management",
-  });
-
   const [view, setView] = useState<"list" | "bulk" | "add">("list");
+
+  useRegisterAdminPage({
+    title: view === "bulk" ? "Bulk User Registration" : view === "add" ? "Register New User" : "User Management",
+    breadcrumb: view === "bulk"
+      ? [
+          { label: "User Management", onClick: () => setView("list") },
+          { label: "Bulk Upload" },
+        ]
+      : view === "add"
+      ? [
+          { label: "User Management", onClick: () => setView("list") },
+          { label: "Add New" },
+        ]
+      : [
+          { label: "User Management" },
+        ],
+  });
   const [filter, setFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");

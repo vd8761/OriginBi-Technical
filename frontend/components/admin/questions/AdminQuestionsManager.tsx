@@ -29,6 +29,7 @@ import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
 import CsvImportPanel from "./CsvImportPanel";
+import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
@@ -272,6 +273,19 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
   const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+
+  useRegisterAdminPage({
+    eyebrow: "Workspace",
+    title: "Assessments",
+    breadcrumb: view === "json-import"
+      ? [
+          { label: "Assessments", onClick: () => setView("list") },
+          { label: "Bulk Import" },
+        ]
+      : [
+          { label: "Assessments" },
+        ],
+  });
 
   // Reset page when category, subcategory, search query or mode changes
   useEffect(() => {
@@ -860,6 +874,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                     assessmentType={selectedModule!} 
                     onEdit={(q) => setEditingQuestion(q)} 
                     onDelete={(id) => setDeleteConfirm(id)} 
+                    onView={(q) => router.push(`/admin/questions/${(q as any).id}?module=${selectedModule}`)}
                     categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
                   />
 

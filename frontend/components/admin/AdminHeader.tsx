@@ -36,7 +36,7 @@ function resolveRoute(pathname: string) {
 }
 
 function defaultBreadcrumb(pathname: string, sectionFallback: string): BreadcrumbSegment[] {
-  const segments: BreadcrumbSegment[] = [{ label: "Admin Hub", href: "/admin" }];
+  const segments: BreadcrumbSegment[] = [];
   const part = pathname.split("/").filter(Boolean);
   if (part.length > 1) {
     const top = part[1];
@@ -49,7 +49,17 @@ function defaultBreadcrumb(pathname: string, sectionFallback: string): Breadcrum
       settings: "Settings",
       users: "Users",
     };
-    segments.push({ label: labelMap[top] ?? sectionFallback, href: `/admin/${top}` });
+    const isMainPage = part.length === 2;
+    if (isMainPage) {
+      segments.push({ label: labelMap[top] ?? sectionFallback });
+    } else {
+      segments.push({ label: labelMap[top] ?? sectionFallback, href: `/admin/${top}` });
+      if (part.length > 2) {
+        const leaf = part[2];
+        const leafLabel = leaf === "new" ? "New" : leaf === "bulk-import" ? "Bulk Import" : "Details";
+        segments.push({ label: leafLabel });
+      }
+    }
   }
   return segments;
 }

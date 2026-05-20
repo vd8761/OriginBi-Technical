@@ -41,8 +41,7 @@ function BulkImportInner() {
     title: "Bulk Import",
     subtitle: "Paste validated JSON to upload coding problems in batch.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/coding" },
+      { label: "Coding", href: "/admin/coding" },
       { label: "Bulk Import" },
     ],
   });

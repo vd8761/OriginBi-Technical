@@ -61,7 +61,6 @@ function ProctoringInner() {
     title: "Proctoring Live Monitor",
     subtitle: "Polled every 5s from /v1/admin/proctoring/active — stateless, no sticky sessions.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
       { label: "Proctoring" },
     ],
   });

@@ -159,7 +159,7 @@ function DashboardInner() {
     eyebrow: "Dashboard",
     title: "Welcome back, Admin",
     subtitle: "Here's what's happening across all assessments today.",
-    breadcrumb: [{ label: "Admin Hub" }],
+    breadcrumb: [{ label: "Dashboard" }],
   });
 
   const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);

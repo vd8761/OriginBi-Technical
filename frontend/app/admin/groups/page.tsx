@@ -253,8 +253,25 @@ function mapBackendGroup(bg: any): Group {
 
 function GroupsInner() {
   const router = useRouter();
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [view, setView] = useState<"list" | "detail" | "add-candidate">("list");
+
   useRegisterAdminPage({
-    title: "Groups Management",
+    title: view === "detail" ? "Group Configuration" : view === "add-candidate" ? "Register Candidate" : "Groups Management",
+    breadcrumb: view === "detail"
+      ? [
+          { label: "Groups", onClick: () => setView("list") },
+          { label: selectedGroup?.name || "Details" }
+        ]
+      : view === "add-candidate"
+      ? [
+          { label: "Groups", onClick: () => setView("list") },
+          { label: selectedGroup?.name || "Details", onClick: () => setView("detail") },
+          { label: "Register Candidate" }
+        ]
+      : [
+          { label: "Groups" }
+        ]
   });
 
   const [groups, setGroups] = useState<Group[]>([]);
@@ -264,10 +281,6 @@ function GroupsInner() {
 
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  
-  // Custom navigation views
-  const [view, setView] = useState<"list" | "detail" | "add-candidate">("list");
   const [membersRefreshTrigger, setMembersRefreshTrigger] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [studentPage, setStudentPage] = useState(1);
