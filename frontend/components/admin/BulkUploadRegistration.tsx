@@ -137,29 +137,7 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
 
     return (
         <div className="w-full font-sans animate-fade-in pb-12">
-            {/* Header & Breadcrumbs */}
-            <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-8">
-                <div>
-                    <div className="flex items-center text-xs text-black dark:text-white mb-1.5 font-normal flex-wrap">
-                        <span>Dashboard</span>
-                        <span className="mx-2 text-black dark:text-white">&gt;</span>
-                        <button onClick={onCancel} className="hover:text-brand-text-light-primary dark:hover:text-white hover:underline cursor-pointer">
-                            Users
-                        </button>
-                        <span className="mx-2 text-black dark:text-white">&gt;</span>
-                        <span className="text-brand-green font-semibold">Bulk Upload</span>
-                        {view === 'review' && (
-                            <>
-                                <span className="mx-2 text-black dark:text-white">&gt;</span>
-                                <span className="text-brand-green font-semibold">Review</span>
-                            </>
-                        )}
-                    </div>
-                    <h1 className="text-2xl sm:text-3xl font-semibold text-brand-text-light-primary dark:text-white tracking-tight">
-                        Bulk Upload Registration {view === 'review' ? '– Review & Confirm' : ''}
-                    </h1>
-                </div>
-            </div>
+
 
             {/* Main Form Card Container - matching manual user add card */}
             <div 

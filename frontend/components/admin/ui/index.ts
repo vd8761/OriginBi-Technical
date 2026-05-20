@@ -10,3 +10,5 @@ export { Modal } from "./Modal";
 export { Avatar } from "./Avatar";
 export { BreadcrumbBar, type BreadcrumbSegment } from "./BreadcrumbBar";
 export { ToggleSwitch } from "./ToggleSwitch";
+export { ConfirmProvider, useConfirm } from "./ConfirmModal";
+

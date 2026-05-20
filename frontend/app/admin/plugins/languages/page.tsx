@@ -24,7 +24,6 @@ function LanguagesInner() {
     title: "Programming Languages",
     subtitle: "Judge0 mappings, Monaco language IDs, runtime limits, and purchasable language plugin metadata.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
       { label: "Plugins", href: "/admin/plugins" },
       { label: "Languages" },
     ],
