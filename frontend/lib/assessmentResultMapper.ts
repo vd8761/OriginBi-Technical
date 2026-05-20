@@ -417,6 +417,7 @@ export const mapSubmissionToAssessmentResult = ({
     netScore: rawTotalScore,
     attemptToken: attemptToken || undefined,
     module: submissionModule || undefined,
+    mode: submissionMode || undefined,
     maxScore: Number.isFinite(maxScore) ? maxScore : undefined,
     objectiveAnsweredCount,
     subjectiveAnsweredCount,

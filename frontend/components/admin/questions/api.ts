@@ -79,6 +79,7 @@ export interface ApiAssessment {
     keypress_log_enabled?: boolean;
     require_camera_mic?: boolean;
     live_proctoring_enabled?: boolean;
+    adaptive_enabled?: boolean;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

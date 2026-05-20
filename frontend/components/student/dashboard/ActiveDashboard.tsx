@@ -447,9 +447,6 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                 transition={{ delay: 0.05 * idx }}
                 className="group relative flex flex-col bg-white dark:bg-[#111a15] rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden hover:border-brand-green/30 transition-colors shadow-sm"
               >
-                {/* Top strip for brand color */}
-                <div className="h-1 w-full" style={{ background: exam.accentColor }} />
-                
                 <div className="p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                   {/* Info */}
                   <div className="flex items-start gap-4 flex-1">
@@ -615,9 +612,6 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
                     transition={{ delay: 0.5 + idx * 0.1 }}
                     className="group relative flex flex-col bg-white dark:bg-[#111a15] rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden hover:border-brand-green/30 transition-colors shadow-sm"
                   >
-                    {/* Top strip for brand color */}
-                    <div className="h-1 w-full" style={{ background: exam.accentColor }} />
-
                     <div className="p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                       {/* Left: Info */}
                       <div className="flex items-start gap-4 flex-1">

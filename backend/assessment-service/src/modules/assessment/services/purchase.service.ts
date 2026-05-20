@@ -563,35 +563,6 @@ export class PurchaseService {
             this.logger.warn(`Failed to resolve user_id for ${body.email}: ${err.message}`);
         }
 
-        // Resolve assessment_id robustly (input can be id or code).
-        // Coding has a tech_assessments row for admin settings/pricing, but
-        // the actual start entitlement still comes from an exam-engine
-        // assignment created via /v1/purchases/demo.
-        let resolvedAssessmentId: string | null = null;
-        try {
-            const byIdRows = await this.dataSource.query(
-                `SELECT assessment_id FROM tech_assessments WHERE assessment_id = $1 LIMIT 1`,
-                [String(body.assessmentId)]
-            );
-            if (byIdRows && byIdRows.length > 0) {
-                resolvedAssessmentId = String(byIdRows[0].assessment_id);
-            } else {
-                const byCodeRows = await this.dataSource.query(
-                    `SELECT assessment_id FROM tech_assessments WHERE assessment_code = $1 LIMIT 1`,
-                    [body.assessmentCode]
-                );
-                if (byCodeRows && byCodeRows.length > 0) {
-                    resolvedAssessmentId = String(byCodeRows[0].assessment_id);
-                }
-            }
-        } catch (err: any) {
-            this.logger.warn(`Failed to resolve assessment_id for ${body.assessmentCode}: ${err.message}`);
-        }
-
-        if (!resolvedAssessmentId && !this.isCodingCode(body.assessmentCode)) {
-            throw new BadRequestException("Invalid assessment reference for purchase");
-        }
-
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();

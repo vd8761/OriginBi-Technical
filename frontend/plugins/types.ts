@@ -12,6 +12,7 @@ import type { ComponentType, ReactNode } from "react";
  *  - `topbar.actions`                                → components/admin/AdminTopbar.tsx
  *  - `dashboard.kpi` / `dashboard.tiles`             → app/admin/page.tsx
  *  - `settings.proctoring`                           → app/admin/settings/page.tsx (Phase E)
+ *  - `assessment.settings.general`                   → components/admin/questions/AssessmentSettingsPage.tsx
  *  - `attempt.toolbar` / `attempt.warning-toast` /
  *    `attempt.background`                            → candidate attempt screen
  */
@@ -25,6 +26,7 @@ export type SurfaceMount =
   | "settings.scoring"
   | "settings.notifications"
   | "settings.integrations"
+  | "assessment.settings.general"
   | "attempt.toolbar"
   | "attempt.warning-toast"
   | "attempt.background";
@@ -73,6 +75,8 @@ export interface FrontendPlugin {
   id: string;
   /** Higher number = registers later. Stable ordering inside a mount. */
   priority?: number;
+  /** When true, this plugin is always active in admin regardless of the backend enabled list. */
+  alwaysActive?: boolean;
   surfaces?: PluginSurface[];
   runtime?: (ctx: PluginCtx) => () => void;
 }

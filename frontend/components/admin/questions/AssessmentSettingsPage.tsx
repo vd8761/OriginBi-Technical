@@ -19,6 +19,8 @@ import {
 import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/Switch";
+import { MountPoint } from "@/plugins";
+import { usePluginRuntime } from "@/plugins";
 
 type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading";
 
@@ -88,6 +90,21 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [requireCameraMic, setRequireCameraMic] = useState(false);
   const [liveProctoringEnabled, setLiveProctoringEnabled] = useState(true);
 
+  // Adaptive Questions plugin state
+  const [adaptiveEnabled, setAdaptiveEnabled] = useState(false);
+  const pluginRuntime = usePluginRuntime();
+
+  // Subscribe to the adaptive plugin's toggle event
+  useEffect(() => {
+    if (!pluginRuntime) return;
+    const unsub = pluginRuntime.subscribe("adaptive.enabled.change", (payload: unknown) => {
+      const data = payload as { enabled: boolean };
+      setAdaptiveEnabled(Boolean(data?.enabled));
+      setHasModifications(true);
+    });
+    return unsub;
+  }, [pluginRuntime]);
+
   const handleSave = async () => {
     const a = assessments[activeModule];
     if (!a) return;
@@ -124,6 +141,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         keypress_log_enabled: keypressLogEnabled,
         require_camera_mic: requireCameraMic,
         live_proctoring_enabled: liveProctoringEnabled,
+        adaptive_enabled: adaptiveEnabled,
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -285,6 +303,9 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     setKeypressLogEnabled(Boolean(a.keypress_log_enabled));
     setRequireCameraMic(Boolean(a.require_camera_mic));
     setLiveProctoringEnabled(a.live_proctoring_enabled !== false);
+
+    // Adaptive Questions plugin
+    setAdaptiveEnabled(Boolean(a.adaptive_enabled));
 
     // Populate Question Types
     setEnabledQuestionKinds(parseQuestionKindEnabledMap(activeModule, a.enabled_question_types));
@@ -509,6 +530,19 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                           <div className="sm:max-w-md"><label className={labelCls}>Main Attempts Limit</label><p className={descCls}>Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
                           <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
                         </div>
+                      )}
+
+                      {/* Adaptive Questions Plugin Mount — shown for non-coding modules */}
+                      {activeModule !== "coding" && !searchQuery && (
+                        <MountPoint
+                          id="assessment.settings.general"
+                          ctx={{
+                            config: {
+                              moduleType: activeModule,
+                              adaptiveEnabled,
+                            },
+                          }}
+                        />
                       )}
 
                       {activeModule === "coding" && (

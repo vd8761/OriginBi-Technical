@@ -346,6 +346,21 @@ export class AssessmentService {
 
       if (!assessment) throw new NotFoundException(`${module} assessment not found`);
 
+      // ── Adaptive routing ──────────────────────────────────────────────────
+      // If adaptive_enabled is true on the assessment (and it's not coding),
+      // delegate to the block-based flow transparently.
+      const ADAPTIVE_SUPPORTED = ['aptitude', 'grammar', 'mnc', 'role'];
+      if (
+        Boolean(assessment.adaptive_enabled) &&
+        ADAPTIVE_SUPPORTED.includes(dbModule) &&
+        module !== 'coding'
+      ) {
+        await queryRunner.rollbackTransaction();
+        await queryRunner.release();
+        return this.startBlockBasedAttempt(module, data);
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const resolvedUserId = await this.resolveUserId(queryRunner, userId);
       if (!resolvedUserId) throw new BadRequestException('No users found.');
 
@@ -2728,7 +2743,7 @@ export class AssessmentService {
     try {
       // Fetch user details
       const userRows = await this.dataSource.query(
-        `SELECT email, first_name, last_name, full_name FROM users WHERE id = $1`,
+        `SELECT email, name, full_name, first_name, last_name FROM users WHERE id = $1`,
         [userId],
       );
       if (!userRows.length) {
@@ -2739,6 +2754,7 @@ export class AssessmentService {
       const toEmail: string = user.email;
       const userName: string =
         user.full_name ||
+        user.name ||
         [user.first_name, user.last_name].filter(Boolean).join(' ') ||
         'Candidate';
 
@@ -2758,6 +2774,10 @@ export class AssessmentService {
       const assessmentCode = this.assessmentCodeForEmail(module);
       const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
 
+      this.logger.log(
+        `Sending certificate email to ${toEmail} for ${module} (score=${overallScorePercent}%, cert=${certificateId})`,
+      );
+
       await this.emailService.sendCertificateEmail({
         toEmail,
         userName,
@@ -2769,7 +2789,7 @@ export class AssessmentService {
         completedAt,
       });
     } catch (err: any) {
-      this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`);
+      this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);
     }
   }
 

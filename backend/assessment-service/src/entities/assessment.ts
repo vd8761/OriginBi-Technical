@@ -132,6 +132,9 @@ export class TechAssessment {
     @Column({ name: "live_proctoring_enabled", type: "boolean", default: true })
     liveProctoringEnabled!: boolean;
 
+    @Column({ name: "adaptive_enabled", type: "boolean", default: false })
+    adaptiveEnabled!: boolean;
+
     @ManyToOne(() => UserEntity, { nullable: false })
     @JoinColumn({ name: "created_by" })
     createdBy!: UserEntity;

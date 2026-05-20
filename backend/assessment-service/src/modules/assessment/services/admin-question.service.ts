@@ -596,10 +596,9 @@ export class AdminQuestionService {
                 a.categories, a.difficulty_marks, a.difficulty_negative_marks,
                 a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
                 a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
-                a.proctoring_require_fullscreen, a.fullscreen_exit_limit,
-                a.proctoring_block_devtools, a.devtools_open_limit,
-                a.mouse_focus_loss_limit, a.keypress_log_enabled,
+                a.keypress_log_enabled,
                 a.require_camera_mic, a.live_proctoring_enabled,
+                a.adaptive_enabled,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -649,6 +648,7 @@ export class AdminQuestionService {
     const keypressLogEnabled = data.keypress_log_enabled;
     const requireCameraMic = data.require_camera_mic;
     const liveProctoringEnabled = data.live_proctoring_enabled;
+    const adaptiveEnabled = data.adaptive_enabled;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -679,6 +679,7 @@ export class AdminQuestionService {
              keypress_log_enabled = COALESCE($21, keypress_log_enabled),
              require_camera_mic = COALESCE($22, require_camera_mic),
              live_proctoring_enabled = COALESCE($23, live_proctoring_enabled),
+             adaptive_enabled = COALESCE($24, adaptive_enabled),
              updated_at = NOW()
          WHERE assessment_id = $15`,
         [
@@ -705,6 +706,7 @@ export class AdminQuestionService {
           keypressLogEnabled !== undefined ? Boolean(keypressLogEnabled) : null,
           requireCameraMic !== undefined ? Boolean(requireCameraMic) : null,
           liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
+          adaptiveEnabled !== undefined ? Boolean(adaptiveEnabled) : null,
         ]
       );
 
