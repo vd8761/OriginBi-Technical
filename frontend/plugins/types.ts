@@ -27,6 +27,8 @@ export type SurfaceMount =
   | "settings.notifications"
   | "settings.integrations"
   | "assessment.settings.general"
+  | "assessment.aptitude.engine"
+  | "assessment.aptitude.report"
   | "attempt.toolbar"
   | "attempt.warning-toast"
   | "attempt.background";
