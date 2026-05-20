@@ -1,0 +1,152 @@
+{
+  "questions": [
+    {
+      "title": "Two Sum",
+      "plugin_slug": "assessment.coding",
+      "difficulty": 1,
+      "max_score": 10,
+      "body": {
+        "type": "coding",
+        "responseType": "code",
+        "title": "Two Sum",
+        "section": "Arrays & Hashing",
+        "category": "Arrays & Hashing",
+        "difficulty": "easy",
+        "mode": "main",
+        "tags": ["arrays", "hash-map", "warmup"],
+        "promptFormat": "markdown",
+        "prompt": "## Two Sum\n\nRead two space-separated integers `a` and `b` from stdin and print their sum.",
+        "inputFormat":  { "kind": "markdown", "content": "Single line containing two integers separated by a space." },
+        "outputFormat": { "kind": "markdown", "content": "One integer — the sum." },
+        "constraintsFormat": { "kind": "markdown", "content": "`-10^9 ≤ a, b ≤ 10^9`" },
+        "allowedLanguages": ["language.python"],
+        "multiFile": false,
+        "starterCode": {
+          "language.python": "import sys\n\ndef solve(a, b):\n    return a + b\n\nif __name__ == \"__main__\":\n    a, b = map(int, sys.stdin.readline().split())\n    print(solve(a, b))\n"
+        },
+        "hintsEnabled": true,
+        "hints": [
+          { "afterFailures": 2, "text": "Read the line, split on whitespace, cast to int." },
+          { "afterFailures": 4, "text": "Use `input().split()` then `map(int, ...)`." }
+        ]
+      },
+      "test_cases": [
+        { "name": "sample",  "is_sample": true,  "is_hidden": false, "weight": 1, "stdin": "2 3",      "expected_stdout": "5",   "explanation": "2 + 3 = 5",      "comparator": "trim_equal" },
+        { "name": "positives", "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "100 250", "expected_stdout": "350", "explanation": "Standard positives.", "comparator": "trim_equal" },
+        { "name": "mixed",   "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "-7 12",   "expected_stdout": "5",   "explanation": "Mixed sign.",     "comparator": "trim_equal" }
+      ]
+    },
+    {
+      "title": "Reverse a String",
+      "plugin_slug": "assessment.coding",
+      "difficulty": 1,
+      "max_score": 10,
+      "body": {
+        "type": "coding",
+        "responseType": "code",
+        "title": "Reverse a String",
+        "section": "Strings",
+        "category": "Strings",
+        "difficulty": "easy",
+        "mode": "main",
+        "tags": ["strings", "io"],
+        "promptFormat": "markdown",
+        "prompt": "## Reverse a String\n\nRead a single line from stdin and print it reversed.",
+        "inputFormat":  { "kind": "plain", "content": "One line of text." },
+        "outputFormat": { "kind": "plain", "content": "The same characters in reverse order." },
+        "constraintsFormat": { "kind": "markdown", "content": "`1 ≤ length ≤ 1000`" },
+        "allowedLanguages": ["language.javascript"],
+        "multiFile": false,
+        "starterCode": {
+          "language.javascript": "process.stdin.on('data', (buf) => {\n  const s = buf.toString().trim();\n  console.log(s.split('').reverse().join(''));\n});\n"
+        },
+        "hintsEnabled": false,
+        "hints": []
+      },
+      "test_cases": [
+        { "name": "sample",     "is_sample": true,  "is_hidden": false, "weight": 1, "stdin": "hello",    "expected_stdout": "olleh",    "explanation": "Reverse of hello.",    "comparator": "trim_equal" },
+        { "name": "mixed-case", "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "OriginBI", "expected_stdout": "IBnigirO", "explanation": "Preserves case.",      "comparator": "trim_equal" },
+        { "name": "palindrome", "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "racecar",  "expected_stdout": "racecar",  "explanation": "Palindromes unchanged.", "comparator": "trim_equal" }
+      ]
+    },
+    {
+      "title": "Valid Parentheses",
+      "plugin_slug": "assessment.coding",
+      "difficulty": 3,
+      "max_score": 20,
+      "body": {
+        "type": "coding",
+        "responseType": "code",
+        "title": "Valid Parentheses",
+        "section": "Stacks",
+        "category": "Stacks",
+        "difficulty": "medium",
+        "mode": "main",
+        "tags": ["stacks", "strings", "classic"],
+        "promptFormat": "markdown",
+        "prompt": "## Valid Parentheses\n\nGiven a string containing only `()[]{}`, decide whether the brackets are balanced.\n\nPrint `YES` if every opener has a matching closer in the correct order, otherwise `NO`.",
+        "inputFormat":  { "kind": "markdown", "content": "A single line containing only the characters `()[]{}`." },
+        "outputFormat": { "kind": "markdown", "content": "Either `YES` or `NO`." },
+        "constraintsFormat": { "kind": "markdown", "content": "`1 ≤ length ≤ 1000`" },
+        "allowedLanguages": ["language.java"],
+        "multiFile": true,
+        "entryFile": { "language.java": "Solution.java" },
+        "starterFiles": {
+          "language.java": [
+            { "path": "Solution.java", "content": "import java.util.*;\n\npublic class Solution {\n    public static boolean isValid(String s) {\n        Deque<Character> st = new ArrayDeque<>();\n        for (char c : s.toCharArray()) {\n            if (c == '(' || c == '[' || c == '{') st.push(c);\n            else {\n                if (st.isEmpty()) return false;\n                char o = st.pop();\n                if ((o=='(' && c!=')') || (o=='[' && c!=']') || (o=='{' && c!='}')) return false;\n            }\n        }\n        return st.isEmpty();\n    }\n\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        String s = sc.hasNextLine() ? sc.nextLine() : \"\";\n        System.out.println(isValid(s) ? \"YES\" : \"NO\");\n    }\n}\n" },
+            { "path": "README.md",     "content": "Edit `Solution.java`. Do not rename the class.\n", "readOnly": true }
+          ]
+        },
+        "hintsEnabled": true,
+        "hints": [
+          { "afterFailures": 2, "text": "A stack is your friend — push opens, pop on closes." },
+          { "afterFailures": 4, "text": "On every close, the popped opener must match the close's pair." }
+        ]
+      },
+      "test_cases": [
+        { "name": "balanced", "is_sample": true,  "is_hidden": false, "weight": 1, "stdin": "()[]{}",  "expected_stdout": "YES", "explanation": "All openers have an immediate match.", "comparator": "trim_equal" },
+        { "name": "crossed",  "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "([)]",    "expected_stdout": "NO",  "explanation": "Pairs cross; not balanced.",          "comparator": "trim_equal" },
+        { "name": "nested",   "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "{[()]}",  "expected_stdout": "YES", "explanation": "Nested correctly.",                   "comparator": "trim_equal" }
+      ]
+    },
+    {
+      "title": "LRU Cache Simulation",
+      "plugin_slug": "assessment.coding",
+      "difficulty": 4,
+      "max_score": 30,
+      "body": {
+        "type": "coding",
+        "responseType": "code",
+        "title": "LRU Cache Simulation",
+        "section": "Design",
+        "category": "Design",
+        "difficulty": "hard",
+        "mode": "main",
+        "tags": ["design", "cache", "hashmap", "linked-list"],
+        "promptFormat": "markdown",
+        "prompt": "## LRU Cache\n\nSimulate a Least-Recently-Used cache of fixed capacity.\n\nLine 1: `c q`. Next `q` lines are either `PUT k v` or `GET k`. For each `GET`, print the value, or `-1` if the key is absent.",
+        "inputFormat":  { "kind": "plain", "content": "Line 1: c q\nNext q lines: PUT k v | GET k" },
+        "outputFormat": { "kind": "plain", "content": "One line per GET — the value or -1." },
+        "constraintsFormat": { "kind": "markdown", "content": "`1 ≤ c ≤ 1000, 1 ≤ q ≤ 10^4`" },
+        "allowedLanguages": ["language.cpp"],
+        "multiFile": true,
+        "entryFile": { "language.cpp": "solution.cpp" },
+        "starterFiles": {
+          "language.cpp": [
+            { "path": "solution.cpp", "content": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int c, q;\n    if (!(cin >> c >> q)) return 0;\n    // TODO: build LRU(c) and process q ops.\n    return 0;\n}\n" },
+            { "path": "lru.hpp",      "content": "// Optional helper header.\n#pragma once\n" }
+          ]
+        },
+        "hintsEnabled": true,
+        "hints": [
+          { "afterFailures": 3, "text": "Touching a key (GET or PUT) makes it most-recent." },
+          { "afterFailures": 6, "text": "A hash map keyed by k plus a doubly-linked list gives O(1) per op." }
+        ]
+      },
+      "test_cases": [
+        { "name": "sample", "is_sample": true,  "is_hidden": false, "weight": 1, "stdin": "2 4\nPUT 1 10\nPUT 2 20\nGET 1\nGET 3",       "expected_stdout": "10\n-1", "explanation": "1 hit, 3 miss.",       "comparator": "trim_equal" },
+        { "name": "evict",  "is_sample": false, "is_hidden": true,  "weight": 1, "stdin": "2 5\nPUT 1 1\nPUT 2 2\nPUT 3 3\nGET 1\nGET 3", "expected_stdout": "-1\n3", "explanation": "Putting 3 evicts 1 (LRU).", "comparator": "trim_equal" }
+      ]
+    }
+  ]
+}

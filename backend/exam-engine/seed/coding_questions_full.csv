@@ -1,0 +1,17 @@
+title,topic,difficulty,marks,tags,language,multi_file,mode,prompt_format,prompt,input_format_kind,input_format,output_format_kind,output_format,constraints_kind,constraints,hints_enabled,hints,test_cases
+"Two Sum","Arrays & Hashing","easy",10,"arrays;hash-map;warmup","python",false,"main","markdown","## Two Sum
+
+Read two space-separated integers `a` and `b` from stdin and print their sum.","markdown","Single line containing two integers separated by a space.","markdown","One integer — the sum.","markdown","`-10^9 ≤ a, b ≤ 10^9`",true,"[{""afterFailures"":2,""text"":""Read the line, split on whitespace, cast to int.""},{""afterFailures"":4,""text"":""Use `input().split()` then `map(int, ...)`.""}]","[{""input"":""2 3"",""output"":""5"",""explanation"":""2 + 3 = 5"",""is_sample"":true},{""input"":""100 250"",""output"":""350"",""explanation"":""Standard positives."",""is_sample"":false},{""input"":""-7 12"",""output"":""5"",""explanation"":""Mixed sign."",""is_sample"":false}]"
+"Reverse a String","Strings","easy",10,"strings;io","javascript",false,"main","markdown","## Reverse a String
+
+Read a single line from stdin and print it reversed.","plain","One line of text.","plain","The same characters in reverse order.","markdown","`1 ≤ length ≤ 1000`",false,"[]","[{""input"":""hello"",""output"":""olleh"",""explanation"":""Reverse of hello."",""is_sample"":true},{""input"":""OriginBI"",""output"":""IBnigirO"",""explanation"":""Preserves case."",""is_sample"":false},{""input"":""racecar"",""output"":""racecar"",""explanation"":""Palindromes unchanged."",""is_sample"":false}]"
+"Valid Parentheses","Stacks","medium",20,"stacks;strings;classic","java",true,"main","markdown","## Valid Parentheses
+
+Given a string containing only `()[]{}`, decide whether the brackets are balanced.
+
+Print `YES` if every opener has a matching closer in the correct order, otherwise `NO`.","markdown","A single line containing only the characters `()[]{}`.","markdown","Either `YES` or `NO`.","markdown","`1 ≤ length ≤ 1000`",true,"[{""afterFailures"":2,""text"":""A stack is your friend — push opens, pop on closes.""},{""afterFailures"":4,""text"":""On every close, the popped opener must match the close's pair.""}]","[{""input"":""()[]{}"",""output"":""YES"",""explanation"":""All openers have an immediate match."",""is_sample"":true},{""input"":""([)]"",""output"":""NO"",""explanation"":""Pairs cross; not balanced."",""is_sample"":false},{""input"":""{[()]}"",""output"":""YES"",""explanation"":""Nested correctly."",""is_sample"":false}]"
+"LRU Cache Simulation","Design","hard",30,"design;cache;hashmap;linked-list","cpp",true,"main","markdown","## LRU Cache
+
+Simulate a Least-Recently-Used cache of fixed capacity.
+
+The first line contains capacity `c` and number of operations `q`. The next `q` lines are either `PUT k v` or `GET k`. For each `GET`, print the value, or `-1` if the key is absent.","plain","Line 1: c q. Next q lines: PUT k v | GET k.","plain","One line per GET — the value or -1.","markdown","`1 ≤ c ≤ 1000, 1 ≤ q ≤ 10^4`",true,"[{""afterFailures"":3,""text"":""Touching a key (GET or PUT) makes it most-recent.""},{""afterFailures"":6,""text"":""A hash map + doubly-linked list gives O(1) per op.""}]","[{""input"":""2 4\nPUT 1 10\nPUT 2 20\nGET 1\nGET 3"",""output"":""10\n-1"",""explanation"":""1 hit, 3 miss."",""is_sample"":true},{""input"":""2 5\nPUT 1 1\nPUT 2 2\nPUT 3 3\nGET 1\nGET 3"",""output"":""-1\n3"",""explanation"":""Putting 3 evicts 1 (LRU)."",""is_sample"":false}]"
