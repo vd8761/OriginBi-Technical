@@ -38,7 +38,7 @@ import {
   ChevronLeft, ChevronRight
 } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
-import { Badge } from "@/components/admin/ui";
+import { Badge, useConfirm } from "@/components/admin/ui";
 import {
   AptitudeIcon,
   CommunicationIcon,
@@ -251,6 +251,7 @@ interface AdminQuestionsManagerProps {
 
 export default function AdminQuestionsManager({ initialModule = null }: AdminQuestionsManagerProps = {}) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(initialModule);
   const [mode, setMode] = useState<QuestionMode>("trial");
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
@@ -266,8 +267,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterSubCategory, setFilterSubCategory] = useState<string>("all");
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [clearConfirm, setClearConfirm] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
@@ -537,7 +536,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       setQuestions(questions.filter(q => (q as { id: string }).id !== id));
       showToast("Question deleted");
     }
-    setDeleteConfirm(null);
   };
 
   const handleImport = async (imported: AnyQuestion[]) => {
@@ -581,7 +579,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       setQuestions([]);
       showToast("All questions cleared");
     }
-    setClearConfirm(false);
   };
 
   const handleExportJson = () => {
@@ -787,7 +784,21 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 <span>Export JSON</span>
               </button>
 
-              <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0">
+              <button 
+                onClick={async () => {
+                  const confirmed = await confirm({
+                    title: "Clear Entire Bank?",
+                    message: `This will remove all ${questions.length} questions from this bank. This action cannot be undone.`,
+                    confirmLabel: "Clear All",
+                    cancelLabel: "Cancel",
+                    variant: "danger"
+                  });
+                  if (confirmed) {
+                    await handleClearAll();
+                  }
+                }} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0"
+              >
                 <Trash2 size={16} />
                 <span>Clear Bank</span>
               </button>
@@ -873,7 +884,18 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                     loading={loading} 
                     assessmentType={selectedModule!} 
                     onEdit={(q) => setEditingQuestion(q)} 
-                    onDelete={(id) => setDeleteConfirm(id)} 
+                    onDelete={async (id) => {
+                      const confirmed = await confirm({
+                        title: "Delete Question?",
+                        message: "This action will permanently remove the question from this bank.",
+                        confirmLabel: "Delete",
+                        cancelLabel: "Cancel",
+                        variant: "danger"
+                      });
+                      if (confirmed) {
+                        await handleDeleteQuestion(id);
+                      }
+                    }} 
                     onView={(q) => router.push(`/admin/questions/${(q as any).id}?module=${selectedModule}`)}
                     categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
                   />
@@ -944,44 +966,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       </AnimatePresence>
 
 
-      {/* Delete/Clear Modals styled with OriginBI theme */}
-      <AnimatePresence>
-        {deleteConfirm && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md z-0" onClick={() => setDeleteConfirm(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative z-10 w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
-              <div className="flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Question?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently remove the question from this bank.</p>
-                <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
-                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Delete</button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {clearConfirm && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md z-0" onClick={() => setClearConfirm(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative z-10 w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
-              <div className="flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This will remove all {questions.length} questions from this bank. This action cannot be undone.</p>
-                <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
-                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Clear All</button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* TOAST: THEME FIX */}
       <AnimatePresence>
