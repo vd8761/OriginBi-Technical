@@ -86,11 +86,12 @@ function QuestionDetailsContent() {
 
   // Register breadcrumbs & title dynamically
   useRegisterAdminPage({
-    eyebrow: "Assessments",
+    eyebrow: "Workspace",
     title: "Question Details",
     breadcrumb: [
       { label: "Assessments", href: "/admin/questions" },
-      { label: `Question details` },
+      ...(moduleParam ? [{ label: ASSESSMENT_TYPE_LABELS[moduleParam] || moduleParam, href: `/admin/questions?module=${moduleParam}` }] : []),
+      { label: "Question Details" },
     ],
   });
 

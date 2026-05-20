@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnyQuestion, AssessmentType, QuestionMode,
   ASSESSMENT_TYPE_LABELS, ASSESSMENT_TYPE_DESCRIPTIONS,
@@ -38,7 +38,7 @@ import {
   ChevronLeft, ChevronRight
 } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
-import { Badge, useConfirm } from "@/components/admin/ui";
+import { Badge, useConfirm, type BreadcrumbSegment } from "@/components/admin/ui";
 import {
   AptitudeIcon,
   CommunicationIcon,
@@ -251,8 +251,25 @@ interface AdminQuestionsManagerProps {
 
 export default function AdminQuestionsManager({ initialModule = null }: AdminQuestionsManagerProps = {}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const moduleParam = searchParams.get("module") as AssessmentType | null;
   const confirm = useConfirm();
-  const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(initialModule);
+  const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(moduleParam || initialModule);
+
+  // Sync selectedModule when the URL search param changes
+  useEffect(() => {
+    setSelectedModule(moduleParam);
+  }, [moduleParam]);
+
+  // Sync state changes back to search parameter
+  const handleSelectModule = useCallback((mod: AssessmentType | null) => {
+    setSelectedModule(mod);
+    if (mod) {
+      router.push(`/admin/questions?module=${mod}`, { scroll: false });
+    } else {
+      router.push(`/admin/questions`, { scroll: false });
+    }
+  }, [router]);
   const [mode, setMode] = useState<QuestionMode>("trial");
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
   const [moduleCounts, setModuleCounts] = useState<Record<AssessmentType, { trial: number; main: number }>>({
@@ -273,17 +290,62 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const pageTitle = selectedModule 
+    ? (activeAssessment?.assessment_name || ASSESSMENT_TYPE_LABELS[selectedModule])
+    : "Assessments";
+
+  const breadcrumb = useMemo(() => {
+    if (!selectedModule) {
+      return [{ label: "Assessments" }];
+    }
+
+    const segments: BreadcrumbSegment[] = [
+      { 
+        label: "Assessments", 
+        onClick: () => {
+          handleSelectModule(null);
+          setView("list");
+          setEditingQuestion(null);
+        } 
+      }
+    ];
+
+    const moduleLabel = activeAssessment?.assessment_name || ASSESSMENT_TYPE_LABELS[selectedModule];
+
+    if (editingQuestion !== null) {
+      segments.push({
+        label: moduleLabel,
+        onClick: () => {
+          setEditingQuestion(null);
+          setView("list");
+        }
+      });
+      segments.push({
+        label: editingQuestion === "new" ? "New Question" : "Edit Question"
+      });
+    } else if (view === "json-import") {
+      segments.push({
+        label: moduleLabel,
+        onClick: () => {
+          setView("list");
+        }
+      });
+      segments.push({
+        label: "Bulk Import"
+      });
+    } else {
+      segments.push({
+        label: moduleLabel
+      });
+    }
+
+    return segments;
+  }, [selectedModule, activeAssessment, view, editingQuestion, handleSelectModule]);
+
   useRegisterAdminPage({
     eyebrow: "Workspace",
-    title: "Assessments",
-    breadcrumb: view === "json-import"
-      ? [
-          { label: "Assessments", onClick: () => setView("list") },
-          { label: "Bulk Import" },
-        ]
-      : [
-          { label: "Assessments" },
-        ],
+    title: pageTitle,
+    breadcrumb: breadcrumb,
   });
 
   // Reset page when category, subcategory, search query or mode changes
@@ -693,7 +755,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   )}
                   <button
                     onClick={() => {
-                      setSelectedModule(at);
+                      handleSelectModule(at);
                       setView("list");
                     }}
                     className="admin-btn admin-btn-primary"
