@@ -440,7 +440,24 @@ export function matchCategory(qCat: string, filterCat: string): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[\s_\-()&]+/g, "");
   const n1 = norm(qCat);
   const n2 = norm(filterCat);
-  return n1 === n2;
+  if (n1 === n2) return true;
+
+  const shortToLong: Record<string, string[]> = {
+    qa: ["quantitativeaptitude", "quantitative"],
+    lr: ["logicalreasoning", "logical"],
+    di: ["datainterpretation", "data"],
+    ar: ["abstractreasoning", "abstract"],
+    va: ["verbalability", "verbal"]
+  };
+
+  for (const [short, longs] of Object.entries(shortToLong)) {
+    if (n2 === short || longs.includes(n2)) {
+      if (n1 === short || longs.includes(n1)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export function matchSubcategory(qSub: string | undefined, filterSub: string): boolean {

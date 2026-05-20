@@ -544,6 +544,21 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     return counts;
   }, [questions, filterCats, selectedModule]);
 
+  const subcategoryCounts = useMemo(() => {
+    if (!selectedModule || filterCategory === "all") return {};
+    const counts: Record<string, number> = {};
+    const currentCat = filterCats.find(c => c.key === filterCategory);
+    if (currentCat && currentCat.subcategories) {
+      currentCat.subcategories.forEach((sc: any) => {
+        counts[sc.id] = questions.filter(q => 
+          matchCategory(getCatKey(q, selectedModule), filterCategory) && 
+          matchSubcategory((q as any).subcategory, sc.id)
+        ).length;
+      });
+    }
+    return counts;
+  }, [questions, filterCats, filterCategory, selectedModule]);
+
   const showToast = (msg: string, type: "success" | "error" = "success") => setToast({ msg, type });
 
   // ─── CRUD handlers ─────────────────────────────────────────────────────────────
@@ -1048,9 +1063,9 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                     value={filterSubCategory}
                     onChange={setFilterSubCategory}
                     options={[
-                      { label: "All Subcategories", value: "all" },
+                      { label: `All Subcategories (${categoryCounts[filterCategory] || 0})`, value: "all" },
                       ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
-                        label: sc.name,
+                        label: `${sc.name} (${subcategoryCounts[sc.id] || 0})`,
                         value: sc.id
                       }))
                     ]}
