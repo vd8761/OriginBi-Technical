@@ -34,12 +34,17 @@ export const DEFAULT_PROCTORING: ProctoringSettings = {
     tabSwitch: true,
     tabSwitchToast: true,
     blockRightClick: true,
-    detectMouseLeave: false,
+    // Mouse-leave and focus-loss are detection-only signals (no UX block) and
+    // every occurrence is forwarded to the attempt_events pipeline. On by
+    // default so the proctoring report captures the full count of cursor exits
+    // and window-focus losses, alongside right-click / copy-paste / tab
+    // switches which were already tracked.
+    detectMouseLeave: true,
     detectFullscreenExit: false,
     blockCopyPaste: true,
     blockBrowserShortcuts: true,
     detectDevtools: false,
-    detectFocusLoss: false,
+    detectFocusLoss: true,
     logKeypress: false,
     requireCameraMic: false,
 };
@@ -55,6 +60,12 @@ export type ProctoringCounter =
     | "keypress";
 
 export type ProctoringCounters = Record<ProctoringCounter, number>;
+
+export interface ProctoringMessage {
+    title: string;
+    desc: string;
+    meta?: Record<string, unknown>;
+}
 
 export const EMPTY_COUNTERS: ProctoringCounters = {
     rightClick: 0,
@@ -117,7 +128,7 @@ export function useProctoringSettings() {
 interface ProctoringHookOptions {
     active: boolean;
     settings: ProctoringSettings;
-    onViolation: (type: ProctoringCounter, message: { title: string; desc: string }) => void;
+    onViolation: (type: ProctoringCounter, message: ProctoringMessage) => void;
 }
 
 export function useProctoring({ active, settings, onViolation }: ProctoringHookOptions) {
@@ -187,6 +198,7 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
                 onViolation("browserShortcut", {
                     title: "Devtools blocked",
                     desc: "Opening developer tools is disabled during the assessment.",
+                    meta: { shortcut: "F12" },
                 });
                 return;
             }
@@ -199,6 +211,7 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
                 onViolation("browserShortcut", {
                     title: "Inspector blocked",
                     desc: "Developer tools shortcuts are disabled during the assessment.",
+                    meta: { shortcut: `${e.ctrlKey ? "Ctrl" : "Meta"}+Shift+${e.key}` },
                 });
                 return;
             }
@@ -215,7 +228,10 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
             if (blocked[k]) {
                 e.preventDefault();
                 e.stopPropagation();
-                onViolation("browserShortcut", blocked[k]);
+                onViolation("browserShortcut", {
+                    ...blocked[k],
+                    meta: { shortcut: `${e.ctrlKey ? "Ctrl" : "Meta"}+${e.key}` },
+                });
                 return;
             }
         };
@@ -290,9 +306,12 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
             const target = e.target as HTMLElement | null;
             if (target?.classList?.contains("code-textarea")) return;
             e.preventDefault();
+            const action = e.type === "cut" ? "cut" : e.type === "paste" ? "paste" : "copy";
+            const label = action[0].toUpperCase() + action.slice(1);
             onViolation("copyPaste", {
-                title: "Clipboard action blocked",
+                title: `${label} blocked`,
                 desc: "Copy and paste are disabled outside of the code editor.",
+                meta: { action },
             });
         };
         document.addEventListener("copy", handler);
