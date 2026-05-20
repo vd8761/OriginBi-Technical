@@ -261,6 +261,89 @@ func ValidateQuestionBodyStruct(body *QuestionBody, ctx AuthoringContext) error 
 		}
 	}
 
+	// Single language per question. A coding question targets exactly one
+	// language. Only enforced once the author has started attaching starters
+	// (zero-language legacy rows are grandfathered — see migration 011/021).
+	hasStarters := len(body.StarterCode) > 0 || len(body.StarterFiles) > 0 || len(body.EntryFile) > 0
+	if hasStarters && len(seenAllowed) != 1 {
+		errs = append(errs, &ValidationError{
+			Code:    "ONE_LANGUAGE_REQUIRED",
+			Field:   "allowedLanguages",
+			Message: fmt.Sprintf("a coding question must declare exactly one language, got %d", len(seenAllowed)),
+		})
+	}
+
+	// Tags: free-form but bounded. Trim/empty checks only — dedup/lowercasing
+	// is the editor's job; here we just reject pathological input.
+	if len(body.Tags) > 32 {
+		errs = append(errs, &ValidationError{
+			Code: "TOO_MANY_TAGS", Field: "tags",
+			Message: fmt.Sprintf("at most 32 tags allowed, got %d", len(body.Tags)),
+		})
+	}
+	for i, t := range body.Tags {
+		if len(t) > 32 {
+			errs = append(errs, &ValidationError{
+				Code: "TAG_TOO_LONG", Field: fmt.Sprintf("tags[%d]", i),
+				Message: fmt.Sprintf("tag %q exceeds 32 characters", t),
+			})
+		}
+	}
+
+	// FormattedText kind validation for the three format-aware sections.
+	validateFormattedText := func(ft *FormattedText, field string) {
+		if ft == nil {
+			return
+		}
+		switch ft.Kind {
+		case "", PromptFormatMarkdown, PromptFormatHTML, PromptFormatPlain:
+			// ok ("" defaults to markdown downstream)
+		default:
+			errs = append(errs, &ValidationError{
+				Code: "INVALID_FORMAT_KIND", Field: field + ".kind",
+				Message: fmt.Sprintf("must be markdown|html|plain, got %q", ft.Kind),
+			})
+		}
+	}
+	validateFormattedText(body.InputFormat, "inputFormat")
+	validateFormattedText(body.OutputFormat, "outputFormat")
+	validateFormattedText(body.ConstraintsFormat, "constraintsFormat")
+
+	// Mode, when present, must be trial|main.
+	switch body.Mode {
+	case "", "trial", "main":
+		// ok
+	default:
+		errs = append(errs, &ValidationError{
+			Code: "INVALID_MODE", Field: "mode",
+			Message: fmt.Sprintf("must be trial|main, got %q", body.Mode),
+		})
+	}
+
+	// Multi-file questions must keep a runner file named solution.<ext>.
+	if body.MultiFile != nil && *body.MultiFile {
+		for slug, files := range body.StarterFiles {
+			hasSolution := false
+			for _, f := range files {
+				base := f.Path
+				if idx := strings.LastIndexAny(base, "/\\"); idx >= 0 {
+					base = base[idx+1:]
+				}
+				if strings.HasPrefix(strings.ToLower(base), "solution.") {
+					hasSolution = true
+					break
+				}
+			}
+			if !hasSolution {
+				errs = append(errs, &ValidationError{
+					Code:    "MISSING_SOLUTION_FILE",
+					Field:   fmt.Sprintf("starterFiles[%s]", slug),
+					Message: "multi-file questions must include a runner file named solution.<ext>",
+				})
+			}
+		}
+	}
+
 	if errs.HasErrors() {
 		return errs
 	}

@@ -411,6 +411,17 @@ interface MonacoEditorProps {
     suggestionsEnabled?: boolean;
     /** When false, language-service diagnostics (squiggles) are hidden. Default true. */
     lintsEnabled?: boolean;
+    /** Called once after the editor instance is created, handing back an
+     * imperative API. Used by the admin authoring panel to insert media
+     * snippets at the caret from outside the editor's React tree. */
+    onReady?: (api: MonacoEditorApi) => void;
+}
+
+/** Imperative handle exposed via the onReady callback. */
+export interface MonacoEditorApi {
+    /** Inserts `text` at the current caret position (replacing any selection),
+     * then focuses the editor. */
+    insertAtCursor: (text: string) => void;
 }
 
 /** Injects CSS for locked-region line decorations. Idempotent. */
@@ -449,6 +460,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     findEnabled = true,
     suggestionsEnabled = true,
     lintsEnabled = true,
+    onReady,
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<EditorInstance | null>(null);
@@ -462,6 +474,10 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const suppressOnChange = useRef(false);
     const changeListenerRef = useRef<{ dispose: () => void } | null>(null);
     const tooltipTeardownRef = useRef<(() => void) | null>(null);
+    const onReadyRef = useRef(onReady);
+    useEffect(() => {
+        onReadyRef.current = onReady;
+    }, [onReady]);
     // Snapshot of locked-line content keyed by line number. Captured the first
     // time we see content for that file, and used to revert any edit that
     // changes those lines.
@@ -705,6 +721,19 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
             });
 
             tooltipTeardownRef.current = installFindTooltipObserver();
+
+            onReadyRef.current?.({
+                insertAtCursor: (text: string) => {
+                    const ed = editorRef.current;
+                    if (!ed) return;
+                    const selection = ed.getSelection();
+                    if (!selection) return;
+                    ed.executeEdits("originbi.insertAtCursor", [
+                        { range: selection, text, forceMoveMarkers: true },
+                    ]);
+                    ed.focus();
+                },
+            });
         });
 
         return () => {

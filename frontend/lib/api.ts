@@ -390,6 +390,7 @@ export interface AdminTestCase {
   weight: number;
   stdin: string;
   expectedStdout: string;
+  explanation: string;
   comparator: string;
   comparatorConfig: Record<string, unknown>;
 }
@@ -401,6 +402,7 @@ export interface AdminTestCaseInput {
   weight?: number;
   stdin?: string;
   expected_stdout?: string;
+  explanation?: string;
   comparator?: string;
   comparator_config?: Record<string, unknown>;
 }
@@ -1197,6 +1199,21 @@ export async function bulkImportAdminQuestions(
   return apiFetch(`/v1/admin/questions/bulk-import`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+// bulkImportAdminQuestionsFile uploads a raw .json or .csv file as multipart
+// form data. The backend's decodeQuestionImports routes by filename: a .csv
+// extension goes through the CSV decoder, anything else through the JSON
+// decoder. Use this for the bulk-import page's drag-and-drop flow.
+export async function bulkImportAdminQuestionsFile(
+  file: File,
+): Promise<{ created: Array<{ id: string }> }> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  return apiFetch(`/v1/admin/questions/bulk-import`, {
+    method: "POST",
+    body: form,
   });
 }
 

@@ -563,14 +563,20 @@ export class PurchaseService {
             this.logger.warn(`Failed to resolve user_id for ${body.email}: ${err.message}`);
         }
 
+        // `resolvedAssessmentId` and the coding-code guard were already
+        // computed before signature verification above — no need to repeat
+        // the lookup. Coding has a tech_assessments row for admin settings,
+        // but the start entitlement comes from an exam-engine assignment
+        // created via /v1/purchases/demo.
+
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
 
         try {
             // Insert purchase record into tech_assessment_purchases table.
-            // assessment_id may be NULL for coding rows (see migration that
-            // drops NOT NULL on tech_assessment_purchases.assessment_id).
+            // Legacy or unresolvable coding audit rows may still carry NULL
+            // assessment_id, but paid status for coding is assignment-backed.
             await queryRunner.query(
                 `INSERT INTO tech_assessment_purchases
                     (email, user_id, assessment_id, assessment_code, amount, razorpay_order_id, razorpay_payment_id, status, purchased_at)
@@ -613,7 +619,9 @@ export class PurchaseService {
         try {
             const rows = await this.dataSource.query(
                 `SELECT assessment_code FROM tech_assessment_purchases
-                 WHERE LOWER(email) = LOWER($1) AND status = 'active'`,
+                 WHERE LOWER(email) = LOWER($1)
+                   AND status = 'active'
+                   AND assessment_code NOT LIKE 'coding:%'`,
                 [email]
             );
 
@@ -625,6 +633,26 @@ export class PurchaseService {
             const visible = groupScope.visible.size > 0
                 ? new Set<string>(groupScope.visible)
                 : new Set<string>(this.knownBaseAssessmentCodes());
+
+            const assignmentTable = await this.dataSource.query(
+                `SELECT to_regclass('public.exam_assignments') AS table_name`,
+            );
+            if (assignmentTable?.[0]?.table_name) {
+                const assignmentRows = await this.dataSource.query(
+                    `SELECT a.assignment_ref AS assessment_code
+                     FROM exam_assignments a
+                     JOIN users u ON u.id = a.candidate_user_id
+                     WHERE LOWER(u.email) = LOWER($1)
+                       AND a.assignment_ref LIKE 'coding:%'
+                       AND a.status::text = 'active'`,
+                    [email],
+                );
+                for (const row of assignmentRows as any[]) {
+                    if (row.assessment_code) {
+                        purchased.add(String(row.assessment_code));
+                    }
+                }
+            }
 
             if (await this.isAdminRegistered(email)) {
                 for (const code of this.knownAssessmentCodes()) {
@@ -646,8 +674,9 @@ export class PurchaseService {
 
     /**
      * The full catalog of assessment codes the frontend understands. Admin
-     * users get all of these without paying. Coding language codes are
-     * sourced from the exam-engine pricing seed (009_identity_coding_runtime.sql).
+     * users get all non-coding assessments without paying. Coding language
+     * access is sourced from exam-engine assignments, because the assignment
+     * is the entitlement that lets a candidate actually start the coding test.
      */
     private knownAssessmentCodes(): string[] {
         return [
@@ -655,11 +684,6 @@ export class PurchaseService {
             "communication",
             "mnc",
             "role",
-            "coding:python",
-            "coding:java",
-            "coding:cpp",
-            "coding:javascript",
-            "coding:c",
         ];
     }
 

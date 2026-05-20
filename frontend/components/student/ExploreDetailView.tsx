@@ -313,7 +313,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
     const handlePaymentSuccess = async () => {
         if (!paymentTarget) return;
-        const isSandboxMode = process.env.NEXT_PUBLIC_RAZORPAY === "false";
         setIsConnecting(false);
         if (paymentTarget.kind === "coding") {
             try {
@@ -324,15 +323,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 router.push("/assessment?view=assessment");
                 setAssignmentError("");
             } catch (err) {
-                if (isSandboxMode) {
-                    // Frontend-only fallback when backend assignment APIs are offline.
-                    markPaid(paymentTarget.key);
-                    setShowLanguageModal(false);
-                    setPendingCodingLang(paymentTarget.language);
-                    setAssignmentError("");
-                    setPaymentTarget(null);
-                    return;
-                }
                 const message =
                     err instanceof ApiError
                         ? err.message

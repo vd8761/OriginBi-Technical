@@ -2,9 +2,21 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
+import pool from './config/db';
+import { runPendingMigrations } from './db/migrator';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Apply pending SQL migrations BEFORE creating the Nest app, so the schema
+  // is correct before any entity/repository touches the DB. RUN_MIGRATIONS
+  // can be set to 'false' for hotfix deploys that need manual triage.
+  if (process.env.RUN_MIGRATIONS !== 'false') {
+    await runPendingMigrations(pool, logger);
+  } else {
+    logger.warn('[Migrator] skipped (RUN_MIGRATIONS=false)');
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // CORS allowlist comes from env so each service knows about its peers

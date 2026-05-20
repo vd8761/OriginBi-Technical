@@ -1,0 +1,11 @@
+title,difficulty,max_score,allowed_languages,prompt
+Two Sum,1,10,"python;java;cpp;javascript;c","## Two Sum\n\nRead two space-separated integers and print their sum."
+Reverse a String,1,10,"python;java;cpp;javascript;c","## Reverse a String\n\nRead one line and print it reversed."
+FizzBuzz,1,10,"python;java;cpp;javascript;c","## FizzBuzz\n\nPrint 1..n with Fizz/Buzz/FizzBuzz substitutions."
+Palindrome Check,1,10,"python;java;cpp;javascript;c","## Palindrome Check\n\nPrint YES if input is a palindrome (case-insensitive)."
+Find Maximum in Array,2,15,"python;java;cpp;c","## Find Maximum\n\nGiven n integers, print the maximum."
+Binary Search,3,20,"python;java;cpp;javascript;c","## Binary Search\n\nReturn the 0-based index of target in a sorted array, or -1."
+Valid Parentheses,3,20,"python;java;javascript","## Valid Parentheses\n\nPrint YES if brackets in input string are balanced."
+Merge Two Sorted Arrays,3,20,"python;java;cpp;javascript;c","## Merge Sorted\n\nMerge two sorted arrays and print the result space-separated."
+Longest Substring Without Repeating Chars,4,25,"python;java;javascript","## Longest Substring\n\nPrint the length of the longest substring with all distinct chars."
+LRU Cache Simulation,4,30,"python;java;cpp","## LRU Cache\n\nProcess PUT/GET operations; print outputs of each GET."

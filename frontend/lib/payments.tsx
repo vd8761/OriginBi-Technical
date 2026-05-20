@@ -5,7 +5,6 @@ import type { AssessmentId } from "./exams";
 import {
     getActiveEmail,
     getLatestSubmittedResult,
-    getPurchasedAssessments,
     listAssignments,
     HAS_TECH_API,
     TECH_API_BASE,
@@ -43,6 +42,17 @@ const readSet = (storageKey: string): Set<string> => {
     } catch {
         return new Set();
     }
+};
+
+const removeCodingKeys = (set: Set<string>): boolean => {
+    let changed = false;
+    for (const key of Array.from(set)) {
+        if (key.startsWith("coding:")) {
+            set.delete(key);
+            changed = true;
+        }
+    }
+    return changed;
 };
 
 const writeSet = (storageKey: string, eventName: string, set: Set<string>) => {
@@ -178,12 +188,24 @@ export function usePaidAssessments() {
     }, []);
 
     const hydrateFromBackend = useCallback(async () => {
-        const { paid, visible } = await fetchServerEntitlements();
-        writeSet(PAID_KEY, PAID_EVENT, paid);
-        writeSet(VISIBLE_KEY, VISIBLE_EVENT, visible);
-        setLocal(paid);
-        setVisibleLocal(visible);
-        setIsEntitlementsReady(true);
+        const next = readSet(PAID_KEY);
+        removeCodingKeys(next);
+        try {
+            const { paid, visible } = await fetchServerEntitlements();
+            paid.forEach((key: string) => next.add(key));
+            writeSet(PAID_KEY, PAID_EVENT, next);
+            setLocal(next);
+            if (visible.size > 0) {
+                writeSet(VISIBLE_KEY, VISIBLE_EVENT, visible);
+                setVisibleLocal(visible);
+            }
+        } finally {
+            // Always flip the readiness flag — otherwise downstream
+            // `visibleExams` stays empty forever and the Explore / Library
+            // pages render no assessments. Network failure should fall back
+            // to whatever's in localStorage rather than block UI.
+            setIsEntitlementsReady(true);
+        }
     }, []);
 
     useEffect(() => {
@@ -254,23 +276,25 @@ export function usePaidAssessments() {
                 return;
             }
             try {
-                const { purchased, visible } = await getPurchasedAssessments(email);
+                const { paid: serverPaid } = await fetchServerEntitlements();
                 if (cancelled) return;
-                const current = new Set<string>(purchased);
-                const nextVisible = new Set<string>(
-                    Array.isArray(visible) && visible.length > 0
-                        ? visible
-                        : DEFAULT_VISIBLE_ASSESSMENTS,
-                );
-                writeSet(PAID_KEY, PAID_EVENT, current);
-                writeSet(VISIBLE_KEY, VISIBLE_EVENT, nextVisible);
-                setLocal(current);
-                setVisibleLocal(nextVisible);
-                setIsEntitlementsReady(true);
-                console.log("[usePaidAssessments] Synced purchases:", purchased);
+                const current = readSet(PAID_KEY);
+                let changed = removeCodingKeys(current);
+                for (const code of serverPaid) {
+                    if (!current.has(code)) {
+                        current.add(code);
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    writeSet(PAID_KEY, PAID_EVENT, current);
+                }
+                console.log("[usePaidAssessments] Synced purchases:", Array.from(serverPaid));
             } catch (err: any) {
                 if (isNetworkError(err)) return;
                 console.error("[usePaidAssessments] Purchase sync failed:", err?.message || err);
+            } finally {
+                if (!cancelled) setIsEntitlementsReady(true);
             }
         };
         sync();
