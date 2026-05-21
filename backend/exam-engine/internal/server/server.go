@@ -134,7 +134,6 @@ func (s *Server) routes() chi.Router {
 			r.Put("/me/registration", s.updateRegistration)
 			r.Get("/me/assignments", s.listAssignments)
 			r.Get("/me/languages", s.meLanguages)
-			r.Post("/purchases/demo", s.demoPurchase)
 			r.Post("/attempts/start", s.startAttempt)
 			r.Get("/attempts/{attempt_id}/snapshot", s.attemptSnapshot)
 			r.Put("/attempts/{attempt_id}/answers/{exam_question_id}", s.saveAnswer)

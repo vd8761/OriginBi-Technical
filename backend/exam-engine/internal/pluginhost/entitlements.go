@@ -52,17 +52,18 @@ func (r *Registry) UserLanguagePlugins(ctx context.Context, userID int64) ([]Lan
 
 	out := map[string]LanguageEntitlement{}
 
-	// 1) Purchases.
+	// 1) Assignments (backed by NestJS tech_assessment_purchases).
 	rows, err := r.pool.Query(ctx, `
 		SELECT p.slug, pi.item_ref
-		FROM purchases pu
-		JOIN pricing_items pi ON pi.id = pu.pricing_item_id
+		FROM exam_assignments a
+		JOIN pricing_items pi ON pi.item_ref = a.assignment_ref
 		JOIN plugins p ON p.id = pi.plugin_id
-		WHERE pu.user_id = $1
+		WHERE a.candidate_user_id = $1
+		  AND a.status = 'active'
 		  AND p.category = 'language'
 	`, userID)
 	if err != nil {
-		return nil, fmt.Errorf("pluginhost: list purchases for user %d: %w", userID, err)
+		return nil, fmt.Errorf("pluginhost: list assignments for user %d: %w", userID, err)
 	}
 	for rows.Next() {
 		var slug, itemRef string

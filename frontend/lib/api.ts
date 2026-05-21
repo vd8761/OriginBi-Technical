@@ -211,10 +211,6 @@ export interface AssignmentListResponse {
   assignments: Assignment[];
 }
 
-export interface DemoPurchaseResponse {
-  purchaseId: string;
-  assignment: Assignment;
-}
 
 export interface SnapshotQuestion {
   examQuestionId: string;
@@ -891,12 +887,6 @@ export async function listAssignments(): Promise<AssignmentListResponse> {
   return apiFetch<AssignmentListResponse>("/v1/me/assignments");
 }
 
-export async function demoPurchase(itemRef: string): Promise<DemoPurchaseResponse> {
-  return apiFetch<DemoPurchaseResponse>("/v1/purchases/demo", {
-    method: "POST",
-    body: JSON.stringify({ itemRef }),
-  });
-}
 
 export async function startAttempt(input: {
   assignmentId?: string;

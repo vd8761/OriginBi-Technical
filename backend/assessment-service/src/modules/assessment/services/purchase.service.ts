@@ -701,6 +701,37 @@ export class PurchaseService {
                 ]
             );
 
+            if (this.isCodingCode(body.assessmentCode)) {
+                const codingExamVersionId = "00000000-0000-0000-0000-000000000601";
+                const systemOrgId = "00000000-0000-0000-0000-000000000001";
+                const lang = body.assessmentCode.toLowerCase().replace("coding:", "");
+                const assignmentId = crypto.randomUUID();
+                
+                await queryRunner.query(
+                    `INSERT INTO exam_assignments (
+                        id, exam_version_id, candidate_user_id, assigned_by, assigned_org_id,
+                        available_from, available_until, max_attempts, status,
+                        assignment_ref, metadata
+                     )
+                     VALUES (
+                        $1, $2, $3, $3, $4,
+                        NOW(), NULL, 1, 'active',
+                        $5, jsonb_build_object('language', $6)
+                     )
+                     ON CONFLICT (candidate_user_id, assignment_ref)
+                         WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
+                     DO UPDATE
+                     SET status = 'active',
+                         available_from = COALESCE(exam_assignments.available_from, EXCLUDED.available_from),
+                         available_until = NULL,
+                         metadata = CASE
+                             WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
+                             ELSE exam_assignments.metadata || EXCLUDED.metadata
+                         END`,
+                    [assignmentId, codingExamVersionId, userId, systemOrgId, body.assessmentCode, lang]
+                );
+            }
+
             await queryRunner.commitTransaction();
 
             this.logger.log(
@@ -879,6 +910,37 @@ export class PurchaseService {
                     settingsSnapshot ? JSON.stringify(settingsSnapshot) : null,
                 ],
             );
+
+            if (this.isCodingCode(assessmentCode)) {
+                const codingExamVersionId = "00000000-0000-0000-0000-000000000601";
+                const systemOrgId = "00000000-0000-0000-0000-000000000001";
+                const lang = assessmentCode.toLowerCase().replace("coding:", "");
+                const assignmentId = crypto.randomUUID();
+                
+                await this.dataSource.query(
+                    `INSERT INTO exam_assignments (
+                        id, exam_version_id, candidate_user_id, assigned_by, assigned_org_id,
+                        available_from, available_until, max_attempts, status,
+                        assignment_ref, metadata
+                     )
+                     VALUES (
+                        $1, $2, $3, $3, $4,
+                        NOW(), NULL, 1, 'active',
+                        $5, jsonb_build_object('language', $6)
+                     )
+                     ON CONFLICT (candidate_user_id, assignment_ref)
+                         WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
+                     DO UPDATE
+                     SET status = 'active',
+                         available_from = COALESCE(exam_assignments.available_from, EXCLUDED.available_from),
+                         available_until = NULL,
+                         metadata = CASE
+                             WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
+                             ELSE exam_assignments.metadata || EXCLUDED.metadata
+                         END`,
+                    [assignmentId, codingExamVersionId, userId, systemOrgId, assessmentCode, lang]
+                );
+            }
         } catch (err: any) {
             this.logger.warn(
                 `recordFreePurchase: insert failed for ${email}/${assessmentCode}: ${err.message}`,

@@ -101,7 +101,7 @@ export const EXAMS: ExtendedExam[] = [
     duration: "90 min",
     questions: 30,
     difficulty: "Intermediate",
-    price: 199,
+    price: 99,
     tags: ["Logic", "Strings", "Arrays", "Simulation"],
     icon: <CodingIcon className="w-7 h-7" />,
     available: true,
