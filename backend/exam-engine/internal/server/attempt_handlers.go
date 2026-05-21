@@ -176,9 +176,6 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		// No assignment found
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "active assignment not found")
 		return
 	}
@@ -855,22 +852,6 @@ func (s *Server) buildFrozenSnapshot(
 		Questions:        questions,
 		CreatedAt:        time.Now().UTC(),
 	}, nil
-}
-
-func (s *Server) buildAssignmentMetadata(ctx context.Context, q snapshotQueryer, examVersionID uuid.UUID, assignmentRef string) ([]byte, error) {
-	var totalSeconds int
-	if err := q.QueryRow(ctx, `
-		SELECT total_time_seconds
-		FROM exam_versions
-		WHERE id = $1
-	`, examVersionID).Scan(&totalSeconds); err != nil {
-		return nil, err
-	}
-	snapshot, err := s.buildFrozenSnapshot(ctx, q, examVersionID, assignmentRef, totalSeconds)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(assignmentMetadata{SettingsSnapshot: &snapshot})
 }
 
 func (s *Server) candidateQuestionBody(
