@@ -294,7 +294,8 @@ function csvToQuestions(rows: string[][], assessmentType: AssessmentType): AnyQu
     const status = (getValue("status").toLowerCase() || "active") as any;
     const explanation = getValue("explanation");
     const imageUrl = getValue("imageurl") || null;
-    const kind = (getValue("questiontype") || getValue("questionkind") || "mcq").toLowerCase() as QuestionKind;
+    const rawKind = (getValue("questionkind") || getValue("questiontype") || "mcq").toLowerCase();
+    const kind = (["mcq", "msq", "tf", "numerical"].includes(rawKind) ? rawKind : "mcq") as QuestionKind;
 
     const baseQuestion: any = {
       id: baseId,

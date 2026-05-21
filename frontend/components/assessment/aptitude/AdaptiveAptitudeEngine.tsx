@@ -18,6 +18,8 @@ import {
   type ProctoringSettings,
 } from "@/lib/proctoring";
 
+
+
 interface Option {
   id: string;
   text: string;
@@ -895,7 +897,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               <div className="flex items-center gap-3">
                 <div>
                   <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
-                    {currentQuestion?.category || 'Assessment'} Module
+                    {(currentQuestion?.category || 'Assessment')} Module
                     <span className="ml-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 normal-case">
                       Block {viewingBlockNumber} · Q{currentIndex + 1}/{totalQuestions}
                     </span>

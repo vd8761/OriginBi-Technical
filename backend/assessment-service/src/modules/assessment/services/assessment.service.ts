@@ -884,6 +884,8 @@ export class AssessmentService {
               ${languageCol},
               aq.score_awarded,
               aq.negative_applied,
+              aq.metadata as attempt_metadata,
+              q.metadata as question_metadata,
               ${correctOptCol},
               q.question_text,
               q.marks,
@@ -937,7 +939,12 @@ export class AssessmentService {
     }> = {};
 
     for (const aq of attemptQuestions) {
-      const category = aq.category || 'General';
+      let category = aq.category || 'General';
+      if (category === 'QA') category = 'Quantitative Aptitude';
+      else if (category === 'LR') category = 'Logical Reasoning';
+      else if (category === 'DI') category = 'Data Interpretation';
+      else if (category === 'AR') category = 'Abstract Reasoning';
+      else if (category === 'VA') category = 'Verbal Ability';
 
       let categoryName = category;
       if (Array.isArray(assessmentCategories)) {
@@ -991,6 +998,10 @@ export class AssessmentService {
         }
       }
 
+      const qMetadata = aq.question_metadata || {};
+      const kind = qMetadata.kind || 'mcq';
+      const attemptMeta = aq.attempt_metadata || {};
+
       const review: any = {
         questionId: String(aq.question_id),
         displayOrder: Number(aq.display_order || 0),
@@ -1001,22 +1012,30 @@ export class AssessmentService {
             ? String(aq.task_type || 'mcq').toLowerCase()
             : isRole
               ? String(aq.question_type || 'conceptual').toLowerCase()
-              : 'mcq',
+              : kind,
         questionText: String(aq.question_text || ''),
         options: optionsForReview,
         selectedOptionId: null,
         selectedAnswerText: null,
         correctOptionId:
-          aq.correct_option_id !== null && aq.correct_option_id !== undefined
-            ? String(aq.correct_option_id)
-            : null,
+          (kind === 'numerical' || kind === 'msq')
+            ? null
+            : (aq.correct_option_id !== null && aq.correct_option_id !== undefined ? String(aq.correct_option_id) : null),
         correctAnswerText: null,
         isCorrect: null,
         status: 'unanswered',
       };
 
-      if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-        review.correctAnswerText = optionTextById.get(review.correctOptionId);
+      if (kind === 'numerical') {
+        review.correctAnswerText = qMetadata.correctAnswer ? String(qMetadata.correctAnswer) : null;
+      } else if (kind === 'msq') {
+        const correctOptionIds = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
+        const correctTexts = correctOptionIds.map((id: string) => optionTextById.get(id) || id).filter(Boolean);
+        review.correctAnswerText = correctTexts.join(', ');
+      } else {
+        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+          review.correctAnswerText = optionTextById.get(review.correctOptionId);
+        }
       }
 
       if (isCoding) {
@@ -1079,18 +1098,43 @@ export class AssessmentService {
         continue;
       }
 
-      const selectedOptionId = aq.selected_option_id !== null && aq.selected_option_id !== undefined
-        ? String(aq.selected_option_id)
-        : '';
-      if (selectedOptionId) {
+      let studentAns: any = null;
+      if (kind === 'numerical' || kind === 'msq') {
+        studentAns = attemptMeta.submittedAnswer;
+      } else {
+        studentAns = aq.selected_option_id !== null && aq.selected_option_id !== undefined ? String(aq.selected_option_id) : '';
+      }
+
+      if (studentAns !== null && studentAns !== undefined && studentAns !== '' && (!Array.isArray(studentAns) || studentAns.length > 0)) {
         answeredCount++;
         objectiveAnsweredCount++;
         sectionMap[category].answeredCount++;
         sectionMap[category].objectiveAnsweredCount++;
-        review.selectedOptionId = selectedOptionId;
-        review.selectedAnswerText = optionTextById.get(selectedOptionId) ?? selectedOptionId;
 
-        const isCorrectAnswer = selectedOptionId === String(aq.correct_option_id);
+        if (kind === 'numerical' || kind === 'msq') {
+          review.selectedAnswerText = Array.isArray(studentAns)
+            ? studentAns.map((id: any) => optionTextById.get(String(id)) || String(id)).join(', ')
+            : String(studentAns);
+        } else {
+          review.selectedOptionId = String(studentAns);
+          review.selectedAnswerText = optionTextById.get(review.selectedOptionId) ?? String(studentAns);
+        }
+
+        let isCorrectAnswer = false;
+        if (kind === 'msq') {
+          const studentChoices = Array.isArray(studentAns) ? studentAns.map(String) : [String(studentAns)];
+          const correctChoices = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
+          isCorrectAnswer = studentChoices.length > 0 &&
+                           studentChoices.length === correctChoices.length &&
+                           studentChoices.every((id: string) => correctChoices.includes(id));
+        } else if (kind === 'numerical') {
+          const studentAnswer = String(studentAns).trim().toLowerCase();
+          const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+          isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
+        } else {
+          isCorrectAnswer = String(studentAns) === String(aq.correct_option_id);
+        }
+
         review.isCorrect = isCorrectAnswer;
         review.status = isCorrectAnswer ? 'correct' : 'incorrect';
 
@@ -1232,14 +1276,25 @@ export class AssessmentService {
 
     // MCQ modules: aptitude, mnc, role
     const rows = await this.dataSource.query(
-      `SELECT aq.${config.idCol} AS question_id, aq.selected_option_id
+      `SELECT aq.${config.idCol} AS question_id, aq.selected_option_id, aq.metadata, q.metadata AS question_metadata
        FROM ${config.junction} aq
+       JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1`,
       [attemptId],
     );
     for (const row of rows) {
-      if (row.selected_option_id !== null && row.selected_option_id !== undefined) {
-        answers[String(row.question_id)] = { optionId: String(row.selected_option_id) };
+      const qMetadata = row.question_metadata || {};
+      const kind = qMetadata.kind || 'mcq';
+
+      if (kind === 'numerical' || kind === 'msq') {
+        const subAnswer = row.metadata?.submittedAnswer;
+        if (subAnswer !== undefined && subAnswer !== null && subAnswer !== '') {
+          answers[String(row.question_id)] = { optionId: subAnswer };
+        }
+      } else {
+        if (row.selected_option_id !== null && row.selected_option_id !== undefined) {
+          answers[String(row.question_id)] = { optionId: String(row.selected_option_id) };
+        }
       }
     }
     return answers;
@@ -1272,10 +1327,10 @@ export class AssessmentService {
       const attemptId = attempt[config.attemptIdCol];
 
       const questionRows = await queryRunner.query(
-        `SELECT aq.attempt_question_id, aq.${config.idCol} AS question_id
+        `SELECT aq.attempt_question_id, aq.${config.idCol} AS question_id, q.metadata, q.correct_option_id
          ${dbModule === 'grammar' ? `, q.task_type` : ''}
          FROM ${config.junction} aq
-         ${dbModule === 'grammar' ? `JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}` : ''}
+         JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
          WHERE aq.${config.attemptIdCol} = $1`,
         [attemptId],
       );
@@ -1287,6 +1342,8 @@ export class AssessmentService {
           attemptQuestionId: row.attempt_question_id,
           questionId: row.question_id,
           taskType: row.task_type,
+          metadata: row.metadata || {},
+          correctOptionId: row.correct_option_id,
         };
         byQuestionId.set(String(row.question_id), entry);
         byAttemptQuestionId.set(String(row.attempt_question_id), entry);
@@ -1411,22 +1468,60 @@ export class AssessmentService {
         }
 
         // MCQ modules: aptitude, mnc, role
-        const selectedOptionId = extractOptionId(rawAnswer);
-        if (selectedOptionId) {
-          await queryRunner.query(
-            `UPDATE ${config.junction}
-             SET selected_option_id = $1, answered_at = NOW()
-             WHERE attempt_question_id = $2`,
-            [selectedOptionId, attemptQuestionId],
-          );
-          saved++;
+        const qMetadata = mapping.metadata || {};
+        const kind = qMetadata.kind || 'mcq';
+
+        if (kind === 'numerical' || kind === 'msq') {
+          const studentChoice = typeof rawAnswer === 'object'
+            ? (rawAnswer.optionId ?? rawAnswer.selectedOptionId ?? rawAnswer.value ?? rawAnswer.optionIds ?? null)
+            : rawAnswer;
+
+          if (studentChoice !== undefined && studentChoice !== null && studentChoice !== '') {
+            // Retrieve existing metadata for this attempt question first
+            const attemptQuestRow = await queryRunner.query(
+              `SELECT metadata FROM ${config.junction} WHERE attempt_question_id = $1`,
+              [attemptQuestionId],
+            );
+            const currentMetadata = attemptQuestRow[0]?.metadata || {};
+            const metadataUpdate = {
+              ...currentMetadata,
+              submittedAnswer: studentChoice,
+            };
+
+            await queryRunner.query(
+              `UPDATE ${config.junction}
+               SET selected_option_id = NULL, answered_at = NOW(), metadata = $1
+               WHERE attempt_question_id = $2`,
+              [JSON.stringify(metadataUpdate), attemptQuestionId],
+            );
+            saved++;
+          } else {
+            await queryRunner.query(
+              `UPDATE ${config.junction}
+               SET selected_option_id = NULL, answered_at = NULL, metadata = NULL
+               WHERE attempt_question_id = $1`,
+              [attemptQuestionId],
+            );
+          }
         } else {
-          await queryRunner.query(
-            `UPDATE ${config.junction}
-             SET selected_option_id = NULL, answered_at = NULL
-             WHERE attempt_question_id = $1`,
-            [attemptQuestionId],
-          );
+          // Standard MCQ / TF
+          const selectedOptionId = extractOptionId(rawAnswer);
+          if (selectedOptionId) {
+            await queryRunner.query(
+              `UPDATE ${config.junction}
+               SET selected_option_id = $1, answered_at = NOW()
+               WHERE attempt_question_id = $2`,
+              [selectedOptionId, attemptQuestionId],
+            );
+            saved++;
+          } else {
+            await queryRunner.query(
+              `UPDATE ${config.junction}
+               SET selected_option_id = NULL, answered_at = NULL
+               WHERE attempt_question_id = $1`,
+              [attemptQuestionId],
+            );
+          }
         }
       }
 
@@ -2186,10 +2281,12 @@ export class AssessmentService {
                 aq.${config.idCol} AS question_id,
                 aq.selected_option_id,
                 aq.block_number,
+                aq.metadata AS attempt_metadata,
                 q.question_text,
                 q.correct_option_id,
                 q.marks,
                 q.negative_marks,
+                q.metadata AS question_metadata,
                 q.${config.catCol} AS category,
                 ass.negative_mark_enabled,
                 ass.negative_mark_value
@@ -2220,7 +2317,13 @@ export class AssessmentService {
       const blockMap: Record<number, { correct: number; total: number; positive: number; negative: number }> = {};
 
       for (const aq of allQuestions) {
-        const cat = aq.category ?? 'General';
+        let cat = aq.category ?? 'General';
+        if (cat === 'QA') cat = 'Quantitative Aptitude';
+        else if (cat === 'LR') cat = 'Logical Reasoning';
+        else if (cat === 'DI') cat = 'Data Interpretation';
+        else if (cat === 'AR') cat = 'Abstract Reasoning';
+        else if (cat === 'VA') cat = 'Verbal Ability';
+
         const blk = Number(aq.block_number ?? 0);
 
         if (!categoryMap[cat]) categoryMap[cat] = { correct: 0, total: 0, answered: 0, score: 0, maxScore: 0 };
@@ -2250,34 +2353,77 @@ export class AssessmentService {
         categoryMap[cat].maxScore += qMarks;
         blockMap[blk].total++;
 
-        const sel = aq.selected_option_id;
+        const qMetadata = aq.question_metadata || {};
+        const kind = qMetadata.kind || 'mcq';
+        const attemptMeta = aq.attempt_metadata || {};
+
+        let studentAns: any = null;
+        if (kind === 'numerical' || kind === 'msq') {
+          studentAns = attemptMeta.submittedAnswer;
+        } else {
+          studentAns = aq.selected_option_id;
+        }
+
         const review: any = {
           questionId: String(aq.question_id),
           displayOrder: Number(aq.display_order || 0),
           category: cat,
-          type: 'mcq',
+          type: kind,
           questionText: String(aq.question_text || ''),
           options: optionsForReview,
-          selectedOptionId: null,
+          selectedOptionId: (kind === 'numerical' || kind === 'msq') ? null : (studentAns ? String(studentAns) : null),
           selectedAnswerText: null,
           correctOptionId:
-            aq.correct_option_id !== null && aq.correct_option_id !== undefined
-              ? String(aq.correct_option_id)
-              : null,
+            (kind === 'numerical' || kind === 'msq')
+              ? null
+              : (aq.correct_option_id !== null && aq.correct_option_id !== undefined ? String(aq.correct_option_id) : null),
           correctAnswerText: null,
           isCorrect: null,
           status: 'unanswered',
         };
-        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-          review.correctAnswerText = optionTextById.get(review.correctOptionId);
+
+        if (kind === 'numerical') {
+          review.correctAnswerText = qMetadata.correctAnswer ? String(qMetadata.correctAnswer) : null;
+        } else if (kind === 'msq') {
+          const correctOptionIds = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
+          const correctTexts = correctOptionIds.map((id: string) => optionTextById.get(id) || id).filter(Boolean);
+          review.correctAnswerText = correctTexts.join(', ');
+        } else {
+          if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+            review.correctAnswerText = optionTextById.get(review.correctOptionId);
+          }
         }
 
-        if (sel !== null && sel !== undefined && String(sel) !== '') {
+        const isAnswered = studentAns !== null && studentAns !== undefined && studentAns !== '' && (!Array.isArray(studentAns) || studentAns.length > 0);
+
+        if (isAnswered) {
           answeredCount++;
           categoryMap[cat].answered++;
-          review.selectedOptionId = String(sel);
-          review.selectedAnswerText = optionTextById.get(review.selectedOptionId) ?? String(sel);
-          const isCorrect = String(sel) === String(aq.correct_option_id);
+
+          if (kind === 'numerical' || kind === 'msq') {
+            review.selectedAnswerText = Array.isArray(studentAns)
+              ? studentAns.map((id: any) => optionTextById.get(String(id)) || String(id)).join(', ')
+              : String(studentAns);
+          } else {
+            review.selectedOptionId = String(studentAns);
+            review.selectedAnswerText = optionTextById.get(review.selectedOptionId) ?? String(studentAns);
+          }
+
+          let isCorrect = false;
+          if (kind === 'msq') {
+            const studentChoices = Array.isArray(studentAns) ? studentAns.map(String) : [String(studentAns)];
+            const correctChoices = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
+            isCorrect = studentChoices.length > 0 &&
+                        studentChoices.length === correctChoices.length &&
+                        studentChoices.every((id: string) => correctChoices.includes(id));
+          } else if (kind === 'numerical') {
+            const studentAnswer = String(studentAns).trim().toLowerCase();
+            const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+            isCorrect = studentAnswer !== '' && studentAnswer === correctAnswer;
+          } else {
+            isCorrect = String(studentAns) === String(aq.correct_option_id);
+          }
+
           const scoreAwarded = isCorrect ? qMarks : 0;
           const negApplied = isCorrect ? 0 : negMarks;
           review.isCorrect = isCorrect;
