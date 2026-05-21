@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnyQuestion, AssessmentType, QuestionMode,
   ASSESSMENT_TYPE_LABELS, ASSESSMENT_TYPE_DESCRIPTIONS,
@@ -28,15 +28,17 @@ import {
 import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
-import JsonImportPanel from "./JsonImportPanel";
+import CsvImportPanel from "./CsvImportPanel";
+import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
   Plus, Upload, Download, Trash2, Search,
   AlertCircle, ArrowLeft, Filter, ChevronDown, Code,
-  Brain, Banknote, MessageSquare, Target, Code2
+  Brain, Banknote, MessageSquare, Target, Code2,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
-import { Badge } from "@/components/admin/ui";
+import { Badge, useConfirm, type BreadcrumbSegment } from "@/components/admin/ui";
 import {
   AptitudeIcon,
   CommunicationIcon,
@@ -45,6 +47,25 @@ import {
   ArrowRightWithoutLineIcon,
 } from "@/components/icons";
 import { motion, AnimatePresence } from "framer-motion";
+
+function getPaginationRange(currentPage: number, totalPages: number): (number | string)[] {
+  const range: (number | string)[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) {
+      range.push(i);
+    }
+    return range;
+  }
+
+  if (currentPage <= 3) {
+    range.push(1, 2, 3, "...", totalPages - 1, totalPages);
+  } else if (currentPage >= totalPages - 2) {
+    range.push(1, 2, "...", totalPages - 2, totalPages - 1, totalPages);
+  } else {
+    range.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
+  }
+  return range;
+}
 
 const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }> = {
   aptitude: { color: "#1ed36a", gradient: "linear-gradient(135deg, #1ed36a 0%, #17b85c 100%)" },
@@ -124,10 +145,36 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
       return { ...common, category: q.category, subcategory: q.subcategory } as AptitudeQuestion;
     case "mnc":
       return { ...common, topic: q.category } as MNCQuestion;
-    case "communication":
-      return { ...common, taskType: q.category as CommTaskType, instructions: q.questionText } as unknown as CommQuestion;
-    case "role":
-      return { ...common, questionType: q.category as RoleQuestionType } as RoleQuestion;
+    case "communication": {
+      const commQ: any = {
+        ...common,
+        taskType: q.category as CommTaskType,
+        instructions: q.questionText,
+        passage: q.metadata?.passage,
+        audioUrl: q.metadata?.audioUrl,
+        prompt: q.metadata?.prompt,
+        prepTimeSeconds: q.metadata?.prepTimeSeconds,
+        recordTimeSeconds: q.metadata?.recordTimeSeconds,
+        minWords: q.metadata?.minWords,
+        maxWords: q.metadata?.maxWords,
+        questions: q.metadata?.questions,
+      };
+      return commQ as CommQuestion;
+    }
+    case "role": {
+      const roleQ: any = {
+        ...common,
+        questionType: q.category as RoleQuestionType,
+        category: q.subcategory,
+        subCategory: q.subcategory,
+        title: q.metadata?.title,
+        scenarioContext: q.metadata?.scenarioContext,
+        ticketId: q.metadata?.ticketId,
+        priority: q.metadata?.priority,
+        reportedBy: q.metadata?.reportedBy,
+      };
+      return roleQ as RoleQuestion;
+    }
     case "coding":
       return { ...common, category: q.category } as unknown as CodingQuestion;
     default:
@@ -154,6 +201,29 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     case "coding": category = (q as CodingQuestion).category; break;
   }
 
+  // Build the complete metadata object containing all assessment-specific fields
+  const metadata: any = {
+    kind: common.kind || "mcq",
+    correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+  };
+
+  if (module === "communication") {
+    if (common.passage) metadata.passage = common.passage;
+    if (common.audioUrl) metadata.audioUrl = common.audioUrl;
+    if (common.prompt) metadata.prompt = common.prompt;
+    if (common.prepTimeSeconds) metadata.prepTimeSeconds = common.prepTimeSeconds;
+    if (common.recordTimeSeconds) metadata.recordTimeSeconds = common.recordTimeSeconds;
+    if (common.minWords) metadata.minWords = common.minWords;
+    if (common.maxWords) metadata.maxWords = common.maxWords;
+    if (common.questions) metadata.questions = common.questions;
+  } else if (module === "role") {
+    if (common.title) metadata.title = common.title;
+    if (common.scenarioContext) metadata.scenarioContext = common.scenarioContext;
+    if (common.ticketId) metadata.ticketId = common.ticketId;
+    if (common.priority) metadata.priority = common.priority;
+    if (common.reportedBy) metadata.reportedBy = common.reportedBy;
+  }
+
   return {
     category,
     subcategory,
@@ -167,10 +237,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     status: common.status || "active",
     imageUrl: common.imageUrl,
     assessmentId: common.assessmentId,
-    metadata: {
-      kind: common.kind || "mcq",
-      correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
-    }
+    metadata
   };
 }
 
@@ -184,7 +251,25 @@ interface AdminQuestionsManagerProps {
 
 export default function AdminQuestionsManager({ initialModule = null }: AdminQuestionsManagerProps = {}) {
   const router = useRouter();
-  const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(initialModule);
+  const searchParams = useSearchParams();
+  const moduleParam = searchParams.get("module") as AssessmentType | null;
+  const confirm = useConfirm();
+  const [selectedModule, setSelectedModule] = useState<AssessmentType | null>(moduleParam || initialModule);
+
+  // Sync selectedModule when the URL search param changes
+  useEffect(() => {
+    setSelectedModule(moduleParam);
+  }, [moduleParam]);
+
+  // Sync state changes back to search parameter
+  const handleSelectModule = useCallback((mod: AssessmentType | null) => {
+    setSelectedModule(mod);
+    if (mod) {
+      router.push(`/admin/questions?module=${mod}`, { scroll: false });
+    } else {
+      router.push(`/admin/questions`, { scroll: false });
+    }
+  }, [router]);
   const [mode, setMode] = useState<QuestionMode>("trial");
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
   const [moduleCounts, setModuleCounts] = useState<Record<AssessmentType, { trial: number; main: number }>>({
@@ -199,12 +284,74 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterSubCategory, setFilterSubCategory] = useState<string>("all");
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [clearConfirm, setClearConfirm] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState<ApiAssessment | null>(null);
   const [assessmentsList, setAssessmentsList] = useState<ApiAssessment[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const pageTitle = selectedModule 
+    ? (activeAssessment?.assessment_name || ASSESSMENT_TYPE_LABELS[selectedModule])
+    : "Assessments";
+
+  const breadcrumb = useMemo(() => {
+    if (!selectedModule) {
+      return [{ label: "Assessments" }];
+    }
+
+    const segments: BreadcrumbSegment[] = [
+      { 
+        label: "Assessments", 
+        onClick: () => {
+          handleSelectModule(null);
+          setView("list");
+          setEditingQuestion(null);
+        } 
+      }
+    ];
+
+    const moduleLabel = activeAssessment?.assessment_name || ASSESSMENT_TYPE_LABELS[selectedModule];
+
+    if (editingQuestion !== null) {
+      segments.push({
+        label: moduleLabel,
+        onClick: () => {
+          setEditingQuestion(null);
+          setView("list");
+        }
+      });
+      segments.push({
+        label: editingQuestion === "new" ? "New Question" : "Edit Question"
+      });
+    } else if (view === "json-import") {
+      segments.push({
+        label: moduleLabel,
+        onClick: () => {
+          setView("list");
+        }
+      });
+      segments.push({
+        label: "Bulk Import"
+      });
+    } else {
+      segments.push({
+        label: moduleLabel
+      });
+    }
+
+    return segments;
+  }, [selectedModule, activeAssessment, view, editingQuestion, handleSelectModule]);
+
+  useRegisterAdminPage({
+    eyebrow: "Workspace",
+    title: pageTitle,
+    breadcrumb: breadcrumb,
+  });
+
+  // Reset page when category, subcategory, search query or mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedModule, mode, filterCategory, filterSubCategory, searchQuery]);
 
 
 
@@ -247,7 +394,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const refreshModuleCounts = useCallback(async (module?: AssessmentType) => {
     const modules = module
       ? [module]
-      : (["aptitude", "mnc", "communication", "role"] as AssessmentType[]);
+      : (["aptitude", "mnc", "communication", "role", "coding"] as AssessmentType[]);
 
     await Promise.all(
       modules.map(async (currentModule) => {
@@ -381,6 +528,12 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     return result;
   }, [questions, filterCategory, filterSubCategory, searchQuery, selectedModule]);
 
+  const limit = 10;
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * limit;
+    return filtered.slice(start, start + limit);
+  }, [filtered, currentPage]);
+
   const categoryCounts = useMemo(() => {
     if (!selectedModule) return {};
     const counts: Record<string, number> = { all: questions.length };
@@ -445,7 +598,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       setQuestions(questions.filter(q => (q as { id: string }).id !== id));
       showToast("Question deleted");
     }
-    setDeleteConfirm(null);
   };
 
   const handleImport = async (imported: AnyQuestion[]) => {
@@ -462,6 +614,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         await refreshModuleCounts(selectedModule!);
       } catch (err) {
         showToast((err as Error).message || "Import failed", "error");
+        throw err;
       } finally {
         setLoading(false);
       }
@@ -489,7 +642,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       setQuestions([]);
       showToast("All questions cleared");
     }
-    setClearConfirm(false);
   };
 
   const handleExportJson = () => {
@@ -528,8 +680,8 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
             const realTrialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
             const realMainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
             
-            const trialCount = realTrialCount > 0 ? realTrialCount : config.trial;
-            const mainCount = realMainCount > 0 ? realMainCount : config.main;
+            const trialCount = realTrialCount;
+            const mainCount = realMainCount;
 
             return (
               <article key={at} className={`admin-module-card admin-qb-tile ${config.accentClass}`}>
@@ -604,7 +756,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   )}
                   <button
                     onClick={() => {
-                      setSelectedModule(at);
+                      handleSelectModule(at);
                       setView("list");
                     }}
                     className="admin-btn admin-btn-primary"
@@ -631,32 +783,52 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
 
       <main className="relative z-10 py-2">
         {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
-        <div className="flex flex-col xl:flex-row justify-between gap-4 items-start xl:items-center mb-6 mt-4">
-          {/* Filter Tabs & Mode Toggle */}
-          <div className="flex flex-wrap items-center gap-6 w-full xl:w-auto">
-            <div className="w-full sm:w-64">
-              <CustomSelect
-                label="Filter by Category"
-                value={filterCategory}
-                onChange={setFilterCategory}
-                options={[
-                  { label: `All Categories (${questions.length})`, value: "all" },
-                  ...filterCats.map(cat => ({
-                    label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
-                    value: cat.key
-                  }))
-                ]}
-              />
+        {/* ACTION BAR: ALIGNED WITH MAIN ADMIN UX */}
+        <div className="space-y-4 mb-6 mt-4">
+          {/* Row 1: Filters (Left) & Bank Toggle (Right) */}
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-end">
+            <div className="flex flex-wrap items-end gap-6 w-full sm:w-auto">
+              <div className="w-full sm:w-64">
+                <CustomSelect
+                  label="Filter by Category"
+                  value={filterCategory}
+                  onChange={setFilterCategory}
+                  options={[
+                    { label: `All Categories (${questions.length})`, value: "all" },
+                    ...filterCats.map(cat => ({
+                      label: `${cat.label} (${categoryCounts[cat.key] || 0})`,
+                      value: cat.key
+                    }))
+                  ]}
+                />
+              </div>
+
+              {selectedModule === "aptitude" && filterCategory !== "all" && (
+                <div className="w-full sm:w-64">
+                  <CustomSelect
+                    label="Filter by Subcategory"
+                    value={filterSubCategory}
+                    onChange={setFilterSubCategory}
+                    options={[
+                      { label: "All Subcategories", value: "all" },
+                      ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
+                        label: sc.name,
+                        value: sc.id
+                      }))
+                    ]}
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner shrink-0 sm:self-end">
               {(["trial", "main"] as QuestionMode[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className={`px-6 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
                     mode === m 
-                      ? "bg-brand-green text-[#0f1411] shadow-lg shadow-brand-green/20" 
+                      ? "bg-brand-green text-white" 
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -664,64 +836,55 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 </button>
               ))}
             </div>
-
-            {selectedModule === "aptitude" && filterCategory !== "all" && (
-              <div className="w-full sm:w-64">
-                <CustomSelect
-                  label="Filter by Subcategory"
-                  value={filterSubCategory}
-                  onChange={setFilterSubCategory}
-                  options={[
-                    { label: "All Subcategories", value: "all" },
-                    ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
-                      label: sc.name,
-                      value: sc.id
-                    }))
-                  ]}
-                />
-              </div>
-            )}
           </div>
-          
-          {/* Action Buttons: Export, Clear, Bulk Import, Add New */}
-          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-            <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
-              <Download size={16} className="text-brand-green" />
-              <span>Export JSON</span>
-            </button>
 
-            <button onClick={() => setClearConfirm(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm">
-              <Trash2 size={16} />
-              <span>Clear Bank</span>
-            </button>
-
-            <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden xl:block mx-1" />
-  
-            <button 
-              onClick={() => setView("json-import")} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
-            >
-              <span>Bulk Import</span>
-              <Upload size={16} className="text-brand-green" />
-            </button>
- 
-            {isDbModule(selectedModule) && (
-              <button 
-                onClick={() => router.push(`/admin/questions/settings?module=${selectedModule}`)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
-              >
-                <Settings size={16} className="text-brand-green" />
-                <span>Settings</span>
+          {/* Row 2: Secondary buttons (Left) & Primary Action buttons (Right) */}
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center border-t border-slate-200 dark:border-white/5 pt-4">
+            {/* Left side actions: Export, Clear */}
+            <div className="flex flex-row items-center gap-3 shrink-0 flex-nowrap overflow-x-auto pb-1">
+              <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0">
+                <Download size={16} className="text-brand-green" />
+                <span>Export JSON</span>
               </button>
-            )}
 
-            <button 
-              onClick={() => setEditingQuestion("new")} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all"
-            >
-              <span>Add New</span>
-              <Plus size={16} />
-            </button>
+              <button 
+                onClick={async () => {
+                  const confirmed = await confirm({
+                    title: "Clear Entire Bank?",
+                    message: `This will remove all ${questions.length} questions from this bank. This action cannot be undone.`,
+                    confirmLabel: "Clear All",
+                    cancelLabel: "Cancel",
+                    variant: "danger"
+                  });
+                  if (confirmed) {
+                    await handleClearAll();
+                  }
+                }} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0"
+              >
+                <Trash2 size={16} />
+                <span>Clear Bank</span>
+              </button>
+            </div>
+
+            {/* Right side actions: Bulk Import, Add New */}
+            <div className="flex flex-row items-center gap-3 shrink-0 flex-nowrap overflow-x-auto pb-1 w-full sm:w-auto justify-start sm:justify-end">
+              <button 
+                onClick={() => setView("json-import")} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0"
+              >
+                <span>Bulk Import</span>
+                <Upload size={16} className="text-brand-green" />
+              </button>
+
+              <button 
+                onClick={() => setEditingQuestion("new")} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-brand-green rounded-lg text-sm font-semibold text-white hover:bg-brand-green/90 transition-all shrink-0"
+              >
+                <span>Add New</span>
+                <Plus size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -729,7 +892,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         {/* LIST CONTAINER */}
         <div className="min-h-[600px]">
           {view === "json-import" ? (
-            <JsonImportPanel
+            <CsvImportPanel
               assessmentType={selectedModule}
               allowedQuestionKinds={allowedQuestionKinds}
               onImport={handleImport}
@@ -738,13 +901,13 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2">
-                <div>
+                <div className="flex items-center gap-3">
                   <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
                     Inventory Overview <span className="text-brand-green">({questions.length})</span>
-                    <span className="ml-3 text-xs font-medium text-slate-500 capitalize px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 inline-block align-middle">
-                      {mode} bank
-                    </span>
                   </h3>
+                  <span className="text-xs font-medium text-slate-500 capitalize px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                    {mode} bank
+                  </span>
                 </div>
                 
                 {/* Search Bar - Now relocated here */}
@@ -754,7 +917,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search repository..."
-                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus:border-slate-300 dark:focus:border-white/20 transition-all"
+                    className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/20 focus:outline-none focus-visible:!outline-none focus:!border-brand-green dark:focus:!border-brand-green transition-all"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                     <Search size={16} />
@@ -778,14 +941,74 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   <button onClick={() => { setFilterCategory("all"); setSearchQuery(""); }} className="mt-8 px-6 py-2.5 rounded-full border border-brand-green/20 text-[11px] font-black uppercase tracking-widest text-brand-green hover:bg-brand-green hover:text-white transition-all">Clear Filters</button>
                 </div>
               ) : (
-                <QuestionTable 
-                  questions={filtered} 
-                  loading={loading} 
-                  assessmentType={selectedModule!} 
-                  onEdit={(q) => setEditingQuestion(q)} 
-                  onDelete={(id) => setDeleteConfirm(id)} 
-                  categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
-                />
+                <>
+                  <QuestionTable 
+                    questions={paginated} 
+                    loading={loading} 
+                    assessmentType={selectedModule!} 
+                    onEdit={(q) => setEditingQuestion(q)} 
+                    onDelete={async (id) => {
+                      const confirmed = await confirm({
+                        title: "Delete Question?",
+                        message: "This action will permanently remove the question from this bank.",
+                        confirmLabel: "Delete",
+                        cancelLabel: "Cancel",
+                        variant: "danger"
+                      });
+                      if (confirmed) {
+                        await handleDeleteQuestion(id);
+                      }
+                    }} 
+                    onView={(q) => router.push(`/admin/questions/${(q as any).id}?module=${selectedModule}`)}
+                    categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
+                  />
+
+                  {filtered.length > limit && (
+                    <div className="admin-pagination-row mt-4">
+                      <div className="admin-pagination-info">
+                        Showing <strong>{Math.min((currentPage - 1) * limit + 1, filtered.length)}</strong> to{" "}
+                        <strong>{Math.min(currentPage * limit, filtered.length)}</strong> of{" "}
+                        <strong>{filtered.length.toLocaleString()}</strong> questions
+                      </div>
+                      <div className="admin-pagination-actions">
+                        <button
+                          className="admin-pagination-btn"
+                          disabled={currentPage <= 1 || loading}
+                          onClick={() => setCurrentPage((p) => p - 1)}
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <div className="admin-pagination-pages">
+                          {getPaginationRange(currentPage, Math.ceil(filtered.length / limit)).map((page, idx) => {
+                            if (page === "...") {
+                              return (
+                                <span key={`ell-${idx}`} className="px-1 sm:px-2 text-slate-400 font-bold select-none text-xs">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return (
+                              <button
+                                key={page}
+                                className={`admin-pagination-page ${currentPage === page ? "active" : ""}`}
+                                onClick={() => setCurrentPage(page as number)}
+                              >
+                                {page}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button
+                          className="admin-pagination-btn"
+                          disabled={currentPage >= Math.ceil(filtered.length / limit) || loading}
+                          onClick={() => setCurrentPage((p) => p + 1)}
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -806,44 +1029,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       </AnimatePresence>
 
 
-      {/* Delete/Clear Modals styled with OriginBI theme */}
-      <AnimatePresence>
-        {deleteConfirm && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
-              <div className="flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><Trash2 size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delete Question?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This action will permanently remove the question from this bank.</p>
-                <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
-                  <button onClick={() => handleDeleteQuestion(deleteConfirm)} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Delete</button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {clearConfirm && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-[#19211C]/80 backdrop-blur-md" onClick={() => setClearConfirm(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm rounded-[40px] bg-white dark:bg-brand-dark-primary p-8 shadow-2xl border border-slate-200 dark:border-white/10">
-              <div className="flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-500/10 text-red-500 mb-6"><AlertCircle size={28} /></div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Clear Entire Bank?</h3>
-                <p className="mt-3 text-[13px] text-slate-900 dark:text-white leading-relaxed font-medium">This will remove all {questions.length} questions from this bank. This action cannot be undone.</p>
-                <div className="mt-8 flex w-full gap-3">
-                  <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
-                  <button onClick={handleClearAll} className="flex-1 py-3 rounded-2xl bg-red-500 text-[12px] font-black uppercase tracking-widest text-white transition-all">Clear All</button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* TOAST: THEME FIX */}
       <AnimatePresence>

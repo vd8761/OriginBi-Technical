@@ -25,8 +25,7 @@ function ManageModuleInner({ slug }: { slug: string }) {
     eyebrow: "Question Banks",
     title: `${label} — Manage Questions`,
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/question-banks" },
+      { label: "Question Banks", href: "/admin/questions" },
       { label },
     ],
   });

@@ -378,11 +378,17 @@ export default function QuestionEditor({
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#0b100d]/80 backdrop-blur-md" />
-      <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-brand-dark-primary shadow-2xl">
+      <div className="absolute inset-0 bg-[#0b100d]/80 backdrop-blur-md z-0" />
+      <div 
+        className="relative z-10 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 shadow-2xl"
+        style={{ backgroundColor: "var(--admin-bg-soft)" }}
+      >
         
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] p-6">
+        <div 
+          className="shrink-0 flex items-center justify-between border-b border-slate-100 dark:border-white/5 p-6"
+          style={{ backgroundColor: "var(--admin-surface-2)" }}
+        >
           <div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">{question ? "Update Question" : "Add Question"}</h2>
             <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-brand-green">Assessment: {assessmentType}</p>
@@ -726,15 +732,18 @@ export default function QuestionEditor({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.04] px-6 py-4 backdrop-blur-md">
-           <button onClick={onCancel} className="px-6 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all">
+        <div 
+          className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 px-6 py-4"
+          style={{ backgroundColor: "var(--admin-surface-2)" }}
+        >
+           <button onClick={onCancel} className="px-8 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 hover:scale-105 active:scale-95 transition-all">
              Cancel
            </button>
            <div className="flex items-center gap-3">
              <button
                onClick={handleSave}
                disabled={isSaving}
-               className={`px-8 py-2.5 rounded-xl bg-brand-green text-sm font-black text-white transition-all flex items-center gap-2 ${isSaving ? "opacity-60 cursor-not-allowed" : "hover:scale-105 active:scale-95"}`}
+               className={`px-8 py-2.5 rounded-xl bg-brand-green text-sm font-semibold text-white transition-all flex items-center gap-2 ${isSaving ? "opacity-60 cursor-not-allowed" : "hover:scale-105 active:scale-95"}`}
              >
                {isSaving && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
                {isSaving ? "Uploading & Saving..." : question ? "Update Question" : "Create Question"}

@@ -57,8 +57,7 @@ function BulkImportInner() {
     title: "Bulk Import",
     subtitle: "Upload coding questions as JSON or CSV, or paste JSON directly.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/coding" },
+      { label: "Coding", href: "/admin/coding" },
       { label: "Bulk Import" },
     ],
   });

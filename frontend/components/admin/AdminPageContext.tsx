@@ -44,7 +44,7 @@ export function useRegisterAdminPage(meta: AdminPageMeta) {
     eyebrow: meta.eyebrow,
     title: meta.title,
     subtitle: meta.subtitle,
-    breadcrumb: meta.breadcrumb,
+    breadcrumb: meta.breadcrumb?.map(b => ({ label: b.label, href: b.href })),
   });
   const stableSetMeta = useCallback(
     (next: AdminPageMeta) => setMeta?.(next),

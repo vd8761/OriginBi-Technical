@@ -650,7 +650,6 @@ function SettingsInner() {
     title: "Exam Settings",
     subtitle: "Defaults that apply to every assessment unless overridden.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
       { label: "Settings" },
     ],
   });

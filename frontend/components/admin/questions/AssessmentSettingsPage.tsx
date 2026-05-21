@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code, ChevronDown } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
 import {
   AssessmentType,
@@ -19,6 +19,7 @@ import {
 import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/Switch";
+import { useConfirm } from "@/components/admin/ui";
 
 type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading";
 
@@ -29,6 +30,7 @@ interface AssessmentSettingsPageProps {
 }
 
 export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSettingsPageProps = {}) {
+  const confirm = useConfirm();
   const searchParams = useSearchParams();
   const moduleParam = (moduleOverride ?? (searchParams.get("module") as AssessmentType)) as AssessmentType;
   
@@ -63,6 +65,12 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [newSubCategoryNames, setNewSubCategoryNames] = useState<Record<string, string>>({});
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
+  const toggleExpandCategory = (id: string) => {
+    setExpandedCategoryIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   const [easyMarks, setEasyMarks] = useState<number | "">(1);
   const [easyNeg, setEasyNeg] = useState<number | "">(0);
@@ -139,8 +147,8 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     title: `${ASSESSMENT_TYPE_LABELS[activeModule]} Settings`,
     eyebrow: "Configuration",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/question-banks" },
+      { label: "Assessments", href: `/admin/questions?module=${activeModule}` },
+      { label: `${ASSESSMENT_TYPE_LABELS[activeModule]} Settings` },
     ],
     hideSearch: true,
   });
@@ -736,52 +744,155 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {categoriesList
-                          .filter(cat => !searchQuery || matchesQuery([cat.name, cat.id, "category", "categories"]))
-                          .map(cat => (
-                            <div key={cat.id} className="flex flex-col bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                              <div className="p-6 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between">
-                                <div className="min-w-0">
-                                  <h3 className="font-bold text-[15px] text-slate-900 dark:text-white truncate">{cat.name}</h3>
-                                  <code className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 mt-1 block uppercase">{cat.id}</code>
-                                </div>
-                                <button 
-                                  onClick={() => window.confirm(`Delete "${cat.name}"?`) && (setCategoriesList(categoriesList.filter(c => c.id !== cat.id)), markDirty())}
-                                  className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                              <div className="p-6 flex flex-col gap-6">
-                                <div className="flex flex-wrap gap-2">
-                                  {(cat.subcategories || []).map(sc => (
-                                    <div key={sc.id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10 text-[11px] font-bold text-slate-600 dark:text-slate-300 group/tag">
-                                      <span>{sc.name}</span>
-                                      <button onClick={() => handleRemoveSubCategory(cat.id, sc.id)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={12} strokeWidth={3} /></button>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="relative">
-                                  <input 
-                                    type="text" 
-                                    placeholder="Add subcategory..." 
-                                    value={newSubCategoryNames[cat.id] || ""}
-                                    onChange={e => setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: e.target.value }))}
-                                    onKeyDown={e => e.key === "Enter" && (handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || ""), setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" })))}
-                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-brand-green/20 transition-all"
-                                  />
-                                  <button 
-                                    onClick={() => { handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || ""); setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" })); }}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-brand-green text-white"
-                                  >
-                                    <Plus size={14} strokeWidth={3} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
+                      {categoriesList.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.01]">
+                          <LayoutGrid className="w-10 h-10 text-slate-400 dark:text-slate-600 mb-3" />
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white">No Categories Added</h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mt-1">Use the builder above to define your first main category and start linking subcategories.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.01] shadow-sm">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02]">
+                                  <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-1/3">Main Category</th>
+                                  <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Subcategories</th>
+                                  <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-64">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                {categoriesList
+                                  .filter(cat => !searchQuery || matchesQuery([cat.name, cat.id, "category", "categories"]))
+                                  .map(cat => {
+                                    const isExpanded = expandedCategoryIds.includes(cat.id);
+                                    return (
+                                      <React.Fragment key={cat.id}>
+                                        <tr className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors border-b border-slate-100 dark:border-white/5">
+                                          <td className="px-6 py-4 align-middle">
+                                            <div className="flex flex-col">
+                                              <span className="font-bold text-sm text-slate-900 dark:text-white">{cat.name}</span>
+                                              <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">{cat.id}</span>
+                                            </div>
+                                          </td>
+                                          <td className="px-6 py-4 align-middle">
+                                            {isExpanded ? (
+                                              <span className="text-[11px] font-semibold text-brand-green italic">
+                                                Editing subcategories...
+                                              </span>
+                                            ) : (
+                                              <div className="flex flex-wrap gap-1.5 items-center">
+                                                {(!cat.subcategories || cat.subcategories.length === 0) ? (
+                                                  <span className="text-[11px] font-semibold text-slate-400 italic">No subcategories</span>
+                                                ) : (
+                                                  <>
+                                                    {cat.subcategories.slice(0, 5).map(sc => (
+                                                      <span key={sc.id} className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                                        {sc.name}
+                                                      </span>
+                                                    ))}
+                                                    {cat.subcategories.length > 5 && (
+                                                      <span className="text-[10px] font-bold text-brand-green">
+                                                        +{cat.subcategories.length - 5} more
+                                                      </span>
+                                                    )}
+                                                  </>
+                                                )}
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="px-6 py-4 align-middle text-right space-x-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleExpandCategory(cat.id)}
+                                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all inline-flex items-center gap-1.5 active:scale-95 ${
+                                                isExpanded
+                                                  ? "bg-brand-green/10 border-brand-green/20 text-brand-green"
+                                                  : "bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                                              }`}
+                                            >
+                                              <span>Manage</span>
+                                              <ChevronDown size={12} className={`transform transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                                            </button>
+                                            <button 
+                                              type="button"
+                                              onClick={async () => {
+                                                const confirmed = await confirm({
+                                                  title: "Delete Category?",
+                                                  message: `Are you sure you want to delete "${cat.name}"? This will also delete all linked subcategories.`,
+                                                  confirmLabel: "Delete",
+                                                  cancelLabel: "Cancel",
+                                                  variant: "danger",
+                                                });
+                                                if (confirmed) {
+                                                  setCategoriesList(categoriesList.filter(c => c.id !== cat.id));
+                                                  markDirty();
+                                                }
+                                              }}
+                                              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all inline-flex items-center justify-center align-middle"
+                                            >
+                                              <Trash2 size={16} />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                        {isExpanded && (
+                                          <tr className="bg-slate-50/[0.04] dark:bg-white/[0.005]">
+                                            <td colSpan={3} className="px-6 py-4 border-b border-slate-200 dark:border-white/5">
+                                              <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
+                                                
+                                                {/* Left: Input box with save button */}
+                                                <div className="flex items-center gap-3 w-full md:w-[45%]">
+                                                  <input 
+                                                    type="text" 
+                                                    placeholder="Enter subcategory name..." 
+                                                    value={newSubCategoryNames[cat.id] || ""}
+                                                    onChange={e => setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                                                    onKeyDown={e => e.key === "Enter" && (handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || ""), setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" })))}
+                                                    className="flex-1 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-950 dark:text-white outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                                                  />
+                                                  <button 
+                                                    type="button"
+                                                    onClick={() => { handleAddSubCategory(cat.id, newSubCategoryNames[cat.id] || ""); setNewSubCategoryNames(prev => ({ ...prev, [cat.id]: "" })); }}
+                                                    className="px-5 py-2.5 text-xs font-bold bg-brand-green hover:bg-brand-green/90 text-white rounded-xl transition active:scale-95 whitespace-nowrap shadow-sm"
+                                                  >
+                                                    Save
+                                                  </button>
+                                                </div>
+
+                                                {/* Right: Wrapping list of subcategories */}
+                                                <div className="flex-1 w-full">
+                                                  {(!cat.subcategories || cat.subcategories.length === 0) ? (
+                                                    <span className="text-xs text-slate-400 italic justify-start md:justify-end flex">No subcategories defined yet.</span>
+                                                  ) : (
+                                                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-2 justify-start md:justify-end">
+                                                      {cat.subcategories.map(sc => (
+                                                        <div key={sc.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[11px] font-semibold text-slate-600 dark:text-slate-300 group/tag transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+                                                          <span>{sc.name}</span>
+                                                          <button 
+                                                            type="button"
+                                                            onClick={() => handleRemoveSubCategory(cat.id, sc.id)} 
+                                                            className="text-slate-400 hover:text-red-500 transition-colors"
+                                                          >
+                                                            <X size={11} strokeWidth={2.5} />
+                                                          </button>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

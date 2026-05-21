@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Edit2, Trash2, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { AnyQuestion, AssessmentType } from './types';
 
 interface QuestionTableProps {
@@ -8,6 +8,7 @@ interface QuestionTableProps {
   assessmentType: AssessmentType;
   onEdit: (q: AnyQuestion) => void;
   onDelete: (id: string) => void;
+  onView?: (q: AnyQuestion) => void;
   categories?: { id: string; name: string }[];
 }
 
@@ -17,6 +18,7 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
   assessmentType,
   onEdit,
   onDelete,
+  onView,
   categories
 }) => {
   if (loading) {
@@ -98,6 +100,15 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
                   </td>
                   <td className="p-4 text-center align-middle">
                     <div className="flex items-center justify-center gap-2">
+                      {onView && (
+                        <button 
+                          onClick={() => onView(q)}
+                          className="p-2 rounded-md bg-transparent hover:bg-black/5 dark:hover:bg-white/10 text-[#1ED36A] hover:text-[#1ED36A]/80 transition-all cursor-pointer"
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                      )}
                       <button 
                         onClick={() => onEdit(q)}
                         className="p-2 rounded-md bg-transparent hover:bg-black/5 dark:hover:bg-white/10 text-brand-text-light-primary dark:text-white transition-all cursor-pointer"

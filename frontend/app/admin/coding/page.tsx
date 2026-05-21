@@ -73,8 +73,7 @@ function CodingListInner() {
     title: "Coding Question Bank",
     subtitle: "List of problems with inline status and pool toggles, filterable by language, topic, and difficulty.",
     breadcrumb: [
-      { label: "Admin Hub", href: "/admin" },
-      { label: "Question Banks", href: "/admin/question-banks" },
+      { label: "Question Banks", href: "/admin/questions" },
       { label: "Coding" },
     ],
   });

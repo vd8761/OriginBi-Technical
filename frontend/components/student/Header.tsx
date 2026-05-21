@@ -20,6 +20,7 @@ import {
     NoNotificationsIcon,
 } from '../icons';
 import { capitalizeWords, getAvatarColor } from "../../lib/utils";
+import { useTheme } from "@/lib/contexts/ThemeContext";
 
 type StudentHeaderView =
     | "dashboard"
@@ -110,6 +111,7 @@ const Header: React.FC<HeaderProps> = ({
     onNavigate,
 }) => {
     const { user, logout, updateProfile } = useSession();
+    const { theme } = useTheme();
     const router = useRouter();
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
@@ -234,7 +236,7 @@ const Header: React.FC<HeaderProps> = ({
     );
 
     return (
-        <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 dark:bg-[#19211C]/95 backdrop-blur-xl border-b border-[#E0E0E0] dark:border-white/[0.08] shadow-none h-[64px] sm:h-[72px]">
+        <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white dark:bg-[#19211C] border-b border-[#E0E0E0] dark:border-white/[0.08] shadow-none h-[64px] sm:h-[72px]">
             <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between h-full relative z-10">
                 <div className="flex items-center gap-3 lg:gap-4">
                     <button
@@ -389,7 +391,7 @@ const Header: React.FC<HeaderProps> = ({
                                 <img
                                     src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Student')}&background=${getAvatarColor(user.name || 'Student')}&color=fff&length=2`}
                                     alt="User Avatar"
-                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-gray-200 dark:border-white/10"
+                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-gray-200 dark:border-white/10 shrink-0 object-cover aspect-square"
                                 />
                             )}
                             <div className="hidden lg:block text-left mr-1">
@@ -413,7 +415,10 @@ const Header: React.FC<HeaderProps> = ({
                         </button>
  
                             {isProfileOpen && (
-                                <div className="absolute right-0 top-full mt-4 w-72 bg-white dark:bg-[#19211C] rounded-[16px] shadow-2xl shadow-black/[0.08] z-[100] border border-gray-100 dark:border-white/[0.08] overflow-hidden">
+                                <div 
+                                    className="absolute right-0 top-full mt-4 w-72 bg-white dark:bg-[#212824] rounded-[16px] shadow-2xl shadow-black/[0.08] z-[100] border border-gray-100 dark:border-white/[0.08] overflow-hidden"
+                                    style={{ backgroundColor: theme === 'dark' ? '#212824' : '#ffffff', opacity: 1, backdropFilter: 'none' }}
+                                >
                                     <div className="px-5 py-4 border-b border-gray-100 dark:border-white/[0.06] bg-gradient-to-r from-gray-50 to-white dark:from-white/[0.04] dark:to-transparent">
                                         <p className="text-sm font-bold text-gray-900 dark:text-white truncate tracking-tight">{user?.name || "Student"}</p>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1 font-medium tracking-tight">{user?.email || "student@originbi.com"}</p>
