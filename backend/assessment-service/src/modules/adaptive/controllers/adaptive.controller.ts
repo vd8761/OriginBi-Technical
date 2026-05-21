@@ -446,6 +446,23 @@ export class AdaptiveController {
       selectedOptionId: q.selectedOptionId ?? null,
     }));
 
+    // Assessment-wide question-count info so the frontend can render
+    // continuous numbering ("Question N of TOTAL") when resuming.
+    const asmRows = await this.dataSource.query(
+      `SELECT a.adaptive_total_questions, a.adaptive_total_blocks
+       FROM tech_assessments a
+       JOIN block_attempts ba ON ba.assessment_id = a.assessment_id
+       WHERE ba.attempt_token = $1
+       LIMIT 1`,
+      [attemptToken],
+    );
+    const totalBlocks = Math.max(1, Number(asmRows[0]?.adaptive_total_blocks ?? 1));
+    const totalQuestions = Math.max(
+      questions.length,
+      Math.round(Number(asmRows[0]?.adaptive_total_questions ?? 0)),
+    );
+    const questionsPerBlock = Math.max(1, Math.round(totalQuestions / totalBlocks));
+
     return {
       success: true,
       blockNumber: bn,
@@ -455,6 +472,9 @@ export class AdaptiveController {
       marksScore: baRows[0].marks_score,
       blockReadinessScore: baRows[0].block_readiness_score,
       nextBlockDifficulty: baRows[0].next_block_difficulty,
+      totalBlocks,
+      totalQuestions,
+      questionsPerBlock,
       questions,
     };
   }

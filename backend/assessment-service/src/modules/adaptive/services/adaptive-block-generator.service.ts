@@ -190,52 +190,65 @@ export class AdaptiveBlockGeneratorService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Build question slots for a block
+  // Build question slots for a block — COUNT based.
+  //
+  // The block must contain exactly `questionCount` questions. The count is
+  // split across difficulties using the block's difficulty profile, and the
+  // category/subcategory of each slot is assigned round-robin so concepts
+  // stay balanced regardless of how many marks each question carries.
   // ─────────────────────────────────────────────────────────────────────────
 
   private buildQuestionSlots(
     blueprint: BlueprintConfig,
-    blockTargetMarks: number,
+    questionCount: number,
     targetDifficulty: Difficulty,
-    coverage: Record<string, Record<string, { marksUsed: number; questionsUsed: number }>>,
   ): QuestionSlot[] {
+    if (questionCount <= 0) return [];
+
     const profile = blueprint.difficultyProfiles[targetDifficulty];
-    const slots: QuestionSlot[] = [];
+    let easyN   = Math.round((profile.easy   / 100) * questionCount);
+    let mediumN = Math.round((profile.medium / 100) * questionCount);
+    let hardN   = Math.round((profile.hard   / 100) * questionCount);
 
-    const categories = Object.keys(blueprint.categoryBlueprint);
-    const totalCatWeight = categories.reduce(
-      (s, c) => s + blueprint.categoryBlueprint[c].weightPct,
-      0,
-    );
+    // Correct rounding drift so the three counts sum to exactly questionCount.
+    const sum = () => easyN + mediumN + hardN;
+    while (sum() < questionCount) {
+      if (profile.medium > 0) mediumN++;
+      else if (profile.easy > 0) easyN++;
+      else hardN++;
+    }
+    while (sum() > questionCount) {
+      if (hardN > 0) hardN--;
+      else if (mediumN > 0) mediumN--;
+      else easyN--;
+    }
 
-    for (const category of categories) {
-      const catPct = blueprint.categoryBlueprint[category].weightPct;
-      const catBlockMarks = parseFloat(((catPct / totalCatWeight) * blockTargetMarks).toFixed(2));
-      if (catBlockMarks <= 0) continue;
-
-      const subcatBp = blueprint.subcategoryBlueprint[category] ?? {};
-      const subcatCoverage = coverage[category] ?? {};
-
-      const subcatSlots = this.engine.pickSubcategoriesForBlock(
-        category,
-        subcatBp,
-        subcatCoverage,
-        catBlockMarks,
-      );
-
-      for (const { subcategory, targetMarks } of subcatSlots) {
-        if (targetMarks <= 0) continue;
-
-        // Split targetMarks across difficulties using the profile
-        const easyMarks   = parseFloat(((profile.easy   / 100) * targetMarks).toFixed(2));
-        const mediumMarks = parseFloat(((profile.medium / 100) * targetMarks).toFixed(2));
-        const hardMarks   = parseFloat(((profile.hard   / 100) * targetMarks).toFixed(2));
-
-        if (easyMarks > 0)   slots.push({ category, subcategory, difficulty: 'easy',   targetMarks: easyMarks });
-        if (mediumMarks > 0) slots.push({ category, subcategory, difficulty: 'medium', targetMarks: mediumMarks });
-        if (hardMarks > 0)   slots.push({ category, subcategory, difficulty: 'hard',   targetMarks: hardMarks });
+    // Flat list of (category, subcategory) pairs for round-robin balancing.
+    const catSubPairs: Array<{ category: string; subcategory: string }> = [];
+    for (const category of Object.keys(blueprint.categoryBlueprint)) {
+      const subs = Object.keys(blueprint.subcategoryBlueprint[category] ?? {});
+      if (subs.length) {
+        for (const sub of subs) catSubPairs.push({ category, subcategory: sub });
+      } else {
+        catSubPairs.push({ category, subcategory: category });
       }
     }
+    if (!catSubPairs.length) {
+      catSubPairs.push({ category: 'General', subcategory: 'General' });
+    }
+
+    const slots: QuestionSlot[] = [];
+    let rr = 0;
+    const pushSlots = (difficulty: Difficulty, n: number) => {
+      for (let i = 0; i < n; i++) {
+        const cs = catSubPairs[rr % catSubPairs.length];
+        rr++;
+        slots.push({ category: cs.category, subcategory: cs.subcategory, difficulty, targetMarks: 1 });
+      }
+    };
+    pushSlots('easy', easyN);
+    pushSlots('medium', mediumN);
+    pushSlots('hard', hardN);
 
     return slots;
   }
@@ -256,20 +269,12 @@ export class AdaptiveBlockGeneratorService {
   ): Promise<any | null> {
     if (!cfg) return null;
 
-    const nearbyMarks = (m: number) => {
-      if (m === 1) return [2];
-      if (m === 2) return [1, 3];
-      if (m === 3) return [2, 4];
-      return [3];
-    };
-
     const nearbyDiff = (d: Difficulty): Difficulty[] => {
-      if (d === 'easy')   return ['medium'];
-      if (d === 'medium') return ['easy', 'hard'];
-      return ['medium'];
+      if (d === 'easy')   return ['easy', 'medium'];
+      if (d === 'medium') return ['medium', 'easy', 'hard'];
+      return ['hard', 'medium'];
     };
 
-    const targetMarksInt = Math.round(slot.targetMarks);
     const excludeClause = usedIds.length
       ? `AND ${cfg.idCol} NOT IN (${usedIds.join(',')})`
       : '';
@@ -285,16 +290,16 @@ export class AdaptiveBlockGeneratorService {
     const metadataSelect = metadataExists ? 'metadata' : 'NULL AS metadata';
     const extraColsSelect = cfg.extraCols ? `, ${cfg.extraCols}` : '';
 
+    // Marks no longer constrain selection — the engine is question-count based,
+    // so any question matching the category/subcategory/difficulty is valid.
     const tryFetch = async (
       diffList: Difficulty[],
-      marksList: number[],
       catFilter: string,
       subFilter: string,
     ): Promise<any | null> => {
-      const diffFilter = difficultyExists
+      const diffFilter = difficultyExists && diffList.length
         ? `AND difficulty IN (${diffList.map(d => `'${d}'`).join(',')})`
-        : ''; // no difficulty column — skip filter, treat all as 'medium'
-      const marksIn = marksList.join(',');
+        : '';
       const rows = await this.dataSource.query(
         `SELECT ${cfg.idCol} AS id, question_text, ${diffSelect},
           ${cfg.categoryCol} AS category,
@@ -305,69 +310,27 @@ export class AdaptiveBlockGeneratorService {
            ${catFilter}
            ${subFilter}
            ${diffFilter}
-           AND marks IN (${marksIn})
          ORDER BY RANDOM() LIMIT 1`,
       );
       return rows[0] ?? null;
     };
 
+    const catFilter = `AND ${cfg.categoryCol}='${slot.category}'`;
+    const subFilter = `AND ${cfg.subcategoryCol}='${slot.subcategory}'`;
+
     const phases: Array<() => Promise<any | null>> = [
-      // Phase 1: exact match
-      () => tryFetch(
-        [slot.difficulty],
-        [targetMarksInt],
-        `AND ${cfg.categoryCol}='${slot.category}'`,
-        `AND ${cfg.subcategoryCol}='${slot.subcategory}'`,
-      ),
-      // Phase 2: same cat+sub+diff, nearby marks
-      () => tryFetch(
-        [slot.difficulty],
-        nearbyMarks(targetMarksInt),
-        `AND ${cfg.categoryCol}='${slot.category}'`,
-        `AND ${cfg.subcategoryCol}='${slot.subcategory}'`,
-      ),
-      // Phase 3: same cat+sub, nearby diff, exact marks
-      () => tryFetch(
-        nearbyDiff(slot.difficulty),
-        [targetMarksInt],
-        `AND ${cfg.categoryCol}='${slot.category}'`,
-        `AND ${cfg.subcategoryCol}='${slot.subcategory}'`,
-      ),
-      // Phase 4: same cat+sub, nearby diff+marks
-      () => tryFetch(
-        nearbyDiff(slot.difficulty),
-        nearbyMarks(targetMarksInt),
-        `AND ${cfg.categoryCol}='${slot.category}'`,
-        `AND ${cfg.subcategoryCol}='${slot.subcategory}'`,
-      ),
-      // Phase 5: same cat, any sub, exact diff+marks
-      () => tryFetch(
-        [slot.difficulty],
-        [targetMarksInt],
-        `AND ${cfg.categoryCol}='${slot.category}'`,
-        '',
-      ),
-      // Phase 6: same cat, any sub, nearby diff
-      () => tryFetch(
-        nearbyDiff(slot.difficulty),
-        [targetMarksInt, ...nearbyMarks(targetMarksInt)],
-        `AND ${cfg.categoryCol}='${slot.category}'`,
-        '',
-      ),
-      // Phase 7: any cat, target diff
-      () => tryFetch(
-        [slot.difficulty],
-        [targetMarksInt, ...nearbyMarks(targetMarksInt)],
-        '',
-        '',
-      ),
-      // Phase 8: any cat, any diff, any marks
-      () => tryFetch(
-        ['easy', 'medium', 'hard'],
-        [1, 2, 3, 4],
-        '',
-        '',
-      ),
+      // Phase 1: exact category + subcategory + difficulty
+      () => tryFetch([slot.difficulty], catFilter, subFilter),
+      // Phase 2: same cat+sub, nearby difficulty
+      () => tryFetch(nearbyDiff(slot.difficulty), catFilter, subFilter),
+      // Phase 3: same category, any subcategory, exact difficulty
+      () => tryFetch([slot.difficulty], catFilter, ''),
+      // Phase 4: same category, any subcategory, nearby difficulty
+      () => tryFetch(nearbyDiff(slot.difficulty), catFilter, ''),
+      // Phase 5: any category, exact difficulty
+      () => tryFetch([slot.difficulty], '', ''),
+      // Phase 6: any category, any difficulty
+      () => tryFetch([], '', ''),
     ];
 
     for (const phase of phases) {
@@ -408,6 +371,7 @@ export class AdaptiveBlockGeneratorService {
       // 2. Load assessment + adaptive_blocks row
       const asmRows = await qr.query(
         `SELECT a.assessment_id, a.module_type, a.block_config, a.question_limit,
+                a.adaptive_total_questions,
                 ab.block_id, ab.difficulty_distribution
          FROM tech_assessments a
          JOIN adaptive_blocks ab ON ab.assessment_id=a.assessment_id AND ab.block_number=$2
@@ -429,6 +393,18 @@ export class AdaptiveBlockGeneratorService {
       const totalBlocks = blueprint.totalBlocks || Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 4);
       const isLastBlock = blockNumber === totalBlocks;
 
+      // Question-count model: the assessment defines a fixed total number of
+      // questions, split evenly across blocks. The last block absorbs any
+      // remainder so the totals always add up exactly.
+      const totalQuestions = Math.max(
+        totalBlocks,
+        Math.round(Number(row.adaptive_total_questions ?? 0)) || totalBlocks * 5,
+      );
+      const questionsPerBlock = Math.max(1, Math.round(totalQuestions / totalBlocks));
+      const questionsThisBlock = isLastBlock
+        ? Math.max(1, totalQuestions - (blockNumber - 1) * questionsPerBlock)
+        : questionsPerBlock;
+
       // 3. Resolve attempt + used question IDs
       const ar = await qr.query(
         `SELECT ${cfg.attemptIdCol} AS aid FROM ${cfg.attempts} WHERE attempt_token=$1`,
@@ -446,12 +422,8 @@ export class AdaptiveBlockGeneratorService {
       // 4. Load subcategory coverage
       const coverage = await this.loadCoverage(attemptToken);
 
-      // 5. Build question slots
-      const blockTargetMarks = isLastBlock
-        ? blueprint.totalMarks - (blockNumber - 1) * blueprint.marksPerBlock
-        : blueprint.marksPerBlock;
-
-      const slots = this.buildQuestionSlots(blueprint, blockTargetMarks, targetDifficulty, coverage);
+      // 5. Build question slots — exactly `questionsThisBlock` slots
+      const slots = this.buildQuestionSlots(blueprint, questionsThisBlock, targetDifficulty);
 
       // 6. Fetch questions for each slot
       const modeExists = await this.columnExists(cfg.questions, 'mode');
@@ -618,6 +590,8 @@ export class AdaptiveBlockGeneratorService {
         blockId,
         blockNumber,
         totalBlocks,
+        totalQuestions,
+        questionsPerBlock,
         difficulty: targetDifficulty,
         questions,
         totalBlockMarks,

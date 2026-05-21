@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Loader2, TrendingUp, TrendingDown, Minus, ArrowRight,
-  CheckCircle2, AlertCircle, ZoomIn, X, Check, Target,
+  CheckCircle2, AlertCircle, ZoomIn, X, Check,
 } from "lucide-react";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import Logo from "../../ui/Logo";
@@ -15,7 +15,7 @@ import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionN
 import {
   generateBlock, completeBlock, saveBlockAnswers, getBlockQuestions,
   submitAssessment, getAttemptStatus,
-  type AdaptiveQuestion, type BlockResponse, type BlockMetrics,
+  type BlockResponse, type BlockMetrics,
   type Difficulty, type AdaptiveFinalReport,
 } from "@/lib/adaptiveApi";
 
@@ -74,6 +74,8 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   const [viewingBlockNum, setViewingBlockNum] = useState(1);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [totalBlocks, setTotalBlocks] = useState(4);
+  const [totalQuestionCount, setTotalQuestionCount] = useState(0);
+  const [questionsPerBlock, setQuestionsPerBlock] = useState(5);
 
   // answers: all answers across all blocks { questionId → answer }
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -97,22 +99,32 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
-  const [blockTransitionMsg, setBlockTransitionMsg] = useState<string | null>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const viewingBlockState = blocks.get(viewingBlockNum);
   const currentBlockState = blocks.get(currentBlockNum);
   const viewingQuestions = viewingBlockState?.block.questions ?? [];
   const currentQuestion = viewingQuestions[currentIndex];
+  const currentQuestionId = currentQuestion?.id;
   const isViewingCurrentBlock = viewingBlockNum === currentBlockNum;
   const isLastQuestion = currentIndex === viewingQuestions.length - 1;
   const isLastBlock = currentBlockState?.block.isLastBlock ?? false;
 
+  const applyAssessmentTotals = useCallback((block: Pick<BlockResponse, "totalBlocks" | "totalQuestions" | "questionsPerBlock" | "questions">) => {
+    const blockCount = Math.max(1, Number(block.totalBlocks ?? totalBlocks));
+    const perBlock = Math.max(1, Number(block.questionsPerBlock ?? block.questions.length ?? questionsPerBlock));
+    const total = Math.max(block.questions.length, Number(block.totalQuestions ?? blockCount * perBlock));
+
+    setTotalBlocks(blockCount);
+    setQuestionsPerBlock(perBlock);
+    setTotalQuestionCount(total);
+  }, [questionsPerBlock, totalBlocks]);
+
   // ── Question timing ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!currentQuestion) return;
-    questionStartRef.current[currentQuestion.id] = Date.now();
-  }, [currentQuestion?.id]);
+    if (!currentQuestionId) return;
+    questionStartRef.current[currentQuestionId] = Date.now();
+  }, [currentQuestionId]);
 
   const recordQuestionTime = useCallback((qId: string) => {
     const start = questionStartRef.current[qId];
@@ -142,15 +154,18 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         if (existingBlock1 && existingBlock1.status !== "not_started") {
           // Resume: load existing block 1 questions
           const data = await getBlockQuestions(attemptToken, 1);
+          const totalBlockCount = data.totalBlocks ?? status?.blocks.length ?? 4;
           block1 = {
             blockId: 0,
             blockNumber: 1,
-            totalBlocks: status?.blocks.length ?? 4,
+            totalBlocks: totalBlockCount,
+            totalQuestions: data.totalQuestions,
+            questionsPerBlock: data.questionsPerBlock,
             difficulty: data.difficulty,
             questions: data.questions,
             totalBlockMarks: data.questions.reduce((s, q) => s + q.marks, 0),
             timeLimitSeconds: data.questions.reduce((s, q) => s + q.expectedTimeSecs, 0),
-            isLastBlock: data.blockNumber === (status?.blocks.length ?? 4),
+            isLastBlock: data.blockNumber === totalBlockCount,
             coverageMap: {},
           };
           // Collect block 1 saved answers (will be merged with resume block answers below)
@@ -161,13 +176,12 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
           // Determine current block from status
           const lastCompleted = status?.blocks.filter(b => b.snapshotTaken).length ?? 0;
-          const resumeBlock = Math.min(lastCompleted + 1, status?.blocks.length ?? 4);
-          const totalBlockCount = status?.blocks.length ?? 4;
+          const resumeBlock = Math.min(lastCompleted + 1, totalBlockCount);
 
           // Pre-load the resume block if it's not block 1 — do this BEFORE any setState
           // so the blocks Map is fully populated before isLoading becomes false.
           let finalBlocksMap: Map<number, BlockState>;
-          let finalAnswers: Record<string, string | string[]> = { ...restored };
+          const finalAnswers: Record<string, string | string[]> = { ...restored };
 
           if (resumeBlock > 1) {
             try {
@@ -175,7 +189,9 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
               const resumeBlockResp: BlockResponse = {
                 blockId: 0,
                 blockNumber: resumeBlock,
-                totalBlocks: totalBlockCount,
+                totalBlocks: resumeData.totalBlocks ?? totalBlockCount,
+                totalQuestions: resumeData.totalQuestions ?? data.totalQuestions,
+                questionsPerBlock: resumeData.questionsPerBlock ?? data.questionsPerBlock,
                 difficulty: resumeData.difficulty,
                 questions: resumeData.questions,
                 totalBlockMarks: resumeData.questions.reduce((s, q) => s + q.marks, 0),
@@ -207,13 +223,13 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
           setBlocks(finalBlocksMap);
           setCurrentBlockNum(resumeBlock);
           setViewingBlockNum(safeViewBlock);
-          setTotalBlocks(totalBlockCount);
+          applyAssessmentTotals(block1);
         } else {
           // Fresh start: generate block 1
           block1 = await generateBlock({
             assessmentId, blockNumber: 1, userId, mode, attemptToken,
           });
-          setTotalBlocks(block1.totalBlocks);
+          applyAssessmentTotals(block1);
           setBlocks(new Map([[1, { block: block1, snapshotTaken: false, metrics: null, nextDifficulty: null }]]));
         }
         // Use assessment's total_time_minutes if available, otherwise estimate from block 1
@@ -277,16 +293,35 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     if (!currentQuestion) return;
     setMarkedForReview(prev => {
       const n = new Set(prev);
-      n.has(currentQuestion.id) ? n.delete(currentQuestion.id) : n.add(currentQuestion.id);
+      if (n.has(currentQuestion.id)) {
+        n.delete(currentQuestion.id);
+      } else {
+        n.add(currentQuestion.id);
+      }
       return n;
     });
   };
 
   // ── Navigation ─────────────────────────────────────────────────────────────
-  const handleNav = (dir: "prev" | "next") => {
+  const handleNav = async (dir: "prev" | "next") => {
     if (currentQuestion) recordQuestionTime(currentQuestion.id);
-    if (dir === "prev" && currentIndex > 0) setCurrentIndex(i => i - 1);
-    if (dir === "next" && !isLastQuestion) setCurrentIndex(i => i + 1);
+    if (dir === "prev") {
+      if (currentIndex > 0) {
+        setCurrentIndex(i => i - 1);
+      } else if (viewingBlockNum > 1) {
+        const prevBlock = blocks.get(viewingBlockNum - 1);
+        await navigateToBlock(viewingBlockNum - 1, Math.max(0, (prevBlock?.block.questions.length ?? questionsPerBlock) - 1));
+      }
+    }
+    if (dir === "next") {
+      if (!isLastQuestion) {
+        setCurrentIndex(i => i + 1);
+      } else if (viewingBlockNum < currentBlockNum) {
+        await navigateToBlock(viewingBlockNum + 1, 0);
+      } else if (isViewingCurrentBlock && !isLastBlock) {
+        await handleCompleteBlock();
+      }
+    }
   };
 
   const handleNavigatorClick = async (globalIdx: number) => {
@@ -298,8 +333,11 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       const len = blk.block.questions.length;
       if (globalIdx < offset + len) {
         if (currentQuestion) recordQuestionTime(currentQuestion.id);
-        if (b !== viewingBlockNum) await navigateToBlock(b);
-        setCurrentIndex(globalIdx - offset);
+        if (b !== viewingBlockNum) {
+          await navigateToBlock(b, globalIdx - offset);
+        } else {
+          setCurrentIndex(globalIdx - offset);
+        }
         return;
       }
       offset += len;
@@ -307,8 +345,9 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   };
 
   // ── Navigate to a different block ─────────────────────────────────────────
-  const navigateToBlock = async (blockNum: number) => {
+  const navigateToBlock = async (blockNum: number, targetIndex = 0) => {
     if (blockNum === viewingBlockNum || blockNum > currentBlockNum) return;
+    let targetBlockState = blocks.get(blockNum);
 
     // Save current block answers first (if post-snapshot)
     const curBs = blocks.get(viewingBlockNum);
@@ -322,7 +361,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     }
 
     // Load block if not cached
-    if (!blocks.has(blockNum)) {
+    if (!targetBlockState) {
       setIsLoadingBlock(true);
       try {
         const data = await getBlockQuestions(attemptToken, blockNum);
@@ -332,24 +371,33 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
         const blockResp: BlockResponse = {
           blockId: 0, blockNumber: data.blockNumber,
-          totalBlocks, difficulty: data.difficulty,
+          totalBlocks: data.totalBlocks ?? totalBlocks,
+          totalQuestions: data.totalQuestions ?? totalQuestionCount,
+          questionsPerBlock: data.questionsPerBlock ?? questionsPerBlock,
+          difficulty: data.difficulty,
           questions: data.questions,
           totalBlockMarks: data.questions.reduce((s, q) => s + q.marks, 0),
-          timeLimitSeconds: 0, isLastBlock: false, coverageMap: {},
+          timeLimitSeconds: data.questions.reduce((s, q) => s + q.expectedTimeSecs, 0),
+          isLastBlock: data.blockNumber === (data.totalBlocks ?? totalBlocks),
+          coverageMap: {},
         };
-        setBlocks(prev => new Map(prev).set(blockNum, {
+        applyAssessmentTotals(blockResp);
+        targetBlockState = {
           block: blockResp, snapshotTaken: data.snapshotTaken,
           metrics: null, nextDifficulty: data.nextBlockDifficulty,
-        }));
+        };
+        setBlocks(prev => new Map(prev).set(blockNum, targetBlockState!));
       } catch (e) {
         setLoadError((e as Error).message);
+        return;
       } finally {
         setIsLoadingBlock(false);
       }
     }
 
     setViewingBlockNum(blockNum);
-    setCurrentIndex(0);
+    const maxIndex = Math.max(0, (targetBlockState?.block.questions.length ?? 1) - 1);
+    setCurrentIndex(Math.min(Math.max(0, targetIndex), maxIndex));
   };
 
   // ── Complete block (write snapshot) ───────────────────────────────────────
@@ -391,7 +439,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       setBlocks(prev => new Map(prev).set(nextNum, {
         block: nextBlock, snapshotTaken: false, metrics: null, nextDifficulty: null,
       }));
-      setTotalBlocks(nextBlock.totalBlocks);
+      applyAssessmentTotals(nextBlock);
 
       // Recalculate total time: sum of all generated block time limits
       setTotalTime(() => {
@@ -401,14 +449,6 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         const estimated = knownTime + nextBlock.timeLimitSeconds + (remainingBlocks * nextBlock.timeLimitSeconds);
         return estimated;
       });
-
-      const diffMsg = result.nextBlockDifficulty === bs.block.difficulty
-        ? `Staying at ${result.nextBlockDifficulty} difficulty`
-        : result.nextBlockDifficulty === "hard" || (result.nextBlockDifficulty === "medium" && bs.block.difficulty === "easy")
-          ? `Upgrading to ${result.nextBlockDifficulty} — great performance!`
-          : `Adjusting to ${result.nextBlockDifficulty} difficulty`;
-      setBlockTransitionMsg(diffMsg);
-      setTimeout(() => setBlockTransitionMsg(null), 4000);
 
       setCurrentBlockNum(nextNum);
       setViewingBlockNum(nextNum);
@@ -427,6 +467,29 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     setIsSubmitting(true);
     setShowSubmitModal(false);
     try {
+      // Snapshot the current (final) block before submitting. Until a block is
+      // snapshotted its answers live ONLY in React state — they are never
+      // written to the backend. Without this, the last hidden block (and the
+      // current block on a timer-expiry submit) would score as all-skipped.
+      const cur = blocks.get(currentBlockNum);
+      if (cur && !cur.snapshotTaken) {
+        const blockAnswers: Record<string, string | string[]> = {};
+        cur.block.questions.forEach(q => {
+          if (answers[q.id] !== undefined) blockAnswers[q.id] = answers[q.id];
+        });
+        const blockTiming: Record<string, number> = {};
+        cur.block.questions.forEach(q => {
+          if (questionTiming[q.id]) blockTiming[q.id] = questionTiming[q.id];
+        });
+        await completeBlock({
+          attemptToken,
+          blockNumber: currentBlockNum,
+          timeTaken: Math.max(0, totalTime - timeLeft),
+          answers: blockAnswers,
+          questionTiming: blockTiming,
+        }).catch(err => console.error("[Adaptive] final block snapshot failed:", err));
+      }
+
       const report = await submitAssessment({ attemptToken, assessmentId, userId });
       onComplete(report);
     } catch (e) {
@@ -434,10 +497,12 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
-  }, [attemptToken, assessmentId, userId, onComplete]);
+  }, [attemptToken, assessmentId, userId, onComplete, blocks, currentBlockNum, answers, questionTiming, totalTime, timeLeft]);
 
   // Keep the ref in sync so the timer always calls the latest version
-  handleFinalSubmitRef.current = handleFinalSubmit;
+  useEffect(() => {
+    handleFinalSubmitRef.current = handleFinalSubmit;
+  }, [handleFinalSubmit]);
 
   // ── Navigator questions ────────────────────────────────────────────────────
   const navigatorQuestions: NavigatorQuestion[] = [];
@@ -468,9 +533,14 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   const globalCurrentIndex = viewingOffset + currentIndex;
 
   // ── Navigator / progress derived ───────────────────────────────────────────
+  const knownQuestionCount = navigatorQuestions.length;
+  const fallbackTotalQuestions = Math.max(knownQuestionCount, totalBlocks * questionsPerBlock);
+  const effectiveTotalQuestions = totalQuestionCount > 0
+    ? Math.max(totalQuestionCount, knownQuestionCount)
+    : fallbackTotalQuestions;
   const answeredCount = navigatorQuestions.filter(q => q.isAnswered).length;
-  const progressPercent = navigatorQuestions.length
-    ? Math.round((answeredCount / navigatorQuestions.length) * 100)
+  const progressPercent = effectiveTotalQuestions
+    ? Math.round((answeredCount / effectiveTotalQuestions) * 100)
     : 0;
   const isQuestionAnswered = currentQuestion ? answers[currentQuestion.id] !== undefined : false;
   const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestion.id) : false;
@@ -515,19 +585,6 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
       <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
 
-      {/* Block transition toast */}
-      <AnimatePresence>
-        {blockTransitionMsg && (
-          <motion.div
-            initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -40 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-brand-green/30"
-          >
-            <TrendingUp className="h-4 w-4" />
-            {blockTransitionMsg}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Header */}
       <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
         <div className="flex min-w-0 items-center">
@@ -543,17 +600,16 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
               )}
             </div>
             <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
-              <span>Block {viewingBlockNum} of {totalBlocks}</span>
+              <span>Question {globalCurrentIndex + 1} of {effectiveTotalQuestions}</span>
               <span className="text-slate-900 dark:text-white font-normal">&middot;</span>
               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${difficultyColor(viewingBlock.difficulty)}`}>
                 {difficultyIcon(viewingBlock.difficulty)}
                 {viewingBlock.difficulty}
               </span>
-              <span className="text-xs font-semibold text-slate-900 dark:text-white">
-                {viewingBlock.totalBlockMarks} marks
-              </span>
-              {!isViewingCurrentBlock && (
-                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">(reviewing)</span>
+              {currentQuestion && (
+                <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                  {currentQuestion.marks} mark{currentQuestion.marks !== 1 ? "s" : ""}
+                </span>
               )}
             </h1>
           </div>
@@ -583,36 +639,8 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         </div>
       </header>
 
-      {/* Block navigation tabs */}
-      <div className="relative z-40 assessment-header backdrop-blur-md border-b border-brand-green/5 dark:border-white/5 px-4 md:px-6">
-        <div className="flex items-center gap-1 py-2 overflow-x-auto scrollbar-none">
-          {Array.from({ length: currentBlockNum }, (_, i) => i + 1).map(bn => {
-            const bs = blocks.get(bn);
-            const isActive = bn === viewingBlockNum;
-            const isCurrent = bn === currentBlockNum;
-            return (
-              <button key={bn} onClick={() => navigateToBlock(bn)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  isActive
-                    ? "bg-brand-green text-white shadow-sm"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10"
-                }`}>
-                <span>Block {bn}</span>
-                {bs && (
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${difficultyColor(bs.block.difficulty)}`}>
-                    {bs.block.difficulty[0].toUpperCase()}
-                  </span>
-                )}
-                {bs?.snapshotTaken && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
-                {isCurrent && !bs?.snapshotTaken && <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Main layout — matches the standard (non-adaptive) exam UI */}
-      <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-124px)] lg:overflow-hidden lg:px-6">
+      <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
         <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
           {/* Section header strip */}
           <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
@@ -697,7 +725,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
               <>
                 <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5 sm:p-5">
                   <h2 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white whitespace-pre-wrap sm:text-base">
-                    <span className="mr-3 font-semibold">{currentIndex + 1}.</span>
+                    <span className="mr-3 font-semibold">{globalCurrentIndex + 1}.</span>
                     {currentQuestion.text}
                   </h2>
                   {currentQuestion.imageUrl && (
@@ -759,40 +787,29 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => handleNav("prev")}
-                disabled={currentIndex === 0}
+                onClick={() => void handleNav("prev")}
+                disabled={globalCurrentIndex === 0}
                 className="min-h-10 rounded-lg border border-brand-green/20 bg-white px-5 text-sm font-bold text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-[#0f1712] dark:text-white"
               >
                 Previous
               </button>
-              {isLastQuestion && isViewingCurrentBlock ? (
-                isLastBlock ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowSubmitModal(true)}
-                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
-                  >
-                    Submit test
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleCompleteBlock}
-                    disabled={isGeneratingNext}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isGeneratingNext && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isGeneratingNext ? "Preparing next block..." : "Next block"}
-                  </button>
-                )
+              {isLastQuestion && isViewingCurrentBlock && isLastBlock ? (
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitModal(true)}
+                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
+                >
+                  Submit test
+                </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => handleNav("next")}
-                  disabled={isLastQuestion}
-                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => void handleNav("next")}
+                  disabled={isGeneratingNext}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Save and next
+                  {isGeneratingNext && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isGeneratingNext ? "Preparing next question..." : "Save and next"}
                 </button>
               )}
             </div>
@@ -813,38 +830,11 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
               onSelect={handleNavigatorClick}
               progressPercent={progressPercent}
               isCollapsed={!isDesktopSidebarOpen}
+              totalQuestions={effectiveTotalQuestions}
+              questionsPerBlock={questionsPerBlock}
+              currentBlockNumber={currentBlockNum}
+              totalBlocks={totalBlocks}
             />
-
-            {/* Block snapshot metrics */}
-            {isDesktopSidebarOpen && viewingBlockState.snapshotTaken && viewingBlockState.metrics && (
-              <div className="mt-4 rounded-lg border border-brand-green/15 bg-white p-4 dark:border-white/10 dark:bg-white/5">
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
-                  Block {viewingBlockNum} Snapshot
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Marks Score", value: `${viewingBlockState.metrics.marksScore.toFixed(1)}%` },
-                    { label: "Accuracy", value: `${viewingBlockState.metrics.adaptiveAccuracy.toFixed(1)}%` },
-                    { label: "Skip Impact", value: `${viewingBlockState.metrics.skipImpact.toFixed(1)}%` },
-                    { label: "Readiness", value: `${viewingBlockState.metrics.blockReadinessScore.toFixed(1)}%` },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">{label}</p>
-                      <p className="text-sm font-bold text-slate-800 dark:text-white">{value}</p>
-                    </div>
-                  ))}
-                </div>
-                {viewingBlockState.nextDifficulty && (
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <Target className="h-3.5 w-3.5" />
-                    Next block:{" "}
-                    <span className={`px-1.5 py-0.5 rounded font-semibold ${difficultyColor(viewingBlockState.nextDifficulty)}`}>
-                      {viewingBlockState.nextDifficulty}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </motion.aside>
       </main>
@@ -870,6 +860,10 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
                   currentIndex={globalCurrentIndex}
                   progressPercent={progressPercent}
                   onSelect={async (idx: number) => { await handleNavigatorClick(idx); setIsSidebarOpen(false); }}
+                  totalQuestions={effectiveTotalQuestions}
+                  questionsPerBlock={questionsPerBlock}
+                  currentBlockNumber={currentBlockNum}
+                  totalBlocks={totalBlocks}
                 />
               </div>
             </motion.div>
