@@ -125,13 +125,65 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         | null
     >(null);
 
+    const [attemptsStats, setAttemptsStats] = useState<Record<string, { trial: number; main: number }>>({});
+
+    useEffect(() => {
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = user?.email || "";
+                if (!activeEmail) {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                if (!TECH_API_BASE) return;
+                const response = await fetch(`${TECH_API_BASE}/api/assessment/stats${emailParam}`);
+                if (!response.ok) return;
+                const json = await response.json();
+                const data = json.data || json;
+                if (json && data && active) {
+                    setAttemptsStats(data);
+                }
+            } catch (err) {
+                if (active) {
+                    setAttemptsStats({});
+                }
+            }
+        };
+
+        fetchStats();
+        return () => {
+            active = false;
+        };
+    }, [user?.email]);
+
     const isReady = exam.available;
     const accent = exam.accentColor;
     const gradient = exam.gradient;
 
     const isCoding = exam.id === "coding";
     const examPaid = !isCoding && (isAdminFree || isPaid(exam.id as PaymentKey));
-    const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey);
+    
+    const dbModule = exam.id === "communication" ? "grammar" : exam.id;
+    const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
+    const mainLimit = exam.mainAttemptsLimit ?? 2;
+    const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey) && stats.main >= mainLimit;
     const hasCodingEntitlement = codingEntries.some((entry) => entry.paid || entry.completed);
 
     const startNonCodingAssessment = () => {
@@ -705,6 +757,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowAptitudeModal(false)}
+                    requireCameraMic={Boolean((exam as any).requireCameraMic)}
                 />
             )}
             {showCommunicationModal && (

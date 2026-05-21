@@ -142,7 +142,14 @@ export class AdminQuestionService {
     return {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: row[config.categoryColumn],
+      category: (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
+        ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
+           : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
+           : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
+           : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
+           : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
+           : row[config.categoryColumn])
+        : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
       questionText: row.question_text,
@@ -556,8 +563,12 @@ export class AdminQuestionService {
 
           const metadata = q.metadata || {};
           if (q.kind) metadata.kind = q.kind;
-          if (q.correctAnswer) metadata.correctAnswer = q.correctAnswer;
-          if (q.correctOptionIds) metadata.correctOptionIds = q.correctOptionIds;
+          if (q.correctAnswer || q.metadata?.correctAnswer) {
+            metadata.correctAnswer = q.correctAnswer || q.metadata?.correctAnswer;
+          }
+          if (q.correctOptionIds || q.metadata?.correctOptionIds) {
+            metadata.correctOptionIds = q.correctOptionIds || q.metadata?.correctOptionIds;
+          }
 
           const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode', 'metadata'];
           const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial', JSON.stringify(metadata)];
@@ -588,6 +599,25 @@ export class AdminQuestionService {
             if (insertedOpts.length > 0) {
               const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
               await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+            }
+
+            // Resolve temp correctOptionIds in metadata
+            if (Array.isArray(metadata.correctOptionIds)) {
+              const resolvedIds = metadata.correctOptionIds.map((id: any) => {
+                if (String(id).startsWith('opt_')) {
+                  if (String(id) === 'opt_true') return insertedOpts[0]?.option_id;
+                  if (String(id) === 'opt_false') return insertedOpts[1]?.option_id;
+                  const idx = parseInt(String(id).split('_')[1]);
+                  return insertedOpts[idx]?.option_id;
+                }
+                return id;
+              }).filter(Boolean);
+              
+              metadata.correctOptionIds = resolvedIds;
+              await queryRunner.query(
+                `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
+                [JSON.stringify(metadata), newQId]
+              );
             }
           }
           imported++;

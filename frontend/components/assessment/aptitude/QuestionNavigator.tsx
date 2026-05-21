@@ -64,8 +64,12 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     // ── Build a flat list: unlocked questions + locked placeholders ──────────
     // Locked future blocks are appended as placeholder tiles so the grid is
     // completely continuous — no visual gaps or separators between blocks.
-    const lockedFutureCount =
-        Math.max(0, totalBlocks - currentBlockNumber) * questionsPerBlock;
+    // We subtract any locked questions already included in the `questions` array.
+    const lockedAlreadyIncluded = questions.filter((q) => q.isLocked).length;
+    const lockedFutureCount = Math.max(
+        0,
+        Math.max(0, totalBlocks - currentBlockNumber) * questionsPerBlock - lockedAlreadyIncluded
+    );
 
     return (
         <div className="flex h-full flex-col gap-4">

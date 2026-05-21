@@ -588,7 +588,7 @@ interface CameraChipProps {
 }
 
 const CameraChip: React.FC<CameraChipProps> = ({ videoRef, ready, error }) => (
-    <div className="fixed bottom-4 right-4 z-[160] flex flex-col items-end gap-2">
+    <div className="hidden">
         <div className="overflow-hidden rounded-xl border border-emerald-500/40 bg-black/70 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
             <video
                 ref={videoRef}

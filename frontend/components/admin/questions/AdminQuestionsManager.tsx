@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnyQuestion, AssessmentType, QuestionMode,
   ASSESSMENT_TYPE_LABELS, ASSESSMENT_TYPE_DESCRIPTIONS,
-  APTITUDE_CATEGORIES,
+  APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS,
   MNC_TOPICS, COMM_TASK_LABELS, CommTaskType,
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
@@ -104,7 +104,7 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
 
 function getFilterCategories(t: AssessmentType): { key: string; label: string; subcategories?: any[] }[] {
   switch (t) {
-    case "aptitude": return APTITUDE_CATEGORIES.map(c => ({ key: c, label: `${c}`, subcategories: [] }));
+    case "aptitude": return APTITUDE_CATEGORIES.map(c => ({ key: c, label: APTITUDE_CATEGORY_LABELS[c] || c, subcategories: [] }));
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
@@ -139,6 +139,7 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     imageUrl: q.imageUrl,
     kind: q.metadata?.kind || "mcq",
     correctOptionIds: q.metadata?.correctOptionIds || (q.correctOptionId ? [String(q.correctOptionId)] : []),
+    correctAnswer: q.metadata?.correctAnswer || undefined,
   };
 
   switch (module) {
@@ -206,6 +207,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
   const metadata: any = {
     kind: common.kind || "mcq",
     correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+    correctAnswer: common.correctAnswer,
   };
 
   if (module === "communication") {

@@ -82,15 +82,18 @@ function TabSwitchSettingsCard({ ctx }: { ctx: PluginCtx }) {
 
 function WarningToast({ ctx }: { ctx: PluginCtx }) {
   const [message, setMessage] = useState<{ title: string; body: string; tone: "warn" | "danger" } | null>(null);
-  const hideTimer = useRef<number | null>(null);
 
-  const show = (title: string, body: string, tone: "warn" | "danger" = "warn", sticky = false) => {
+  const show = (title: string, body: string, tone: "warn" | "danger" = "warn") => {
     setMessage({ title, body, tone });
-    if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
-    if (!sticky) {
-      hideTimer.current = window.setTimeout(() => setMessage(null), 4500);
-    }
   };
+
+  useEffect(() => {
+    if (!message || message.tone === "danger") return;
+    const timer = setTimeout(() => {
+      setMessage(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [message]);
 
   useEffect(() => {
     const cleanups = [
@@ -106,6 +109,14 @@ function WarningToast({ ctx }: { ctx: PluginCtx }) {
             : "The tab-switch limit has been reached.",
         );
       }),
+      ctx.subscribe(EVENT_REFOCUSED, () => {
+        setMessage((prev) => {
+          if (prev && prev.tone !== "danger") {
+            return { ...prev };
+          }
+          return prev;
+        });
+      }),
       ctx.subscribe(EVENT_WARNING, (payload) => {
         const data = payloadToRecord(payload);
         show(
@@ -119,13 +130,11 @@ function WarningToast({ ctx }: { ctx: PluginCtx }) {
           String(data.title ?? "Assessment locked"),
           String(data.message ?? "Your attempt is being submitted."),
           "danger",
-          true,
         );
       }),
     ];
     return () => {
       for (const cleanup of cleanups) cleanup();
-      if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
     };
   }, [ctx]);
 
