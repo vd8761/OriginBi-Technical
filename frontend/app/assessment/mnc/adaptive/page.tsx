@@ -9,7 +9,6 @@ import {
 } from "@/lib/assessmentResultMapper";
 
 import AdaptiveEngineV2 from "@/components/assessment/aptitude/AdaptiveEngineV2";
-import AdaptiveReportV2 from "@/components/assessment/aptitude/AdaptiveReportV2";
 import type { AdaptiveFinalReport } from "@/lib/adaptiveApi";
 
 const Spinner = () => (
@@ -31,7 +30,6 @@ function AdaptiveMNCContent() {
   const [userId, setUserId]             = useState<number | null>(null);
   const [attemptToken, setAttemptToken] = useState<string | null>(null);
   const [mode, setMode]                 = useState<"trial" | "main">("main");
-  const [report, setReport]             = useState<AdaptiveFinalReport | null>(null);
   const [initError, setInitError]       = useState<string | null>(null);
 
   // Run once on mount — never re-runs, so AdaptiveEngineV2 is never unmounted
@@ -115,7 +113,7 @@ function AdaptiveMNCContent() {
     } catch (err) {
       console.error("[AdaptiveMNC] handleComplete error:", err);
     }
-    setReport(r);
+    router.push("/dashboard?completed=mnc");
   };
 
   if (initError) {
@@ -134,18 +132,6 @@ function AdaptiveMNCContent() {
   }
 
   if (!assessmentId || !userId || !attemptToken) return <Spinner />;
-
-  if (report) {
-    return (
-      <AdaptiveReportV2
-        report={report}
-        onClose={() => {
-          if (mode === "trial") router.push("/assessment");
-          else router.push("/dashboard?completed=mnc");
-        }}
-      />
-    );
-  }
 
   return (
     // key=attemptToken ensures React never unmounts/remounts the engine

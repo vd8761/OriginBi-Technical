@@ -334,7 +334,7 @@ export class AdaptiveSnapshotService {
       };
     }
 
-    const { attemptId: _aid, assessmentId, moduleType, cfg } = await this.resolveAttempt(attemptToken);
+    const { attemptId, assessmentId, moduleType, cfg } = await this.resolveAttempt(attemptToken);
     const userId = await this.getUserId(attemptToken, moduleType);
 
     // Load block questions
@@ -385,6 +385,17 @@ export class AdaptiveSnapshotService {
         timeTakenSeconds: timeSecs,
         expectedTimeSecs: expectedSecs,
       });
+
+      // Persist the evaluated answer to the junction table. The final report
+      // (loadAllLatestAnswers) reads selected_option_id / is_correct /
+      // score_awarded from the junction — without this write a block that is
+      // only ever snapshotted (never re-edited) would score as all-skipped.
+      if (cfg) {
+        await this.persistJunctionAnswer(
+          cfg, attemptId, q.questionId, q.kind, sel,
+          isCorrect, marksAwarded, timeSecs, status,
+        );
+      }
     }
 
     const totalTimeSecs = Object.values(questionTiming).reduce((a, b) => a + b, 0);
@@ -615,6 +626,47 @@ export class AdaptiveSnapshotService {
       return raw.optionId ?? raw.selectedOptionId ?? raw.value ?? null;
     }
     return String(raw);
+  }
+
+  /**
+   * Write an evaluated answer back to the module's junction table so the
+   * final report can read it as the candidate's "latest answer".
+   */
+  private async persistJunctionAnswer(
+    cfg: NonNullable<ReturnType<AdaptiveSnapshotService['getModuleConfig']>>,
+    attemptId: number,
+    questionId: string,
+    kind: string,
+    sel: string | string[] | null,
+    isCorrect: boolean,
+    marksAwarded: number,
+    timeSecs: number,
+    status: AnswerStatus,
+  ): Promise<void> {
+    const isMulti = kind === 'msq' || kind === 'numerical';
+
+    if (status === 'skipped') {
+      await this.dataSource.query(
+        `UPDATE ${cfg.junction}
+         SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
+             score_awarded=0, time_taken_seconds=$3, answered_at=NULL
+         WHERE ${cfg.attemptIdCol}=$1 AND ${cfg.idCol}=$2`,
+        [attemptId, Number(questionId), timeSecs],
+      );
+      return;
+    }
+
+    await this.dataSource.query(
+      `UPDATE ${cfg.junction}
+       SET selected_option_id=$1, metadata=$2, is_correct=$3,
+           score_awarded=$4, time_taken_seconds=$5, answered_at=NOW()
+       WHERE ${cfg.attemptIdCol}=$6 AND ${cfg.idCol}=$7`,
+      [
+        isMulti ? null : sel,
+        JSON.stringify({ submittedAnswer: isMulti ? sel : null }),
+        isCorrect, marksAwarded, timeSecs, attemptId, Number(questionId),
+      ],
+    );
   }
 
   private async getBlockDifficulty(

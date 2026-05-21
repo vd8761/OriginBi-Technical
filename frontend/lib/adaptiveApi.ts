@@ -48,6 +48,8 @@ export interface BlockResponse {
   blockId: number;
   blockNumber: number;
   totalBlocks: number;
+  totalQuestions?: number;
+  questionsPerBlock?: number;
   difficulty: Difficulty;
   questions: AdaptiveQuestion[];
   totalBlockMarks: number;
@@ -237,6 +239,9 @@ export async function getBlockQuestions(
   marksScore: number | null;
   blockReadinessScore: number | null;
   nextBlockDifficulty: Difficulty | null;
+  totalBlocks?: number;
+  totalQuestions?: number;
+  questionsPerBlock?: number;
   questions: AdaptiveQuestion[];
 }> {
   const res = await apiFetch<any>(`${BASE}/block/${attemptToken}/${blockNumber}`);

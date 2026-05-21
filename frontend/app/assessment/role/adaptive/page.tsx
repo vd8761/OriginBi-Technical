@@ -9,7 +9,6 @@ import {
 } from "@/lib/assessmentResultMapper";
 
 import AdaptiveEngineV2 from "@/components/assessment/aptitude/AdaptiveEngineV2";
-import AdaptiveReportV2 from "@/components/assessment/aptitude/AdaptiveReportV2";
 import type { AdaptiveFinalReport } from "@/lib/adaptiveApi";
 
 const Spinner = () => (
@@ -31,7 +30,6 @@ function AdaptiveRoleContent() {
   const [userId, setUserId]             = useState<number | null>(null);
   const [attemptToken, setAttemptToken] = useState<string | null>(null);
   const [mode, setMode]                 = useState<"trial" | "main">("main");
-  const [report, setReport]             = useState<AdaptiveFinalReport | null>(null);
   const [initError, setInitError]       = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,7 +105,7 @@ function AdaptiveRoleContent() {
     } catch (err) {
       console.error("[AdaptiveRole] handleComplete error:", err);
     }
-    setReport(r);
+    router.push("/dashboard?completed=role");
   };
 
   if (initError) {
@@ -126,18 +124,6 @@ function AdaptiveRoleContent() {
   }
 
   if (!assessmentId || !userId || !attemptToken) return <Spinner />;
-
-  if (report) {
-    return (
-      <AdaptiveReportV2
-        report={report}
-        onClose={() => {
-          if (mode === "trial") router.push("/assessment");
-          else router.push("/dashboard?completed=role");
-        }}
-      />
-    );
-  }
 
   return (
     <AdaptiveEngineV2

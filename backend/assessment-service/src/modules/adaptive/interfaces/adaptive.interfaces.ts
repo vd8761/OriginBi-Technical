@@ -69,6 +69,10 @@ export interface BlockResponse {
   blockId: number;
   blockNumber: number;
   totalBlocks: number;
+  /** Total questions across the whole assessment (all blocks combined). */
+  totalQuestions: number;
+  /** Number of questions in each block. */
+  questionsPerBlock: number;
   difficulty: Difficulty;
   questions: AdaptiveQuestion[];
   totalBlockMarks: number;

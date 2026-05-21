@@ -12,7 +12,6 @@ import AdaptiveAptitudeEngine, {
   type AttemptSubmitResult,
 } from "@/components/assessment/aptitude/AdaptiveAptitudeEngine";
 import AdaptiveEngineV2 from "@/components/assessment/aptitude/AdaptiveEngineV2";
-import AdaptiveReportV2 from "@/components/assessment/aptitude/AdaptiveReportV2";
 import type { AdaptiveFinalReport } from "@/lib/adaptiveApi";
 
 const Spinner = () => (
@@ -35,7 +34,6 @@ function AdaptiveV2Content() {
   const [userId, setUserId]             = useState<number | null>(null);
   const [attemptToken, setAttemptToken] = useState<string | null>(null);
   const [mode, setMode]                 = useState<"trial" | "main">("main");
-  const [report, setReport]             = useState<AdaptiveFinalReport | null>(null);
   const [initError, setInitError]       = useState<string | null>(null);
 
   useEffect(() => {
@@ -111,7 +109,7 @@ function AdaptiveV2Content() {
     } catch (err) {
       console.error("[AdaptiveV2] handleComplete error:", err);
     }
-    setReport(r);
+    router.push("/dashboard?completed=aptitude");
   };
 
   if (initError) {
@@ -130,18 +128,6 @@ function AdaptiveV2Content() {
   }
 
   if (!assessmentId || !userId || !attemptToken) return <Spinner />;
-
-  if (report) {
-    return (
-      <AdaptiveReportV2
-        report={report}
-        onClose={() => {
-          if (mode === "trial") router.push("/assessment");
-          else router.push("/dashboard?completed=aptitude");
-        }}
-      />
-    );
-  }
 
   return (
     <AdaptiveEngineV2
