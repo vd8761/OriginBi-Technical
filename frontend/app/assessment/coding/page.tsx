@@ -119,7 +119,7 @@ function CodingAssessmentInner() {
 
     return (
         <PluginProvider enabled={plugins} attemptId={snapshot?.attempt.id ?? null}>
-            <CodingAssessment lang={lang} snapshot={snapshot} mode={mode} />
+            <CodingAssessment lang={lang} snapshot={snapshot} mode={mode} enabledPlugins={plugins} />
         </PluginProvider>
     );
 }

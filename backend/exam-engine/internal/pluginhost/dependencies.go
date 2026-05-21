@@ -28,10 +28,12 @@ func resolveGraph(manifests map[string]*Manifest) (order []string, errs []*Depen
 		return nil, nil
 	}
 
+	providers := capabilityProviders(manifests)
+
 	// Validate required + extended slugs exist.
 	for _, m := range manifests {
 		for _, dep := range m.Requires {
-			if _, ok := manifests[dep]; !ok {
+			if len(resolveDependencyProviders(dep, manifests, providers)) == 0 {
 				errs = append(errs, &DependencyError{
 					PluginSlug: m.Slug,
 					Kind:       "missing-require",
@@ -98,11 +100,17 @@ func resolveGraph(manifests map[string]*Manifest) (order []string, errs []*Depen
 		deps := append([]string(nil), m.Requires...)
 		sort.Strings(deps)
 		for _, dep := range deps {
-			if _, ok := manifests[dep]; !ok {
+			targets := resolveDependencyProviders(dep, manifests, providers)
+			if len(targets) == 0 {
 				continue
 			}
-			if err := visit(dep); err != nil {
-				return err
+			for _, target := range targets {
+				if target == slug {
+					continue
+				}
+				if err := visit(target); err != nil {
+					return err
+				}
 			}
 		}
 		stack = stack[:len(stack)-1]
@@ -138,6 +146,27 @@ func resolveGraph(manifests map[string]*Manifest) (order []string, errs []*Depen
 	})
 
 	return order, errs
+}
+
+func capabilityProviders(manifests map[string]*Manifest) map[string][]string {
+	providers := map[string][]string{}
+	for slug, m := range manifests {
+		providers[slug] = append(providers[slug], slug)
+		for _, capability := range m.Provides {
+			providers[capability] = append(providers[capability], slug)
+		}
+	}
+	for capability := range providers {
+		sort.Strings(providers[capability])
+	}
+	return providers
+}
+
+func resolveDependencyProviders(dep string, manifests map[string]*Manifest, providers map[string][]string) []string {
+	if _, ok := manifests[dep]; ok {
+		return []string{dep}
+	}
+	return providers[dep]
 }
 
 // FilterErrorsBlocking returns the subset of dependency errors that should

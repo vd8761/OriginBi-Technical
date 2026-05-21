@@ -254,7 +254,7 @@ func (s *Server) executeCodeRunAction(
 		return codeRunResponse{}, errCodeRunnerBusy
 	}
 
-	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req)
+	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req, false)
 	if err != nil {
 		return codeRunResponse{}, fmt.Errorf("run persistence failed: %w", err)
 	}
@@ -404,6 +404,10 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 		itemRef = "coding:" + runnerjudge0.LegacyLanguageName(language)
 	}
 	var exists int
+	// 'submitted' is included so the post-submit final-evaluation pass can
+	// still load the graded test cases — the attempt is already 'submitted'
+	// by then. The live run path is gated to active attempts elsewhere
+	// (loadQuestionBodyForAttempt), so this does not loosen it.
 	err := s.pool.QueryRow(ctx, `
 		SELECT 1
 		FROM attempts a
@@ -413,7 +417,7 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 		    AND eq.id = $2
 		WHERE a.id = $1
 		  AND a.candidate_user_id = $3
-		  AND a.status IN ('started','in_progress','paused')
+		  AND a.status IN ('started','in_progress','paused','submitted')
 		  AND (
 		      assign.assignment_ref IS NULL
 		      OR assign.assignment_ref = $4
@@ -449,12 +453,18 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 	return tests, rows.Err()
 }
 
+// persistRunStart records a code run. When reuseAnswer is false (the live
+// run-tests / run-custom path) it first writes the candidate's current code
+// as the answer-of-record. When true (the post-submit final-evaluation pass)
+// the answer was already frozen at submit time, so it is left untouched and
+// only the code_submissions rows are written.
 func (s *Server) persistRunStart(
 	ctx context.Context,
 	userID int64,
 	attemptID uuid.UUID,
 	examQuestionID uuid.UUID,
 	req codeRunRequest,
+	reuseAnswer bool,
 ) (uuid.UUID, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -462,14 +472,16 @@ func (s *Server) persistRunStart(
 	}
 	defer tx.Rollback(ctx)
 
-	payload, _ := json.Marshal(map[string]any{
-		"language":    req.Language,
-		"files":       req.Files,
-		"entryFile":   req.EntryFile,
-		"lastRunMode": req.Mode,
-	})
-	if _, err := s.saveAnswerTx(ctx, tx, userID, attemptID, examQuestionID, "attempted", payload); err != nil {
-		return uuid.Nil, err
+	if !reuseAnswer {
+		payload, _ := json.Marshal(map[string]any{
+			"language":    req.Language,
+			"files":       req.Files,
+			"entryFile":   req.EntryFile,
+			"lastRunMode": req.Mode,
+		})
+		if _, err := s.saveAnswerTx(ctx, tx, userID, attemptID, examQuestionID, "attempted", payload); err != nil {
+			return uuid.Nil, err
+		}
 	}
 	var answerID uuid.UUID
 	if err := tx.QueryRow(ctx, `

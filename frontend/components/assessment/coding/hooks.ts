@@ -79,13 +79,28 @@ export interface TabSwitchEvent {
     duration: number;
 }
 
+interface TabSwitchOptions {
+    graceMs?: number;
+    /**
+     * Scopes the persisted tab-switch state to a single attempt. Without it
+     * the localStorage keys are global and a previous attempt's switch count
+     * (and consumed grace deadline) leak into the next attempt — which
+     * surfaced as a phantom "1 tab switch" the moment a fresh exam loaded.
+     */
+    scopeKey?: string;
+}
+
 /**
  * Monitors tab/visibility changes once the candidate has had `graceMs`
  * to settle in. The grace deadline is persisted to localStorage so a
  * page reload can't reset the timer — once consumed, it's consumed for
- * the rest of the attempt.
+ * the rest of the attempt. State is namespaced per attempt via `scopeKey`.
  */
-export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
+export function useTabSwitchMonitor(active: boolean, opts: TabSwitchOptions = {}) {
+    const graceMs = opts.graceMs ?? 10_000;
+    const scope = opts.scopeKey ? `:${opts.scopeKey}` : "";
+    const switchKey = `${TAB_SWITCH_KEY}${scope}`;
+    const graceKey = `${TAB_SWITCH_GRACE_KEY}${scope}`;
     const [count, setCount] = useState(0);
     const [events, setEvents] = useState<TabSwitchEvent[]>([]);
     const [hidden, setHidden] = useState(false);
@@ -93,9 +108,13 @@ export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
     const hiddenAt = useRef<number | null>(null);
 
     useEffect(() => {
+        // Reset in-memory state when the attempt scope changes so a new exam
+        // never starts with a stale count.
+        setCount(0);
+        setEvents([]);
         let savedEvents: TabSwitchEvent[] | null = null;
         try {
-            const raw = window.localStorage.getItem(TAB_SWITCH_KEY);
+            const raw = window.localStorage.getItem(switchKey);
             if (raw) {
                 const parsed: TabSwitchEvent[] = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
@@ -111,7 +130,7 @@ export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
             setCount(savedEvents.length);
         }, 0);
         return () => window.clearTimeout(id);
-    }, []);
+    }, [switchKey]);
 
     useEffect(() => {
         if (!active) return;
@@ -120,13 +139,13 @@ export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
         // we set the start timestamp on first activation and never bump it.
         let graceStart: number;
         try {
-            const raw = window.localStorage.getItem(TAB_SWITCH_GRACE_KEY);
+            const raw = window.localStorage.getItem(graceKey);
             const parsed = raw ? parseInt(raw, 10) : NaN;
             if (Number.isFinite(parsed)) {
                 graceStart = parsed;
             } else {
                 graceStart = Date.now();
-                window.localStorage.setItem(TAB_SWITCH_GRACE_KEY, String(graceStart));
+                window.localStorage.setItem(graceKey, String(graceStart));
             }
         } catch {
             graceStart = Date.now();
@@ -152,7 +171,7 @@ export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
             setEvents((prev) => {
                 const next = [...prev, evt];
                 try {
-                    window.localStorage.setItem(TAB_SWITCH_KEY, JSON.stringify(next));
+                    window.localStorage.setItem(switchKey, JSON.stringify(next));
                 } catch {
                     // ignore
                 }
@@ -183,18 +202,18 @@ export function useTabSwitchMonitor(active: boolean, graceMs = 10_000) {
             window.removeEventListener("blur", onBlur);
             window.removeEventListener("focus", onFocus);
         };
-    }, [active, graceMs]);
+    }, [active, graceMs, graceKey, switchKey]);
 
     const clear = useCallback(() => {
         setCount(0);
         setEvents([]);
         try {
-            window.localStorage.removeItem(TAB_SWITCH_KEY);
-            window.localStorage.removeItem(TAB_SWITCH_GRACE_KEY);
+            window.localStorage.removeItem(switchKey);
+            window.localStorage.removeItem(graceKey);
         } catch {
             // ignore
         }
-    }, []);
+    }, [switchKey, graceKey]);
 
     return { count, events, hidden, lastReason, clear };
 }

@@ -29,6 +29,15 @@ services:
       - ./judge0.conf:/etc/judge0.conf:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
+    # FIX 3: Run in the host cgroup namespace. isolate v2 (the sandbox in the
+    # cgv2 image) creates per-run cgroups at /sys/fs/cgroup/box-N and moves the
+    # judged process into them. With the default private cgroup namespace the
+    # bind-mounted host /sys/fs/cgroup and the container's namespace root
+    # disagree, so isolate fails with "Cannot set /sys/fs/cgroup/box-N/
+    # cgroup.procs ... No such file or directory" and every run returns status
+    # 13 (Internal Error). Sharing the host cgroup namespace keeps the paths
+    # consistent. Requires the host on cgroup v2 (the default on modern Linux).
+    cgroup: host
     # FIX 2: Added env_file
     env_file: judge0.conf
     environment:

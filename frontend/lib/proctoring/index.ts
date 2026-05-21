@@ -34,12 +34,17 @@ export const DEFAULT_PROCTORING: ProctoringSettings = {
     tabSwitch: true,
     tabSwitchToast: true,
     blockRightClick: true,
-    detectMouseLeave: false,
+    // Mouse-leave and focus-loss are detection-only signals (no UX block) and
+    // every occurrence is forwarded to the attempt_events pipeline. On by
+    // default so the proctoring report captures the full count of cursor exits
+    // and window-focus losses, alongside right-click / copy-paste / tab
+    // switches which were already tracked.
+    detectMouseLeave: true,
     detectFullscreenExit: false,
     blockCopyPaste: true,
     blockBrowserShortcuts: true,
     detectDevtools: false,
-    detectFocusLoss: false,
+    detectFocusLoss: true,
     logKeypress: false,
     requireCameraMic: false,
 };
@@ -55,6 +60,12 @@ export type ProctoringCounter =
     | "keypress";
 
 export type ProctoringCounters = Record<ProctoringCounter, number>;
+
+export interface ProctoringMessage {
+    title: string;
+    desc: string;
+    meta?: Record<string, unknown>;
+}
 
 export const EMPTY_COUNTERS: ProctoringCounters = {
     rightClick: 0,
@@ -117,7 +128,7 @@ export function useProctoringSettings() {
 interface ProctoringHookOptions {
     active: boolean;
     settings: ProctoringSettings;
-    onViolation: (type: ProctoringCounter, message: { title: string; desc: string }) => void;
+    onViolation: (type: ProctoringCounter, message: ProctoringMessage) => void;
 }
 
 export function useProctoring({ active, settings, onViolation }: ProctoringHookOptions) {
@@ -187,6 +198,7 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
                 onViolation("browserShortcut", {
                     title: "Devtools blocked",
                     desc: "Opening developer tools is disabled during the assessment.",
+                    meta: { shortcut: "F12" },
                 });
                 return;
             }
@@ -199,6 +211,7 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
                 onViolation("browserShortcut", {
                     title: "Inspector blocked",
                     desc: "Developer tools shortcuts are disabled during the assessment.",
+                    meta: { shortcut: `${e.ctrlKey ? "Ctrl" : "Meta"}+Shift+${e.key}` },
                 });
                 return;
             }
@@ -215,7 +228,10 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
             if (blocked[k]) {
                 e.preventDefault();
                 e.stopPropagation();
-                onViolation("browserShortcut", blocked[k]);
+                onViolation("browserShortcut", {
+                    ...blocked[k],
+                    meta: { shortcut: `${e.ctrlKey ? "Ctrl" : "Meta"}+${e.key}` },
+                });
                 return;
             }
         };
@@ -290,9 +306,12 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
             const target = e.target as HTMLElement | null;
             if (target?.classList?.contains("code-textarea")) return;
             e.preventDefault();
+            const action = e.type === "cut" ? "cut" : e.type === "paste" ? "paste" : "copy";
+            const label = action[0].toUpperCase() + action.slice(1);
             onViolation("copyPaste", {
-                title: "Clipboard action blocked",
+                title: `${label} blocked`,
                 desc: "Copy and paste are disabled outside of the code editor.",
+                meta: { action },
             });
         };
         document.addEventListener("copy", handler);
@@ -366,4 +385,57 @@ export function resolveProctoringForPackage(
         logKeypress,
         requireCameraMic,
     };
+}
+
+// ─── Effective (purchase-snapshot-aware) settings ────────────────────────
+//
+// When a candidate pays for an assessment, the backend freezes the
+// tech_assessments config onto tech_assessment_purchases.settings_snapshot.
+// The exam must run against that snapshot — not the live admin row — so a
+// later admin edit never changes an already-scheduled exam.
+//
+// fetchEffectiveAssessmentSettings asks the backend for the right row: the
+// snapshot frozen at purchase, or the live config when none exists (legacy or
+// never-purchased). The returned object uses the same snake_case field names
+// as a tech_assessments row, so resolveProctoringForPackage and the engines'
+// attempt-limit reads consume it unchanged.
+
+// Reads the signed-in candidate's email from localStorage. Mirrors the inline
+// parsing the assessment engines already do.
+export function readCandidateEmail(): string | null {
+    if (typeof window === "undefined") return null;
+    for (const key of ["originbi:user-profile", "user"]) {
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            if (parsed?.email) return String(parsed.email);
+        } catch {
+            /* ignore */
+        }
+    }
+    return null;
+}
+
+export async function fetchEffectiveAssessmentSettings(
+    apiBase: string,
+    assessmentCode: string,
+    email: string | null | undefined,
+): Promise<Record<string, unknown> | null> {
+    if (!email) return null;
+    try {
+        const res = await fetch(
+            `${apiBase}/api/assessment/purchase/effective-settings`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, assessmentCode }),
+            },
+        );
+        if (!res.ok) return null;
+        const json = await res.json();
+        return (json?.settings as Record<string, unknown> | null) ?? null;
+    } catch {
+        return null;
+    }
 }
