@@ -274,7 +274,7 @@ const Header: React.FC<HeaderProps> = ({
                 onClick={() => handleNavClick("assessment")}
             />
             <NavItem
-                icon={<AwardIcon className="w-4 h-4 text-white" strokeColor="white" />}
+                icon={<AwardIcon className="w-4 h-4" />}
                 label="My Score"
                 active={isMyScoreActive}
                 isMobile={isMobile}

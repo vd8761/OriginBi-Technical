@@ -454,12 +454,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       return;
     }
 
-    // Prevent re-taking already-completed non-coding assessments
-    if (exam.id !== "coding" && isCompleted(exam.id as AssessmentId)) {
-      router.push("/dashboard");
-      return;
-    }
-
     const dbModule = exam.id === "communication" ? "grammar" : exam.id;
     const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
     const currentCount = mode === "trial" ? stats.trial : stats.main;

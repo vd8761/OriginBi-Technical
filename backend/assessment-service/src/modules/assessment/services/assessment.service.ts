@@ -39,11 +39,11 @@ export class AssessmentService {
         
         try {
           const trialRows = await queryRunner.query(
-            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND mode = 'trial'`,
+            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND mode = 'trial' AND status IN ('submitted', 'evaluated')`,
             [resolvedUserId]
           );
           const mainRows = await queryRunner.query(
-            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND (mode = 'main' OR mode IS NULL)`,
+            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND (mode = 'main' OR mode IS NULL) AND status IN ('submitted', 'evaluated')`,
             [resolvedUserId]
           );
           stats[module] = {
