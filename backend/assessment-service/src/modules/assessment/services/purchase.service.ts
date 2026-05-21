@@ -495,11 +495,14 @@ export class PurchaseService {
         const amountInPaise = Math.round(finalAmount * 100);
         const currency = "INR";
 
+        const sanitizedCode = assessmentCode.replace(/:/g, "_");
+        const receiptId = `ta_${sanitizedCode}_${Date.now()}`.slice(0, 40);
+
         // Create Razorpay order via API
         const orderData = {
             amount: amountInPaise,
             currency,
-            receipt: `tech_assess_${assessmentCode}_${String(Date.now())}`,
+            receipt: receiptId,
             notes: { email, plan: "tech_assessment", assessmentId: String(assessmentId), assessmentCode },
         };
 
@@ -716,7 +719,7 @@ export class PurchaseService {
                      VALUES (
                         $1, $2, $3, $3, $4,
                         NOW(), NULL, 1, 'active',
-                        $5, jsonb_build_object('language', $6)
+                        $5, jsonb_build_object('language', $6::text)
                      )
                      ON CONFLICT (candidate_user_id, assignment_ref)
                          WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
@@ -926,7 +929,7 @@ export class PurchaseService {
                      VALUES (
                         $1, $2, $3, $3, $4,
                         NOW(), NULL, 1, 'active',
-                        $5, jsonb_build_object('language', $6)
+                        $5, jsonb_build_object('language', $6::text)
                      )
                      ON CONFLICT (candidate_user_id, assignment_ref)
                          WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
