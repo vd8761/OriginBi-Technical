@@ -667,7 +667,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
 
     const escapeCsvCell = (val: any): string => {
       if (val === null || val === undefined) return "";
-      let str = typeof val === "object" ? JSON.stringify(val) : String(val);
+      const str = typeof val === "object" ? JSON.stringify(val) : String(val);
       if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
         return `"${str.replace(/"/g, '""')}"`;
       }
