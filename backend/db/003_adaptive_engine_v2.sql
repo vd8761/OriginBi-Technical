@@ -5,6 +5,12 @@
 -- ============================================================
 
 -- ── 1. Extend block_attempts with full v2 metrics ────────────────────────────
+ALTER TABLE tech_assessments
+  ADD COLUMN IF NOT EXISTS adaptive_total_questions INT          DEFAULT 20,
+  ADD COLUMN IF NOT EXISTS adaptive_total_marks     INT          DEFAULT 100,
+  ADD COLUMN IF NOT EXISTS adaptive_total_blocks    INT          DEFAULT 4,
+  ADD COLUMN IF NOT EXISTS adaptive_seconds_per_mark INT         DEFAULT 45;
+
 ALTER TABLE block_attempts
   ADD COLUMN IF NOT EXISTS obtained_marks         DECIMAL(8,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS total_block_marks      DECIMAL(8,2) DEFAULT 0,

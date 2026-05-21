@@ -57,6 +57,10 @@ export interface AdaptiveQuestion {
   kind: QuestionKind;
   imageUrl?: string;
   expectedTimeSecs: number;
+  audioUrl?: string;
+  passageText?: string;
+  taskType?: string;
+  rubricJson?: any;
 }
 
 // ── Block response ────────────────────────────────────────────────────────────

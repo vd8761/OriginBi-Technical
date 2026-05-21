@@ -168,7 +168,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                         const isActive = idx === currentIndex;
                         return (
                             <button
-                                key={q.id}
+                                key={`${q.blockNumber ?? 0}-${q.id}-${idx}`}
                                 type="button"
                                 onClick={() => !q.isLocked && onSelect(idx)}
                                 disabled={!!q.isLocked}

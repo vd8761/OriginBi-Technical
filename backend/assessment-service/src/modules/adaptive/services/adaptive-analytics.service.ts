@@ -404,6 +404,9 @@ export class AdaptiveAnalyticsService {
   // ─────────────────────────────────────────────────────────────────────────
 
   private async persistReport(report: AdaptiveFinalReport): Promise<void> {
+    // Compute skipped_marks from the report's topic mastery data (sum of marks for skipped questions)
+    const skippedMarks = report.topicMastery.reduce((s, t) => s + t.skippedMarks, 0);
+
     await this.dataSource.query(
       `DELETE FROM adaptive_performance_analytics WHERE attempt_token=$1`,
       [report.attemptToken]
@@ -426,7 +429,7 @@ export class AdaptiveAnalyticsService {
       [
         report.attemptToken, report.assessmentId, report.userId,
         report.obtainedMarks, report.totalMarks, report.marksPercentage, report.finalEvaluationScore,
-        report.performanceLevel, report.skippedQuestions, 0, 
+        report.performanceLevel, report.skippedQuestions, skippedMarks,
         report.wrongAnswers, report.skipImpact, report.skipConfidence, report.difficultyHandling,
         report.speedEfficiency, report.topicMasteryScore, report.reliabilityScore, report.reliabilityLevel,
         JSON.stringify(report.topicMastery), JSON.stringify(report.blockPerformance), JSON.stringify(report.categoryPerformance),

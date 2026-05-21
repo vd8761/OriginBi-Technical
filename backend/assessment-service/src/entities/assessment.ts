@@ -135,6 +135,9 @@ export class TechAssessment {
     @Column({ name: "adaptive_enabled", type: "boolean", default: false })
     adaptiveEnabled!: boolean;
 
+    @Column({ name: "adaptive_total_questions", type: "int", default: 20 })
+    adaptiveTotalQuestions!: number;
+
     @Column({ name: "adaptive_total_marks", type: "int", default: 100 })
     adaptiveTotalMarks!: number;
 

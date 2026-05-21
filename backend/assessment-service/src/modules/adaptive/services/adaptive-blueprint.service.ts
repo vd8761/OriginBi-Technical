@@ -417,15 +417,18 @@ export class AdaptiveBlueprintService {
     );
     if (!rows.length) return null;
     const r = rows[0];
-    return {
+    const bp: BlueprintConfig & { _questionStats?: any } = {
       totalMarks:           Number(r.total_marks),
       totalBlocks:          Number(r.total_blocks),
       marksPerBlock:        Number(r.marks_per_block),
       secondsPerMark:       Number(r.seconds_per_mark),
       categoryBlueprint:    r.category_blueprint ?? {},
-      subcategoryBlueprint: r.subcategoryBlueprint ?? r.subcategory_blueprint ?? {},
+      subcategoryBlueprint: r.subcategory_blueprint ?? {},
       difficultyProfiles:   r.difficulty_profiles ?? this.engine.DEFAULT_DIFFICULTY_PROFILES,
     };
+    // Attach stored question_stats so blueprintIsValid can compare checksums
+    bp._questionStats = r.question_stats ?? null;
+    return bp;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -447,6 +450,12 @@ export class AdaptiveBlueprintService {
     // Check if category count matches
     const existingCatCount = Object.keys(existing.categoryBlueprint).length;
     if (existingCatCount === 0) return false;
+
+    // Check question bank checksum — if questions were added/removed, rebuild
+    const storedStats = (existing as any)._questionStats;
+    if (storedStats && storedStats.checksum && storedStats.checksum !== currentStats.checksum) {
+      return false;
+    }
 
     return true;
   }

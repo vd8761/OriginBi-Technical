@@ -49,7 +49,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
   const logout = useCallback(() => {
     try {
-      // Clear all originbi keys to avoid state leakage
+      // Clear all student session keys
       localStorage.removeItem("originbi:access-token");
       localStorage.removeItem("originbi:id-token");
       localStorage.removeItem("originbi:user-profile");
@@ -57,16 +57,14 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.removeItem("originbi:paid-assessments");
       localStorage.removeItem("originbi:completed-assessments");
 
-      // Clear admin session flag and tokens to avoid cross-session contamination
-      localStorage.removeItem("originbi:admin-session");
-      localStorage.removeItem("originbi:admin-access-token");
-      localStorage.removeItem("originbi:admin-id-token");
-      localStorage.removeItem("originbi:admin-refresh-token");
-      localStorage.removeItem("user");
-
       // Clear any legacy userEmail keys if present
       localStorage.removeItem("userEmail");
       sessionStorage.removeItem("userEmail");
+
+      // NOTE: Do NOT clear admin session keys here. Admin auth is a separate
+      // namespace and should only be cleared by the admin logout flow.
+      // Clearing originbi:admin-session here causes the admin dashboard to
+      // redirect back to login immediately after a successful admin login.
 
       setUser(null);
       setIsLoggedIn(false);
@@ -81,12 +79,8 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.setItem("originbi:id-token", idToken);
       localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
 
-      // Clear admin session flag and tokens to avoid cross-session contamination
-      localStorage.removeItem("originbi:admin-session");
-      localStorage.removeItem("originbi:admin-access-token");
-      localStorage.removeItem("originbi:admin-id-token");
-      localStorage.removeItem("originbi:admin-refresh-token");
-      localStorage.removeItem("user");
+      // NOTE: Do NOT clear admin session keys here. Admin and student sessions
+      // are independent namespaces.
 
       setUser(profile);
       setIsLoggedIn(true);
@@ -121,7 +115,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
         // Admin auth uses its own token namespace; if the explicit admin gate
         // is active, never try to restore a student session from this provider.
-        if (hasAdminSession && isAdminPath) {
+        // This guard must cover ALL paths, not just /admin, because the context
+        // mounts globally and the path check can race with the redirect.
+        if (hasAdminSession) {
           return;
         }
 

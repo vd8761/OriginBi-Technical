@@ -98,6 +98,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
 
   // Adaptive Questions plugin state
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(false);
+  const [adaptiveTotalQuestions, setAdaptiveTotalQuestions] = useState<number | "">(20);
   const [adaptiveTotalMarks, setAdaptiveTotalMarks] = useState<number | "">(100);
   const [adaptiveTotalBlocks, setAdaptiveTotalBlocks] = useState<number | "">(4);
   const [adaptiveSecondsPerMark, setAdaptiveSecondsPerMark] = useState<number | "">(45);
@@ -244,6 +245,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         require_camera_mic: requireCameraMic,
         live_proctoring_enabled: liveProctoringEnabled,
         adaptive_enabled: adaptiveEnabled,
+        adaptive_total_questions: adaptiveTotalQuestions === "" ? 20 : Number(adaptiveTotalQuestions),
         adaptive_total_marks: adaptiveTotalMarks === "" ? 100 : Number(adaptiveTotalMarks),
         adaptive_total_blocks: adaptiveTotalBlocks === "" ? 4 : Number(adaptiveTotalBlocks),
         adaptive_seconds_per_mark: adaptiveSecondsPerMark === "" ? 45 : Number(adaptiveSecondsPerMark),
@@ -411,6 +413,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
 
     // Adaptive Questions plugin
     setAdaptiveEnabled(Boolean(a.adaptive_enabled));
+    setAdaptiveTotalQuestions(a.adaptive_total_questions !== undefined ? Number(a.adaptive_total_questions) : 20);
     setAdaptiveTotalMarks(a.adaptive_total_marks !== undefined ? Number(a.adaptive_total_marks) : 100);
     setAdaptiveTotalBlocks(a.adaptive_total_blocks !== undefined ? Number(a.adaptive_total_blocks) : 4);
     setAdaptiveSecondsPerMark(a.adaptive_seconds_per_mark !== undefined ? Number(a.adaptive_seconds_per_mark) : 45);
@@ -1110,7 +1113,26 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                       </div>
 
                       {/* Settings grid — always visible so admin can configure before enabling */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                        <div>
+                          <label className={labelCls}>Total Questions</label>
+                          <p className={descCls}>Total number of questions in the exam.</p>
+                          <input
+                            type="number" min={5} max={500}
+                            value={adaptiveTotalQuestions}
+                            onChange={e => {
+                              const v = e.target.value;
+                              const qCount = v === "" ? "" : Number(v);
+                              setAdaptiveTotalQuestions(qCount);
+                              if (typeof qCount === "number" && qCount > 0) {
+                                setAdaptiveTotalBlocks(Math.max(1, Math.ceil(qCount / 5)));
+                                setAdaptiveTotalMarks(qCount);
+                              }
+                              markDirty();
+                            }}
+                            className={inputCls + " mt-4"}
+                          />
+                        </div>
                         <div>
                           <label className={labelCls}>Total Marks</label>
                           <p className={descCls}>Full exam marks distributed across all blocks.</p>

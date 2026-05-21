@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { 
   getActiveEmail, 
   getPurchasedAssessments, 
@@ -32,6 +32,7 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
   const [purchases, setPurchases] = useState<Set<string>>(new Set());
   const [completions, setCompletions] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Record<string, AssessmentResult>>({});
+  const isInitializingRef = useRef(false);
 
   const readFromStorage = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -55,7 +56,11 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
     const email = getActiveEmail();
     const token = typeof window !== "undefined" ? localStorage.getItem("originbi:access-token") : null;
     if (!email || !token) {
-      setIsInitialized(true);
+      // Only set initialized if this is the initial load attempt
+      if (!isInitializingRef.current) {
+        isInitializingRef.current = true;
+        setIsInitialized(true);
+      }
       return;
     }
 
@@ -63,41 +68,48 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
     try {
       // 1. Sync Purchases (Tech API + Exam Engine)
       // Handle network errors gracefully
-      let purchased: string[] = [];
-      let assignments: any[] = [];
+      let purchased: string[] | null = null;
+      let assignments: any[] | null = null;
+      let purchasesSuccess = false;
+      let assignmentsSuccess = false;
       
       try {
         const purchaseResult = await getPurchasedAssessments(email);
         purchased = purchaseResult.purchased || [];
+        purchasesSuccess = true;
       } catch (err: any) {
         console.warn("[DataHydration] Purchases sync failed (network error?):", err?.message || err);
-        // Continue with empty purchases, don't fail entire sync
+        // Continue with existing data, don't fail entire sync
       }
-
+ 
       try {
         const assignmentResult = await listAssignments();
         assignments = assignmentResult.assignments || [];
+        assignmentsSuccess = true;
       } catch (err: any) {
         console.warn("[DataHydration] Assignments sync failed (network error?):", err?.message || err);
-        // Continue with empty assignments, don't fail entire sync
+        // Continue with existing data, don't fail entire sync
       }
-
-      const nextPurchases = new Set(
-        purchased.filter((code) => !String(code).startsWith("coding:")),
-      );
-      (assignments ?? []).forEach(a => {
-        if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
-          nextPurchases.add(a.assignmentRef);
-        }
-      });
-
-      setPurchases(nextPurchases);
-      localStorage.setItem(PAID_KEY, JSON.stringify(Array.from(nextPurchases)));
-      window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
-
+ 
+      // Only update purchases if at least one API call succeeded
+      if (purchasesSuccess || assignmentsSuccess) {
+        const nextPurchases = new Set(
+          (purchased ?? []).filter((code) => !String(code).startsWith("coding:")),
+        );
+        (assignments ?? []).forEach(a => {
+          if (a.assignmentRef && (a.status === 'active' || a.status === 'completed' || a.completed)) {
+            nextPurchases.add(a.assignmentRef);
+          }
+        });
+ 
+        setPurchases(nextPurchases);
+        localStorage.setItem(PAID_KEY, JSON.stringify(Array.from(nextPurchases)));
+        window.dispatchEvent(new CustomEvent("originbi:paid-changed"));
+      }
+ 
       // 2. Sync Results - use functional updates to avoid closure dependency on results/completions
       const modules: AssessmentId[] = ["aptitude", "communication", "mnc", "role", "coding"];
-
+ 
       const fetchResults = await Promise.all(
         modules.map(async (module) => {
           try {
@@ -106,7 +118,7 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
               // No submission history yet, skip mapping
               return;
             }
-
+ 
             const { mapSubmissionToAssessmentResult } = await import("@/lib/assessmentResultMapper");
             const result = mapSubmissionToAssessmentResult({
               assessmentId: module,
@@ -125,9 +137,9 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
           }
         })
       );
-
+ 
       const validResults = fetchResults.filter(Boolean) as { module: string; result: AssessmentResult }[];
-
+ 
       if (validResults.length > 0) {
         setResults(prev => {
           const next = { ...prev };
@@ -137,7 +149,7 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
           localStorage.setItem(RESULTS_KEY, JSON.stringify(next));
           return next;
         });
-
+ 
         setCompletions(prev => {
           const next = new Set(prev);
           for (const { module } of validResults) {
@@ -146,16 +158,20 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
           localStorage.setItem(COMPLETED_KEY, JSON.stringify(Array.from(next)));
           return next;
         });
-
+ 
         window.dispatchEvent(new CustomEvent("originbi:results-changed"));
         window.dispatchEvent(new CustomEvent("originbi:completed-changed"));
       }
-
+ 
     } catch (err) {
       console.error("[DataHydration] Sync failed:", err);
     } finally {
       setIsSyncing(false);
-      setIsInitialized(true);
+      // Only set initialized to true on the initial load completion
+      if (!isInitializingRef.current) {
+        isInitializingRef.current = true;
+        setIsInitialized(true);
+      }
     }
   }, []);
 

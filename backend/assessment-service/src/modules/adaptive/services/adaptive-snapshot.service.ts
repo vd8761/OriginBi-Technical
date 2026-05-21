@@ -37,53 +37,66 @@ export class AdaptiveSnapshotService {
 
   private getModuleConfig(moduleType: string): {
     attempts: string; questions: string; junction: string;
-    idCol: string; attemptIdCol: string; hasNegative: boolean;
+    idCol: string; options: string; attemptIdCol: string; hasNegative: boolean;
     categoryCol: string; subcategoryCol: string;
+    hasImageUrl: boolean;
+    extraCols?: string;
   } | null {
     const map: Record<string, {
       attempts: string; questions: string; junction: string;
-      idCol: string; attemptIdCol: string; hasNegative: boolean;
+      idCol: string; options: string; attemptIdCol: string; hasNegative: boolean;
       categoryCol: string; subcategoryCol: string;
+      hasImageUrl: boolean;
+      extraCols?: string;
     }> = {
       aptitude: {
         attempts: 'tech_aptitude_attempts',
         questions: 'tech_aptitude_questions',
         junction: 'tech_aptitude_attempt_questions',
         idCol: 'aptitude_question_id',
+        options: 'tech_aptitude_options',
         attemptIdCol: 'aptitude_attempt_id',
         hasNegative: true,
         categoryCol: 'category',
         subcategoryCol: 'subcategory',
+        hasImageUrl: true,
       },
       grammar: {
         attempts: 'tech_grammar_attempts',
         questions: 'tech_grammar_questions',
         junction: 'tech_grammar_attempt_questions',
         idCol: 'grammar_question_id',
+        options: 'tech_grammar_options',
         attemptIdCol: 'grammar_attempt_id',
         hasNegative: false,
         categoryCol: 'task_type',
         subcategoryCol: 'task_type',
+        hasImageUrl: false,
+        extraCols: 'audio_url, passage_text, task_type, rubric_json',
       },
       mnc: {
         attempts: 'tech_mnc_attempts',
         questions: 'tech_mnc_questions',
         junction: 'tech_mnc_attempt_questions',
         idCol: 'mnc_question_id',
+        options: 'tech_mnc_options',
         attemptIdCol: 'mnc_attempt_id',
         hasNegative: false,
         categoryCol: 'category',
         subcategoryCol: 'subcategory',
+        hasImageUrl: false,
       },
       role: {
         attempts: 'tech_role_attempts',
         questions: 'tech_role_questions',
         junction: 'tech_role_attempt_questions',
         idCol: 'role_question_id',
+        options: 'tech_role_options',
         attemptIdCol: 'role_attempt_id',
         hasNegative: true,
         categoryCol: 'domain',
         subcategoryCol: 'domain',
+        hasImageUrl: true,
       },
       // 'communication' assessments are stored as module_type='grammar' in the DB enum.
       // This alias handles any edge-case where the string reaches this service directly.
@@ -92,10 +105,13 @@ export class AdaptiveSnapshotService {
         questions: 'tech_grammar_questions',
         junction: 'tech_grammar_attempt_questions',
         idCol: 'grammar_question_id',
+        options: 'tech_grammar_options',
         attemptIdCol: 'grammar_attempt_id',
         hasNegative: false,
         categoryCol: 'task_type',
         subcategoryCol: 'task_type',
+        hasImageUrl: false,
+        extraCols: 'audio_url, passage_text, task_type, rubric_json',
       },
     };
     return map[moduleType] ?? null;
@@ -146,6 +162,8 @@ export class AdaptiveSnapshotService {
     blockNumber: number,
   ): Promise<Array<{
     questionId: string;
+    id: string;
+    text: string;
     difficulty: Difficulty;
     category: string;
     subcategory: string;
@@ -160,20 +178,32 @@ export class AdaptiveSnapshotService {
     kind: string;
     correctOptionId: string | null;
     questionMetadata: any;
+    options?: Array<{ id: string; text: string }>;
+    imageUrl?: string;
+    audioUrl?: string;
+    passageText?: string;
+    taskType?: string;
+    rubricJson?: any;
   }>> {
     const { attemptId, moduleType, cfg } = await this.resolveAttempt(attemptToken);
     if (!cfg) throw new BadRequestException('Module not supported');
+
+    const extraColsSelect = cfg.extraCols ? `, q.${cfg.extraCols.split(', ').join(', q.')}` : '';
+    const imageColSelect = cfg.hasImageUrl ? ', q.image_url' : '';
 
     const rows = await this.dataSource.query(
       `SELECT aq.${cfg.idCol} AS question_id,
               aq.selected_option_id, aq.metadata AS attempt_meta,
               aq.is_correct, aq.score_awarded, aq.time_taken_seconds,
               aq.expected_time_seconds,
+              q.question_text,
               q.difficulty, q.marks, q.negative_marks,
               q.metadata AS question_meta,
               q.correct_option_id,
               COALESCE(q.${cfg.categoryCol}, 'General') AS category,
               COALESCE(q.${cfg.subcategoryCol}, 'General') AS subcategory
+              ${imageColSelect}
+              ${extraColsSelect}
        FROM ${cfg.junction} aq
        JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
        WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2
@@ -181,7 +211,8 @@ export class AdaptiveSnapshotService {
       [attemptId, blockNumber],
     );
 
-    return rows.map((r: any) => {
+    const questionsWithOpts = [];
+    for (const r of rows) {
       const qMeta = typeof r.question_meta === 'object' ? r.question_meta : {};
       const aMeta = typeof r.attempt_meta === 'object' ? r.attempt_meta : {};
       const kind = this.engine.normalizeKind(qMeta?.kind);
@@ -190,8 +221,16 @@ export class AdaptiveSnapshotService {
           ? (aMeta?.submittedAnswer ?? null)
           : (r.selected_option_id ? String(r.selected_option_id) : null);
 
-      return {
+      const opts = await this.dataSource.query(
+        `SELECT option_id::text AS id, option_text AS text
+         FROM ${cfg.options} WHERE ${cfg.idCol}=$1 ORDER BY option_id`,
+        [Number(r.question_id)],
+      );
+
+      questionsWithOpts.push({
         questionId: String(r.question_id),
+        id: String(r.question_id),
+        text: r.question_text ?? '',
         difficulty: (r.difficulty as Difficulty) ?? 'easy',
         category: r.category ?? 'General',
         subcategory: r.subcategory ?? 'General',
@@ -206,8 +245,16 @@ export class AdaptiveSnapshotService {
         kind,
         correctOptionId: r.correct_option_id ? String(r.correct_option_id) : null,
         questionMetadata: qMeta,
-      };
-    });
+        options: opts,
+        imageUrl: cfg.hasImageUrl ? (r.image_url ?? undefined) : undefined,
+        audioUrl: r.audio_url ?? undefined,
+        passageText: r.passage_text ?? undefined,
+        taskType: r.task_type ?? undefined,
+        rubricJson: r.rubric_json ?? undefined,
+      });
+    }
+
+    return questionsWithOpts;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -317,7 +364,9 @@ export class AdaptiveSnapshotService {
         q.correctOptionId, q.questionMetadata,
       );
 
-      const marksAwarded = isCorrect ? q.marks : 0;
+      // Apply negative marks when the question is wrong (not skipped)
+      const negativeDeduction = (!isCorrect && status === 'wrong') ? q.negativeMarks : 0;
+      const marksAwarded = isCorrect ? q.marks : -negativeDeduction;
 
       questionAnswers[q.questionId] = {
         selectedOptionId: sel,
@@ -476,11 +525,12 @@ export class AdaptiveSnapshotService {
 
       const sel = this.normalizeAnswer(rawAnswer);
       const timeSecs = questionTiming?.[q.questionId];
-      const { isCorrect } = this.evaluateAnswer(
+      const { isCorrect, status } = this.evaluateAnswer(
         q.kind, sel, typeof sel === 'string' ? sel : null,
         q.correctOptionId, q.questionMetadata,
       );
-      const marksAwarded = isCorrect ? q.marks : 0;
+      const negativeDeduction = (!isCorrect && status === 'wrong') ? q.negativeMarks : 0;
+      const marksAwarded = isCorrect ? q.marks : -negativeDeduction;
 
       const hasAnswer = Array.isArray(sel)
         ? sel.length > 0

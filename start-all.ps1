@@ -6,6 +6,31 @@ Write-Host "Set root directory to: $PSScriptRoot" -ForegroundColor Yellow
 
 Write-Host "Starting all OriginBi Technical services..." -ForegroundColor Green
 
+# ── Kill any stale processes on service ports before starting ────────────────
+function Stop-PortProcess {
+    param([int]$Port)
+    $pids = (netstat -ano | Select-String ":$Port\s.*LISTENING") |
+        ForEach-Object { ($_ -split '\s+')[-1] } |
+        Where-Object { $_ -match '^\d+$' } |
+        Select-Object -Unique
+    foreach ($pid in $pids) {
+        if ($pid -and $pid -ne '0') {
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            Write-Host "  Freed port $Port (killed PID $pid)" -ForegroundColor DarkGray
+        }
+    }
+}
+
+Write-Host "Checking for stale processes on service ports..." -ForegroundColor Yellow
+Stop-PortProcess -Port 5000   # Assessment Service
+Stop-PortProcess -Port 5001   # Tech Assessment Engine
+Stop-PortProcess -Port 8088   # Exam Engine
+# Note: We intentionally do NOT kill 3000 (frontend) or 4004 (student-service)
+#       as those may be managed separately.
+Start-Sleep -Seconds 1
+Write-Host "Port check complete." -ForegroundColor Green
+Write-Host ""
+
 function Start-ServiceWindow {
     param(
         [Parameter(Mandatory = $true)]
@@ -73,7 +98,7 @@ Start-ServiceWindow `
 Start-ServiceWindow `
     -Name "Exam Engine" `
     -RelativePath "backend/exam-engine" `
-    -Command "go run ./cmd/server" `
+    -Command "go run ./cmd/server; if (`$LASTEXITCODE -ne 0) { Write-Host 'Exam Engine crashed! Check errors above.' -ForegroundColor Red; Read-Host 'Press Enter to close' }" `
     -Port "8088"
 
 # 4. Tech Assessment Engine (Go) (Port 5001)

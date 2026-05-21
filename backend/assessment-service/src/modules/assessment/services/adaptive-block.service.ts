@@ -82,16 +82,56 @@ export class AdaptiveBlockService {
         options: 'tech_mnc_options', attemptIdCol: 'mnc_attempt_id',
         categoryCol: 'subcategory', hasMode: true,
       },
+      role: {
+        attempts: 'tech_role_attempts', questions: 'tech_role_questions',
+        junction: 'tech_role_attempt_questions', idCol: 'role_question_id',
+        options: 'tech_role_options', attemptIdCol: 'role_attempt_id',
+        categoryCol: 'domain', hasMode: false,
+      },
     };
     return map[moduleType] ?? null;
   }
 
-  getModuleFromToken(attemptToken: string): string {
+  /**
+   * Resolve module type from attempt token.
+   *
+   * Strategy (in order):
+   *  1. Token prefix heuristic (legacy tokens that start with APT/GRA/MNC/ROL)
+   *  2. DB lookup across all attempt tables — reliable for any token format
+   *
+   * The DB lookup is cached per token so it only hits the DB once per request.
+   */
+  async getModuleFromToken(attemptToken: string): Promise<string> {
     const token = (attemptToken || '').toUpperCase();
+
+    // Fast path: legacy prefix-based tokens
     if (token.startsWith('APT')) return 'aptitude';
     if (token.startsWith('GRA') || token.startsWith('COM')) return 'grammar';
     if (token.startsWith('MNC')) return 'mnc';
-    return 'aptitude'; // default fallback
+    if (token.startsWith('ROL')) return 'role';
+
+    // Slow path: DB lookup for tokens that don't match any prefix
+    // (e.g. tokens generated as `${assessmentId}-${userId}-${timestamp}`)
+    const tables: Array<{ table: string; module: string }> = [
+      { table: 'tech_aptitude_attempts', module: 'aptitude' },
+      { table: 'tech_grammar_attempts',  module: 'grammar' },
+      { table: 'tech_mnc_attempts',      module: 'mnc' },
+      { table: 'tech_role_attempts',     module: 'role' },
+    ];
+    for (const t of tables) {
+      try {
+        const rows = await this.dataSource.query(
+          `SELECT 1 FROM ${t.table} WHERE attempt_token=$1 LIMIT 1`,
+          [attemptToken],
+        );
+        if (rows.length) return t.module;
+      } catch {
+        // table may not exist yet — skip
+      }
+    }
+
+    this.logger.warn(`getModuleFromToken: could not resolve module for token "${attemptToken}", defaulting to aptitude`);
+    return 'aptitude';
   }
 
   // ── Column existence (cached) ──────────────────────────────────────────────
@@ -323,7 +363,7 @@ export class AdaptiveBlockService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      const moduleType = this.getModuleFromToken(attemptToken);
+      const moduleType = await this.getModuleFromToken(attemptToken);
       const cfg = this.getModuleConfig(moduleType);
       if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
 
@@ -448,16 +488,17 @@ export class AdaptiveBlockService {
       //    Future (not-yet-generated) blocks are inaccessible because they don't exist in DB yet.
 
       // 7. Update block_attempts with draft performance metrics
+      // NOTE: performance_metrics column does not exist in the schema — store
+      // the category breakdown in the existing accuracy_score + correct_count fields only.
       await qr.query(
         `UPDATE block_attempts
          SET status='completed', completed_at=NOW(), time_taken_seconds=$1,
              accuracy_score=$2, correct_count=$3, total_count=$4,
              next_block_difficulty=$5,
-             performance_metrics=$6, updated_at=NOW()
-         WHERE attempt_token=$7 AND block_number=$8`,
+             updated_at=NOW()
+         WHERE attempt_token=$6 AND block_number=$7`,
         [
           timeTaken, accuracyScore, correctCount, totalCount, nextDiff,
-          JSON.stringify({ correctCount, totalCount, accuracyScore, timeTaken, categoryMap }),
           attemptToken, blockNumber,
         ],
       );
@@ -516,7 +557,7 @@ export class AdaptiveBlockService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      const moduleType = this.getModuleFromToken(attemptToken);
+      const moduleType = await this.getModuleFromToken(attemptToken);
       const cfg = this.getModuleConfig(moduleType);
       if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
 
@@ -617,7 +658,7 @@ export class AdaptiveBlockService {
       throw new BadRequestException(`Block ${blockNumber} has not been unlocked yet`);
     }
 
-    const moduleType = this.getModuleFromToken(attemptToken);
+    const moduleType = await this.getModuleFromToken(attemptToken);
     const cfg = this.getModuleConfig(moduleType);
     if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
 

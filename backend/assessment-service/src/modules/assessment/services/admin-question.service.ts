@@ -109,10 +109,10 @@ export class AdminQuestionService {
     return {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: row[config.categoryColumn],
+      category: module === 'coding' ? 'Coding' : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
-      questionText: row.question_text,
+      questionText: module === 'coding' ? (row.problem_title || row.problem_statement || '') : row.question_text,
       explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
@@ -122,7 +122,7 @@ export class AdminQuestionService {
       marks: Number(row.marks),
       negativeMarks: Number(row.negative_marks),
       status: row.status,
-      mode: row.mode || 'trial',
+      mode: row.mode || 'main',
       imageUrl: row.image_url,
       metadata: row.metadata || {},
       createdAt: row.created_at,
@@ -143,7 +143,7 @@ export class AdminQuestionService {
       conditions.push(`q.assessment_id = $${paramIdx++}`);
       params.push(assessmentId);
     }
-    if (category) {
+    if (category && module !== 'coding') {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
     }
@@ -155,12 +155,17 @@ export class AdminQuestionService {
       conditions.push(`q.status = $${paramIdx++}`);
       params.push(status);
     }
-    if (mode) {
+    if (mode && module !== 'coding') {
       conditions.push(`q.mode = $${paramIdx++}`);
       params.push(mode);
     }
     if (search) {
-      conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
+      if (module === 'coding') {
+        conditions.push(`(LOWER(q.problem_title) LIKE $${paramIdx} OR LOWER(q.problem_statement) LIKE $${paramIdx})`);
+        paramIdx++;
+      } else {
+        conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
+      }
       params.push(`%${search.toLowerCase()}%`);
     }
 
@@ -599,6 +604,7 @@ export class AdminQuestionService {
                 a.keypress_log_enabled,
                 a.require_camera_mic, a.live_proctoring_enabled,
                 a.adaptive_enabled,
+                a.adaptive_total_questions,
                 a.adaptive_total_marks,
                 a.adaptive_total_blocks,
                 a.adaptive_seconds_per_mark,
@@ -652,6 +658,7 @@ export class AdminQuestionService {
     const requireCameraMic = data.require_camera_mic;
     const liveProctoringEnabled = data.live_proctoring_enabled;
     const adaptiveEnabled = data.adaptive_enabled;
+    const adaptiveTotalQuestions = data.adaptive_total_questions ?? data.adaptiveTotalQuestions;
     const adaptiveTotalMarks     = data.adaptive_total_marks     ?? data.adaptiveTotalMarks;
     const adaptiveTotalBlocks    = data.adaptive_total_blocks    ?? data.adaptiveTotalBlocks;
     const adaptiveSecondsPerMark = data.adaptive_seconds_per_mark ?? data.adaptiveSecondsPerMark;
@@ -689,6 +696,7 @@ export class AdminQuestionService {
              adaptive_total_marks = COALESCE($25, adaptive_total_marks),
              adaptive_total_blocks = COALESCE($26, adaptive_total_blocks),
              adaptive_seconds_per_mark = COALESCE($27, adaptive_seconds_per_mark),
+             adaptive_total_questions = COALESCE($28, adaptive_total_questions),
              updated_at = NOW()
          WHERE assessment_id = $15`,
         [
@@ -719,6 +727,7 @@ export class AdminQuestionService {
           adaptiveTotalMarks !== undefined ? Number(adaptiveTotalMarks) : null,
           adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : null,
           adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : null,
+          adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : null,
         ]
       );
 

@@ -310,34 +310,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const isQuestionAnswered = currentQuestion ? !!answers[currentQuestionId] : false;
     const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestionId) : false;
 
-    // ── Block-wise unlock logic ──────────────────────────────────────────────
-    // Questions are grouped in blocks of 5. Block 1 = Q1-5, Block 2 = Q6-10, etc.
-    // A block unlocks when ALL questions in the previous block are answered.
+    // ── Block grouping (display only — no locking) ──────────────────────────
+    // Questions are grouped in blocks of 5 for the navigator display.
+    // Users can freely navigate to any question — skipping is allowed.
     const QUESTIONS_PER_BLOCK = 5;
 
-    // Compute the highest unlocked question index (0-based, inclusive)
-    const getUnlockedUpTo = (): number => {
-        if (questions.length === 0) return -1;
-        let unlockedUpTo = QUESTIONS_PER_BLOCK - 1; // Block 1 always unlocked
-        while (unlockedUpTo + 1 < questions.length) {
-            // Check if all questions in the current unlocked block are answered
-            const blockStart = unlockedUpTo - (QUESTIONS_PER_BLOCK - 1);
-            const allAnsweredInBlock = questions
-                .slice(blockStart, unlockedUpTo + 1)
-                .every(q => !!answers[q.id]);
-            if (allAnsweredInBlock) {
-                // Unlock next block
-                unlockedUpTo = Math.min(unlockedUpTo + QUESTIONS_PER_BLOCK, questions.length - 1);
-            } else {
-                break;
-            }
-        }
-        return unlockedUpTo;
-    };
-
-    const unlockedUpTo = getUnlockedUpTo();
-
-    const isQuestionLocked = (index: number) => index > unlockedUpTo;
+    // All questions are always unlocked — no restriction on navigation.
+    const unlockedUpTo = questions.length - 1;
+    const isQuestionLocked = (_index: number) => false;
 
 
     useEffect(() => {
@@ -389,6 +369,17 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 }
 
                 const data = await response.json();
+
+                // If backend returned block-based adaptive mode, redirect to adaptive engine
+                if (data.isBlockBased) {
+                    const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+                    const assessmentsJson = await assessmentsRes.json();
+                    const found = assessmentsJson?.data?.find((a: any) => a.module_type === "aptitude");
+                    const assessmentId = found?.assessment_id || 1;
+                    window.location.href = `/assessment/aptitude/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${data.attemptToken}`;
+                    return;
+                }
+
                 const token = data.attemptToken || data.token;
                 setAttemptToken(token || null);
 
@@ -953,8 +944,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleNext}
-                                    disabled={isQuestionLocked(currentIndex + 1)}
-                                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                                 >
                                     Save and next
                                 </button>

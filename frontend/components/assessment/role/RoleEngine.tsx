@@ -338,6 +338,17 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                 }
 
                 const data = await response.json();
+
+                // If backend returned block-based adaptive mode, redirect to adaptive engine
+                if (data.isBlockBased) {
+                    const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+                    const assessmentsJson = await assessmentsRes.json();
+                    const found = assessmentsJson?.data?.find((a: any) => a.module_type === 'role');
+                    const assessmentId = found?.assessment_id || 1;
+                    window.location.href = `/assessment/role/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${data.attemptToken}`;
+                    return;
+                }
+
                 const token = data.attemptToken || data.token;
                 setAttemptToken(token || null);
                 setQuestions(Array.isArray(data.questions) ? normalizeQuestions(data.questions) : []);

@@ -808,7 +808,15 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <CommunicationPreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'grammar');
+              if (dbExam?.adaptive_enabled) {
+                // Adaptive mode: go through standard engine which will detect isBlockBased and redirect
+                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowCommunicationModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
@@ -826,7 +834,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <RolePreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'role');
+              if (dbExam?.adaptive_enabled) {
+                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowRoleModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
@@ -844,7 +859,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <MNCPreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'mnc');
+              if (dbExam?.adaptive_enabled) {
+                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowMncModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}

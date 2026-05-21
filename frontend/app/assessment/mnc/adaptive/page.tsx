@@ -8,9 +8,6 @@ import {
   saveAssessmentResultToStorage,
 } from "@/lib/assessmentResultMapper";
 
-import AdaptiveAptitudeEngine, {
-  type AttemptSubmitResult,
-} from "@/components/assessment/aptitude/AdaptiveAptitudeEngine";
 import AdaptiveEngineV2 from "@/components/assessment/aptitude/AdaptiveEngineV2";
 import AdaptiveReportV2 from "@/components/assessment/aptitude/AdaptiveReportV2";
 import type { AdaptiveFinalReport } from "@/lib/adaptiveApi";
@@ -26,8 +23,7 @@ const Spinner = () => (
   </div>
 );
 
-// ── V2 engine ─────────────────────────────────────────────────────────────────
-function AdaptiveV2Content() {
+function AdaptiveMNCContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -38,16 +34,19 @@ function AdaptiveV2Content() {
   const [report, setReport]             = useState<AdaptiveFinalReport | null>(null);
   const [initError, setInitError]       = useState<string | null>(null);
 
+  // Run once on mount — never re-runs, so AdaptiveEngineV2 is never unmounted
+  // by a parent state change triggered by searchParams reference churn.
   useEffect(() => {
-    const aid = searchParams.get("assessmentId");
-    const tok = searchParams.get("attemptToken");
-    const m   = (searchParams.get("mode") as "trial" | "main") || "main";
+    const aid  = searchParams.get("assessmentId");
+    const tok  = searchParams.get("attemptToken");
+    const m    = (searchParams.get("mode") as "trial" | "main") || "main";
 
     if (!aid || !tok) {
       setInitError("Missing assessmentId or attemptToken in URL.");
       return;
     }
 
+    // Resolve userId from localStorage
     let resolvedId: number | null = null;
     try {
       const profileRaw = localStorage.getItem("originbi:user-profile");
@@ -73,17 +72,18 @@ function AdaptiveV2Content() {
       }
     }
 
+    // Set all state in one synchronous block — React 18 batches these into one render
     setAssessmentId(parseInt(aid));
     setAttemptToken(tok);
     setMode(m);
     setUserId(resolvedId ?? 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // empty deps — intentionally runs once on mount only
 
   const handleComplete = (r: AdaptiveFinalReport) => {
     try {
       localStorage.setItem("adaptiveV2Report", JSON.stringify(r));
-      localStorage.setItem("adaptiveAptitudeResults", JSON.stringify({
+      localStorage.setItem("adaptiveMNCResults", JSON.stringify({
         totalScore:           r.obtainedMarks,
         overallScorePercent:  r.marksPercentage,
         maxScore:             r.totalMarks,
@@ -98,18 +98,18 @@ function AdaptiveV2Content() {
         reliabilityLevel:     r.reliabilityLevel,
       }));
       const assessmentResult = mapSubmissionToAssessmentResult({
-        assessmentId: "aptitude",
+        assessmentId: "mnc",
         submission: {
           totalScore:      r.obtainedMarks,
           correctCount:    r.correctAnswers,
           wrongCount:      r.wrongAnswers,
           timeTakenSeconds: r.timeTakenSeconds,
         },
-        detail: EXAM_DETAILS.aptitude,
+        detail: EXAM_DETAILS.mnc,
       });
       saveAssessmentResultToStorage(assessmentResult);
     } catch (err) {
-      console.error("[AdaptiveV2] handleComplete error:", err);
+      console.error("[AdaptiveMNC] handleComplete error:", err);
     }
     setReport(r);
   };
@@ -137,13 +137,15 @@ function AdaptiveV2Content() {
         report={report}
         onClose={() => {
           if (mode === "trial") router.push("/assessment");
-          else router.push("/dashboard?completed=aptitude");
+          else router.push("/dashboard?completed=mnc");
         }}
       />
     );
   }
 
   return (
+    // key=attemptToken ensures React never unmounts/remounts the engine
+    // even if this parent component re-renders for any reason.
     <AdaptiveEngineV2
       key={attemptToken}
       assessmentId={assessmentId}
@@ -155,58 +157,10 @@ function AdaptiveV2Content() {
   );
 }
 
-// ── V1 engine (legacy) ────────────────────────────────────────────────────────
-function AdaptiveV1Content() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const mode = (searchParams.get("mode") as "trial" | "main") || "main";
-  const [assessmentCode, setAssessmentCode] = useState("TECH_APT_001");
-  const [userId, setUserId] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("userId");
-    if (stored) setUserId(parseInt(stored));
-    const code = searchParams.get("assessmentCode") || searchParams.get("code");
-    if (code) setAssessmentCode(code);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleComplete = (result: AttemptSubmitResult) => {
-    try {
-      const assessmentResult = mapSubmissionToAssessmentResult({
-        assessmentId: "aptitude",
-        submission: result,
-        detail: EXAM_DETAILS.aptitude,
-      });
-      localStorage.setItem("adaptiveAptitudeResults", JSON.stringify(result));
-      saveAssessmentResultToStorage(assessmentResult);
-    } catch (err) {
-      console.error("[AdaptiveAptitude] handleComplete error:", err);
-    }
-    router.push("/dashboard?completed=aptitude");
-  };
-
-  return (
-    <AdaptiveAptitudeEngine
-      onComplete={handleComplete}
-      assessmentCode={assessmentCode}
-      userId={userId}
-      mode={mode}
-    />
-  );
-}
-
-// ── Page entry ────────────────────────────────────────────────────────────────
-function AdaptivePageContent() {
-  const searchParams = useSearchParams();
-  const useV2 = searchParams.get("v2") === "true";
-  return useV2 ? <AdaptiveV2Content /> : <AdaptiveV1Content />;
-}
-
-export default function AdaptiveAptitudePage() {
+export default function AdaptiveMNCPage() {
   return (
     <Suspense fallback={<Spinner />}>
-      <AdaptivePageContent />
+      <AdaptiveMNCContent />
     </Suspense>
   );
 }

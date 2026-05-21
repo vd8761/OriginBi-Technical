@@ -351,15 +351,16 @@ export class AdaptiveController {
       throw new BadRequestException('attemptToken and blockNumber are required');
     }
 
-    // Load secondsPerMark from blueprint
+    // Load secondsPerMark from blueprint via attempt token
     const bpRows = await this.dataSource.query(
-      `SELECT ab.seconds_per_mark
-       FROM adaptive_blueprint ab
-       JOIN block_attempts ba ON ba.attempt_token=$1
-       JOIN adaptive_blocks abl ON abl.block_id=ba.block_id AND ba.block_number=$2
-       WHERE abl.assessment_id=ab.assessment_id
-       LIMIT 1`,
-      [dto.attemptToken, dto.blockNumber],
+      `SELECT bp.seconds_per_mark
+       FROM adaptive_blueprint bp
+       WHERE bp.assessment_id = (
+         SELECT assessment_id FROM block_attempts
+         WHERE attempt_token=$1
+         LIMIT 1
+       )`,
+      [dto.attemptToken],
     );
     const secondsPerMark = Number(bpRows[0]?.seconds_per_mark ?? 45);
 
@@ -415,7 +416,7 @@ export class AdaptiveController {
     const bn = parseInt(blockNumber);
     if (isNaN(bn)) throw new BadRequestException('Invalid block number');
 
-    const questions = await this.snapshot.loadBlockQuestions(attemptToken, bn);
+    const rawQuestions = await this.snapshot.loadBlockQuestions(attemptToken, bn);
     const baRows = await this.dataSource.query(
       `SELECT difficulty_achieved, status, snapshot_taken,
               marks_score, block_readiness_score, next_block_difficulty
@@ -423,6 +424,27 @@ export class AdaptiveController {
       [attemptToken, bn],
     );
     if (!baRows.length) throw new NotFoundException(`Block ${bn} not found`);
+
+    // Map to the AdaptiveQuestion shape the frontend expects
+    const questions = rawQuestions.map(q => ({
+      id: q.id ?? q.questionId,
+      text: q.text ?? '',
+      options: q.options ?? [],
+      difficulty: q.difficulty,
+      category: q.category,
+      subcategory: q.subcategory,
+      marks: q.marks,
+      negativeMarks: q.negativeMarks,
+      kind: q.kind,
+      imageUrl: q.imageUrl,
+      expectedTimeSecs: q.expectedTimeSecs,
+      audioUrl: q.audioUrl,
+      passageText: q.passageText,
+      taskType: q.taskType,
+      rubricJson: q.rubricJson,
+      // Restore saved answer so the frontend can pre-fill selections
+      selectedOptionId: q.selectedOptionId ?? null,
+    }));
 
     return {
       success: true,

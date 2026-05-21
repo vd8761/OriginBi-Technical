@@ -89,6 +89,9 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const hasInitializedRef = useRef(false); // prevents double-init in React StrictMode
+  const handleFinalSubmitRef = useRef<() => Promise<void>>(async () => {});
   const [isGeneratingNext, setIsGeneratingNext] = useState(false);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -125,6 +128,10 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
   // ── Initialize: load block 1 ───────────────────────────────────────────────
   useEffect(() => {
+    // Guard against React StrictMode double-invocation and any accidental re-runs
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     const init = async () => {
       try {
         setIsLoading(true);
@@ -147,34 +154,74 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
             isLastBlock: data.blockNumber === (status?.blocks.length ?? 4),
             coverageMap: {},
           };
-          // Restore saved answers
+          // Collect block 1 saved answers (will be merged with resume block answers below)
           const restored: Record<string, string | string[]> = {};
           data.questions.forEach(q => {
             if (q.selectedOptionId) restored[q.id] = q.selectedOptionId;
           });
-          if (Object.keys(restored).length) setAnswers(restored);
 
           // Determine current block from status
           const lastCompleted = status?.blocks.filter(b => b.snapshotTaken).length ?? 0;
           const resumeBlock = Math.min(lastCompleted + 1, status?.blocks.length ?? 4);
+          const totalBlockCount = status?.blocks.length ?? 4;
+
+          // Pre-load the resume block if it's not block 1 — do this BEFORE any setState
+          // so the blocks Map is fully populated before isLoading becomes false.
+          let finalBlocksMap: Map<number, BlockState>;
+          let finalAnswers: Record<string, string | string[]> = { ...restored };
+
+          if (resumeBlock > 1) {
+            try {
+              const resumeData = await getBlockQuestions(attemptToken, resumeBlock);
+              const resumeBlockResp: BlockResponse = {
+                blockId: 0,
+                blockNumber: resumeBlock,
+                totalBlocks: totalBlockCount,
+                difficulty: resumeData.difficulty,
+                questions: resumeData.questions,
+                totalBlockMarks: resumeData.questions.reduce((s, q) => s + q.marks, 0),
+                timeLimitSeconds: resumeData.questions.reduce((s, q) => s + q.expectedTimeSecs, 0),
+                isLastBlock: resumeBlock === totalBlockCount,
+                coverageMap: {},
+              };
+              resumeData.questions.forEach(q => {
+                if (q.selectedOptionId) finalAnswers[q.id] = q.selectedOptionId;
+              });
+              finalBlocksMap = new Map([
+                [1, { block: block1, snapshotTaken: true, metrics: null, nextDifficulty: null }],
+                [resumeBlock, { block: resumeBlockResp, snapshotTaken: resumeData.snapshotTaken, metrics: null, nextDifficulty: resumeData.nextBlockDifficulty }],
+              ]);
+            } catch {
+              // Non-fatal — resume block will load on demand; fall back to block 1 view
+              finalBlocksMap = new Map([[1, { block: block1, snapshotTaken: true, metrics: null, nextDifficulty: null }]]);
+            }
+          } else {
+            finalBlocksMap = new Map([[1, { block: block1, snapshotTaken: false, metrics: null, nextDifficulty: null }]]);
+          }
+
+          // Determine which block to actually view: if resumeBlock isn't in the map
+          // (load failed), fall back to block 1 so viewingBlockState is never undefined.
+          const safeViewBlock = finalBlocksMap.has(resumeBlock) ? resumeBlock : 1;
+
+          // Commit all state in one batch — blocks Map is ready before isLoading → false
+          setAnswers(finalAnswers);
+          setBlocks(finalBlocksMap);
           setCurrentBlockNum(resumeBlock);
-          setViewingBlockNum(resumeBlock);
-          setTotalBlocks(status?.blocks.length ?? 4);
+          setViewingBlockNum(safeViewBlock);
+          setTotalBlocks(totalBlockCount);
         } else {
           // Fresh start: generate block 1
           block1 = await generateBlock({
             assessmentId, blockNumber: 1, userId, mode, attemptToken,
           });
           setTotalBlocks(block1.totalBlocks);
+          setBlocks(new Map([[1, { block: block1, snapshotTaken: false, metrics: null, nextDifficulty: null }]]));
         }
-
-        const blockState: BlockState = {
-          block: block1, snapshotTaken: false, metrics: null, nextDifficulty: null,
-        };
-        setBlocks(new Map([[1, blockState]]));
-        const totalSecs = block1.timeLimitSeconds * block1.totalBlocks;
-        setTimeLeft(totalSecs);
-        setTotalTime(totalSecs);
+        // Use assessment's total_time_minutes if available, otherwise estimate from block 1
+        // Store per-block time limits and sum them as blocks are generated
+        const estimatedTotalSecs = block1.timeLimitSeconds * block1.totalBlocks;
+        setTimeLeft(estimatedTotalSecs);
+        setTotalTime(estimatedTotalSecs);
       } catch (e) {
         setLoadError((e as Error).message);
       } finally {
@@ -187,12 +234,15 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (isLoading || isSubmitting) return;
-    if (timeLeft <= 0) { handleFinalSubmit(); return; }
-    const t = setInterval(() => setTimeLeft(p => p - 1), 1000);
+    if (isLoading || isSubmittingRef.current) return;
+    if (timeLeft <= 0) { handleFinalSubmitRef.current(); return; }
+    const t = setInterval(() => setTimeLeft(p => {
+      if (p <= 1) { clearInterval(t); handleFinalSubmitRef.current(); return 0; }
+      return p - 1;
+    }), 1000);
     return () => clearInterval(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, isSubmitting, timeLeft]);
+  }, [isLoading]);
 
   // ── Answer selection ───────────────────────────────────────────────────────
   const handleOptionSelect = (optionId: string) => {
@@ -344,6 +394,15 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       }));
       setTotalBlocks(nextBlock.totalBlocks);
 
+      // Recalculate total time: sum of all generated block time limits
+      setTotalTime(() => {
+        const allBlocks = Array.from(blocks.values());
+        const knownTime = allBlocks.reduce((s, bs) => s + bs.block.timeLimitSeconds, 0);
+        const remainingBlocks = nextBlock.totalBlocks - nextNum;
+        const estimated = knownTime + nextBlock.timeLimitSeconds + (remainingBlocks * nextBlock.timeLimitSeconds);
+        return estimated;
+      });
+
       const diffMsg = result.nextBlockDifficulty === bs.block.difficulty
         ? `Staying at ${result.nextBlockDifficulty} difficulty`
         : result.nextBlockDifficulty === "hard" || (result.nextBlockDifficulty === "medium" && bs.block.difficulty === "easy")
@@ -364,7 +423,8 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
   // ── Final submit ───────────────────────────────────────────────────────────
   const handleFinalSubmit = useCallback(async () => {
-    if (isSubmitting) return;
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setShowSubmitModal(false);
     try {
@@ -372,9 +432,13 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       onComplete(report);
     } catch (e) {
       setLoadError((e as Error).message);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
-  }, [isSubmitting, attemptToken, assessmentId, userId, onComplete]);
+  }, [attemptToken, assessmentId, userId, onComplete]);
+
+  // Keep the ref in sync so the timer always calls the latest version
+  handleFinalSubmitRef.current = handleFinalSubmit;
 
   // ── Navigator questions ────────────────────────────────────────────────────
   const navigatorQuestions: NavigatorQuestion[] = [];
@@ -427,7 +491,14 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     );
   }
 
-  if (!viewingBlockState) return null;
+  if (!viewingBlockState) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712]">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+        <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Loading block...</p>
+      </div>
+    );
+  }
   const { block: viewingBlock } = viewingBlockState;
 
   // ── Render ─────────────────────────────────────────────────────────────────

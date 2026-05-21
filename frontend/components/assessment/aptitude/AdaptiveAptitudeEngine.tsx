@@ -1081,6 +1081,8 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
                   `Return to Block ${currentBlockNumber}`
                 ) : isLastQuestion && currentBlockNumber === totalBlocks ? (
                   'Submit Assessment'
+                ) : isLastQuestion && isViewingCurrentBlock ? (
+                  'Next Block →'
                 ) : (
                   'Save and next'
                 )}

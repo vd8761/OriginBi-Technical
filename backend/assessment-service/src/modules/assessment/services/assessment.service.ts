@@ -276,7 +276,7 @@ export class AssessmentService {
     try {
       const dbModule = module === 'communication' ? 'grammar' : module;
       const tableMap = this.getTableMap();
-      const config = tableMap[module];
+      const config = tableMap[dbModule];
       if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
 
       let assessment: any;
@@ -2191,6 +2191,24 @@ export class AssessmentService {
         const existing = existingBlockRows[0];
         const existingExpires = new Date(existing.expires_at);
         if (existingExpires > new Date()) {
+          // If adaptive_enabled, let the v2 engine handle resume — just return the token
+          if (Boolean(assessment.adaptive_enabled)) {
+            await queryRunner.commitTransaction();
+            return {
+              attemptToken: existing.attempt_token,
+              expiresAt: existing.expires_at,
+              durationSeconds: durationMinutes * 60,
+              timeLeftSeconds: Math.max(0, Math.round((existingExpires.getTime() - Date.now()) / 1000)),
+              mode,
+              totalBlocks,
+              questionsPerBlock,
+              totalQuestions,
+              currentBlock: null,
+              isBlockBased: true,
+              resumed: true,
+            };
+          }
+
           const blockRow = await queryRunner.query(
             `SELECT block_number FROM block_attempts
              WHERE attempt_token = $1 AND status = 'in_progress'
@@ -2260,13 +2278,30 @@ export class AssessmentService {
       // 7. Commit so generateBlock can read the attempt row
       await queryRunner.commitTransaction();
 
-      // 8. Initialize adaptive_blocks rows (idempotent)
+      // 8. If adaptive_enabled, skip old block generation — the v2 adaptive engine
+      //    (/api/adaptive/v2/block/generate) will handle blueprint + block generation.
+      //    Just return the attempt token so the frontend can redirect to the v2 page.
+      if (Boolean(assessment.adaptive_enabled)) {
+        return {
+          attemptToken,
+          expiresAt,
+          durationSeconds: durationMinutes * 60,
+          mode,
+          totalBlocks,
+          questionsPerBlock,
+          totalQuestions,
+          currentBlock: null,
+          isBlockBased: true,
+        };
+      }
+
+      // 9. Initialize adaptive_blocks rows (idempotent) — old flow only
       await this.adaptiveBlockService.initializeAdaptiveBlocks(assessment.assessment_id, {
         blocksPerAssessment: totalBlocks,
         questionsPerBlock,
       });
 
-      // 9. Generate block 1
+      // 10. Generate block 1 — old flow only
       const firstBlock = await this.adaptiveBlockService.generateBlock({
         assessmentId: assessment.assessment_id,
         blockNumber: 1,

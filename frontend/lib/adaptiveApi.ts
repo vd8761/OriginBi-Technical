@@ -38,6 +38,10 @@ export interface AdaptiveQuestion {
   // Populated when loading a previously answered block
   selectedOptionId?: string | string[] | null;
   answeredAt?: string | null;
+  audioUrl?: string;
+  passageText?: string;
+  taskType?: string;
+  rubricJson?: any;
 }
 
 export interface BlockResponse {

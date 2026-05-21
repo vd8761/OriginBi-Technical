@@ -67,6 +67,8 @@ export class AdaptiveBlockGeneratorService {
       attempts: string; questions: string; junction: string;
       idCol: string; options: string; attemptIdCol: string;
       categoryCol: string; subcategoryCol: string; hasMode: boolean;
+      hasImageUrl: boolean;
+      extraCols?: string;
     }> = {
       aptitude: {
         attempts: 'tech_aptitude_attempts',
@@ -78,6 +80,7 @@ export class AdaptiveBlockGeneratorService {
         categoryCol: 'category',
         subcategoryCol: 'subcategory',
         hasMode: true,
+        hasImageUrl: true,
       },
       grammar: {
         attempts: 'tech_grammar_attempts',
@@ -89,6 +92,8 @@ export class AdaptiveBlockGeneratorService {
         categoryCol: 'task_type',
         subcategoryCol: 'task_type',
         hasMode: true,
+        hasImageUrl: false,
+        extraCols: 'audio_url, passage_text, task_type, rubric_json',
       },
       mnc: {
         attempts: 'tech_mnc_attempts',
@@ -100,6 +105,7 @@ export class AdaptiveBlockGeneratorService {
         categoryCol: 'category',
         subcategoryCol: 'subcategory',
         hasMode: true,
+        hasImageUrl: false,
       },
       role: {
         attempts: 'tech_role_attempts',
@@ -108,14 +114,11 @@ export class AdaptiveBlockGeneratorService {
         idCol: 'role_question_id',
         options: 'tech_role_options',
         attemptIdCol: 'role_attempt_id',
-        // category/subcategory columns were added via migration; domain is the fallback
         categoryCol: 'domain',
         subcategoryCol: 'domain',
         hasMode: false,
+        hasImageUrl: true,
       },
-      // 'communication' assessments are stored with module_type='grammar' in the DB
-      // (tech_module_type enum only has 'grammar'), so this entry handles any edge-case
-      // where the string 'communication' reaches this service directly.
       communication: {
         attempts: 'tech_grammar_attempts',
         questions: 'tech_grammar_questions',
@@ -126,6 +129,8 @@ export class AdaptiveBlockGeneratorService {
         categoryCol: 'task_type',
         subcategoryCol: 'task_type',
         hasMode: true,
+        hasImageUrl: false,
+        extraCols: 'audio_url, passage_text, task_type, rubric_json',
       },
     };
     return map[moduleType] ?? null;
@@ -171,11 +176,12 @@ export class AdaptiveBlockGeneratorService {
   }
 
   private async saveCoverage(
+    qr: any,
     attemptToken: string,
     assessmentId: number,
     coverage: Record<string, Record<string, { marksUsed: number; questionsUsed: number }>>,
   ): Promise<void> {
-    await this.dataSource.query(
+    await qr.query(
       `INSERT INTO adaptive_subcategory_coverage (attempt_token, assessment_id, coverage)
        VALUES ($1, $2, $3)
        ON CONFLICT (attempt_token) DO UPDATE SET coverage=$3, updated_at=NOW()`,
@@ -246,6 +252,7 @@ export class AdaptiveBlockGeneratorService {
     mode: 'trial' | 'main',
     modeExists: boolean,
     difficultyExists: boolean,
+    metadataExists: boolean,
   ): Promise<any | null> {
     if (!cfg) return null;
 
@@ -275,6 +282,8 @@ export class AdaptiveBlockGeneratorService {
 
     // Select difficulty column — fall back to literal 'medium' when column doesn't exist
     const diffSelect = difficultyExists ? 'difficulty' : `'medium' AS difficulty`;
+    const metadataSelect = metadataExists ? 'metadata' : 'NULL AS metadata';
+    const extraColsSelect = cfg.extraCols ? `, ${cfg.extraCols}` : '';
 
     const tryFetch = async (
       diffList: Difficulty[],
@@ -288,9 +297,9 @@ export class AdaptiveBlockGeneratorService {
       const marksIn = marksList.join(',');
       const rows = await this.dataSource.query(
         `SELECT ${cfg.idCol} AS id, question_text, ${diffSelect},
-                ${cfg.categoryCol} AS category,
-                ${cfg.subcategoryCol} AS subcategory,
-                marks, negative_marks, metadata, image_url
+          ${cfg.categoryCol} AS category,
+          ${cfg.subcategoryCol} AS subcategory,
+          marks, negative_marks, ${metadataSelect}${cfg.hasImageUrl ? ', image_url' : ''}${extraColsSelect}
          FROM ${cfg.questions}
          WHERE ${baseWhere}
            ${catFilter}
@@ -387,7 +396,16 @@ export class AdaptiveBlockGeneratorService {
     await qr.startTransaction();
 
     try {
-      // 1. Load assessment + adaptive_blocks row
+      // 1. Ensure blueprint exists (auto-builds from question bank if missing).
+      //    This also initializes adaptive_blocks rows, which are needed for the JOIN below.
+      const blueprint = await this.blueprintService.ensureBlueprint(assessmentId);
+      if (!blueprint) {
+        throw new BadRequestException(
+          `Could not build blueprint for assessment ${assessmentId}. Ensure questions are added first.`,
+        );
+      }
+
+      // 2. Load assessment + adaptive_blocks row
       const asmRows = await qr.query(
         `SELECT a.assessment_id, a.module_type, a.block_config, a.question_limit,
                 ab.block_id, ab.difficulty_distribution
@@ -408,16 +426,8 @@ export class AdaptiveBlockGeneratorService {
       }
 
       const rawBC = row.block_config ?? {};
-      const totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 4);
+      const totalBlocks = blueprint.totalBlocks || Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 4);
       const isLastBlock = blockNumber === totalBlocks;
-
-      // 2. Load blueprint — auto-builds from question bank if missing or stale
-      const blueprint = await this.blueprintService.ensureBlueprint(assessmentId);
-      if (!blueprint) {
-        throw new BadRequestException(
-          `Could not build blueprint for assessment ${assessmentId}. Ensure questions are added first.`,
-        );
-      }
 
       // 3. Resolve attempt + used question IDs
       const ar = await qr.query(
@@ -446,13 +456,14 @@ export class AdaptiveBlockGeneratorService {
       // 6. Fetch questions for each slot
       const modeExists = await this.columnExists(cfg.questions, 'mode');
       const difficultyExists = await this.columnExists(cfg.questions, 'difficulty');
+      const metadataExists = await this.columnExists(cfg.questions, 'metadata');
       const fetchedQuestions: any[] = [];
       const localUsedIds = new Set(usedIds);
 
       for (const slot of slots) {
         const q = await this.fetchQuestionForSlot(
           cfg, assessmentId, slot,
-          Array.from(localUsedIds), mode, modeExists, difficultyExists,
+          Array.from(localUsedIds), mode, modeExists, difficultyExists, metadataExists,
         );
         if (q) {
           localUsedIds.add(Number(q.id));
@@ -464,11 +475,25 @@ export class AdaptiveBlockGeneratorService {
         throw new BadRequestException(`No questions available for block ${blockNumber}`);
       }
 
+      // Deduplicate: the 8-phase fallback may return the same question for multiple slots
+      // when the question bank is small. Keep only the first occurrence of each question ID.
+      const seenQIds = new Set<number>();
+      const uniqueQuestions = fetchedQuestions.filter(q => {
+        const id = Number(q.id);
+        if (seenQIds.has(id)) return false;
+        seenQIds.add(id);
+        return true;
+      });
+
       // Shuffle
-      for (let i = fetchedQuestions.length - 1; i > 0; i--) {
+      for (let i = uniqueQuestions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [fetchedQuestions[i], fetchedQuestions[j]] = [fetchedQuestions[j], fetchedQuestions[i]];
+        [uniqueQuestions[i], uniqueQuestions[j]] = [uniqueQuestions[j], uniqueQuestions[i]];
       }
+
+      // Replace fetchedQuestions with deduplicated list for all downstream steps
+      fetchedQuestions.length = 0;
+      fetchedQuestions.push(...uniqueQuestions);
 
       // 7. Build coverage map for this block
       const blockCoverageMap: Record<string, Record<string, number>> = {};
@@ -479,7 +504,7 @@ export class AdaptiveBlockGeneratorService {
         blockCoverageMap[cat][sub] = (blockCoverageMap[cat][sub] ?? 0) + Number(q.marks);
       }
 
-      // 8. Update subcategory coverage
+      // 8. Update subcategory coverage (inside transaction so it rolls back on failure)
       const updatedCoverage = { ...coverage };
       for (const [cat, subs] of Object.entries(blockCoverageMap)) {
         if (!updatedCoverage[cat]) updatedCoverage[cat] = {};
@@ -489,9 +514,12 @@ export class AdaptiveBlockGeneratorService {
           updatedCoverage[cat][sub].questionsUsed += 1;
         }
       }
-      await this.saveCoverage(attemptToken, assessmentId, updatedCoverage);
+      await this.saveCoverage(qr, attemptToken, assessmentId, updatedCoverage);
 
       // 9. Insert into junction table
+      // Use a per-block sequence counter that only increments on successful inserts
+      // to avoid gaps and duplicate block_sequence_order values.
+      let blockSeqOrder = 0;
       for (let i = 0; i < fetchedQuestions.length; i++) {
         const q = fetchedQuestions[i];
         const displayOrder = usedIds.length + i + 1;
@@ -500,13 +528,18 @@ export class AdaptiveBlockGeneratorService {
           (q.difficulty as Difficulty) ?? 'easy',
           blueprint.secondsPerMark,
         );
-        await qr.query(
+        blockSeqOrder++;
+        // ON CONFLICT covers both unique constraints:
+        //   1. (attemptId, questionId)       — question already assigned to this attempt
+        //   2. (attemptId, block_number, block_sequence_order) — sequence slot already taken
+        // In both cases we skip silently; the question is already recorded.
+        const result = await qr.query(
           `INSERT INTO ${cfg.junction}
              (${cfg.attemptIdCol}, ${cfg.idCol}, display_order, block_number,
               block_sequence_order, is_locked, expected_time_seconds)
            VALUES ($1,$2,$3,$4,$5,false,$6)
-           ON CONFLICT (${cfg.attemptIdCol}, ${cfg.idCol}) DO NOTHING`,
-          [attemptId, Number(q.id), displayOrder, blockNumber, i + 1, expectedSecs],
+           ON CONFLICT DO NOTHING`,
+          [attemptId, Number(q.id), displayOrder, blockNumber, blockSeqOrder, expectedSecs],
         );
       }
 
@@ -572,8 +605,12 @@ export class AdaptiveBlockGeneratorService {
           marks: Number(q.marks),
           negativeMarks: Number(q.negative_marks ?? 0),
           kind,
-          imageUrl: q.image_url ?? undefined,
+          imageUrl: cfg.hasImageUrl ? (q.image_url ?? undefined) : undefined,
           expectedTimeSecs: expectedSecs,
+          audioUrl: q.audio_url ?? undefined,
+          passageText: q.passage_text ?? undefined,
+          taskType: q.task_type ?? undefined,
+          rubricJson: q.rubric_json ?? undefined,
         });
       }
 
