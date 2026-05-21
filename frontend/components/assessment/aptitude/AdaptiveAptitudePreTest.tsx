@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { securityCheckBeforeStart, getUserId } from "@/lib/assessmentSecurity";
 
 interface AdaptiveAptitudePreTestProps {
   mode: 'trial' | 'main';
@@ -140,46 +141,20 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
           process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
           "";
 
-        let userId: number | null = null;
-        try {
-          const profileRaw = localStorage.getItem("originbi:user-profile");
-          if (profileRaw) { const p = JSON.parse(profileRaw); if (p?.id) userId = Number(p.id); }
-        } catch {}
-        if (!userId) {
-          try {
-            const stored = localStorage.getItem("userId") || localStorage.getItem("user");
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              const id = typeof parsed === "object" ? parsed?.id : parseInt(stored);
-              if (id) userId = Number(id);
-            }
-          } catch {}
-        }
-
-        // SECURITY: Validate mode parameter to prevent manipulation
-        const validModes = ['trial', 'main'] as const;
-        const sanitizedMode = validModes.includes(mode as any) ? mode : 'main';
+        // SECURITY: Comprehensive security check before starting
+        const securityCheck = await securityCheckBeforeStart('aptitude', mode, API_BASE);
         
-        // SECURITY: Check attempt eligibility before starting
-        const eligibilityRes = await fetch(`${API_BASE}/api/assessment/validate-eligibility`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            assessmentCode: "TECH_APT_001", 
-            userId: userId ?? 1, 
-            mode: sanitizedMode 
-          }),
-        });
-        
-        if (!eligibilityRes.ok) {
-          const errText = await eligibilityRes.text().catch(() => "Attempt limit exceeded");
-          throw new Error(errText);
+        if (!securityCheck.canProceed) {
+          throw new Error(securityCheck.error || 'Security validation failed');
         }
+        
+        const sanitizedMode = securityCheck.sanitizedMode;
+        const userId = getUserId();
 
         const res = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/block-based`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assessmentCode: "TECH_APT_001", userId: userId ?? 1, mode: sanitizedMode }),
+          body: JSON.stringify({ assessmentCode: "TECH_APT_001", userId: userId, mode: sanitizedMode }),
         });
 
         if (!res.ok) {
