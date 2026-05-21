@@ -42,7 +42,7 @@ func Open(ctx context.Context, dsn string) (*Pool, error) {
 }
 
 // EnsurePartitions is a no-op since telemetry partitioning has been removed.
-func EnsurePartitions(ctx context.Context, pool *Pool) error {
+func EnsurePartitions(_ context.Context, _ *Pool) error {
 	return nil
 }
 

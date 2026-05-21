@@ -1,22 +1,13 @@
 package server
 
 import (
-	"context"
 	"database/sql"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/originbi/exam-engine/internal/auth"
-)
-
-const (
-	systemOrgID         = "00000000-0000-0000-0000-000000000001"
-	codingExamVersionID = "00000000-0000-0000-0000-000000000601"
 )
 
 type assignmentDTO struct {
@@ -122,122 +113,4 @@ func nullTimePtr(v sql.NullTime) *time.Time {
 		return nil
 	}
 	return &v.Time
-}
-
-func int64String(v int64) string {
-	return strconv.FormatInt(v, 10)
-}
-
-// grantFreeAssignmentTx idempotently creates a single active assignment for
-// the given assignment_ref inside an existing transaction. Returns nil if the
-// ref is not a known coding language plugin (caller should treat as no-op).
-func (s *Server) grantFreeAssignmentTx(ctx context.Context, tx pgx.Tx, userID int64, assignmentRef string) error {
-	ref := strings.ToLower(strings.TrimSpace(assignmentRef))
-	if ref == "" {
-		return nil
-	}
-	if s.plugins != nil {
-		ok, err := s.plugins.IsPurchasableLanguagePlugin(ctx, ref)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-	}
-	var pricingExists bool
-	if err := tx.QueryRow(ctx, `
-		SELECT EXISTS(SELECT 1 FROM pricing_items WHERE item_ref = $1)
-	`, ref).Scan(&pricingExists); err != nil {
-		return err
-	}
-	if !pricingExists {
-		return nil
-	}
-	metadata, err := s.buildAssignmentMetadata(ctx, tx, uuid.MustParse(codingExamVersionID), ref)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `
-		INSERT INTO exam_assignments (
-		    id, exam_version_id, candidate_user_id, assigned_by, assigned_org_id,
-		    available_from, available_until, max_attempts, status,
-		    assignment_ref, metadata
-		)
-		VALUES (
-		    $1, $2, $3, $3, $4,
-		    now(), NULL, 1, 'active',
-		    $5, jsonb_build_object('language', replace($5, 'coding:', ''), 'grantedBy', 'admin_registration') || $6::jsonb
-		)
-		ON CONFLICT (candidate_user_id, assignment_ref)
-		    WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
-		DO UPDATE
-		SET status = 'active',
-		    available_from = COALESCE(exam_assignments.available_from, EXCLUDED.available_from),
-		    available_until = NULL,
-		    metadata = CASE
-		        WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
-		        ELSE exam_assignments.metadata || EXCLUDED.metadata
-		    END
-	`, uuid.New(), codingExamVersionID, userID, systemOrgID, ref, metadata)
-	return err
-}
-
-// grantFreeCodingAssignments idempotently creates an active assignment for
-// every priced coding language for the given user. Used to satisfy the
-// "registrations.registration_source = 'ADMIN' → free access" requirement.
-// The assignment's purchase_id stays NULL because there is no Razorpay row;
-// the assignment is the entitlement.
-func (s *Server) grantFreeCodingAssignments(ctx context.Context, userID int64) error {
-	rows, err := s.pool.Query(ctx, `
-		SELECT item_ref
-		FROM pricing_items
-		WHERE item_kind = 'coding_language'
-	`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	var refs []string
-	for rows.Next() {
-		var ref string
-		if err := rows.Scan(&ref); err != nil {
-			return err
-		}
-		refs = append(refs, ref)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	for _, ref := range refs {
-		metadata, err := s.buildAssignmentMetadata(ctx, s.pool, uuid.MustParse(codingExamVersionID), ref)
-		if err != nil {
-			return err
-		}
-		if _, err := s.pool.Exec(ctx, `
-			INSERT INTO exam_assignments (
-			    id, exam_version_id, candidate_user_id, assigned_by, assigned_org_id,
-			    available_from, available_until, max_attempts, status,
-			    assignment_ref, metadata
-			)
-			VALUES (
-			    $1, $2, $3, $3, $4,
-			    now(), NULL, 1, 'active',
-			    $5, jsonb_build_object('language', replace($5, 'coding:', ''), 'grantedBy', 'admin_registration') || $6::jsonb
-			)
-			ON CONFLICT (candidate_user_id, assignment_ref)
-			    WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
-			DO UPDATE
-			SET status = 'active',
-			    metadata = CASE
-			        WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
-			        ELSE exam_assignments.metadata || EXCLUDED.metadata
-			    END
-		`, uuid.New(), codingExamVersionID, userID, systemOrgID, ref, metadata); err != nil {
-			return err
-		}
-	}
-	return nil
 }

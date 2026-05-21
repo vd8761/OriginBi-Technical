@@ -297,6 +297,7 @@ const (
 	maxAuthBodyBytes    = 64 << 10
 	maxRuntimeBodyBytes = 1 << 20
 	maxCodeRunBodyBytes = 2 << 20
+	systemOrgID         = "00000000-0000-0000-0000-000000000001"
 )
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
