@@ -19,5 +19,6 @@ export type {
     PackageProctoringInput,
     ProctoringCounter,
     ProctoringCounters,
+    ProctoringMessage,
     ProctoringSettings,
 } from "@/lib/proctoring";

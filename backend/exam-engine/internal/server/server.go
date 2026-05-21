@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +37,9 @@ type Server struct {
 	// plugins is set by AttachPluginRegistry after server.New. Handlers must
 	// handle nil for compat with tests that don't bootstrap a registry.
 	plugins *pluginhost.Registry
+	// evaluating tracks attempt IDs whose post-submit grading is in flight, so
+	// duplicate submits don't kick off redundant Judge0 evaluation passes.
+	evaluating sync.Map
 }
 
 // AttachPluginRegistry binds an in-memory plugin registry to the server and

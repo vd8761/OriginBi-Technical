@@ -17,6 +17,107 @@ export class PurchaseService {
         return !!code && code.toLowerCase().startsWith("coding:");
     }
 
+    // The tech_assessments configuration columns frozen onto a purchase. One
+    // list so the snapshot writer and the live-fallback resolver always read
+    // the exact same fields.
+    private static readonly SETTINGS_SNAPSHOT_COLUMNS = [
+        "total_time_minutes", "total_questions", "question_limit",
+        "categories", "difficulty_marks", "difficulty_negative_marks",
+        "tab_switch_limit", "anti_copy_enabled", "shuffle_questions", "shuffle_options",
+        "negative_mark_enabled", "negative_mark_value",
+        "trial_attempts_limit", "main_attempts_limit", "enabled_question_types",
+        "proctoring_require_fullscreen", "fullscreen_exit_limit",
+        "proctoring_block_devtools", "devtools_open_limit",
+        "mouse_focus_loss_limit", "keypress_log_enabled",
+        "require_camera_mic", "live_proctoring_enabled",
+    ];
+
+    /**
+     * Reads the current tech_assessments configuration for an assessment and
+     * returns it as a plain object for tech_assessment_purchases.settings_
+     * snapshot. Returns null when no row is found (e.g. coding purchases have
+     * no tech_assessments row). `exec` lets the caller run it inside an open
+     * transaction (queryRunner) or against the pool.
+     */
+    private async snapshotAssessmentSettings(
+        exec: { query: (sql: string, params?: any[]) => Promise<any> },
+        assessmentId: string | null,
+    ): Promise<Record<string, unknown> | null> {
+        if (!assessmentId) return null;
+        try {
+            const cols = PurchaseService.SETTINGS_SNAPSHOT_COLUMNS.join(", ");
+            const rows = await exec.query(
+                `SELECT to_jsonb(s) AS snapshot FROM (
+                     SELECT ${cols} FROM tech_assessments WHERE assessment_id = $1
+                 ) s`,
+                [assessmentId],
+            );
+            if (rows && rows.length > 0 && rows[0].snapshot) {
+                return { ...rows[0].snapshot, captured_at: new Date().toISOString() };
+            }
+        } catch (err: any) {
+            this.logger.warn(
+                `snapshotAssessmentSettings failed for ${assessmentId}: ${err.message}`,
+            );
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the proctoring/exam settings a candidate's exam should run
+     * against: the snapshot frozen at their most recent active purchase, or
+     * the live tech_assessments row when no snapshot exists (legacy purchases
+     * or never-purchased assessments). Field names match a tech_assessments
+     * row so the frontend's resolveProctoringForPackage consumes it directly.
+     */
+    async getEffectiveAssessmentSettings(
+        email: string,
+        assessmentCode: string,
+    ): Promise<{ source: "snapshot" | "live" | "none"; settings: Record<string, unknown> | null }> {
+        const lookupCode = this.resolveAssessmentLookupCode(assessmentCode);
+        if (email) {
+            try {
+                const snapRows = await this.dataSource.query(
+                    `SELECT settings_snapshot
+                     FROM tech_assessment_purchases
+                     WHERE LOWER(email) = LOWER($1)
+                       AND LOWER(assessment_code) IN (LOWER($2), LOWER($3))
+                       AND status = 'active'
+                       AND settings_snapshot IS NOT NULL
+                     ORDER BY purchased_at DESC
+                     LIMIT 1`,
+                    [email, assessmentCode, lookupCode],
+                );
+                if (snapRows?.length && snapRows[0].settings_snapshot) {
+                    return { source: "snapshot", settings: snapRows[0].settings_snapshot };
+                }
+            } catch (err: any) {
+                this.logger.warn(`effective-settings snapshot lookup failed: ${err.message}`);
+            }
+        }
+        try {
+            const cols = PurchaseService.SETTINGS_SNAPSHOT_COLUMNS.join(", ");
+            // tech_assessments.assessment_code holds an internal label
+            // (TECH_APT_001 …); the module is identified by module_type, which
+            // is the candidate-facing code ('aptitude', 'mnc', …) except
+            // 'communication' which is stored as 'grammar'.
+            const liveRows = await this.dataSource.query(
+                `SELECT to_jsonb(s) AS settings FROM (
+                     SELECT ${cols} FROM tech_assessments
+                     WHERE LOWER(module_type::text) IN (LOWER($1), LOWER($2))
+                     LIMIT 1
+                 ) s`,
+                [assessmentCode, lookupCode],
+            );
+            if (liveRows?.length && liveRows[0].settings) {
+                return { source: "live", settings: liveRows[0].settings };
+            }
+        } catch (err: any) {
+            this.logger.warn(`effective-settings live lookup failed: ${err.message}`);
+        }
+        return { source: "none", settings: null };
+    }
+
     private resolveAssessmentLookupCode(code: string | number): string {
         const raw = String(code || "").trim().toLowerCase();
         if (raw === "communication") {
@@ -574,13 +675,20 @@ export class PurchaseService {
         await queryRunner.startTransaction();
 
         try {
+            // Freeze the assessment configuration as it stands right now, so a
+            // later admin edit can't retroactively change this scheduled exam.
+            const settingsSnapshot = await this.snapshotAssessmentSettings(
+                queryRunner,
+                resolvedAssessmentId,
+            );
+
             // Insert purchase record into tech_assessment_purchases table.
             // Legacy or unresolvable coding audit rows may still carry NULL
             // assessment_id, but paid status for coding is assignment-backed.
             await queryRunner.query(
                 `INSERT INTO tech_assessment_purchases
-                    (email, user_id, assessment_id, assessment_code, amount, razorpay_order_id, razorpay_payment_id, status, purchased_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW())`,
+                    (email, user_id, assessment_id, assessment_code, amount, razorpay_order_id, razorpay_payment_id, status, settings_snapshot, purchased_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, NOW())`,
                 [
                     body.email,
                     userId,
@@ -589,6 +697,7 @@ export class PurchaseService {
                     body.amount,
                     body.razorpay_order_id,
                     body.razorpay_payment_id,
+                    settingsSnapshot ? JSON.stringify(settingsSnapshot) : null,
                 ]
             );
 
@@ -754,11 +863,21 @@ export class PurchaseService {
                 return;
             }
 
+            const settingsSnapshot = await this.snapshotAssessmentSettings(
+                this.dataSource,
+                resolvedAssessmentId,
+            );
             await this.dataSource.query(
                 `INSERT INTO tech_assessment_purchases
-                    (email, user_id, assessment_id, assessment_code, amount, razorpay_order_id, razorpay_payment_id, status, purchased_at)
-                 VALUES ($1, $2, $3, $4, 0, 'free_admin', 'free_admin', 'active', NOW())`,
-                [email, userId, resolvedAssessmentId, assessmentCode],
+                    (email, user_id, assessment_id, assessment_code, amount, razorpay_order_id, razorpay_payment_id, status, settings_snapshot, purchased_at)
+                 VALUES ($1, $2, $3, $4, 0, 'free_admin', 'free_admin', 'active', $5, NOW())`,
+                [
+                    email,
+                    userId,
+                    resolvedAssessmentId,
+                    assessmentCode,
+                    settingsSnapshot ? JSON.stringify(settingsSnapshot) : null,
+                ],
             );
         } catch (err: any) {
             this.logger.warn(

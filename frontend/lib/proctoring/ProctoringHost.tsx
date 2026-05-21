@@ -17,6 +17,7 @@ import {
     EMPTY_COUNTERS,
     type ProctoringCounter,
     type ProctoringCounters,
+    type ProctoringMessage,
     type ProctoringSettings,
     useProctoring,
 } from "./index";
@@ -35,7 +36,7 @@ interface ProctoringHostProps {
     // record violations into telemetry / persist them with the attempt.
     onViolation?: (
         type: ProctoringCounter,
-        message: { title: string; desc: string },
+        message: ProctoringMessage,
         counters: ProctoringCounters,
     ) => void;
 }
@@ -73,7 +74,7 @@ export default function ProctoringHost({ settings, active, onViolation }: Procto
     }, []);
 
     const handleViolation = useCallback(
-        (type: ProctoringCounter, message: { title: string; desc: string }) => {
+        (type: ProctoringCounter, message: ProctoringMessage) => {
             const prev = countersRef.current;
             const next: ProctoringCounters = { ...prev, [type]: prev[type] + 1 };
             countersRef.current = next;

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Video } from "lucide-react";
 import QuestionPanel from "./QuestionPanel";
 import CodeEditor, { LANG_META, readPrefs, writePrefs } from "./CodeEditor";
 import SubmitModal, { type QStatus } from "./SubmitModal";
@@ -21,8 +22,10 @@ import {
     useProctoringSettings,
     type ProctoringCounter,
     type ProctoringCounters,
+    type ProctoringMessage,
     type ProctoringSettings,
 } from "./proctoring";
+import { requestDummyMedia } from "@/lib/proctoring/dummyMedia";
 import {
     runAttemptCode,
     saveAttemptAnswer,
@@ -37,7 +40,7 @@ import {
     type SnapshotQuestion,
 } from "@/lib/api";
 import { useTheme } from "@/lib/contexts/ThemeContext";
-import { MountPoint, useCommandStream, usePluginRuntime } from "@/plugins";
+import { MountPoint, useCommandStream, usePluginRuntime, type EnabledPluginConfig } from "@/plugins";
 
 const STATUS_KEY = "ob_statuses";
 const CURRENT_Q_KEY = "ob_current_q";
@@ -56,6 +59,7 @@ interface CodingAssessmentProps {
     lang: string;
     snapshot?: AttemptSnapshot | null;
     mode?: AssessmentMode;
+    enabledPlugins?: EnabledPluginConfig[];
 }
 
 type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
@@ -577,7 +581,53 @@ const ProctorToast: React.FC<ProctorToastProps> = ({ visible, title, desc }) => 
     </div>
 );
 
-const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mode = "main" }) => {
+interface CameraChipProps {
+    videoRef: React.RefObject<HTMLVideoElement | null>;
+    ready: boolean;
+    error: string | null;
+}
+
+const CameraChip: React.FC<CameraChipProps> = ({ videoRef, ready, error }) => (
+    <div className="fixed bottom-4 right-4 z-[160] flex flex-col items-end gap-2">
+        <div className="overflow-hidden rounded-xl border border-emerald-500/40 bg-black/70 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
+            <video
+                ref={videoRef}
+                muted
+                playsInline
+                autoPlay
+                style={{ width: 144, height: 108, objectFit: "cover", display: ready ? "block" : "none" }}
+            />
+            {!ready && (
+                <div className="flex h-[108px] w-[144px] items-center justify-center px-2 text-center text-[10px] font-bold text-amber-300">
+                    {error ? "Camera blocked" : "Awaiting camera..."}
+                </div>
+            )}
+        </div>
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-black/70 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-300 backdrop-blur">
+            <Video size={11} />
+            <span>{ready ? "Camera Active" : error ? "Camera Blocked" : "Camera..."}</span>
+        </div>
+    </div>
+);
+
+function proctorEventKind(type: ProctoringCounter, meta?: Record<string, unknown>) {
+    if (type === "copyPaste") {
+        const action = meta?.action === "paste" || meta?.action === "cut" ? meta.action : "copy";
+        return `proctoring.${action}.blocked`;
+    }
+    const kinds: Record<Exclude<ProctoringCounter, "copyPaste">, string> = {
+        rightClick: "proctoring.right_click.blocked",
+        mouseLeave: "proctoring.mouse.left",
+        fullscreenExit: "proctoring.fullscreen.exit",
+        browserShortcut: "proctoring.shortcut.blocked",
+        devtoolsOpen: "proctoring.devtools.opened",
+        focusLost: "proctoring.focus.lost",
+        keypress: "proctoring.keypress",
+    };
+    return kinds[type];
+}
+
+const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mode = "main", enabledPlugins = [] }) => {
     const router = useRouter();
     const languageLabel = LANG_META[lang]?.label ?? lang;
     const questions = useMemo(
@@ -710,19 +760,62 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     const proctoring = useProctoringSettings();
     const proctoringActive = !submitted;
 
-    const tabMonitor = useTabSwitchMonitor(proctoringActive && proctoring.settings.tabSwitch);
+    const isAttemptPluginEnabled = useCallback(
+        (id: string) =>
+            enabledPlugins.some(
+                (plugin) => plugin.id === id && plugin.enabled && plugin.config?.enabled !== false,
+            ),
+        [enabledPlugins],
+    );
+
+    useEffect(() => {
+        if (
+            (isAttemptPluginEnabled("proctoring.camera-vision") ||
+                isAttemptPluginEnabled("proctoring.microphone-audio")) &&
+            !proctoring.settings.requireCameraMic
+        ) {
+            proctoring.update("requireCameraMic", true);
+        }
+        if (
+            isAttemptPluginEnabled("proctoring.screen-browser") &&
+            !proctoring.settings.detectFullscreenExit
+        ) {
+            proctoring.update("detectFullscreenExit", true);
+        }
+    }, [
+        isAttemptPluginEnabled,
+        proctoring.settings.detectFullscreenExit,
+        proctoring.settings.requireCameraMic,
+        proctoring.update,
+    ]);
+
+    // scopeKey namespaces the persisted tab-switch state to this attempt, so a
+    // previous attempt's count never leaks in as a phantom switch on entry.
+    const tabMonitor = useTabSwitchMonitor(
+        proctoringActive && proctoring.settings.tabSwitch,
+        { scopeKey: backendAttemptId },
+    );
 
     useTabPanic(proctoringActive, tabMonitor.hidden);
 
     const [counters, setCounters] = useState<ProctoringCounters>({ ...EMPTY_COUNTERS });
+    const countersRef = useRef<ProctoringCounters>({ ...EMPTY_COUNTERS });
     const [toastVisible, setToastVisible] = useState(false);
     const [lastViolation, setLastViolation] = useState<{ title: string; desc: string }>({
         title: "Tab switch detected",
         desc: "Stay on this tab during the assessment.",
     });
+    const [cameraReady, setCameraReady] = useState(false);
+    const [cameraError, setCameraError] = useState<string | null>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
     const lastReportedSwitch = useRef(0);
     const toastHideTimer = useRef<number | null>(null);
     const eventQueueRef = useRef<AttemptEventInput[]>([]);
+    // Local question ids whose answer has unsaved edits. A question stays in
+    // this set until the backend confirms its save, so a failed save (e.g. a
+    // dropped connection) is retried on the next autosave tick instead of
+    // being lost.
+    const dirtyAnswersRef = useRef<Set<number>>(new Set());
 
     const flushTraceEvents = useCallback(
         async (keepalive = false) => {
@@ -778,12 +871,20 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     }, []);
 
     const handleProctorViolation = useCallback(
-        (type: ProctoringCounter, message: { title: string; desc: string }) => {
-            setCounters((prev) => ({ ...prev, [type]: prev[type] + 1 }));
+        (type: ProctoringCounter, message: ProctoringMessage) => {
+            const next: ProctoringCounters = {
+                ...countersRef.current,
+                [type]: countersRef.current[type] + 1,
+            };
+            countersRef.current = next;
+            setCounters(next);
             showViolationToast(message.title, message.desc);
-            traceEvent(`proctor.${type}`, 2, {
+            traceEvent(proctorEventKind(type, message.meta), 2, {
+                counter: type,
+                count: next[type],
                 title: message.title,
                 description: message.desc,
+                ...message.meta,
             });
         },
         [showViolationToast, traceEvent],
@@ -794,6 +895,32 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         settings: proctoring.settings,
         onViolation: handleProctorViolation,
     });
+
+    useEffect(() => {
+        if (!proctoringActive || !proctoring.settings.requireCameraMic) {
+            setCameraReady(false);
+            setCameraError(null);
+            return;
+        }
+        let cancelled = false;
+        requestDummyMedia().then((state) => {
+            if (cancelled) return;
+            if (state.stream && videoRef.current) {
+                videoRef.current.srcObject = state.stream;
+                videoRef.current.play().catch(() => {});
+                setCameraReady(true);
+                setCameraError(null);
+                traceEvent("proctoring.camera.ready", 0, { tracks: state.stream.getTracks().length });
+            } else if (state.error) {
+                setCameraReady(false);
+                setCameraError(state.error);
+                traceEvent("proctoring.camera.blocked", 2, { error: state.error });
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [proctoring.settings.requireCameraMic, proctoringActive, traceEvent]);
 
     useEffect(() => {
         if (!backendAttemptId) return;
@@ -916,9 +1043,10 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         if (tabMonitor.count > lastReportedSwitch.current) {
             const newSwitches = tabMonitor.count - lastReportedSwitch.current;
             lastReportedSwitch.current = tabMonitor.count;
-            traceEvent("proctor.tab_switch", 2, {
+            traceEvent("proctoring.tab.switched", 2, {
                 newSwitches,
                 totalSwitches: tabMonitor.count,
+                count: tabMonitor.count,
                 hidden: tabMonitor.hidden,
             });
             if (proctoring.settings.tabSwitchToast) {
@@ -1000,6 +1128,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             const state = stateOverride ?? statuses[qId] ?? "unattempted";
             const payload = payloadOverride ?? buildPayloadForQuestion(qId);
             await saveAttemptAnswer(backendAttemptId, examQuestionId, { state, payload });
+            // Confirmed on the server — clear the dirty flag so the autosave
+            // loop stops retrying this question.
+            dirtyAnswersRef.current.delete(qId);
             traceEvent("answer.autosaved", 0, {
                 state,
                 hasFiles: Array.isArray(payload.files),
@@ -1018,13 +1149,50 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         ],
     );
 
+    // Persists every question with unsaved edits. A question whose save fails
+    // (dropped connection, server hiccup) stays dirty and is retried on the
+    // next tick — no edit is silently lost. Returns once all queued saves have
+    // been attempted.
+    const flushDirtyAnswers = useCallback(async () => {
+        if (!backendAttemptId || dirtyAnswersRef.current.size === 0) return;
+        const ids = Array.from(dirtyAnswersRef.current);
+        for (const qId of ids) {
+            try {
+                await persistQuestion(qId);
+            } catch {
+                // Leave qId in the dirty set; the next tick retries it.
+                setSaved(false);
+            }
+        }
+    }, [backendAttemptId, persistQuestion]);
+
     useEffect(() => {
-        if (!hydrated || !backendAttemptId || !q?.id) return;
+        if (!hydrated || !backendAttemptId) return;
         const id = window.setInterval(() => {
-            void persistQuestion(q.id).catch(() => setSaved(false));
-        }, 10000);
+            // Always treat the current question as dirty so its latest state
+            // is captured even if no change event fired this interval.
+            if (q?.id != null) dirtyAnswersRef.current.add(q.id);
+            void flushDirtyAnswers();
+        }, 5000);
         return () => window.clearInterval(id);
-    }, [backendAttemptId, hydrated, persistQuestion, q?.id]);
+    }, [backendAttemptId, hydrated, flushDirtyAnswers, q?.id]);
+
+    // Last-chance answer flush when the tab is hidden or the page is being
+    // unloaded — covers a candidate closing the tab or losing the network
+    // right after an edit.
+    useEffect(() => {
+        if (!backendAttemptId) return;
+        const flushOnExit = () => {
+            if (q?.id != null) dirtyAnswersRef.current.add(q.id);
+            void flushDirtyAnswers();
+        };
+        window.addEventListener("pagehide", flushOnExit);
+        document.addEventListener("visibilitychange", flushOnExit);
+        return () => {
+            window.removeEventListener("pagehide", flushOnExit);
+            document.removeEventListener("visibilitychange", flushOnExit);
+        };
+    }, [backendAttemptId, flushDirtyAnswers, q?.id]);
 
     const setQuestionStatus = useCallback((qId: number, next: QStatus) => {
         setStatuses((s) => {
@@ -1065,6 +1233,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             [qId]: nextState,
         }));
         traceEvent("question.mcq_selected", 0, { selected: idx, state: nextState }, qId);
+        dirtyAnswersRef.current.add(qId);
         void persistQuestion(qId, nextState, nextPayload).catch(() => setSaved(false));
     };
 
@@ -1080,6 +1249,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 ...s,
                 [qId]: s[qId] === "solved" || s[qId] === "flagged" ? s[qId] : "attempted",
             }));
+            // Mark dirty so the autosave loop persists this edit to the server
+            // (and retries on failure). triggerSave() only writes localStorage.
+            dirtyAnswersRef.current.add(qId);
             traceEvent("workspace.changed", 0, {
                 fileCount: payload.files?.length ?? 0,
                 entryFile: payload.entryFile,
@@ -1427,7 +1599,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     const tabSwitchCount = tabMonitor.count;
 
     const resetCounters = useCallback(() => {
-        setCounters({ ...EMPTY_COUNTERS });
+        const next = { ...EMPTY_COUNTERS };
+        countersRef.current = next;
+        setCounters(next);
     }, []);
 
     const devProps = useMemo(
@@ -1691,6 +1865,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 title={lastViolation.title}
                 desc={lastViolation.desc}
             />
+            {proctoringActive && proctoring.settings.requireCameraMic && (
+                <CameraChip videoRef={videoRef} ready={cameraReady} error={cameraError} />
+            )}
             <MountPoint id="attempt.warning-toast" />
 
             {process.env.NODE_ENV === "development" && <DevControls {...devProps} />}

@@ -208,6 +208,13 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metadata, err := s.buildAssignmentMetadata(ctx, tx, uuid.MustParse(codingExamVersionID), req.ItemRef)
+	if err != nil {
+		s.logger.Error("assignment snapshot failed", "user_id", principal.UserID, "item_ref", req.ItemRef, "err", err)
+		writeError(w, http.StatusInternalServerError, "assignment snapshot failed")
+		return
+	}
+
 	var assignmentID uuid.UUID
 	var availableFrom sql.NullTime
 	err = tx.QueryRow(ctx, `
@@ -219,7 +226,7 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		VALUES (
 		    $1, $2, $3, $3, $4,
 		    now(), NULL, 1, 'active',
-		    $5, $6, jsonb_build_object('language', replace($5, 'coding:', ''))
+		    $5, $6, jsonb_build_object('language', replace($5, 'coding:', '')) || $7::jsonb
 		)
 		ON CONFLICT (candidate_user_id, assignment_ref)
 		    WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
@@ -227,9 +234,13 @@ func (s *Server) demoPurchase(w http.ResponseWriter, r *http.Request) {
 		SET status = 'active',
 		    available_from = COALESCE(exam_assignments.available_from, EXCLUDED.available_from),
 		    available_until = NULL,
-		    purchase_id = COALESCE(exam_assignments.purchase_id, EXCLUDED.purchase_id)
+		    purchase_id = COALESCE(exam_assignments.purchase_id, EXCLUDED.purchase_id),
+		    metadata = CASE
+		        WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
+		        ELSE exam_assignments.metadata || EXCLUDED.metadata
+		    END
 		RETURNING id, available_from
-	`, uuid.New(), codingExamVersionID, principal.UserID, systemOrgID, req.ItemRef, purchaseID).Scan(&assignmentID, &availableFrom)
+	`, uuid.New(), codingExamVersionID, principal.UserID, systemOrgID, req.ItemRef, purchaseID, metadata).Scan(&assignmentID, &availableFrom)
 	if err != nil {
 		s.logger.Error("assignment upsert failed", "user_id", principal.UserID, "item_ref", req.ItemRef, "err", err)
 		writeError(w, http.StatusInternalServerError, "assignment failed")
@@ -293,7 +304,11 @@ func (s *Server) grantFreeAssignmentTx(ctx context.Context, tx pgx.Tx, userID in
 	if !pricingExists {
 		return nil
 	}
-	_, err := tx.Exec(ctx, `
+	metadata, err := s.buildAssignmentMetadata(ctx, tx, uuid.MustParse(codingExamVersionID), ref)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
 		INSERT INTO exam_assignments (
 		    id, exam_version_id, candidate_user_id, assigned_by, assigned_org_id,
 		    available_from, available_until, max_attempts, status,
@@ -302,15 +317,19 @@ func (s *Server) grantFreeAssignmentTx(ctx context.Context, tx pgx.Tx, userID in
 		VALUES (
 		    $1, $2, $3, $3, $4,
 		    now(), NULL, 1, 'active',
-		    $5, jsonb_build_object('language', replace($5, 'coding:', ''), 'grantedBy', 'admin_registration')
+		    $5, jsonb_build_object('language', replace($5, 'coding:', ''), 'grantedBy', 'admin_registration') || $6::jsonb
 		)
 		ON CONFLICT (candidate_user_id, assignment_ref)
 		    WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
 		DO UPDATE
 		SET status = 'active',
 		    available_from = COALESCE(exam_assignments.available_from, EXCLUDED.available_from),
-		    available_until = NULL
-	`, uuid.New(), codingExamVersionID, userID, systemOrgID, ref)
+		    available_until = NULL,
+		    metadata = CASE
+		        WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
+		        ELSE exam_assignments.metadata || EXCLUDED.metadata
+		    END
+	`, uuid.New(), codingExamVersionID, userID, systemOrgID, ref, metadata)
 	return err
 }
 
@@ -343,6 +362,10 @@ func (s *Server) grantFreeCodingAssignments(ctx context.Context, userID int64) e
 	}
 
 	for _, ref := range refs {
+		metadata, err := s.buildAssignmentMetadata(ctx, s.pool, uuid.MustParse(codingExamVersionID), ref)
+		if err != nil {
+			return err
+		}
 		if _, err := s.pool.Exec(ctx, `
 			INSERT INTO exam_assignments (
 			    id, exam_version_id, candidate_user_id, assigned_by, assigned_org_id,
@@ -352,12 +375,17 @@ func (s *Server) grantFreeCodingAssignments(ctx context.Context, userID int64) e
 			VALUES (
 			    $1, $2, $3, $3, $4,
 			    now(), NULL, 1, 'active',
-			    $5, jsonb_build_object('language', replace($5, 'coding:', ''), 'grantedBy', 'admin_registration')
+			    $5, jsonb_build_object('language', replace($5, 'coding:', ''), 'grantedBy', 'admin_registration') || $6::jsonb
 			)
 			ON CONFLICT (candidate_user_id, assignment_ref)
 			    WHERE assignment_ref IS NOT NULL AND status <> 'revoked'
-			DO NOTHING
-		`, uuid.New(), codingExamVersionID, userID, systemOrgID, ref); err != nil {
+			DO UPDATE
+			SET status = 'active',
+			    metadata = CASE
+			        WHEN exam_assignments.metadata ? 'settingsSnapshot' THEN exam_assignments.metadata
+			        ELSE exam_assignments.metadata || EXCLUDED.metadata
+			    END
+		`, uuid.New(), codingExamVersionID, userID, systemOrgID, ref, metadata); err != nil {
 			return err
 		}
 	}

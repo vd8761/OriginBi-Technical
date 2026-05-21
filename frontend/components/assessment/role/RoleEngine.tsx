@@ -14,6 +14,7 @@ import ProctoringHost from "@/lib/proctoring/ProctoringHost";
 import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
 import {
     DEFAULT_PROCTORING,
+    fetchEffectiveAssessmentSettings,
     resolveProctoringForPackage,
     type ProctoringSettings,
 } from "@/lib/proctoring";
@@ -167,6 +168,15 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                         (a: any) => a.module_type === 'role' || a.assessment_code === 'role'
                     );
                     if (found) {
+                        // Prefer the config frozen at the candidate's purchase
+                        // time over the live admin row, so a later admin edit
+                        // never changes an already-scheduled exam.
+                        const effective = await fetchEffectiveAssessmentSettings(
+                            API_BASE,
+                            'role',
+                            activeEmail,
+                        );
+                        if (effective) Object.assign(found, effective);
                         const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
                         setAttemptsLimit(Number(lim));
                         setProctoringSettings(resolveProctoringForPackage(found));

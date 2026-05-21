@@ -417,6 +417,29 @@ const DevControls: React.FC<DevControlsProps> = (props) => {
                             count={proctoringCounters.fullscreenExit}
                             onChange={(v) => onProctorSettingChange("detectFullscreenExit", v)}
                         />
+                        <Toggle
+                            label="Camera / mic prompt"
+                            value={proctoringSettings.requireCameraMic}
+                            onChange={(v) => onProctorSettingChange("requireCameraMic", v)}
+                        />
+                        <Toggle
+                            label="Detect focus loss"
+                            value={proctoringSettings.detectFocusLoss}
+                            count={proctoringCounters.focusLost}
+                            onChange={(v) => onProctorSettingChange("detectFocusLoss", v)}
+                        />
+                        <Toggle
+                            label="Detect devtools"
+                            value={proctoringSettings.detectDevtools}
+                            count={proctoringCounters.devtoolsOpen}
+                            onChange={(v) => onProctorSettingChange("detectDevtools", v)}
+                        />
+                        <Toggle
+                            label="Log keypress"
+                            value={proctoringSettings.logKeypress}
+                            count={proctoringCounters.keypress}
+                            onChange={(v) => onProctorSettingChange("logKeypress", v)}
+                        />
                     </div>
                     <div className="flex flex-wrap gap-1">
                         <Btn onClick={onRequestFullscreen}>request fullscreen</Btn>
