@@ -382,10 +382,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f5fbf7] dark:bg-[#0f1712] font-sans transition-colors duration-500">
             <div className="fixed inset-0 pointer-events-none">
-                <div
-                    className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full blur-[100px] opacity-70"
-                    style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
-                />
                 <div className="absolute inset-0 opacity-[0.10] dark:opacity-[0.06] assessment-grid" />
             </div>
 
@@ -411,13 +407,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 </button>
 
                 {/* Hero */}
-                <section className="relative overflow-hidden rounded-3xl border border-slate-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04] backdrop-blur-xl p-8 sm:p-10 lg:p-12">
+                <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#212824] p-8 sm:p-10 lg:p-12 shadow-sm">
                     <div
                         className="absolute top-0 left-0 right-0 h-1.5"
                         style={{ background: gradient }}
-                    />
-                    <div className="absolute -top-16 right-0 w-64 h-64 rounded-full blur-[80px] opacity-30 pointer-events-none"
-                        style={{ background: accent }}
                     />
 
                     <div className="relative flex flex-col lg:flex-row lg:items-center gap-8">
@@ -441,7 +434,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         Coming Soon
                                     </span>
                                 )}
-                                <span className="text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
                                     {exam.difficulty}
                                 </span>
                                 {!isCoding && examCompleted && (
@@ -451,8 +444,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                 )}
                                 {!isCoding && examPaid && !examCompleted && (
                                     <span
-                                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
-                                        style={{ background: `${accent}1f`, color: accent }}
+                                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border"
+                                        style={{
+                                            background: `${accent}15`,
+                                            color: accent,
+                                            borderColor: `${accent}33`,
+                                        }}
                                     >
                                         Unlocked
                                     </span>
@@ -563,7 +560,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         {detail.skills.map((skill) => (
                             <div
                                 key={skill.title}
-                                className="rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-5 transition-all hover:border-[#1ED36A]/30"
+                                className="rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-5 transition-all hover:border-[#1ED36A]/30 shadow-xs"
                             >
                                 <h4 className="text-[14px] font-bold text-black dark:text-white mb-1.5">
                                     {skill.title}
@@ -582,7 +579,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         {detail.sections.map((section, index) => (
                             <div
                                 key={section.name}
-                                className="flex items-center gap-4 rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4"
+                                className="flex items-center gap-4 rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-4 shadow-xs"
                             >
                                 <div
                                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold"
@@ -808,7 +805,7 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
         status === "completed" ? "Completed" : status === "ready" ? "Start" : "Pay & Unlock";
 
     return (
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-4 shadow-xs">
             <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
                 style={{ background: `${lang.accent}1a` }}
@@ -847,7 +844,7 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
 };
 
 const Stat: React.FC<{ label: string; value: string; accent?: string }> = ({ label, value, accent }) => (
-    <div className="rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-4 shadow-xs">
         <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-black dark:text-white mb-1.5">
             {label}
         </p>

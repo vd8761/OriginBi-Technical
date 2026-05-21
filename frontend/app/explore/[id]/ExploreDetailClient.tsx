@@ -76,7 +76,13 @@ export default function ExploreDetailClient({ id }: { id: string }) {
                 assessmentCode: dbExam.assessment_code || exam.id,
                 title: dbExam.assessment_name || exam.title,
                 duration: `${dbExam.total_time_minutes || 60} min`,
-                questions: dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.total_questions || exam.questions),
+                questions: dbExam.question_limit !== undefined && dbExam.question_limit !== null && dbExam.question_limit > 0
+                    ? dbExam.question_limit
+                    : (dbExam.total_questions !== undefined && dbExam.total_questions !== null
+                        ? dbExam.total_questions
+                        : (dbExam.main_questions_count !== undefined && dbExam.main_questions_count !== null
+                            ? dbExam.main_questions_count
+                            : exam.questions)),
                 price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
                 trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
                 mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,

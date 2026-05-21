@@ -1022,10 +1022,10 @@ export default function CsvImportPanel({
 
           {errorMsg && (
             <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-in shake duration-500">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+              <AlertCircle className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
               <div>
-                <p className="text-[9px] font-black tracking-widest text-red-500 mb-0.5 leading-none">CSV Error</p>
-                <p className="text-[10px] font-bold text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>
+                <p className="text-xs font-black uppercase tracking-wider text-red-500 mb-1 leading-none">CSV Error</p>
+                <p className="text-sm font-bold text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>
               </div>
             </div>
           )}
@@ -1112,14 +1112,14 @@ export default function CsvImportPanel({
                   {/* Alert Error Box */}
                   {currentErrors.length > 0 && (
                     <div className="bg-red-500/10 border-b border-red-500/20 p-4 shrink-0 flex items-start gap-3">
-                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <h4 className="text-[10px] font-black tracking-widest text-red-500 mb-1 leading-none">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-red-500 mb-1.5 leading-none">
                           Validation Failures ({currentErrors.length})
                         </h4>
-                        <ul className="list-disc pl-3.5 space-y-0.5">
+                        <ul className="list-disc pl-4 space-y-1">
                           {currentErrors.map((err, i) => (
-                            <li key={i} className="text-[10px] font-bold text-red-600 dark:text-red-400">
+                            <li key={i} className="text-sm font-bold text-red-600 dark:text-red-400">
                               {err.message}
                             </li>
                           ))}

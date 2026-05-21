@@ -19,6 +19,7 @@ export interface RegisterUserDto {
   roleDescription?: string;
   groupName?: string;
   pricingPolicy?: string;
+  registrationSource?: string;
 }
 
 @Injectable()
@@ -52,6 +53,7 @@ export class RegistrationService {
         student_board: dto.studentBoard || null,
         department_degree_id: dto.departmentDegreeId || null,
         current_year: dto.currentYear || null,
+        registration_source: dto.registrationSource || 'SELF',
         metadata: {
           sendEmail: dto.sendEmail !== false,
           currentRole: dto.currentRole || null,

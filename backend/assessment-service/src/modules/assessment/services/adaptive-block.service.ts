@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -295,12 +295,13 @@ export class AdaptiveBlockService {
     try {
       // 1. Resolve attempt
       const ar = await qr.query(
-        `SELECT aptitude_attempt_id, assessment_id FROM tech_aptitude_attempts WHERE attempt_token=$1`,
+        `SELECT aptitude_attempt_id, assessment_id, mode FROM tech_aptitude_attempts WHERE attempt_token=$1`,
         [attemptToken],
       );
       if (!ar.length) throw new NotFoundException('Attempt not found');
       const attemptId = Number(ar[0].aptitude_attempt_id);
       const assessmentId = Number(ar[0].assessment_id);
+      const attemptMode = ar[0].mode || 'main';
 
       // 2. Load this block's questions with correct answers + marks
       const bqs = await qr.query(

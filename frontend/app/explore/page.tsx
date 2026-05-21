@@ -66,7 +66,13 @@ export default function ExplorePage() {
           assessmentCode: dbExam.assessment_code || exam.id,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.main_questions_count > 0 ? dbExam.main_questions_count : dbExam.total_questions)) || exam.questions,
+          questions: dbExam.question_limit !== undefined && dbExam.question_limit !== null && dbExam.question_limit > 0
+            ? dbExam.question_limit
+            : (dbExam.total_questions !== undefined && dbExam.total_questions !== null
+                ? dbExam.total_questions
+                : (dbExam.main_questions_count !== undefined && dbExam.main_questions_count !== null
+                    ? dbExam.main_questions_count
+                    : exam.questions)),
           trialQuestionsCount: dbExam.trial_questions_count || 0,
           mainQuestionsCount: dbExam.main_questions_count || 0,
           questionLimit: dbExam.question_limit || 0,

@@ -351,7 +351,10 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
     }
     setIsLoading(true);
     try {
-      await registerUser(formData);
+      await registerUser({
+        ...formData,
+        registrationSource: "ADMIN",
+      });
       onRegister();
     } catch (err: any) {
       console.error("Registration Error:", err);

@@ -282,6 +282,7 @@ export class BulkAdminUsersService {
             currentRole: dto.currentRole,
             roleDescription: dto.roleDescription,
             groupName: dto.groupName,
+            registrationSource: 'ADMIN',
           });
 
           row.status = 'SUCCESS';
