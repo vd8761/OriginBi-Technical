@@ -789,7 +789,12 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         proctoring.update,
     ]);
 
-    const tabMonitor = useTabSwitchMonitor(proctoringActive && proctoring.settings.tabSwitch);
+    // scopeKey namespaces the persisted tab-switch state to this attempt, so a
+    // previous attempt's count never leaks in as a phantom switch on entry.
+    const tabMonitor = useTabSwitchMonitor(
+        proctoringActive && proctoring.settings.tabSwitch,
+        { scopeKey: backendAttemptId },
+    );
 
     useTabPanic(proctoringActive, tabMonitor.hidden);
 
@@ -806,6 +811,11 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     const lastReportedSwitch = useRef(0);
     const toastHideTimer = useRef<number | null>(null);
     const eventQueueRef = useRef<AttemptEventInput[]>([]);
+    // Local question ids whose answer has unsaved edits. A question stays in
+    // this set until the backend confirms its save, so a failed save (e.g. a
+    // dropped connection) is retried on the next autosave tick instead of
+    // being lost.
+    const dirtyAnswersRef = useRef<Set<number>>(new Set());
 
     const flushTraceEvents = useCallback(
         async (keepalive = false) => {
@@ -1118,6 +1128,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             const state = stateOverride ?? statuses[qId] ?? "unattempted";
             const payload = payloadOverride ?? buildPayloadForQuestion(qId);
             await saveAttemptAnswer(backendAttemptId, examQuestionId, { state, payload });
+            // Confirmed on the server — clear the dirty flag so the autosave
+            // loop stops retrying this question.
+            dirtyAnswersRef.current.delete(qId);
             traceEvent("answer.autosaved", 0, {
                 state,
                 hasFiles: Array.isArray(payload.files),
@@ -1136,13 +1149,50 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         ],
     );
 
+    // Persists every question with unsaved edits. A question whose save fails
+    // (dropped connection, server hiccup) stays dirty and is retried on the
+    // next tick — no edit is silently lost. Returns once all queued saves have
+    // been attempted.
+    const flushDirtyAnswers = useCallback(async () => {
+        if (!backendAttemptId || dirtyAnswersRef.current.size === 0) return;
+        const ids = Array.from(dirtyAnswersRef.current);
+        for (const qId of ids) {
+            try {
+                await persistQuestion(qId);
+            } catch {
+                // Leave qId in the dirty set; the next tick retries it.
+                setSaved(false);
+            }
+        }
+    }, [backendAttemptId, persistQuestion]);
+
     useEffect(() => {
-        if (!hydrated || !backendAttemptId || !q?.id) return;
+        if (!hydrated || !backendAttemptId) return;
         const id = window.setInterval(() => {
-            void persistQuestion(q.id).catch(() => setSaved(false));
-        }, 10000);
+            // Always treat the current question as dirty so its latest state
+            // is captured even if no change event fired this interval.
+            if (q?.id != null) dirtyAnswersRef.current.add(q.id);
+            void flushDirtyAnswers();
+        }, 5000);
         return () => window.clearInterval(id);
-    }, [backendAttemptId, hydrated, persistQuestion, q?.id]);
+    }, [backendAttemptId, hydrated, flushDirtyAnswers, q?.id]);
+
+    // Last-chance answer flush when the tab is hidden or the page is being
+    // unloaded — covers a candidate closing the tab or losing the network
+    // right after an edit.
+    useEffect(() => {
+        if (!backendAttemptId) return;
+        const flushOnExit = () => {
+            if (q?.id != null) dirtyAnswersRef.current.add(q.id);
+            void flushDirtyAnswers();
+        };
+        window.addEventListener("pagehide", flushOnExit);
+        document.addEventListener("visibilitychange", flushOnExit);
+        return () => {
+            window.removeEventListener("pagehide", flushOnExit);
+            document.removeEventListener("visibilitychange", flushOnExit);
+        };
+    }, [backendAttemptId, flushDirtyAnswers, q?.id]);
 
     const setQuestionStatus = useCallback((qId: number, next: QStatus) => {
         setStatuses((s) => {
@@ -1183,6 +1233,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             [qId]: nextState,
         }));
         traceEvent("question.mcq_selected", 0, { selected: idx, state: nextState }, qId);
+        dirtyAnswersRef.current.add(qId);
         void persistQuestion(qId, nextState, nextPayload).catch(() => setSaved(false));
     };
 
@@ -1198,6 +1249,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 ...s,
                 [qId]: s[qId] === "solved" || s[qId] === "flagged" ? s[qId] : "attempted",
             }));
+            // Mark dirty so the autosave loop persists this edit to the server
+            // (and retries on failure). triggerSave() only writes localStorage.
+            dirtyAnswersRef.current.add(qId);
             traceEvent("workspace.changed", 0, {
                 fileCount: payload.files?.length ?? 0,
                 entryFile: payload.entryFile,

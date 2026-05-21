@@ -379,6 +379,19 @@ func (s *Server) saveAnswer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, saveAnswerResponse{Saved: true, SavedAt: savedAt})
 }
 
+// submitAttempt is split into two phases on purpose:
+//
+//   Phase 1 (synchronous, transactional): persist every answer and flip the
+//   attempt to 'submitted'. This is the candidate's exam state of record —
+//   once it commits, the work cannot be lost no matter what happens next.
+//
+//   Phase 2 (asynchronous): run final Judge0 evaluation + grading and move the
+//   attempt to 'evaluated'. This is detached from the request so a slow run
+//   can't time the HTTP call out. The previous design graded inline; on this
+//   1-vCPU box a multi-test compile pass routinely took >30s, the client gave
+//   up, the status UPDATE never ran, and the attempt was stranded in
+//   'in_progress' — i.e. the submission was silently lost. If Phase 2 fails
+//   now, the attempt simply stays 'submitted' and stays gradeable.
 func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 	principal, err := auth.Require(r.Context())
 	if err != nil {
@@ -395,7 +408,7 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saveCtx, saveCancel := contextWithTimeout(r.Context(), 10*time.Second)
+	saveCtx, saveCancel := contextWithTimeout(r.Context(), 15*time.Second)
 	defer saveCancel()
 	tx, err := s.pool.Begin(saveCtx)
 	if err != nil {
@@ -423,50 +436,25 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 			payload = json.RawMessage("{}")
 		}
 		if _, err := s.saveAnswerTx(saveCtx, tx, principal.UserID, attemptID, examQuestionID, state, payload); err != nil {
+			// A duplicate submit (timer + terminate hook + manual button can
+			// all fire) finds the attempt no longer active — saveAnswerTx
+			// returns ErrNoRows. Treat that as an idempotent success below.
+			if errors.Is(err, pgx.ErrNoRows) {
+				break
+			}
 			writeSaveAnswerErr(w, err)
 			return
 		}
-	}
-	if err := tx.Commit(saveCtx); err != nil {
-		writeError(w, http.StatusInternalServerError, "commit failed")
-		return
-	}
-
-	if err := s.runFinalCodeForAttempt(r.Context(), principal.UserID, attemptID); err != nil {
-		status, body := codeRunErrResponse(err)
-		if status == http.StatusInternalServerError {
-			writeError(w, http.StatusBadGateway, "final code evaluation failed: "+err.Error())
-			return
-		}
-		writeJSON(w, status, body)
-		return
-	}
-
-	gradeCtx, gradeCancel := contextWithTimeout(r.Context(), 10*time.Second)
-	defer gradeCancel()
-	tx, err = s.pool.Begin(gradeCtx)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "db unavailable")
-		return
-	}
-	defer tx.Rollback(gradeCtx)
-
-	finalScore, gradingStatus, err := s.gradeAttemptTx(gradeCtx, tx, attemptID, principal.UserID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "grading failed")
-		return
 	}
 
 	var dto attemptDTO
 	var id, assignmentID, examVersionID uuid.UUID
 	var startedAt, submittedAt, deadlineAt sql.NullTime
-	err = tx.QueryRow(gradeCtx, `
+	err = tx.QueryRow(saveCtx, `
 		UPDATE attempts
-		SET status = 'evaluated',
+		SET status = 'submitted',
 		    submitted_at = now(),
 		    last_seen_at = now(),
-		    final_score = $3,
-		    grading_status = $4,
 		    time_remaining_ms = CASE
 		        WHEN deadline_at IS NULL THEN time_remaining_ms
 		        ELSE GREATEST(0, (extract(epoch FROM (deadline_at - now())) * 1000)::int)
@@ -476,42 +464,160 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 		  AND status IN ('started','in_progress','paused')
 		RETURNING id, assignment_id, exam_version_id, status::text,
 		          started_at, submitted_at, deadline_at, time_remaining_ms
-	`, attemptID, principal.UserID, finalScore, gradingStatus).Scan(
+	`, attemptID, principal.UserID).Scan(
 		&id, &assignmentID, &examVersionID, &dto.Status,
 		&startedAt, &submittedAt, &deadlineAt, &dto.TimeRemainingMs,
 	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusConflict, "attempt is not active")
-		return
-	}
-	if err != nil {
+	alreadyTerminal := errors.Is(err, pgx.ErrNoRows)
+	if err != nil && !alreadyTerminal {
 		writeError(w, http.StatusInternalServerError, "submit failed")
 		return
 	}
-	if err := s.recordAttemptEventTx(gradeCtx, tx, attemptID, "attempt_submitted", 0, nil, map[string]any{
-		"finalScore":    finalScore,
-		"gradingStatus": gradingStatus,
-		"answerCount":   len(req.Answers),
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "trace write failed")
-		return
+	if !alreadyTerminal {
+		if err := s.recordAttemptEventTx(saveCtx, tx, attemptID, "attempt_submitted", 0, nil, map[string]any{
+			"answerCount": len(req.Answers),
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "trace write failed")
+			return
+		}
 	}
-	if err := tx.Commit(gradeCtx); err != nil {
+	if err := tx.Commit(saveCtx); err != nil {
 		writeError(w, http.StatusInternalServerError, "commit failed")
 		return
 	}
-	s.publishLifecycleEvent(r.Context(), "attempt.submitted", attemptID, principal.UserID, map[string]any{
-		"finalScore":    finalScore,
-		"gradingStatus": gradingStatus,
-		"answerCount":   len(req.Answers),
-	})
+
+	// Idempotent path: the attempt was already submitted/evaluated by an
+	// earlier (possibly concurrent) submit. Return its current state. If it is
+	// 'submitted' but grading never finished, re-kick evaluation.
+	if alreadyTerminal {
+		ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		cur, ferr := s.fetchAttemptForSubmit(ctx, attemptID, principal.UserID)
+		if ferr != nil {
+			writeError(w, http.StatusConflict, "attempt is not active")
+			return
+		}
+		if cur.Status == "submitted" {
+			s.scheduleAttemptEvaluation(attemptID, principal.UserID)
+		}
+		writeJSON(w, http.StatusOK, submitResponse{Attempt: cur, Status: cur.Status})
+		return
+	}
+
 	dto.ID = id.String()
 	dto.AssignmentID = assignmentID.String()
 	dto.ExamVersionID = examVersionID.String()
 	dto.StartedAt = nullTimePtr(startedAt)
 	dto.SubmittedAt = nullTimePtr(submittedAt)
 	dto.DeadlineAt = nullTimePtr(deadlineAt)
+
+	s.publishLifecycleEvent(r.Context(), "attempt.submitted", attemptID, principal.UserID, map[string]any{
+		"answerCount": len(req.Answers),
+	})
+
+	// Phase 2 — grade in the background; the submission is already durable.
+	s.scheduleAttemptEvaluation(attemptID, principal.UserID)
+
 	writeJSON(w, http.StatusOK, submitResponse{Attempt: dto, Status: dto.Status})
+}
+
+// fetchAttemptForSubmit reads the current attempt row as an attemptDTO. Used
+// by the idempotent submit path to echo back the already-terminal state.
+func (s *Server) fetchAttemptForSubmit(ctx context.Context, attemptID uuid.UUID, userID int64) (attemptDTO, error) {
+	var dto attemptDTO
+	var id, assignmentID, examVersionID uuid.UUID
+	var startedAt, submittedAt, deadlineAt sql.NullTime
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, assignment_id, exam_version_id, status::text,
+		       started_at, submitted_at, deadline_at, time_remaining_ms
+		FROM attempts
+		WHERE id = $1 AND candidate_user_id = $2
+	`, attemptID, userID).Scan(
+		&id, &assignmentID, &examVersionID, &dto.Status,
+		&startedAt, &submittedAt, &deadlineAt, &dto.TimeRemainingMs,
+	)
+	if err != nil {
+		return attemptDTO{}, err
+	}
+	dto.ID = id.String()
+	dto.AssignmentID = assignmentID.String()
+	dto.ExamVersionID = examVersionID.String()
+	dto.StartedAt = nullTimePtr(startedAt)
+	dto.SubmittedAt = nullTimePtr(submittedAt)
+	dto.DeadlineAt = nullTimePtr(deadlineAt)
+	return dto, nil
+}
+
+// scheduleAttemptEvaluation runs final code evaluation + grading for a
+// submitted attempt in a detached goroutine, transitioning it to 'evaluated'.
+// Concurrent calls for the same attempt collapse to a single run.
+func (s *Server) scheduleAttemptEvaluation(attemptID uuid.UUID, userID int64) {
+	if _, busy := s.evaluating.LoadOrStore(attemptID, true); busy {
+		return
+	}
+	go func() {
+		defer s.evaluating.Delete(attemptID)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := s.evaluateAndGradeAttempt(ctx, attemptID, userID); err != nil {
+			// The attempt stays 'submitted' — durable and gradeable later.
+			s.logger.Error("attempt evaluation failed",
+				"attempt_id", attemptID, "err", err)
+		}
+	}()
+}
+
+// evaluateAndGradeAttempt runs the final Judge0 pass and grading, then moves a
+// 'submitted' attempt to 'evaluated'. Safe to call more than once: the final
+// UPDATE is guarded on status = 'submitted'.
+func (s *Server) evaluateAndGradeAttempt(ctx context.Context, attemptID uuid.UUID, userID int64) error {
+	if err := s.runFinalCodeForAttempt(ctx, userID, attemptID); err != nil {
+		return fmt.Errorf("final code evaluation: %w", err)
+	}
+
+	gradeCtx, cancel := contextWithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(gradeCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(gradeCtx)
+
+	finalScore, gradingStatus, err := s.gradeAttemptTx(gradeCtx, tx, attemptID, userID)
+	if err != nil {
+		return fmt.Errorf("grading: %w", err)
+	}
+	tag, err := tx.Exec(gradeCtx, `
+		UPDATE attempts
+		SET status = 'evaluated',
+		    final_score = $3,
+		    grading_status = $4,
+		    last_seen_at = now()
+		WHERE id = $1
+		  AND candidate_user_id = $2
+		  AND status = 'submitted'
+	`, attemptID, userID, finalScore, gradingStatus)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		// Already graded by a concurrent pass — nothing to do.
+		return nil
+	}
+	if err := s.recordAttemptEventTx(gradeCtx, tx, attemptID, "attempt_evaluated", 0, nil, map[string]any{
+		"finalScore":    finalScore,
+		"gradingStatus": gradingStatus,
+	}); err != nil {
+		return err
+	}
+	if err := tx.Commit(gradeCtx); err != nil {
+		return err
+	}
+	s.publishLifecycleEvent(ctx, "attempt.evaluated", attemptID, userID, map[string]any{
+		"finalScore":    finalScore,
+		"gradingStatus": gradingStatus,
+	})
+	return nil
 }
 
 func (s *Server) writeSnapshot(w http.ResponseWriter, r *http.Request, userID int64, attemptID uuid.UUID) {
@@ -996,7 +1102,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 		JOIN question_versions qv ON qv.id = ans.question_version_id
 		WHERE a.id = $1
 		  AND a.candidate_user_id = $2
-		  AND a.status IN ('started','in_progress','paused')
+		  AND a.status IN ('started','in_progress','paused','submitted')
 		ORDER BY eq.ordinal
 	`, attemptID, userID)
 	if err != nil {
@@ -1057,7 +1163,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 		}
 
 		persistCtx, persistCancel := contextWithTimeout(ctx, 5*time.Second)
-		runID, err := s.persistRunStart(persistCtx, userID, attemptID, ans.ExamQuestionID, req)
+		runID, err := s.persistRunStart(persistCtx, userID, attemptID, ans.ExamQuestionID, req, true)
 		persistCancel()
 		if err != nil {
 			return fmt.Errorf("question %s final run start: %w", ans.ExamQuestionID, err)
