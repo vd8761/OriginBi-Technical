@@ -7,6 +7,7 @@ import React, {
   useContext,
   ReactNode,
 } from "react";
+import { setActiveStudent, clearAllAssessmentCaches } from "../assessmentCache";
 
 export interface UserProfile {
   name: string;
@@ -90,8 +91,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
           if (storedProfile) {
             const parsedProfile = JSON.parse(storedProfile);
             setUser(parsedProfile);
-            setIsLoggedIn(true);
-            window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: parsedProfile }));
+              setIsLoggedIn(true);
+              setActiveStudent(parsedProfile.email ?? null);
+              window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: parsedProfile }));
           } else {
             // If token exists but profile doesn't, fetch it from API
             const { getSession } = await import("@/lib/api");
@@ -104,6 +106,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               };
               setUser(profile);
               setIsLoggedIn(true);
+              setActiveStudent(profile.email ?? null);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
             }
@@ -122,6 +125,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               };
               setUser(profile);
               setIsLoggedIn(true);
+              setActiveStudent(profile.email ?? null);
               localStorage.setItem("originbi:access-token", accessToken);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
@@ -153,6 +157,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
       setUser(profile);
       setIsLoggedIn(true);
+      setActiveStudent(profile.email ?? null);
       window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
     } catch (error) {
       console.error("Error setting session storage", error);
@@ -161,6 +166,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
   const logout = () => {
     try {
+      // Clear all assessment caches first to prevent cross-student leakage
+      clearAllAssessmentCaches().catch(() => {});
+
       // Clear all originbi keys to avoid state leakage
       localStorage.removeItem("originbi:access-token");
       localStorage.removeItem("originbi:id-token");

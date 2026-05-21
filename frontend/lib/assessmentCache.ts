@@ -39,6 +39,24 @@ const LS_INDEX_PREFIX = 'obi_assess_idx_';
 // Persistent cache: keep IndexedDB snapshots for larger payloads.
 const USE_IDB = true;
 
+// ── Active student scoping ────────────────────────────────────
+// Cache keys are scoped per-student so that Student Y on the same
+// device can never resume Student X's in-progress assessment.
+let _activeStudentEmail: string | null = null;
+
+/**
+ * Set the active student email.  Called once after login and on app boot.
+ * All subsequent cache reads/writes will be scoped to this email.
+ */
+export function setActiveStudent(email: string | null): void {
+  _activeStudentEmail = email?.toLowerCase().trim() ?? null;
+}
+
+/** Returns the normalised active student email, or null. */
+export function getActiveStudent(): string | null {
+  return _activeStudentEmail;
+}
+
 // ── Types ─────────────────────────────────────────────────────
 
 export interface AnswerValue {
@@ -78,6 +96,8 @@ export interface CacheSession {
   currentIndex: number;
   /** Submission status – guard against serving stale data */
   status: 'in_progress' | 'submitted';
+  /** Email of the student who owns this cache entry (cross-student guard) */
+  ownerEmail?: string;
   /** Adaptive assessment properties */
   currentBlock?: any;
   currentBlockNumber?: number;
@@ -113,22 +133,35 @@ function lsWrite(session: CacheSession) {
   }
 }
 
-/** Write secondary index: assessmentCode → token */
+/**
+ * Build a student-scoped index key.
+ * Format: obi_assess_idx_<email>__<assessmentCode>
+ * If no active student is set, falls back to the bare code (legacy compat).
+ */
+function scopedIndexKey(assessmentCode: string): string {
+  const email = _activeStudentEmail;
+  if (email) {
+    return `${LS_INDEX_PREFIX}${email}__${assessmentCode}`;
+  }
+  return `${LS_INDEX_PREFIX}${assessmentCode}`;
+}
+
+/** Write secondary index: assessmentCode → token (scoped by active student) */
 function lsWriteIndex(assessmentCode: string, token: string) {
   try {
-    localStorage.setItem(`${LS_INDEX_PREFIX}${assessmentCode}`, token);
+    localStorage.setItem(scopedIndexKey(assessmentCode), token);
   } catch { /* noop */ }
 }
 
-/** Find a token by assessmentCode from the secondary index */
+/** Find a token by assessmentCode from the secondary index (scoped by active student) */
 function lsFindByCode(assessmentCode: string): string | null {
   try {
-    return localStorage.getItem(`${LS_INDEX_PREFIX}${assessmentCode}`) ?? null;
+    return localStorage.getItem(scopedIndexKey(assessmentCode)) ?? null;
   } catch { return null; }
 }
 
 function lsClearIndex(assessmentCode: string) {
-  try { localStorage.removeItem(`${LS_INDEX_PREFIX}${assessmentCode}`); } catch { /* noop */ }
+  try { localStorage.removeItem(scopedIndexKey(assessmentCode)); } catch { /* noop */ }
 }
 
 /** Reads the lightweight snapshot from localStorage. */
@@ -224,6 +257,7 @@ export async function initCache(session: Omit<CacheSession, 'lastUpdatedAt' | 's
     ...session,
     lastUpdatedAt: Date.now(),
     status: 'in_progress',
+    ownerEmail: _activeStudentEmail ?? undefined,
   };
   lsWrite(full);
   if (session.assessmentCode) {
@@ -344,7 +378,13 @@ export async function clearCache(token: string, assessmentCode?: string): Promis
 export async function loadCacheByCode(assessmentCode: string): Promise<CacheSession | null> {
   const token = lsFindByCode(assessmentCode);
   if (!token) return null;
-  return loadCache(token);
+  const session = await loadCache(token);
+  // Cross-student guard: reject cache if it was written by a different student
+  if (session?.ownerEmail && _activeStudentEmail && session.ownerEmail !== _activeStudentEmail) {
+    console.warn('[assessmentCache] Rejecting cache entry owned by', session.ownerEmail, '(active:', _activeStudentEmail, ')');
+    return null;
+  }
+  return session;
 }
 
 /**
@@ -395,4 +435,37 @@ export function getInProgressTokens(): Array<{ token: string; module: string; la
     }
   } catch { /* noop */ }
   return result;
+}
+
+/**
+ * Clear ALL assessment cache entries from localStorage and IndexedDB.
+ * Called on student logout to prevent cross-student session leakage.
+ */
+export async function clearAllAssessmentCaches(): Promise<void> {
+  try {
+    // Collect all cache + index keys
+    const toDelete: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith(LS_PREFIX) || k.startsWith(LS_INDEX_PREFIX))) {
+        toDelete.push(k);
+      }
+    }
+    toDelete.forEach((k) => localStorage.removeItem(k));
+  } catch { /* noop */ }
+
+  // Wipe IndexedDB store entirely
+  if (USE_IDB) {
+    try {
+      const db = await openIDB();
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch { /* noop */ }
+  }
+
+  _activeStudentEmail = null;
 }

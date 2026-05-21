@@ -750,7 +750,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
     };
 
     return (
-        <AssessmentPluginHost packageSlug="grammar">
+        <AssessmentPluginHost packageSlug="grammar" tabSwitchLimit={proctoringSettings.tabSwitchLimit}>
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             {/* Hand-rolled proctoring rules (right-click, copy-paste, etc.).
                 Tab-switch is now plugin-driven through AssessmentPluginHost. */}
