@@ -190,6 +190,7 @@ export interface RegisterRequest {
   groupCode?: string;
   sendEmail?: boolean;
   pricingPolicy?: "free" | "pay";
+  registrationSource?: string;
 }
 
 export interface Assignment {
@@ -694,7 +695,8 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       currentRole: input.currentRole,
       roleDescription: input.roleDescription,
       groupCode: input.groupCode,
-      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "free" }),
+      registrationSource: input.registrationSource,
+      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "pay" }),
     }),
     baseOverride: TECH_API_BASE,
     auth: false,
