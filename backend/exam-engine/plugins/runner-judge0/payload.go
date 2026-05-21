@@ -26,6 +26,8 @@ type PayloadRequest struct {
 	EntryFile string
 }
 
+const judge0MaxFileSizeKB = 4096
+
 func BuildPayload(runtime *Runtime, req PayloadRequest) (map[string]any, error) {
 	langSlug := NormalizeLanguageSlug(req.Language)
 	langCfg, err := runtime.Lookup(langSlug)
@@ -44,10 +46,10 @@ func BuildPayload(runtime *Runtime, req PayloadRequest) (map[string]any, error) 
 		"memory_limit":                 positiveOrDefault(langCfg.MemoryLimitKb, defaultInt(runnerCfg.Defaults, "memoryLimitKb", 131072)),
 		"stack_limit":                  positiveOrDefault(langCfg.StackLimitKb, defaultInt(runnerCfg.Defaults, "stackLimitKb", 32768)),
 		"max_processes_and_or_threads": positiveOrDefault(langCfg.ProcessesLimit, defaultInt(runnerCfg.Defaults, "processesLimit", 32)),
-		"max_file_size":                1024,
+		"max_file_size":                judge0FileSizeLimit(1024),
 	}
 	if langCfg.OutputLimitKb > 0 {
-		body["max_file_size"] = langCfg.OutputLimitKb
+		body["max_file_size"] = judge0FileSizeLimit(langCfg.OutputLimitKb)
 	}
 	if sourceIsBase64 {
 		if languageID == runnerCfg.MultiFileLanguageID {
@@ -311,4 +313,14 @@ func defaultInt(values map[string]int, key string, fallback int) int {
 		return fallback
 	}
 	return values[key]
+}
+
+func judge0FileSizeLimit(kb int) int {
+	if kb <= 0 {
+		return 1024
+	}
+	if kb > judge0MaxFileSizeKB {
+		return judge0MaxFileSizeKB
+	}
+	return kb
 }

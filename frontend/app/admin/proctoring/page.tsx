@@ -27,9 +27,13 @@ const POLL_INTERVAL_MS = 5_000;
 const COUNTER_DEFS: { key: string; label: string; icon: LucideIcon }[] = [
   { key: "proctoring.tab.switched", label: "Tab", icon: Eye },
   { key: "proctoring.copy.blocked", label: "Copy", icon: ShieldAlert },
+  { key: "proctoring.paste.blocked", label: "Paste", icon: ShieldAlert },
+  { key: "proctoring.cut.blocked", label: "Cut", icon: ShieldAlert },
+  { key: "proctoring.right_click.blocked", label: "Right", icon: MousePointerClick },
   { key: "proctoring.fullscreen.exit", label: "Fullscreen", icon: Maximize },
   { key: "proctoring.devtools.opened", label: "Devtools", icon: ShieldAlert },
   { key: "proctoring.focus.lost", label: "Focus", icon: MousePointerClick },
+  { key: "proctoring.mouse.left", label: "Mouse", icon: MousePointerClick },
   { key: "proctoring.keypress", label: "Keypress", icon: Keyboard },
 ];
 

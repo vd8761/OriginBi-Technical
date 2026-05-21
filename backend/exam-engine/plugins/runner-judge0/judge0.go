@@ -64,6 +64,10 @@ func (c Client) Post(ctx context.Context, payload map[string]any, stdin string) 
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 8<<10))
+		if len(body) > 0 {
+			return Result{}, fmt.Errorf("status %d: %s", res.StatusCode, string(body))
+		}
 		return Result{}, fmt.Errorf("status %d", res.StatusCode)
 	}
 	var rawResult RawResult

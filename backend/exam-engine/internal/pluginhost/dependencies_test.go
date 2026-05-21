@@ -76,6 +76,28 @@ func TestResolveGraph_MissingRequire(t *testing.T) {
 	}
 }
 
+func TestResolveGraph_CapabilityRequire(t *testing.T) {
+	m := makeManifests(map[string][]string{
+		"assessment.coding": nil,
+		"runner.judge0":     nil,
+		"language.python":   {"assessment.coding", "code.runner"},
+	})
+	m["runner.judge0"].Provides = []string{"code.runner"}
+
+	order, errs := resolveGraph(m)
+	if len(errs) != 0 {
+		t.Fatalf("expected capability requirement to resolve, got %v", errs)
+	}
+
+	pos := map[string]int{}
+	for i, slug := range order {
+		pos[slug] = i
+	}
+	if pos["runner.judge0"] >= pos["language.python"] {
+		t.Fatalf("runner.judge0 should load before language.python: %v", order)
+	}
+}
+
 func TestResolveGraph_Cycle(t *testing.T) {
 	// a → b → c → a
 	m := makeManifests(map[string][]string{
