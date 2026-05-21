@@ -2900,6 +2900,62 @@ export class AssessmentService {
     return Array.from(buf).map(b => charset[b % charset.length]).join('');
   }
 
+  /**
+   * Validates if user can start a new attempt for given assessment and mode
+   * SECURITY: Server-side validation to prevent attempt limit bypass
+   */
+  async validateAttemptEligibility(
+    userId: number, 
+    assessmentCode: string, 
+    mode: 'trial' | 'main'
+  ): Promise<{ canStart: boolean; reason?: string; currentCount: number; limit: number }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    
+    try {
+      // Get assessment limits
+      const assessment = await queryRunner.query(
+        `SELECT trial_attempts_limit, main_attempts_limit FROM tech_assessments WHERE assessment_code = $1`,
+        [assessmentCode]
+      );
+      
+      if (!assessment.length) {
+        return { canStart: false, reason: 'Assessment not found', currentCount: 0, limit: 0 };
+      }
+      
+      const limit = mode === 'trial' ? assessment[0].trial_attempts_limit : assessment[0].main_attempts_limit;
+      
+      // Count existing attempts
+      const stats = await this.getAttemptsStats(userId);
+      const module = this.getModuleFromAssessmentCode(assessmentCode);
+      const currentCount = stats[module]?.[mode] || 0;
+      
+      const canStart = currentCount < limit;
+      
+      return {
+        canStart,
+        reason: canStart ? undefined : `Attempt limit exceeded (${currentCount}/${limit})`,
+        currentCount,
+        limit
+      };
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Maps assessment code to module name
+   */
+  private getModuleFromAssessmentCode(assessmentCode: string): string {
+    const codeToModule: Record<string, string> = {
+      'TECH_APT_001': 'aptitude',
+      'TECH_MNC_001': 'mnc', 
+      'TECH_COMM_001': 'grammar',
+      'TECH_CODING_001': 'coding'
+    };
+    return codeToModule[assessmentCode] || 'aptitude';
+  }
+
   /** Safe column-existence check (used inside transactions) */
   private async columnExistsSafe(
     queryRunner: any,

@@ -215,6 +215,40 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     setIsDownloading(true);
 
     try {
+      // SECURITY: Validate certificate eligibility before generation
+      const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+      
+      let userId: number | null = null;
+      try {
+        const profileRaw = localStorage.getItem("originbi:user-profile");
+        if (profileRaw) {
+          const p = JSON.parse(profileRaw);
+          if (p?.id) userId = Number(p.id);
+        }
+      } catch {}
+      
+      if (!userId) {
+        alert("User authentication required for certificate generation.");
+        return;
+      }
+
+      // Validate completion status on server
+      const validationRes = await fetch(`${API_BASE}/api/assessment/validate-certificate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          examId: exam.id,
+          mode: "main" // Only main assessments get certificates
+        }),
+      });
+
+      if (!validationRes.ok) {
+        const errText = await validationRes.text().catch(() => "Certificate not available");
+        alert(`Certificate validation failed: ${errText}`);
+        return;
+      }
+
       const el = certificateRef.current;
       const containerWidth = el.offsetWidth;
 

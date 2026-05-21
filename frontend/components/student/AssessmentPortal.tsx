@@ -486,8 +486,27 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const handleResumeAttempt = (attempt: InProgressAttempt) => {
+    // SECURITY: Validate attempt token and prevent manipulation
+    if (!attempt.attemptToken || !attempt.module) {
+      console.error('Invalid attempt data:', attempt);
+      return;
+    }
+    
     const resumeModule = attempt.module === "grammar" ? "communication" : attempt.module;
-    const mode = attempt.mode ?? "main";
+    const validModes = ['trial', 'main'] as const;
+    const mode = validModes.includes(attempt.mode as any) ? attempt.mode : 'main';
+    
+    // Prevent infinite loops by checking if we're already on the target page
+    const currentPath = window.location.pathname;
+    const targetPath = resumeModule === "aptitude" && attempt.isBlockBased 
+      ? `/assessment/aptitude/adaptive`
+      : `/assessment/${resumeModule}`;
+      
+    if (currentPath === targetPath) {
+      console.warn('Already on target assessment page, preventing loop');
+      return;
+    }
+    
     if (resumeModule === "aptitude" && attempt.isBlockBased) {
       const matchingAssessment = assessmentsList.find(
         (a) => a.assessment_code === attempt.assessmentCode

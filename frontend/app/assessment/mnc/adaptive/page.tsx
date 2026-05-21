@@ -39,12 +39,16 @@ function AdaptiveMNCContent() {
   useEffect(() => {
     const aid  = searchParams.get("assessmentId");
     const tok  = searchParams.get("attemptToken");
-    const m    = (searchParams.get("mode") as "trial" | "main") || "main";
+    const m    = searchParams.get("mode");
 
     if (!aid || !tok) {
       setInitError("Missing assessmentId or attemptToken in URL.");
       return;
     }
+
+    // SECURITY: Validate mode parameter to prevent manipulation
+    const validModes = ['trial', 'main'] as const;
+    const sanitizedMode = validModes.includes(m as any) ? (m as "trial" | "main") : 'main';
 
     // Resolve userId from localStorage
     let resolvedId: number | null = null;
@@ -75,7 +79,7 @@ function AdaptiveMNCContent() {
     // Set all state in one synchronous block — React 18 batches these into one render
     setAssessmentId(parseInt(aid));
     setAttemptToken(tok);
-    setMode(m);
+    setMode(sanitizedMode);
     setUserId(resolvedId ?? 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // empty deps — intentionally runs once on mount only
