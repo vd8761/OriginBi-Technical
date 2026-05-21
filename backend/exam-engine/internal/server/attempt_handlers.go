@@ -71,6 +71,10 @@ type attemptFingerprint struct {
 	Snapshot *frozenAttemptSnapshot `json:"snapshot,omitempty"`
 }
 
+type assignmentMetadata struct {
+	SettingsSnapshot *frozenAttemptSnapshot `json:"settingsSnapshot,omitempty"`
+}
+
 type frozenAttemptSnapshot struct {
 	AssignmentRef    string                `json:"assignmentRef"`
 	Language         string                `json:"language"`
@@ -78,6 +82,11 @@ type frozenAttemptSnapshot struct {
 	TotalTimeSeconds int                   `json:"totalTimeSeconds"`
 	Questions        []snapshotQuestionDTO `json:"questions"`
 	CreatedAt        time.Time             `json:"createdAt"`
+}
+
+type snapshotQueryer interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 type saveAnswerRequest struct {
@@ -130,6 +139,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 	var assignmentID, examVersionID uuid.UUID
 	var assignmentRef string
 	var totalSeconds int
+	var assignmentMetadataBytes []byte
 	if req.AssignmentID != "" {
 		parsedID, parseErr := uuid.Parse(req.AssignmentID)
 		if parseErr != nil {
@@ -137,7 +147,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = tx.QueryRow(ctx, `
-			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds
+			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata
 			FROM exam_assignments a
 			JOIN exam_versions ev ON ev.id = a.exam_version_id
 			WHERE a.id = $1
@@ -146,10 +156,10 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			  AND now() >= COALESCE(a.available_from, '-infinity'::timestamptz)
 			  AND (a.available_until IS NULL OR now() <= a.available_until)
 			FOR UPDATE OF a
-		`, parsedID, principal.UserID).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds)
+		`, parsedID, principal.UserID).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes)
 	} else if req.AssignmentRef != "" {
 		err = tx.QueryRow(ctx, `
-			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds
+			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata
 			FROM exam_assignments a
 			JOIN exam_versions ev ON ev.id = a.exam_version_id
 			WHERE a.candidate_user_id = $1
@@ -160,7 +170,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			ORDER BY a.created_at DESC
 			LIMIT 1
 			FOR UPDATE OF a
-		`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds)
+		`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes)
 	} else {
 		writeError(w, http.StatusBadRequest, "assignmentId or assignmentRef is required")
 		return
@@ -171,7 +181,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		if req.AssignmentRef != "" && s.isAdminRegistered(ctx, principal.UserID) {
 			if grantErr := s.grantFreeAssignmentTx(ctx, tx, principal.UserID, req.AssignmentRef); grantErr == nil {
 				err = tx.QueryRow(ctx, `
-					SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds
+					SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata
 					FROM exam_assignments a
 					JOIN exam_versions ev ON ev.id = a.exam_version_id
 					WHERE a.candidate_user_id = $1
@@ -180,7 +190,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 					ORDER BY a.created_at DESC
 					LIMIT 1
 					FOR UPDATE OF a
-				`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds)
+				`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes)
 			}
 		}
 	}
@@ -247,10 +257,16 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	frozen, err := s.buildFrozenSnapshot(ctx, tx, examVersionID, assignmentRef, totalSeconds)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "snapshot build failed")
-		return
+	frozen, ok := frozenSnapshotFromAssignmentMetadata(assignmentMetadataBytes, examVersionID)
+	if !ok {
+		frozen, err = s.buildFrozenSnapshot(ctx, tx, examVersionID, assignmentRef, totalSeconds)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "snapshot build failed")
+			return
+		}
+	}
+	if frozen.TotalTimeSeconds > 0 {
+		totalSeconds = frozen.TotalTimeSeconds
 	}
 	fingerprint, err := json.Marshal(attemptFingerprint{Snapshot: &frozen})
 	if err != nil {
@@ -578,9 +594,6 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 			}
 			if len(snap.Questions) > 0 {
 				resp.Questions = snap.Questions
-				if err := s.refreshCandidateQuestionBodies(ctx, resp.Questions); err != nil {
-					return snapshotResponse{}, err
-				}
 				answers, err := s.loadAnswerSnapshots(ctx, examVersionID, attemptID)
 				if err != nil {
 					return snapshotResponse{}, err
@@ -640,6 +653,24 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 	return resp, nil
 }
 
+func frozenSnapshotFromAssignmentMetadata(raw []byte, examVersionID uuid.UUID) (frozenAttemptSnapshot, bool) {
+	if len(raw) == 0 {
+		return frozenAttemptSnapshot{}, false
+	}
+	var metadata assignmentMetadata
+	if err := json.Unmarshal(raw, &metadata); err != nil || metadata.SettingsSnapshot == nil {
+		return frozenAttemptSnapshot{}, false
+	}
+	snap := *metadata.SettingsSnapshot
+	if snap.ExamVersionID != "" && snap.ExamVersionID != examVersionID.String() {
+		return frozenAttemptSnapshot{}, false
+	}
+	if snap.TotalTimeSeconds <= 0 || len(snap.Questions) == 0 {
+		return frozenAttemptSnapshot{}, false
+	}
+	return snap, true
+}
+
 func (s *Server) loadAnswerSnapshots(ctx context.Context, examVersionID uuid.UUID, attemptID uuid.UUID) ([]answerSnapshotDTO, error) {
 	aRows, err := s.pool.Query(ctx, `
 		SELECT eq.id,
@@ -680,12 +711,12 @@ func (s *Server) loadAnswerSnapshots(ctx context.Context, examVersionID uuid.UUI
 
 func (s *Server) buildFrozenSnapshot(
 	ctx context.Context,
-	tx pgx.Tx,
+	q snapshotQueryer,
 	examVersionID uuid.UUID,
 	assignmentRef string,
 	totalSeconds int,
 ) (frozenAttemptSnapshot, error) {
-	rows, err := tx.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT eq.id,
 		       qv.id,
 		       eq.ordinal,
@@ -734,6 +765,22 @@ func (s *Server) buildFrozenSnapshot(
 		Questions:        questions,
 		CreatedAt:        time.Now().UTC(),
 	}, nil
+}
+
+func (s *Server) buildAssignmentMetadata(ctx context.Context, q snapshotQueryer, examVersionID uuid.UUID, assignmentRef string) ([]byte, error) {
+	var totalSeconds int
+	if err := q.QueryRow(ctx, `
+		SELECT total_time_seconds
+		FROM exam_versions
+		WHERE id = $1
+	`, examVersionID).Scan(&totalSeconds); err != nil {
+		return nil, err
+	}
+	snapshot, err := s.buildFrozenSnapshot(ctx, q, examVersionID, assignmentRef, totalSeconds)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(assignmentMetadata{SettingsSnapshot: &snapshot})
 }
 
 func (s *Server) refreshCandidateQuestionBodies(ctx context.Context, questions []snapshotQuestionDTO) error {
