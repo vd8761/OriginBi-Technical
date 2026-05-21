@@ -783,31 +783,6 @@ func (s *Server) buildAssignmentMetadata(ctx context.Context, q snapshotQueryer,
 	return json.Marshal(assignmentMetadata{SettingsSnapshot: &snapshot})
 }
 
-func (s *Server) refreshCandidateQuestionBodies(ctx context.Context, questions []snapshotQuestionDTO) error {
-	for i := range questions {
-		questionVersionID, err := uuid.Parse(questions[i].QuestionVersionID)
-		if err != nil {
-			return err
-		}
-		var title string
-		var difficulty int
-		var body []byte
-		if err := s.pool.QueryRow(ctx, `
-			SELECT q.title, qv.difficulty, qv.body
-			FROM question_versions qv
-			JOIN questions q ON q.id = qv.question_id
-			WHERE qv.id = $1
-		`, questionVersionID).Scan(&title, &difficulty, &body); err != nil {
-			return err
-		}
-		questions[i].Body, err = s.candidateQuestionBody(ctx, questionVersionID, title, difficulty, body)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Server) candidateQuestionBody(
 	ctx context.Context,
 	questionVersionID uuid.UUID,
