@@ -757,6 +757,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowAptitudeModal(false)}
+                    requireCameraMic={Boolean((exam as any).requireCameraMic)}
                 />
             )}
             {showCommunicationModal && (

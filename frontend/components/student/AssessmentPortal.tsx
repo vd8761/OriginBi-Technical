@@ -274,6 +274,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
           tags: tags,
           enabledQuestionTypes: dbExam.enabled_question_types,
+          requireCameraMic: Boolean(dbExam.require_camera_mic),
         };
       }
       return exam;
@@ -789,6 +790,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
             skills={exam?.tags}
+            requireCameraMic={exam?.requireCameraMic}
           />
         );
       })()}
