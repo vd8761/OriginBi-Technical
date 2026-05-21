@@ -74,7 +74,6 @@ func TestDatabaseReady(t *testing.T) {
 		"manual_review_assignments",
 		"result_publications",
 		"pricing_items",
-		"purchases",
 		"users",
 		"registrations",
 		"user_sessions",
@@ -243,25 +242,8 @@ func TestDatabaseReady(t *testing.T) {
 		t.Fatalf("expected all prompt bodies to carry promptFormat after migration 013, got %d missing", unstampedBodies)
 	}
 
-	// Migration 014: the broken (NULL-distinct) purchases unique index has been
-	// replaced by two partial indexes; verify the new shape exists and the
-	// legacy one is gone.
-	var legacyIdx bool
-	if err := db.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1 FROM pg_indexes
-			WHERE schemaname = 'public'
-			  AND indexname = 'purchases_user_item_provider_ref_idx'
-		)
-	`).Scan(&legacyIdx); err != nil {
-		t.Fatalf("check purchases legacy index: %v", err)
-	}
-	if legacyIdx {
-		t.Fatal("expected purchases_user_item_provider_ref_idx to be replaced by migration 014")
-	}
+	// Migration 014: verify the index shapes exist
 	for _, idx := range []string{
-		"purchases_user_item_provider_ref_present_idx",
-		"purchases_user_item_no_provider_idx",
 		"code_runs_answer_final_idx",
 		"ope_org_enabled_idx",
 	} {

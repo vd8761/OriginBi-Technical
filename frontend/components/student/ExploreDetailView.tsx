@@ -24,7 +24,7 @@ import {
     useCompletedAssessments,
     type PaymentKey,
 } from "@/lib/payments";
-import { ApiError, demoPurchase, listAssignments, logoutUser, type Assignment } from "@/lib/api";
+import { ApiError, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
 import { Loader2 } from "lucide-react";
 import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
@@ -88,7 +88,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 const key = codingPaymentKey(lang.id);
                 const assignment = serverAssignments.find((a) => a.assignmentRef === key);
                 const paid =
-                    isAdminFree ||
                     isPaid(key) ||
                     (!!assignment &&
                         (assignment.status === "active" ||
@@ -284,22 +283,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
         const isUnlocked =
-            isAdminFree ||
             isPaid(key) ||
             assignment?.status === "active" ||
             assignment?.status === "completed" ||
             assignment?.completed;
         if (isUnlocked) {
             setShowLanguageModal(false);
-            setIsConnecting(true);
-            try {
-                await demoPurchase(key).catch(() => undefined);
-                await refreshAssignments();
-                setPendingCodingLang(language);
-                setAssignmentError("");
-            } finally {
-                setIsConnecting(false);
-            }
+            setPendingCodingLang(language);
+            setAssignmentError("");
             return;
         }
 
@@ -336,7 +327,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 });
                 if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
 
-                await demoPurchase(key);
                 await refreshAssignments();
                 setShowLanguageModal(false);
                 setIsConnecting(false);
@@ -368,7 +358,6 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         setIsConnecting(false);
         if (paymentTarget.kind === "coding") {
             try {
-                await demoPurchase(paymentTarget.key);
                 await refreshAssignments();
                 setShowLanguageModal(false);
                 // After successful payment, take user to the assessment library
@@ -398,7 +387,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             return;
         }
         if (isCoding) {
-            router.push(`/assessment/coding?mode=trial`);
+            setAssessmentMode("trial");
+            setShowLanguageModal(true);
             return;
         }
         setAssessmentMode("trial");
@@ -788,7 +778,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     price={exam.price}
                     isPaid={isCodingPaid}
                     isCompleted={isCodingCompleted}
-                    onClose={() => setShowLanguageModal(false)}
+                    onClose={() => {
+                        setShowLanguageModal(false);
+                        setAssessmentMode("main");
+                    }}
                     onPick={handleLanguagePick}
                 />
             )}
@@ -800,9 +793,13 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     onStart={(mode: 'trial' | 'main') => {
                         const langId = pendingCodingLang.id;
                         setPendingCodingLang(null);
+                        setAssessmentMode("main");
                         router.push(`/assessment/coding?lang=${langId}&mode=${mode}`);
                     }}
-                    onClose={() => setPendingCodingLang(null)}
+                    onClose={() => {
+                        setPendingCodingLang(null);
+                        setAssessmentMode("main");
+                    }}
                 />
             )}
 

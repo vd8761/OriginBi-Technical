@@ -41,24 +41,8 @@ func Open(ctx context.Context, dsn string) (*Pool, error) {
 	return pool, nil
 }
 
-// EnsurePartitions creates today's heartbeat partition and the current month's
-// events partition if they don't yet exist. Safe to call on boot and from a
-// daily cron — relies on the SQL helpers seeded by migration 004.
-func EnsurePartitions(ctx context.Context, pool *Pool) error {
-	for i := 0; i < 3; i++ {
-		if _, err := pool.Exec(ctx,
-			`SELECT ensure_attempt_events_partition((date_trunc('month', now()) + make_interval(months => $1::int))::date)`,
-			i); err != nil {
-			return fmt.Errorf("ensure events partition: %w", err)
-		}
-	}
-	for i := 0; i < 14; i++ {
-		if _, err := pool.Exec(ctx,
-			`SELECT ensure_attempt_heartbeats_partition(current_date + $1::int)`,
-			i); err != nil {
-			return fmt.Errorf("ensure heartbeats partition: %w", err)
-		}
-	}
+// EnsurePartitions is a no-op since telemetry partitioning has been removed.
+func EnsurePartitions(_ context.Context, _ *Pool) error {
 	return nil
 }
 

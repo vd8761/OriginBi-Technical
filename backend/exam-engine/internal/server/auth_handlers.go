@@ -515,27 +515,6 @@ func (s *Server) bootstrapAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, authResponse{User: user, Registration: reg, ExpiresAt: expires})
 }
 
-// isAdminRegistered returns true when the user's most recent active
-// registration row has registration_source = 'ADMIN'. Such users get every
-// assessment for free — the entitlement gates in listAssignments and
-// startAttempt fall through as if they had paid.
-func (s *Server) isAdminRegistered(ctx context.Context, userID int64) bool {
-	ctx, cancel := contextWithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	var source string
-	err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(registration_source, 'SELF')
-		FROM registrations
-		WHERE user_id = $1 AND is_deleted = FALSE
-		ORDER BY created_at DESC, id DESC
-		LIMIT 1
-	`, userID).Scan(&source)
-	if err != nil {
-		return false
-	}
-	return strings.EqualFold(source, "ADMIN")
-}
-
 func (s *Server) isAdmin(ctx context.Context, userID int64) bool {
 	ctx, cancel := contextWithTimeout(ctx, 2*time.Second)
 	defer cancel()
