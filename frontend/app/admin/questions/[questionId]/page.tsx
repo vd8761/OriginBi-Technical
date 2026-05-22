@@ -11,7 +11,7 @@ import {
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import { fetchQuestion, ApiQuestion } from "@/components/admin/questions/api";
-import { AnyQuestion, AssessmentType, ASSESSMENT_TYPE_LABELS } from "@/components/admin/questions/types";
+import { AnyQuestion, AssessmentType, ASSESSMENT_TYPE_LABELS, QUESTION_KIND_LABELS, APTITUDE_CATEGORY_LABELS, QuestionKind } from "@/components/admin/questions/types";
 
 function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
   const common = {
@@ -28,6 +28,7 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     imageUrl: q.imageUrl,
     kind: q.metadata?.kind || "mcq",
     correctOptionIds: q.metadata?.correctOptionIds || (q.correctOptionId ? [String(q.correctOptionId)] : []),
+    correctAnswer: q.metadata?.correctAnswer || undefined,
   };
 
   switch (module) {
@@ -148,7 +149,7 @@ function QuestionDetailsContent() {
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Error Loading Details</h2>
         <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">{error || "Something went wrong."}</p>
         <button
-          onClick={() => router.push("/admin/questions")}
+          onClick={() => router.push(moduleParam ? `/admin/questions?module=${moduleParam}` : "/admin/questions")}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-green text-white text-sm font-semibold hover:bg-brand-green/90 transition-all"
         >
           <ArrowLeft size={16} />
@@ -170,7 +171,7 @@ function QuestionDetailsContent() {
       {/* Top action row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <button
-          onClick={() => router.push("/admin/questions")}
+          onClick={() => router.push(moduleParam ? `/admin/questions?module=${moduleParam}` : "/admin/questions")}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm font-semibold text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm"
         >
           <ArrowLeft size={16} />
@@ -347,16 +348,17 @@ function QuestionDetailsContent() {
                 </div>
                 
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                  {question.kind === "msq" ? "Multiple Choice (MSQ)" : "Single Choice (MCQ)"}
+                  {QUESTION_KIND_LABELS[(question.kind || "mcq") as QuestionKind] || "Single Choice (MCQ)"}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 gap-3 mt-2">
                 {(question as any).options.map((opt: any, idx: number) => {
-                  // Determine correctness based on kind
+                  // Determine correctness based on kind — normalise to string for safe comparison
+                  const optId = String(opt.id);
                   const isCorrect = question.kind === "msq"
-                    ? question.correctOptionIds?.includes(opt.id)
-                    : opt.id === (question as any).correctOptionId;
+                    ? (question.correctOptionIds ?? []).map(String).includes(optId)
+                    : optId === String((question as any).correctOptionId);
 
                   return (
                     <div
@@ -452,7 +454,10 @@ function QuestionDetailsContent() {
               <div className="flex items-center gap-2.5">
                 <Tag size={16} className="text-brand-green" />
                 <span className="font-bold text-slate-800 dark:text-white text-sm capitalize">
-                  {(question as any).category || (question as any).topic || (question as any).taskType || (question as any).questionType || "General"}
+                  {(() => {
+                    const raw = (question as any).category || (question as any).topic || (question as any).taskType || (question as any).questionType || "General";
+                    return APTITUDE_CATEGORY_LABELS[raw] || raw;
+                  })()}
                 </span>
               </div>
             </div>

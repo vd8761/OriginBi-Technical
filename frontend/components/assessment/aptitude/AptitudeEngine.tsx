@@ -23,6 +23,8 @@ import { NumericalQuestion } from "./question-types/NumericalQuestion";
 
 const APTITUDE_TOTAL_TIME = 3600;
 
+
+
 interface Option {
     id: string;
     text: string;
@@ -421,18 +423,21 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 setTotalTime(duration);
 
                 if (serverAnswers && typeof serverAnswers === "object") {
-                    const restored: Record<string, string> = {};
+                    const restored: Record<string, string | string[]> = {};
                     for (const [qId, val] of Object.entries(serverAnswers)) {
                         if (val && typeof val === "object" && "optionId" in val && (val as any).optionId) {
-                            restored[qId] = String((val as any).optionId);
+                            const optVal = (val as any).optionId;
+                            restored[qId] = Array.isArray(optVal) ? optVal.map(String) : String(optVal);
                         } else if (typeof val === "string" || typeof val === "number") {
                             restored[qId] = String(val);
+                        } else if (Array.isArray(val)) {
+                            restored[qId] = val.map(String);
                         }
                     }
                     if (Object.keys(restored).length > 0) {
                         setAnswers(restored);
                         Object.entries(restored).forEach(([qId, optId]) => {
-                            cacheSaveAnswer(qId, { optionId: optId });
+                            cacheSaveAnswer(qId, { optionId: optId as any });
                         });
                         setShowRestoredBanner(true);
                         setTimeout(() => setShowRestoredBanner(false), 5000);
@@ -635,6 +640,17 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         setAnswers(newAnswers);
         // Persist to cache immediately
         cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
+
+        if (kind === 'msq') {
+            const selectedIds = newAnswer as string[];
+            if (selectedIds.length === 0) {
+                persistAnswer(currentQuestion.id, null);
+            } else {
+                persistAnswer(currentQuestion.id, { optionId: selectedIds });
+            }
+        } else {
+            persistAnswer(currentQuestion.id, { optionId: newAnswer });
+        }
     };
 
     const handleNumericalChange = (value: string) => {
@@ -713,7 +729,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     }
 
     return (
-        <AssessmentPluginHost packageSlug="aptitude">
+        <AssessmentPluginHost packageSlug="aptitude" tabSwitchLimit={proctoringSettings.tabSwitchLimit}>
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />

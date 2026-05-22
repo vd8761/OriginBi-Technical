@@ -190,6 +190,7 @@ export interface RegisterRequest {
   groupCode?: string;
   sendEmail?: boolean;
   pricingPolicy?: "free" | "pay";
+  registrationSource?: string;
 }
 
 export interface Assignment {
@@ -210,10 +211,6 @@ export interface AssignmentListResponse {
   assignments: Assignment[];
 }
 
-export interface DemoPurchaseResponse {
-  purchaseId: string;
-  assignment: Assignment;
-}
 
 export interface SnapshotQuestion {
   examQuestionId: string;
@@ -694,7 +691,8 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       currentRole: input.currentRole,
       roleDescription: input.roleDescription,
       groupCode: input.groupCode,
-      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "free" }),
+      registrationSource: input.registrationSource,
+      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "pay" }),
     }),
     baseOverride: TECH_API_BASE,
     auth: false,
@@ -889,12 +887,6 @@ export async function listAssignments(): Promise<AssignmentListResponse> {
   return apiFetch<AssignmentListResponse>("/v1/me/assignments");
 }
 
-export async function demoPurchase(itemRef: string): Promise<DemoPurchaseResponse> {
-  return apiFetch<DemoPurchaseResponse>("/v1/purchases/demo", {
-    method: "POST",
-    body: JSON.stringify({ itemRef }),
-  });
-}
 
 export async function startAttempt(input: {
   assignmentId?: string;

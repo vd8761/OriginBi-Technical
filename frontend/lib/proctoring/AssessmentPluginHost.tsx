@@ -34,12 +34,14 @@ interface AssessmentPluginHostProps {
     /** Optional attempt id. Coding passes this; non-coding engines today
      *  don't, because their attempts live in NestJS, not in exam-engine. */
     attemptId?: string;
+    tabSwitchLimit?: number;
     children: ReactNode;
 }
 
 export default function AssessmentPluginHost({
     packageSlug,
     attemptId,
+    tabSwitchLimit,
     children,
 }: AssessmentPluginHostProps) {
     const [enabled, setEnabled] = useState<EnabledPluginConfig[] | null>(null);
@@ -51,12 +53,26 @@ export default function AssessmentPluginHost({
                 attemptId,
                 packageSlug,
             });
-            if (!cancelled) setEnabled(config);
+            if (!cancelled) {
+                const mappedConfig = config.map((p) => {
+                    if (p.id === "proctoring.tab-switch" && typeof tabSwitchLimit === "number") {
+                        return {
+                            ...p,
+                            config: {
+                                ...p.config,
+                                threshold: tabSwitchLimit,
+                            },
+                        };
+                    }
+                    return p;
+                });
+                setEnabled(mappedConfig);
+            }
         })();
         return () => {
             cancelled = true;
         };
-    }, [packageSlug, attemptId]);
+    }, [packageSlug, attemptId, tabSwitchLimit]);
 
     return (
         <PluginProvider enabled={enabled} attemptId={attemptId ?? null}>

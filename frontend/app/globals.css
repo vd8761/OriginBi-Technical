@@ -85,6 +85,9 @@
   --admin-fg-2: #0f1411;
   --admin-fg-3: #0f1411;
   --admin-fg-4: #0f1411;
+
+  /* Custom Select dropdown background variable (solid opaque) */
+  --select-dropdown-bg: #ffffff;
 }
 
 @theme {
@@ -423,6 +426,9 @@
   /* Shadows (Dark Override) */
   --admin-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
   --admin-shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  /* Custom Select dropdown background variable (solid opaque) */
+  --select-dropdown-bg: #141a17;
 }
 
 /* Assessment Specific Styles */
@@ -1055,6 +1061,11 @@
 .dark select optgroup {
   background-color: #111a15;
   color: #e2e8f0;
+}
+
+/* Custom Select Dropdown solid, opaque background styling */
+.custom-select-dropdown {
+  background-color: var(--select-dropdown-bg, #ffffff) !important;
 }
 
 /* ── Admin Login Page ── */
@@ -2592,33 +2603,33 @@
   box-shadow: 0 0 0 3px rgba(30, 211, 106, 0.12);
 }
 
-.admin-panel-root [class~="bg-white"],
-.admin-panel-root [class~="bg-slate-50"],
-.admin-panel-root [class~="bg-slate-100"] {
+.dark .admin-panel-root [class~="bg-white"],
+.dark .admin-panel-root [class~="bg-slate-50"],
+.dark .admin-panel-root [class~="bg-slate-100"] {
   background-color: rgba(255, 255, 255, 0.035) !important;
 }
 
-.admin-panel-root [class~="border-slate-100"],
-.admin-panel-root [class~="border-slate-200"],
-.admin-panel-root [class~="border-white/10"] {
+.dark .admin-panel-root [class~="border-slate-100"],
+.dark .admin-panel-root [class~="border-slate-200"],
+.dark .admin-panel-root [class~="border-white/10"] {
   border-color: var(--admin-border) !important;
 }
 
-.admin-panel-root [class~="text-slate-900"],
-.admin-panel-root [class~="text-slate-800"],
-.admin-panel-root [class~="text-slate-700"] {
+.dark .admin-panel-root [class~="text-slate-900"],
+.dark .admin-panel-root [class~="text-slate-800"],
+.dark .admin-panel-root [class~="text-slate-700"] {
   color: var(--admin-fg) !important;
 }
 
-.admin-panel-root [class~="text-slate-600"],
-.admin-panel-root [class~="text-slate-500"],
-.admin-panel-root [class~="text-slate-400"],
-.admin-panel-root [class~="text-slate-300"] {
+.dark .admin-panel-root [class~="text-slate-600"],
+.dark .admin-panel-root [class~="text-slate-500"],
+.dark .admin-panel-root [class~="text-slate-400"],
+.dark .admin-panel-root [class~="text-slate-300"] {
   color: var(--admin-fg-3) !important;
 }
 
-.admin-panel-root [class~="text-emerald-600"],
-.admin-panel-root [class~="text-emerald-300"] {
+.dark .admin-panel-root [class~="text-emerald-600"],
+.dark .admin-panel-root [class~="text-emerald-300"] {
   color: var(--admin-green) !important;
 }
 

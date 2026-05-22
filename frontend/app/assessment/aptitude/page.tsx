@@ -1,54 +1,7 @@
-"use client";
+import React, { Suspense } from 'react';
+import AptitudeClient from './Client';
 
-import React, { Suspense, useCallback } from "react";
-import AptitudeEngine, { type AttemptSubmitResult } from "../../../components/assessment/aptitude/AptitudeEngine";
-import { useSearchParams } from "next/navigation";
-import { useAssessmentTracker } from "../../../lib/assessmentTracker";
-import { EXAM_DETAILS } from "../../../lib/exams";
-import {
-    mapSubmissionToAssessmentResult,
-    saveAssessmentResultToStorage,
-    unlockAssessmentForDashboard,
-} from "../../../lib/assessmentResultMapper";
-
-function AptitudeAssessmentContent() {
-    const searchParams = useSearchParams();
-    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
-    const assessmentCode = searchParams.get("assessmentCode") || "APTITUDE_DEFAULT";
-    const { markAssessmentComplete } = useAssessmentTracker();
-
-    const handleComplete = useCallback((result: AttemptSubmitResult) => {
-        const assessmentResult = mapSubmissionToAssessmentResult({
-            assessmentId: "aptitude",
-            submission: result,
-            detail: EXAM_DETAILS.aptitude,
-        });
-        saveAssessmentResultToStorage(assessmentResult);
-        unlockAssessmentForDashboard("aptitude");
-
-        // Mark complete in tracker (generates notifications & suggestions)
-        markAssessmentComplete("aptitude", {
-            totalScore: assessmentResult.overallScore,
-            correctCount: assessmentResult.correctCount ?? 0,
-            wrongCount: assessmentResult.wrongCount ?? 0,
-            timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-        });
-
-        // Redirect to dashboard using hard redirect to ensure navigation
-        console.log("Aptitude: Submission complete, redirecting...");
-        if (mode === 'trial') {
-            window.location.href = '/assessment';
-        } else {
-            window.location.href = '/dashboard?completed=aptitude';
-        }
-    }, [markAssessmentComplete, mode]);
-
-    return (
-        <div className="min-h-screen w-full">
-            <AptitudeEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
-        </div>
-    );
-}
+export const dynamic = 'force-dynamic';
 
 export default function AptitudeAssessmentPage() {
     return (
@@ -60,7 +13,7 @@ export default function AptitudeAssessmentPage() {
                 </div>
             </div>
         }>
-            <AptitudeAssessmentContent />
+            <AptitudeClient />
         </Suspense>
     );
 }

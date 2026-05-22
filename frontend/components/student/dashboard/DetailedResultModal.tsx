@@ -14,6 +14,8 @@ interface DetailedResultModalProps {
   detail: ExamDetailData | null;
 }
 
+
+
 // ── Icons ──
 const CloseIcon = ({ c }: { c?: string }) => (
   <svg className={c} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

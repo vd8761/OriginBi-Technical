@@ -18,6 +18,8 @@ import {
   type ProctoringSettings,
 } from "@/lib/proctoring";
 
+
+
 interface Option {
   id: string;
   text: string;
@@ -711,7 +713,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   }
 
   return (
-    <AssessmentPluginHost packageSlug="aptitude">
+    <AssessmentPluginHost packageSlug="aptitude" tabSwitchLimit={proctoringSettings.tabSwitchLimit}>
     <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
       <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
       <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
@@ -895,7 +897,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               <div className="flex items-center gap-3">
                 <div>
                   <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
-                    {currentQuestion?.category || 'Assessment'} Module
+                    {(currentQuestion?.category || 'Assessment')} Module
                     <span className="ml-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 normal-case">
                       Block {viewingBlockNumber} · Q{currentIndex + 1}/{totalQuestions}
                     </span>

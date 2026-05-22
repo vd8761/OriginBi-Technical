@@ -28,6 +28,7 @@ export interface ProctoringSettings {
     detectFocusLoss: boolean;
     logKeypress: boolean;
     requireCameraMic: boolean;
+    tabSwitchLimit?: number;
 }
 
 export const DEFAULT_PROCTORING: ProctoringSettings = {
@@ -365,6 +366,8 @@ export function resolveProctoringForPackage(
     if (!assessment) return DEFAULT_PROCTORING;
     const tabSwitch =
         typeof assessment.tab_switch_limit === "number" && assessment.tab_switch_limit > 0;
+    const tabSwitchLimit =
+        typeof assessment.tab_switch_limit === "number" ? assessment.tab_switch_limit : undefined;
     const blockCopyPaste = Boolean(assessment.anti_copy_enabled);
     const detectDevtools = Boolean(assessment.proctoring_block_devtools);
     const detectFullscreenExit = Boolean(assessment.proctoring_require_fullscreen);
@@ -378,6 +381,7 @@ export function resolveProctoringForPackage(
         ...DEFAULT_PROCTORING,
         tabSwitch,
         tabSwitchToast: tabSwitch,
+        tabSwitchLimit,
         blockCopyPaste,
         detectDevtools,
         detectFullscreenExit,

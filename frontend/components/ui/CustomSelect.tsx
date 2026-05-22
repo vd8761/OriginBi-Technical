@@ -66,7 +66,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, o
                 </button>
 
                 {isOpen && (
-                    <div className="absolute top-full left-0 mt-2 w-full bg-white dark:bg-[#111a15] backdrop-blur-2xl border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto custom-scrollbar">
+                    <div className="absolute top-full left-0 mt-2 w-full bg-[#ffffff] dark:bg-[#141a17] custom-select-dropdown border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto custom-scrollbar" style={{ backgroundColor: 'var(--select-dropdown-bg, #ffffff)' }}>
                         {options.map((option) => (
                             <button
                                 key={option.value}
@@ -74,14 +74,14 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, o
                                 onClick={() => handleSelect(option.value)}
                                 className={`w-full text-left px-4 py-3 text-[13px] transition-colors font-bold border-b border-gray-100 dark:border-white/5 last:border-0 ${String(value) === String(option.value)
                                     ? 'bg-brand-green text-white'
-                                    : 'text-slate-900 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5'
+                                    : 'text-slate-900 bg-[#ffffff] dark:bg-[#141a17] dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5'
                                     }`}
                             >
                                 {option.label}
                             </button>
                         ))}
                         {options.length === 0 && (
-                            <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
+                            <div className="px-4 py-3 text-sm text-gray-500 text-center bg-[#ffffff] dark:bg-[#141a17]">No options available</div>
                         )}
                     </div>
                 )}

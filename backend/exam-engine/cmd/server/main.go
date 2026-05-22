@@ -59,10 +59,8 @@ func run() error {
 	defer pool.Close()
 
 	if cfg.EnsurePartitionsOnBoot {
-		if err := db.EnsurePartitions(rootCtx, pool); err != nil {
-			logger.Warn("partition ensure failed", "err", err)
-		}
-		go partitionMaintainer(rootCtx, pool, logger)
+		// Telemetry partitioning has been removed.
+		logger.Info("partitioning is disabled, skipping initialization")
 	}
 
 	verifier, err := auth.NewCognitoVerifier(rootCtx, cfg.CognitoRegion, cfg.CognitoUserPoolID, cfg.CognitoClientID)
@@ -117,22 +115,6 @@ func run() error {
 	return nil
 }
 
-// partitionMaintainer runs once an hour and ensures the upcoming partitions
-// exist. Cheap to run; idempotent thanks to the SQL helpers.
-func partitionMaintainer(ctx context.Context, pool *db.Pool, logger *slog.Logger) {
-	t := time.NewTicker(1 * time.Hour)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			if err := db.EnsurePartitions(ctx, pool); err != nil {
-				logger.Warn("partition ensure tick failed", "err", err)
-			}
-		}
-	}
-}
 
 func newLogger(level string) *slog.Logger {
 	var lvl slog.Level
