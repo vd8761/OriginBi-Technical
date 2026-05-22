@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS tech_grammar_questions (
     task_type tech_grammar_task_type NOT NULL,
     difficulty tech_difficulty NOT NULL,
     question_text TEXT NOT NULL,
+    explanation TEXT NULL,
     audio_url TEXT NULL,
     passage_text TEXT NULL,
     reference_answer TEXT NULL,
@@ -282,6 +283,7 @@ CREATE TABLE IF NOT EXISTS tech_mnc_questions (
     subcategory VARCHAR(100) NULL,
     difficulty tech_difficulty NOT NULL,
     question_text TEXT NOT NULL,
+    explanation TEXT NULL,
     correct_option_id BIGINT NULL,
     marks DECIMAL(5,2) NOT NULL,
     negative_marks DECIMAL(5,2) NOT NULL,
@@ -348,6 +350,7 @@ CREATE TABLE IF NOT EXISTS tech_role_questions (
     subcategory VARCHAR(100) NULL,
     question_type tech_role_question_type NOT NULL,
     question_text TEXT NOT NULL,
+    explanation TEXT NULL,
     scenario_context TEXT NULL,
     metadata JSONB NULL,
     image_url TEXT NULL,
@@ -499,3 +502,28 @@ CREATE INDEX IF NOT EXISTS idx_tech_assessment_purchases_user
 
 CREATE INDEX IF NOT EXISTS idx_tech_assessment_purchases_assessment
     ON tech_assessment_purchases(assessment_id);
+
+-- Add explanation column to other question tables if they don't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'tech_grammar_questions' AND column_name = 'explanation'
+    ) THEN
+        ALTER TABLE tech_grammar_questions ADD COLUMN explanation TEXT NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'tech_mnc_questions' AND column_name = 'explanation'
+    ) THEN
+        ALTER TABLE tech_mnc_questions ADD COLUMN explanation TEXT NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'tech_role_questions' AND column_name = 'explanation'
+    ) THEN
+        ALTER TABLE tech_role_questions ADD COLUMN explanation TEXT NULL;
+    END IF;
+END $$;

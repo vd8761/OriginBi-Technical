@@ -148,9 +148,14 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     case "mnc":
       return { ...common, topic: q.category } as MNCQuestion;
     case "communication": {
+      let taskType = q.category as CommTaskType;
+      if (taskType === ("listening_mcq" as any)) taskType = "audio";
+      if (taskType === ("reading_mcq" as any)) taskType = "reading";
       const commQ: any = {
         ...common,
-        taskType: q.category as CommTaskType,
+        taskType,
+        category: q.metadata?.category || "General",
+        subcategory: q.subcategory || q.metadata?.subcategory || "",
         instructions: q.questionText,
         passage: q.metadata?.passage,
         audioUrl: q.metadata?.audioUrl,
@@ -198,7 +203,15 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
       break;
     }
     case "mnc": category = (q as MNCQuestion).topic; break;
-    case "communication": category = (q as CommQuestion).taskType; break;
+    case "communication": {
+      const cq = q as CommQuestion;
+      const tType = cq.taskType;
+      if (tType === "audio") category = "listening_mcq";
+      else if (tType === "reading") category = "reading_mcq";
+      else category = tType;
+      subcategory = cq.subcategory || "";
+      break;
+    }
     case "role": category = (q as RoleQuestion).questionType; break;
     case "coding": category = (q as CodingQuestion).category; break;
   }
@@ -211,6 +224,8 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
   };
 
   if (module === "communication") {
+    if (common.category) metadata.category = common.category;
+    if (common.subcategory) metadata.subcategory = common.subcategory;
     if (common.passage) metadata.passage = common.passage;
     if (common.audioUrl) metadata.audioUrl = common.audioUrl;
     if (common.prompt) metadata.prompt = common.prompt;
@@ -573,6 +588,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         setLoading(true);
         const payload = {
           ...frontendToPayload(selectedModule!, q),
+          assessmentId: q.assessmentId || activeAssessment?.assessment_id || undefined,
           mode
         };
         if (isExisting && !qId.startsWith("new-")) {
@@ -626,9 +642,10 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         setLoading(true);
         const payloads = imported.map(q => ({
           ...frontendToPayload(selectedModule!, q),
+          assessmentId: activeAssessment?.assessment_id || undefined,
           mode
         }));
-        const res = await bulkImportQuestions(selectedModule!, payloads);
+        const res = await bulkImportQuestions(selectedModule!, payloads, activeAssessment?.assessment_id || undefined);
         showToast(`Imported ${res.imported} questions`);
         await loadQuestionsForModule(selectedModule!, mode);
         await refreshModuleCounts(selectedModule!);

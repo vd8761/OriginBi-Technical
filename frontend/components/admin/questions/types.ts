@@ -117,6 +117,11 @@ export interface CommQuestion {
   negativeMarks?: number;
   status?: QuestionStatus;
   explanation?: string;
+  // Standardized mcq / msq / tf properties
+  text?: string;
+  options?: QuestionOption[];
+  correctOptionId?: string;
+  imageUrl?: string | null;
 }
 
 export const COMM_TASK_LABELS: Record<CommTaskType, string> = {
