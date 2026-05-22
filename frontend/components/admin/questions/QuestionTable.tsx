@@ -9,7 +9,7 @@ interface QuestionTableProps {
   onEdit: (q: AnyQuestion) => void;
   onDelete: (id: string) => void;
   onView?: (q: AnyQuestion) => void;
-  categories?: { id: string; name: string }[];
+  categories?: { id: string; name: string; subcategories?: any[] }[];
 }
 
 const QuestionTable: React.FC<QuestionTableProps> = ({
@@ -56,6 +56,21 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
               const difficulty = (q as any).difficulty || "Medium";
               const optionsCount = (q as any).options?.length || 0;
 
+              const subcategoryKey = (q as any).subcategory || (q as any).subCategory || "";
+              let subcategoryDisplay = subcategoryKey;
+              if (matchedCat && matchedCat.subcategories && subcategoryKey) {
+                const matchedSub = matchedCat.subcategories.find((sc: any) => 
+                  String(sc.id) === String(subcategoryKey) || 
+                  String(sc.name) === String(subcategoryKey)
+                );
+                if (matchedSub) {
+                  subcategoryDisplay = matchedSub.name || subcategoryKey;
+                }
+              }
+              if (subcategoryDisplay && subcategoryDisplay.includes("_")) {
+                subcategoryDisplay = subcategoryDisplay.replace(/_/g, " ");
+              }
+
               return (
                 <tr key={qId} className="bg-white dark:bg-transparent border-b border-brand-light-tertiary dark:border-white/5 hover:bg-brand-light-secondary dark:hover:bg-white/5 transition-colors group">
                   <td className="p-4 align-middle">
@@ -72,7 +87,7 @@ const QuestionTable: React.FC<QuestionTableProps> = ({
                   </td>
                   <td className="p-4 text-sm text-brand-text-light-primary dark:text-white align-middle">
                     <span className="capitalize text-slate-400 dark:text-white/40">
-                      {(q as any).subcategory || (q as any).subCategory || "-"}
+                      {subcategoryDisplay || "-"}
                     </span>
                   </td>
                   <td className="p-4 text-center text-sm text-brand-text-light-primary dark:text-white align-middle font-bold">

@@ -12,6 +12,39 @@ interface ModuleConfig {
   readonly subcategoryColumn?: string;
 }
 
+function norm(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function matchCategory(qCat: string | undefined, targetCat: string): boolean {
+  if (!qCat) return false;
+  const nQ = norm(qCat);
+  const nT = norm(targetCat);
+  if (nQ === nT) return true;
+
+  const shortToLong: Record<string, string[]> = {
+    qa: ["quantitativeaptitude", "quantitative"],
+    lr: ["logicalreasoning", "logical"],
+    di: ["datainterpretation", "data"],
+    ar: ["abstractreasoning", "abstract"],
+    va: ["verbalability", "verbal"]
+  };
+
+  for (const [short, longs] of Object.entries(shortToLong)) {
+    if (nT === short || longs.includes(nT)) {
+      if (nQ === short || longs.includes(nQ)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function matchSubcategory(qSub: string | undefined, targetSub: string): boolean {
+  if (!qSub) return false;
+  return norm(qSub) === norm(targetSub);
+}
+
 const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
   aptitude: {
     questionTable: 'tech_aptitude_questions',
@@ -109,7 +142,16 @@ export class AdminQuestionService {
     return {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: module === 'coding' ? 'Coding' : row[config.categoryColumn],
+      category: module === 'coding'
+        ? 'Coding'
+        : (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
+          ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
+             : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
+             : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
+             : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
+             : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
+             : row[config.categoryColumn])
+          : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
       questionText: module === 'coding' ? (row.problem_title || row.problem_statement || '') : row.question_text,
@@ -528,8 +570,12 @@ export class AdminQuestionService {
 
           const metadata = q.metadata || {};
           if (q.kind) metadata.kind = q.kind;
-          if (q.correctAnswer) metadata.correctAnswer = q.correctAnswer;
-          if (q.correctOptionIds) metadata.correctOptionIds = q.correctOptionIds;
+          if (q.correctAnswer || q.metadata?.correctAnswer) {
+            metadata.correctAnswer = q.correctAnswer || q.metadata?.correctAnswer;
+          }
+          if (q.correctOptionIds || q.metadata?.correctOptionIds) {
+            metadata.correctOptionIds = q.correctOptionIds || q.metadata?.correctOptionIds;
+          }
 
           const columns = ['assessment_id', config.categoryColumn, 'difficulty', 'question_text', 'explanation', 'correct_option_id', 'marks', 'negative_marks', 'status', 'mode', 'metadata'];
           const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial', JSON.stringify(metadata)];
@@ -560,6 +606,25 @@ export class AdminQuestionService {
             if (insertedOpts.length > 0) {
               const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
               await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+            }
+
+            // Resolve temp correctOptionIds in metadata
+            if (Array.isArray(metadata.correctOptionIds)) {
+              const resolvedIds = metadata.correctOptionIds.map((id: any) => {
+                if (String(id).startsWith('opt_')) {
+                  if (String(id) === 'opt_true') return insertedOpts[0]?.option_id;
+                  if (String(id) === 'opt_false') return insertedOpts[1]?.option_id;
+                  const idx = parseInt(String(id).split('_')[1]);
+                  return insertedOpts[idx]?.option_id;
+                }
+                return id;
+              }).filter(Boolean);
+              
+              metadata.correctOptionIds = resolvedIds;
+              await queryRunner.query(
+                `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
+                [JSON.stringify(metadata), newQId]
+              );
             }
           }
           imported++;
@@ -668,6 +733,86 @@ export class AdminQuestionService {
     await queryRunner.startTransaction();
 
     try {
+      // 1. Fetch old assessment categories
+      const oldRows = await queryRunner.query(
+        `SELECT categories, module_type FROM tech_assessments WHERE assessment_id = $1`,
+        [id]
+      );
+      const oldAssessment = oldRows[0];
+      const moduleType = oldAssessment?.module_type as ModuleType;
+
+      if (categories !== undefined && oldAssessment) {
+        let oldCats: any[] = [];
+        try {
+          oldCats = typeof oldAssessment.categories === 'string' 
+            ? JSON.parse(oldAssessment.categories) 
+            : (oldAssessment.categories || []);
+        } catch (e) {
+          oldCats = [];
+        }
+        if (!Array.isArray(oldCats)) oldCats = [];
+
+        let newCats: any[] = [];
+        try {
+          newCats = typeof categories === 'string' 
+            ? JSON.parse(categories) 
+            : (categories || []);
+        } catch (e) {
+          newCats = [];
+        }
+        if (!Array.isArray(newCats)) newCats = [];
+
+        const newCatIds = new Set(newCats.map(c => c.id?.toLowerCase().trim()));
+        const deletedCats = oldCats.filter(c => c.id && !newCatIds.has(c.id.toLowerCase().trim()));
+
+        const deletedSubs: { catId: string; subId: string }[] = [];
+        for (const oldCat of oldCats) {
+          if (!oldCat.id) continue;
+          const newCat = newCats.find(c => c.id?.toLowerCase().trim() === oldCat.id.toLowerCase().trim());
+          if (newCat) {
+            const oldSubs = oldCat.subcategories || [];
+            const newSubIds = new Set((newCat.subcategories || []).map((s: any) => s.id?.toLowerCase().trim()));
+            for (const oldSub of oldSubs) {
+              if (oldSub.id && !newSubIds.has(oldSub.id.toLowerCase().trim())) {
+                deletedSubs.push({ catId: oldCat.id, subId: oldSub.id });
+              }
+            }
+          }
+        }
+
+        const config = MODULE_CONFIGS[moduleType];
+        if (config && (deletedCats.length > 0 || deletedSubs.length > 0)) {
+          const questions = await queryRunner.query(
+            `SELECT * FROM ${config.questionTable} WHERE assessment_id = $1`,
+            [id]
+          );
+
+          const questionIdsToDelete: number[] = [];
+          for (const q of questions) {
+            const qId = q[config.idColumn];
+            const qCat = q[config.categoryColumn];
+            const qSub = config.subcategoryColumn ? q[config.subcategoryColumn] : undefined;
+
+            const isCatDeleted = deletedCats.some(dc => matchCategory(qCat, dc.id));
+            if (isCatDeleted) {
+              questionIdsToDelete.push(qId);
+              continue;
+            }
+
+            const isSubDeleted = deletedSubs.some(ds => matchCategory(qCat, ds.catId) && matchSubcategory(qSub, ds.subId));
+            if (isSubDeleted) {
+              questionIdsToDelete.push(qId);
+            }
+          }
+
+          if (questionIdsToDelete.length > 0) {
+            throw new BadRequestException(
+              `Cannot delete category/subcategory because it has ${questionIdsToDelete.length} allocated question(s). Please delete or reassign them first.`
+            );
+          }
+        }
+      }
+
       await queryRunner.query(
         `UPDATE tech_assessments
          SET assessment_name = COALESCE($1, assessment_name),

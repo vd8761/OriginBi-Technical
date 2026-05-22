@@ -1,57 +1,7 @@
-"use client";
+import React, { Suspense } from 'react';
+import RoleClient from './Client';
 
-import React from 'react';
-import RoleEngine, { type AttemptSubmitResult } from '../../../components/assessment/role/RoleEngine';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import { useAssessmentTracker } from '../../../lib/assessmentTracker';
-import { EXAM_DETAILS } from '../../../lib/exams';
-import {
-    mapSubmissionToAssessmentResult,
-    saveAssessmentResultToStorage,
-    unlockAssessmentForDashboard,
-} from '../../../lib/assessmentResultMapper';
-
-function RoleAssessmentContent() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
-    const assessmentCode = searchParams.get("assessmentCode") || "ROLE_DEFAULT";
-    const { markAssessmentComplete } = useAssessmentTracker();
-
-    const handleComplete = (result: AttemptSubmitResult) => {
-        try {
-            const assessmentResult = mapSubmissionToAssessmentResult({
-                assessmentId: "role",
-                submission: result,
-                detail: EXAM_DETAILS.role,
-            });
-            saveAssessmentResultToStorage(assessmentResult);
-            unlockAssessmentForDashboard("role");
-
-            markAssessmentComplete("role", {
-                totalScore: assessmentResult.overallScore,
-                correctCount: assessmentResult.correctCount ?? 0,
-                wrongCount: assessmentResult.wrongCount ?? 0,
-                timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-            });
-        } catch (err) {
-            console.error("[Role] handleComplete error:", err);
-        }
-
-        if (mode === 'trial') {
-            router.push('/assessment');
-        } else {
-            router.push('/dashboard?completed=role');
-        }
-    };
-
-    return (
-        <div className="min-h-screen w-full">
-            <RoleEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
-        </div>
-    );
-}
+export const dynamic = 'force-dynamic';
 
 export default function RoleAssessmentPage() {
     return (
@@ -63,7 +13,7 @@ export default function RoleAssessmentPage() {
                 </div>
             </div>
         }>
-            <RoleAssessmentContent />
+            <RoleClient />
         </Suspense>
     );
 }

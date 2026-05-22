@@ -294,7 +294,8 @@ function csvToQuestions(rows: string[][], assessmentType: AssessmentType): AnyQu
     const status = (getValue("status").toLowerCase() || "active") as any;
     const explanation = getValue("explanation");
     const imageUrl = getValue("imageurl") || null;
-    const kind = (getValue("questiontype") || getValue("questionkind") || "mcq").toLowerCase() as QuestionKind;
+    const rawKind = (getValue("questionkind") || getValue("questiontype") || "mcq").toLowerCase();
+    const kind = (["mcq", "msq", "tf", "numerical"].includes(rawKind) ? rawKind : "mcq") as QuestionKind;
 
     const baseQuestion: any = {
       id: baseId,
@@ -919,6 +920,11 @@ export default function CsvImportPanel({
     if (!activeQuestionId) return [];
     return validationMap[activeQuestionId] || [];
   }, [activeQuestionId, validationMap]);
+
+  const getFieldError = (fieldName: string) => {
+    return currentErrors.find(err => err.field === fieldName)?.message;
+  };
+
   return (
     <div className="flex flex-col gap-6 relative">
       {/* Non-Glassmorphic Application Theme Progress Overlay */}
@@ -1022,10 +1028,10 @@ export default function CsvImportPanel({
 
           {errorMsg && (
             <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-in shake duration-500">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+              <AlertCircle className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
               <div>
-                <p className="text-[9px] font-black tracking-widest text-red-500 mb-0.5 leading-none">CSV Error</p>
-                <p className="text-[10px] font-bold text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>
+                <p className="text-xs font-black uppercase tracking-wider text-red-500 mb-1 leading-none">CSV Error</p>
+                <p className="text-sm font-bold text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>
               </div>
             </div>
           )}
@@ -1112,14 +1118,14 @@ export default function CsvImportPanel({
                   {/* Alert Error Box */}
                   {currentErrors.length > 0 && (
                     <div className="bg-red-500/10 border-b border-red-500/20 p-4 shrink-0 flex items-start gap-3">
-                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                      <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <h4 className="text-[10px] font-black tracking-widest text-red-500 mb-1 leading-none">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-red-500 mb-1.5 leading-none">
                           Validation Failures ({currentErrors.length})
                         </h4>
-                        <ul className="list-disc pl-3.5 space-y-0.5">
+                        <ul className="list-disc pl-4 space-y-1">
                           {currentErrors.map((err, i) => (
-                            <li key={i} className="text-[10px] font-bold text-red-600 dark:text-red-400">
+                            <li key={i} className="text-sm font-bold text-red-600 dark:text-red-400">
                               {err.message}
                             </li>
                           ))}
@@ -1142,51 +1148,71 @@ export default function CsvImportPanel({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Category / Topic Dropdowns/Inputs */}
                           {assessmentType === "aptitude" && (
-                            <CustomSelect
-                              label="Aptitude Category"
-                              value={(activeQuestion as AptitudeQuestion).category || "QA"}
-                              onChange={(val) => updateActiveQuestion({ category: val })}
-                              options={APTITUDE_CATEGORIES.map(c => ({
-                                label: APTITUDE_CATEGORY_LABELS[c] || c,
-                                value: c
-                              }))}
-                            />
+                            <div className="w-full">
+                              <CustomSelect
+                                label="Aptitude Category"
+                                value={(activeQuestion as AptitudeQuestion).category || "QA"}
+                                onChange={(val) => updateActiveQuestion({ category: val })}
+                                options={APTITUDE_CATEGORIES.map(c => ({
+                                  label: APTITUDE_CATEGORY_LABELS[c] || c,
+                                  value: c
+                                }))}
+                              />
+                              {getFieldError("category") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("category")}</p>
+                              )}
+                            </div>
                           )}
 
                           {assessmentType === "mnc" && (
-                            <CustomSelect
-                              label="MNC Prep Topic"
-                              value={(activeQuestion as MNCQuestion).topic || "General"}
-                              onChange={(val) => updateActiveQuestion({ topic: val })}
-                              options={MNC_TOPICS.map(t => ({
-                                label: t,
-                                value: t
-                              }))}
-                            />
+                            <div className="w-full">
+                              <CustomSelect
+                                label="MNC Prep Topic"
+                                value={(activeQuestion as MNCQuestion).topic || "General"}
+                                onChange={(val) => updateActiveQuestion({ topic: val })}
+                                options={MNC_TOPICS.map(t => ({
+                                  label: t,
+                                  value: t
+                                }))}
+                              />
+                              {getFieldError("topic") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("topic")}</p>
+                              )}
+                            </div>
                           )}
 
                           {assessmentType === "role" && (
-                            <CustomSelect
-                              label="Role Question Type"
-                              value={(activeQuestion as RoleQuestion).questionType || "conceptual"}
-                              onChange={(val) => updateActiveQuestion({ questionType: val as any })}
-                              options={[
-                                { label: "Conceptual", value: "conceptual" },
-                                { label: "Scenario", value: "scenario" }
-                              ]}
-                            />
+                            <div className="w-full">
+                              <CustomSelect
+                                label="Role Question Type"
+                                value={(activeQuestion as RoleQuestion).questionType || "conceptual"}
+                                onChange={(val) => updateActiveQuestion({ questionType: val as any })}
+                                options={[
+                                  { label: "Conceptual", value: "conceptual" },
+                                  { label: "Scenario", value: "scenario" }
+                                ]}
+                              />
+                              {getFieldError("questionType") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("questionType")}</p>
+                              )}
+                            </div>
                           )}
 
                           {assessmentType === "communication" && (
-                            <CustomSelect
-                              label="Task Type"
-                              value={(activeQuestion as CommQuestion).taskType || "mcq"}
-                              onChange={(val) => updateActiveQuestion({ taskType: val as any })}
-                              options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({
-                                label: v,
-                                value: k
-                              }))}
-                            />
+                            <div className="w-full">
+                              <CustomSelect
+                                label="Task Type"
+                                value={(activeQuestion as CommQuestion).taskType || "mcq"}
+                                onChange={(val) => updateActiveQuestion({ taskType: val as any })}
+                                options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({
+                                  label: v,
+                                  value: k
+                                }))}
+                              />
+                              {getFieldError("taskType") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("taskType")}</p>
+                              )}
+                            </div>
                           )}
 
                           {/* Subcategory */}
@@ -1200,72 +1226,90 @@ export default function CsvImportPanel({
                                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2 text-[12px] font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
                                 placeholder="e.g. REST API, Fractions..."
                               />
+                              {getFieldError("subcategory") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("subcategory")}</p>
+                              )}
                             </div>
                           )}
 
                           {/* Difficulty Selector */}
-                          <CustomSelect
-                            label="Difficulty"
-                            value={activeQuestion.difficulty || "medium"}
-                            onChange={(val) => {
-                              const d = val as any;
-                              const marks = d === "easy" ? 1 : d === "medium" ? 2 : 5;
-                              updateActiveQuestion({ difficulty: d, marks });
-                            }}
-                            options={[
-                              { label: "Easy (1 Mark)", value: "easy" },
-                              { label: "Medium (2 Marks)", value: "medium" },
-                              { label: "Hard (5 Marks)", value: "hard" }
-                            ]}
-                          />
+                          <div>
+                            <CustomSelect
+                              label="Difficulty"
+                              value={activeQuestion.difficulty || "medium"}
+                              onChange={(val) => {
+                                const d = val as any;
+                                const marks = d === "easy" ? 1 : d === "medium" ? 2 : 5;
+                                updateActiveQuestion({ difficulty: d, marks });
+                              }}
+                              options={[
+                                { label: "Easy (1 Mark)", value: "easy" },
+                                { label: "Medium (2 Marks)", value: "medium" },
+                                { label: "Hard (5 Marks)", value: "hard" }
+                              ]}
+                            />
+                            {getFieldError("difficulty") && (
+                              <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("difficulty")}</p>
+                            )}
+                          </div>
 
                           {/* Status */}
-                          <CustomSelect
-                            label="Status"
-                            value={activeQuestion.status || "active"}
-                            onChange={(val) => updateActiveQuestion({ status: val as any })}
-                            options={[
-                              { label: "Active", value: "active" },
-                              { label: "Inactive", value: "inactive" }
-                            ]}
-                          />
+                          <div>
+                            <CustomSelect
+                              label="Status"
+                              value={activeQuestion.status || "active"}
+                              onChange={(val) => updateActiveQuestion({ status: val as any })}
+                              options={[
+                                { label: "Active", value: "active" },
+                                { label: "Inactive", value: "inactive" }
+                              ]}
+                            />
+                            {getFieldError("status") && (
+                              <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("status")}</p>
+                            )}
+                          </div>
 
                           {/* Question Format */}
                           {assessmentType !== "coding" && assessmentType !== "communication" && (
-                            <CustomSelect
-                              className="md:col-span-2"
-                              label="Question Kind"
-                              value={activeQuestion.kind || "mcq"}
-                              onChange={(val) => {
-                                const newKind = val as QuestionKind;
-                                let opts = activeQuestion.options || [];
-                                let correctId = activeQuestion.correctOptionId || "";
-                                let correctIds = activeQuestion.correctOptionIds || [];
-                                
-                                if (newKind === "tf") {
-                                  opts = [{ id: "opt_true", text: "True" }, { id: "opt_false", text: "False" }];
-                                  correctId = "opt_true";
-                                  correctIds = ["opt_true"];
-                                } else if (newKind === "numerical") {
-                                  opts = [];
-                                  correctId = "";
-                                  correctIds = [];
-                                } else if (activeQuestion.kind === "tf" || activeQuestion.kind === "numerical") {
-                                  opts = [
-                                    { id: "opt_0", text: "" }, { id: "opt_1", text: "" },
-                                    { id: "opt_2", text: "" }, { id: "opt_3", text: "" }
-                                  ];
-                                  correctId = "opt_0";
-                                  correctIds = ["opt_0"];
-                                }
-                                
-                                updateActiveQuestion({ kind: newKind, options: opts, correctOptionId: correctId, correctOptionIds: correctIds });
-                              }}
-                              options={allowedQuestionKinds.map(k => ({
-                                label: String(k).toUpperCase(),
-                                value: String(k)
-                              }))}
-                            />
+                            <div className="md:col-span-2">
+                              <CustomSelect
+                                className="w-full"
+                                label="Question Kind"
+                                value={activeQuestion.kind || "mcq"}
+                                onChange={(val) => {
+                                  const newKind = val as QuestionKind;
+                                  let opts = activeQuestion.options || [];
+                                  let correctId = activeQuestion.correctOptionId || "";
+                                  let correctIds = activeQuestion.correctOptionIds || [];
+                                  
+                                  if (newKind === "tf") {
+                                    opts = [{ id: "opt_true", text: "True" }, { id: "opt_false", text: "False" }];
+                                    correctId = "opt_true";
+                                    correctIds = ["opt_true"];
+                                  } else if (newKind === "numerical") {
+                                    opts = [];
+                                    correctId = "";
+                                    correctIds = [];
+                                  } else if (activeQuestion.kind === "tf" || activeQuestion.kind === "numerical") {
+                                    opts = [
+                                      { id: "opt_0", text: "" }, { id: "opt_1", text: "" },
+                                      { id: "opt_2", text: "" }, { id: "opt_3", text: "" }
+                                    ];
+                                    correctId = "opt_0";
+                                    correctIds = ["opt_0"];
+                                  }
+                                  
+                                  updateActiveQuestion({ kind: newKind, options: opts, correctOptionId: correctId, correctOptionIds: correctIds });
+                                }}
+                                options={allowedQuestionKinds.map(k => ({
+                                  label: String(k).toUpperCase(),
+                                  value: String(k)
+                                }))}
+                              />
+                              {getFieldError("kind") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("kind")}</p>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1422,6 +1466,9 @@ export default function CsvImportPanel({
                                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 text-[12px] font-bold text-slate-900 dark:text-white h-24 resize-none focus:outline-none"
                                 placeholder="Enter the query or problem statement..."
                               />
+                              {getFieldError("text") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("text")}</p>
+                              )}
                             </div>
                             
                             <div>
@@ -1432,6 +1479,9 @@ export default function CsvImportPanel({
                                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 text-[12px] font-bold text-slate-900 dark:text-white h-20 resize-none focus:outline-none"
                                 placeholder="Explain the rationale behind the correct solution..."
                               />
+                              {getFieldError("explanation") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("explanation")}</p>
+                              )}
                             </div>
                             {/* Question Image Upload (Task 7) */}
                             <div className="space-y-1.5 mt-4">
@@ -1509,6 +1559,9 @@ export default function CsvImportPanel({
                                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2 text-[12px] font-bold text-slate-900 dark:text-white focus:outline-none"
                                 placeholder="e.g. 25, 3.14..."
                               />
+                              {getFieldError("correctAnswer") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("correctAnswer")}</p>
+                              )}
                             </div>
                           ) : assessmentType === "communication" && ["mcq", "reading", "audio"].includes((activeQuestion as CommQuestion).taskType) ? (
                             // Communication Sub-Questions listing
@@ -1675,6 +1728,11 @@ export default function CsvImportPanel({
                                   </div>
                                 );
                               })}
+                              {(getFieldError("options") || getFieldError("correctOptionId") || getFieldError("correctOptionIds")) && (
+                                <p className="text-[11px] font-bold text-red-500 mt-2">
+                                  {getFieldError("options") || getFieldError("correctOptionId") || getFieldError("correctOptionIds")}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>

@@ -1,57 +1,7 @@
-"use client";
+import React, { Suspense } from 'react';
+import CommunicationClient from './Client';
 
-import React from 'react';
-import CommunicationEngine, { type AttemptSubmitResult } from '../../../components/assessment/communication/CommunicationEngine';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import { useAssessmentTracker } from '../../../lib/assessmentTracker';
-import { EXAM_DETAILS } from '../../../lib/exams';
-import {
-    mapSubmissionToAssessmentResult,
-    saveAssessmentResultToStorage,
-    unlockAssessmentForDashboard,
-} from '../../../lib/assessmentResultMapper';
-
-function CommunicationAssessmentContent() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
-    const assessmentCode = searchParams.get("assessmentCode") || "COMMUNICATION_DEFAULT";
-    const { markAssessmentComplete } = useAssessmentTracker();
-
-    const handleComplete = (result: AttemptSubmitResult) => {
-        try {
-            const assessmentResult = mapSubmissionToAssessmentResult({
-                assessmentId: "communication",
-                submission: result,
-                detail: EXAM_DETAILS.communication,
-            });
-            saveAssessmentResultToStorage(assessmentResult);
-            unlockAssessmentForDashboard("communication");
-
-            markAssessmentComplete("communication", {
-                totalScore: assessmentResult.overallScore,
-                correctCount: assessmentResult.correctCount ?? 0,
-                wrongCount: assessmentResult.wrongCount ?? 0,
-                timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
-            });
-        } catch (err) {
-            console.error("[Communication] handleComplete error:", err);
-        }
-
-        if (mode === 'trial') {
-            router.push('/assessment');
-        } else {
-            router.push('/dashboard?completed=communication');
-        }
-    };
-
-    return (
-        <div className="min-h-screen w-full">
-            <CommunicationEngine onComplete={handleComplete} mode={mode} assessmentCode={assessmentCode} />
-        </div>
-    );
-}
+export const dynamic = 'force-dynamic';
 
 export default function CommunicationAssessmentPage() {
     return (
@@ -63,7 +13,7 @@ export default function CommunicationAssessmentPage() {
                 </div>
             </div>
         }>
-            <CommunicationAssessmentContent />
+            <CommunicationClient />
         </Suspense>
     );
 }

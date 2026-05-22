@@ -128,7 +128,7 @@ func (s *AssessmentService) GetAttemptsStats(userId interface{}) (map[string]map
 
 		if !config.HasMode {
 			var count int64
-			query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE user_id = ?", config.Attempts)
+			query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE user_id = ? AND status IN ('submitted', 'evaluated')", config.Attempts)
 			if err := db.Raw(query, resolvedUserId).Scan(&count).Error; err == nil {
 				stats[module]["trial"] = count
 				stats[module]["main"] = count
@@ -140,7 +140,7 @@ func (s *AssessmentService) GetAttemptsStats(userId interface{}) (map[string]map
 				FROM %s a
 				JOIN %s aq ON aq.%s = a.%s
 				JOIN %s q ON q.%s = aq.%s
-				WHERE a.user_id = ? AND q.mode = 'trial'`,
+				WHERE a.user_id = ? AND q.mode = 'trial' AND a.status IN ('submitted', 'evaluated')`,
 				config.AttemptIDCol, config.Attempts, config.Junction, config.AttemptIDCol,
 				config.AttemptIDCol, config.Questions, config.IDCol, config.IDCol)
 			
@@ -149,7 +149,7 @@ func (s *AssessmentService) GetAttemptsStats(userId interface{}) (map[string]map
 				FROM %s a
 				JOIN %s aq ON aq.%s = a.%s
 				JOIN %s q ON q.%s = aq.%s
-				WHERE a.user_id = ? AND q.mode = 'main'`,
+				WHERE a.user_id = ? AND q.mode = 'main' AND a.status IN ('submitted', 'evaluated')`,
 				config.AttemptIDCol, config.Attempts, config.Junction, config.AttemptIDCol,
 				config.AttemptIDCol, config.Questions, config.IDCol, config.IDCol)
 

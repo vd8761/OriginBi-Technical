@@ -4,10 +4,11 @@ import React, {
   createContext,
   useState,
   useEffect,
-  useContext,
   useCallback,
+  useContext,
   ReactNode,
 } from "react";
+import { setActiveStudent, clearAllAssessmentCaches } from "../assessmentCache";
 
 export interface UserProfile {
   name: string;
@@ -47,24 +48,25 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Defined before the session-restore effect so that effect can both call it
+  // (on an invalid session) and depend on it for the cross-tab storage listener.
   const logout = useCallback(() => {
     try {
-      // Clear all student session keys
+      // Clear all assessment caches first to prevent cross-student leakage
+      clearAllAssessmentCaches().catch(() => {});
+
+      // Clear all originbi keys to avoid state leakage
       localStorage.removeItem("originbi:access-token");
       localStorage.removeItem("originbi:id-token");
       localStorage.removeItem("originbi:user-profile");
       localStorage.removeItem("originbi:assessment-results");
       localStorage.removeItem("originbi:paid-assessments");
       localStorage.removeItem("originbi:completed-assessments");
+      localStorage.removeItem("user");
 
       // Clear any legacy userEmail keys if present
       localStorage.removeItem("userEmail");
       sessionStorage.removeItem("userEmail");
-
-      // NOTE: Do NOT clear admin session keys here. Admin auth is a separate
-      // namespace and should only be cleared by the admin logout flow.
-      // Clearing originbi:admin-session here causes the admin dashboard to
-      // redirect back to login immediately after a successful admin login.
 
       setUser(null);
       setIsLoggedIn(false);
@@ -72,23 +74,6 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       console.error("Error clearing session storage", error);
     }
   }, []);
-
-  const login = (accessToken: string, idToken: string, profile: UserProfile) => {
-    try {
-      localStorage.setItem("originbi:access-token", accessToken);
-      localStorage.setItem("originbi:id-token", idToken);
-      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
-
-      // NOTE: Do NOT clear admin session keys here. Admin and student sessions
-      // are independent namespaces.
-
-      setUser(profile);
-      setIsLoggedIn(true);
-      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
-    } catch (error) {
-      console.error("Error setting session storage", error);
-    }
-  };
 
   useEffect(() => {
     // Check localStorage on mount
@@ -115,9 +100,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
         // Admin auth uses its own token namespace; if the explicit admin gate
         // is active, never try to restore a student session from this provider.
-        // This guard must cover ALL paths, not just /admin, because the context
-        // mounts globally and the path check can race with the redirect.
-        if (hasAdminSession) {
+        if (hasAdminSession && isAdminPath) {
           return;
         }
 
@@ -132,18 +115,12 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
           return;
         }
 
-        // If cache is cleared (no token and no profile), ensure logout
-        if (!token && !storedProfile) {
-          setUser(null);
-          setIsLoggedIn(false);
-          return;
-        }
-
         if (token) {
           if (storedProfile) {
             const parsedProfile = JSON.parse(storedProfile);
             setUser(parsedProfile);
             setIsLoggedIn(true);
+            setActiveStudent(parsedProfile.email ?? null);
             window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: parsedProfile }));
           } else {
             // If token exists but profile doesn't, fetch it from API
@@ -157,6 +134,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               };
               setUser(profile);
               setIsLoggedIn(true);
+              setActiveStudent(profile.email ?? null);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
             } else {
@@ -178,6 +156,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               };
               setUser(profile);
               setIsLoggedIn(true);
+              setActiveStudent(profile.email ?? null);
               localStorage.setItem("originbi:access-token", accessToken);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
@@ -201,7 +180,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
     // Listen for storage events (cross-tab sync and cache clear detection)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "originbi:access-token" && e.newValue === null) {
-        // Token was removed (cache cleared), logout
+        // Token was removed (cache cleared / logged out in another tab)
         logout();
       }
     };
@@ -209,6 +188,28 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [logout]);
+
+  const login = (accessToken: string, idToken: string, profile: UserProfile) => {
+    try {
+      localStorage.setItem("originbi:access-token", accessToken);
+      localStorage.setItem("originbi:id-token", idToken);
+      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+
+      // Clear admin session flag and tokens to avoid cross-session contamination
+      localStorage.removeItem("originbi:admin-session");
+      localStorage.removeItem("originbi:admin-access-token");
+      localStorage.removeItem("originbi:admin-id-token");
+      localStorage.removeItem("originbi:admin-refresh-token");
+      localStorage.removeItem("user");
+
+      setUser(profile);
+      setIsLoggedIn(true);
+      setActiveStudent(profile.email ?? null);
+      window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+    } catch (error) {
+      console.error("Error setting session storage", error);
+    }
+  };
 
   const updateProfile = (profileUpdates: Partial<UserProfile>) => {
     try {

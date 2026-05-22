@@ -46,13 +46,15 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     progressPercent = 0,
     isCollapsed    = false,
     totalQuestions,
+    questionsPerBlock = 5,
+    currentBlockNumber = 1,
+    totalBlocks = 1,
 }) => {
     const unlockedQs  = questions.filter((q) => !q.isLocked);
     const answeredCount = unlockedQs.filter((q) => q.isAnswered).length;
     const markedCount   = unlockedQs.filter((q) => q.isMarked).length;
+    const leftCount     = unlockedQs.filter((q) => !q.isAnswered).length;
     const displayTotal  = totalQuestions ?? questions.length;
-    // Left = total questions (including locked future blocks) minus answered and marked
-    const leftCount     = Math.max(0, displayTotal - answeredCount - markedCount);
 
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const progressRingStyle = {
@@ -62,7 +64,12 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     // ── Build a flat list: unlocked questions + locked placeholders ──────────
     // Locked future blocks are appended as placeholder tiles so the grid is
     // completely continuous — no visual gaps or separators between blocks.
-    const lockedFutureCount = Math.max(0, displayTotal - questions.length);
+    // We subtract any locked questions already included in the `questions` array.
+    const lockedAlreadyIncluded = questions.filter((q) => q.isLocked).length;
+    const lockedFutureCount = Math.max(
+        0,
+        Math.max(0, totalBlocks - currentBlockNumber) * questionsPerBlock - lockedAlreadyIncluded
+    );
 
     return (
         <div className="flex h-full flex-col gap-4">
@@ -164,7 +171,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                         const isActive = idx === currentIndex;
                         return (
                             <button
-                                key={`${q.blockNumber ?? 0}-${q.id}-${idx}`}
+                                key={q.id}
                                 type="button"
                                 onClick={() => !q.isLocked && onSelect(idx)}
                                 disabled={!!q.isLocked}
@@ -182,8 +189,11 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                                     isCollapsed ? "h-10 w-10" : "h-10 w-full"
                                 }`}
                             >
-                                <span>{q.number}</span>
-                                {q.isLocked && <Lock className="absolute right-1 top-1 h-2.5 w-2.5" />}
+                                {q.isLocked ? (
+                                    <Lock className="h-3.5 w-3.5" />
+                                ) : (
+                                    q.number
+                                )}
                                 {!q.isLocked && q.isAnswered && q.isMarked && (
                                     <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-brand-green border border-white dark:border-[#111a15]">
                                         <div className="h-1 w-1 rounded-full bg-white" />
@@ -198,12 +208,11 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                         <div
                             key={`future-locked-${i}`}
                             title="Answer all previous questions to unlock"
-                            className={`relative flex items-center justify-center rounded-md border text-sm font-bold ${stateStyles.locked} ${
+                            className={`flex items-center justify-center rounded-md border text-sm font-bold ${stateStyles.locked} ${
                                 isCollapsed ? "h-10 w-10" : "h-10 w-full"
                             }`}
                         >
-                            <span>{questions.length + i + 1}</span>
-                            <Lock className="absolute right-1 top-1 h-2.5 w-2.5" />
+                            <Lock className="h-3.5 w-3.5" />
                         </div>
                     ))}
                 </div>

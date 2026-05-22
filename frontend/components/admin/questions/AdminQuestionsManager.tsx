@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnyQuestion, AssessmentType, QuestionMode,
   ASSESSMENT_TYPE_LABELS, ASSESSMENT_TYPE_DESCRIPTIONS,
-  APTITUDE_CATEGORIES,
+  APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS,
   MNC_TOPICS, COMM_TASK_LABELS, CommTaskType,
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   CodingQuestion, CODING_CATEGORIES,
-  getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind
+  getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind,
+  matchCategory, matchSubcategory
 } from "./types";
 import { loadQuestions, saveQuestions } from "./storage";
 import {
@@ -103,7 +104,7 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
 
 function getFilterCategories(t: AssessmentType): { key: string; label: string; subcategories?: any[] }[] {
   switch (t) {
-    case "aptitude": return APTITUDE_CATEGORIES.map(c => ({ key: c, label: `${c}`, subcategories: [] }));
+    case "aptitude": return APTITUDE_CATEGORIES.map(c => ({ key: c, label: APTITUDE_CATEGORY_LABELS[c] || c, subcategories: [] }));
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
@@ -138,6 +139,7 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     imageUrl: q.imageUrl,
     kind: q.metadata?.kind || "mcq",
     correctOptionIds: q.metadata?.correctOptionIds || (q.correctOptionId ? [String(q.correctOptionId)] : []),
+    correctAnswer: q.metadata?.correctAnswer || undefined,
   };
 
   switch (module) {
@@ -205,6 +207,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
   const metadata: any = {
     kind: common.kind || "mcq",
     correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+    correctAnswer: common.correctAnswer,
   };
 
   if (module === "communication") {
@@ -514,10 +517,10 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const filtered = useMemo(() => {
     if (!selectedModule) return [];
     let result = questions;
-    if (filterCategory !== "all") result = result.filter(q => getCatKey(q, selectedModule) === filterCategory);
+    if (filterCategory !== "all") result = result.filter(q => matchCategory(getCatKey(q, selectedModule), filterCategory));
     if (filterSubCategory !== "all") {
        result = result.filter(q => {
-         if (selectedModule === "aptitude") return (q as AptitudeQuestion).subcategory === filterSubCategory;
+         if (selectedModule === "aptitude") return matchSubcategory((q as AptitudeQuestion).subcategory, filterSubCategory);
          return true;
        });
     }
@@ -537,9 +540,26 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const categoryCounts = useMemo(() => {
     if (!selectedModule) return {};
     const counts: Record<string, number> = { all: questions.length };
-    filterCats.forEach(c => { counts[c.key] = questions.filter(q => getCatKey(q, selectedModule) === c.key).length; });
+    filterCats.forEach(c => {
+      counts[c.key] = questions.filter(q => matchCategory(getCatKey(q, selectedModule), c.key)).length;
+    });
     return counts;
   }, [questions, filterCats, selectedModule]);
+
+  const subcategoryCounts = useMemo(() => {
+    if (!selectedModule || filterCategory === "all") return {};
+    const counts: Record<string, number> = {};
+    const currentCat = filterCats.find(c => c.key === filterCategory);
+    if (currentCat && currentCat.subcategories) {
+      currentCat.subcategories.forEach((sc: any) => {
+        counts[sc.id] = questions.filter(q => 
+          matchCategory(getCatKey(q, selectedModule), filterCategory) && 
+          matchSubcategory((q as any).subcategory, sc.id)
+        ).length;
+      });
+    }
+    return counts;
+  }, [questions, filterCats, filterCategory, selectedModule]);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => setToast({ msg, type });
 
@@ -644,16 +664,251 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     }
   };
 
-  const handleExportJson = () => {
-    const data = JSON.stringify(questions, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
+  const handleExportCsv = () => {
+    if (!selectedModule) return;
+
+    const escapeCsvCell = (val: any): string => {
+      if (val === null || val === undefined) return "";
+      const str = typeof val === "object" ? JSON.stringify(val) : String(val);
+      if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    let headers: string[] = [];
+    const rows: string[][] = [];
+
+    switch (selectedModule) {
+      case "aptitude":
+        headers = [
+          "Category", "Subcategory", "Question Type", "Question Text",
+          "Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Option 6",
+          "Correct Option Index", "Correct Answer", "Difficulty", "Marks", "Negative Marks",
+          "Explanation", "Status"
+        ];
+        questions.forEach((q: any) => {
+          let correctOptionIndex = "";
+          if (q.kind === "msq") {
+            const indices: number[] = [];
+            (q.correctOptionIds || []).forEach((id: string) => {
+              const idx = q.options?.findIndex((o: any) => o.id === id);
+              if (idx !== undefined && idx !== -1) indices.push(idx + 1);
+            });
+            correctOptionIndex = indices.join(",");
+          } else {
+            const idx = q.options?.findIndex((o: any) => o.id === q.correctOptionId);
+            if (idx !== undefined && idx !== -1) correctOptionIndex = String(idx + 1);
+          }
+
+          rows.push([
+            q.category || "",
+            q.subcategory || "",
+            q.kind || "mcq",
+            q.text || "",
+            q.options?.[0]?.text || "",
+            q.options?.[1]?.text || "",
+            q.options?.[2]?.text || "",
+            q.options?.[3]?.text || "",
+            q.options?.[4]?.text || "",
+            q.options?.[5]?.text || "",
+            correctOptionIndex,
+            q.correctAnswer || "",
+            q.difficulty || "medium",
+            String(q.marks ?? 1),
+            String(q.negativeMarks ?? 0.25),
+            q.explanation || "",
+            q.status || "active"
+          ]);
+        });
+        break;
+
+      case "mnc":
+        headers = [
+          "Topic", "Question Type", "Question Text",
+          "Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Option 6",
+          "Correct Option Index", "Difficulty", "Marks", "Negative Marks",
+          "Explanation", "Status"
+        ];
+        questions.forEach((q: any) => {
+          let correctOptionIndex = "";
+          if (q.kind === "msq") {
+            const indices: number[] = [];
+            (q.correctOptionIds || []).forEach((id: string) => {
+              const idx = q.options?.findIndex((o: any) => o.id === id);
+              if (idx !== undefined && idx !== -1) indices.push(idx + 1);
+            });
+            correctOptionIndex = indices.join(",");
+          } else {
+            const idx = q.options?.findIndex((o: any) => o.id === q.correctOptionId);
+            if (idx !== undefined && idx !== -1) correctOptionIndex = String(idx + 1);
+          }
+
+          rows.push([
+            q.topic || "",
+            q.kind || "mcq",
+            q.text || "",
+            q.options?.[0]?.text || "",
+            q.options?.[1]?.text || "",
+            q.options?.[2]?.text || "",
+            q.options?.[3]?.text || "",
+            q.options?.[4]?.text || "",
+            q.options?.[5]?.text || "",
+            correctOptionIndex,
+            q.difficulty || "medium",
+            String(q.marks ?? 1),
+            String(q.negativeMarks ?? 0.25),
+            q.explanation || "",
+            q.status || "active"
+          ]);
+        });
+        break;
+
+      case "role":
+        headers = [
+          "Question Type", "Category", "Subcategory",
+          "Scenario Title", "Scenario Context", "Ticket ID", "Priority", "Reported By",
+          "Question Kind", "Question Text",
+          "Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Option 6",
+          "Correct Option Index", "Difficulty", "Marks", "Negative Marks",
+          "Explanation", "Status"
+        ];
+        questions.forEach((q: any) => {
+          let correctOptionIndex = "";
+          if (q.kind === "msq") {
+            const indices: number[] = [];
+            (q.correctOptionIds || []).forEach((id: string) => {
+              const idx = q.options?.findIndex((o: any) => o.id === id);
+              if (idx !== undefined && idx !== -1) indices.push(idx + 1);
+            });
+            correctOptionIndex = indices.join(",");
+          } else {
+            const idx = q.options?.findIndex((o: any) => o.id === q.correctOptionId);
+            if (idx !== undefined && idx !== -1) correctOptionIndex = String(idx + 1);
+          }
+
+          rows.push([
+            q.questionType || "conceptual",
+            q.category || "",
+            q.subCategory || q.subcategory || "",
+            q.title || "",
+            q.scenarioContext || "",
+            q.ticketId || "",
+            q.priority || "Medium",
+            q.reportedBy || "",
+            q.kind || "mcq",
+            q.text || "",
+            q.options?.[0]?.text || "",
+            q.options?.[1]?.text || "",
+            q.options?.[2]?.text || "",
+            q.options?.[3]?.text || "",
+            q.options?.[4]?.text || "",
+            q.options?.[5]?.text || "",
+            correctOptionIndex,
+            q.difficulty || "medium",
+            String(q.marks ?? 1),
+            String(q.negativeMarks ?? 0.25),
+            q.explanation || "",
+            q.status || "active"
+          ]);
+        });
+        break;
+
+      case "coding":
+        headers = [
+          "Category", "Question Text", "Difficulty", "Marks", "Negative Marks",
+          "Explanation", "Status"
+        ];
+        questions.forEach((q: any) => {
+          rows.push([
+            q.category || "",
+            q.text || "",
+            q.difficulty || "medium",
+            String(q.marks ?? 1),
+            String(q.negativeMarks ?? 0.25),
+            q.explanation || "",
+            q.status || "active"
+          ]);
+        });
+        break;
+
+      case "communication":
+        headers = [
+          "Task Type", "Category", "Subcategory", "Instructions", "Passage", "Audio URL", "Prompt",
+          "Prep Time (Seconds)", "Record Time (Seconds)", "Min Words", "Max Words",
+          "Question Text", "Option 1", "Option 2", "Option 3", "Option 4",
+          "Correct Option Index", "Difficulty", "Marks", "Negative Marks",
+          "Explanation", "Status"
+        ];
+        questions.forEach((q: any) => {
+          const subQuestions = q.questions || [];
+          const baseRow = [
+            q.taskType || "mcq",
+            q.category || "",
+            q.subcategory || "",
+            q.instructions || q.text || "",
+            q.passage || "",
+            q.audioUrl || "",
+            q.prompt || "",
+            String(q.prepTimeSeconds ?? 30),
+            String(q.recordTimeSeconds ?? 90),
+            String(q.minWords ?? 50),
+            String(q.maxWords ?? 200),
+          ];
+
+          if (subQuestions.length > 0) {
+            subQuestions.forEach((sq: any) => {
+              const idx = sq.options?.findIndex((o: any) => o.id === sq.correctOptionId);
+              const correctOptionIndex = (idx !== undefined && idx !== -1) ? String(idx + 1) : "";
+              rows.push([
+                ...baseRow,
+                sq.text || "",
+                sq.options?.[0]?.text || "",
+                sq.options?.[1]?.text || "",
+                sq.options?.[2]?.text || "",
+                sq.options?.[3]?.text || "",
+                correctOptionIndex,
+                q.difficulty || "medium",
+                String(q.marks ?? 1),
+                String(q.negativeMarks ?? 0.25),
+                q.explanation || "",
+                q.status || "active"
+              ]);
+            });
+          } else {
+            rows.push([
+              ...baseRow,
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+              q.difficulty || "medium",
+              String(q.marks ?? 1),
+              String(q.negativeMarks ?? 0.25),
+              q.explanation || "",
+              q.status || "active"
+            ]);
+          }
+        });
+        break;
+    }
+
+    const csvContent = [
+      headers.map(escapeCsvCell).join(","),
+      ...rows.map(row => row.map(escapeCsvCell).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `originbi-${selectedModule}-questions.json`;
+    link.download = `originbi-${selectedModule}-questions.csv`;
     link.click();
     showToast("Export successful");
   };
+
 
   // ─── LANDING ───
   if (!selectedModule) {
@@ -810,9 +1065,9 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                     value={filterSubCategory}
                     onChange={setFilterSubCategory}
                     options={[
-                      { label: "All Subcategories", value: "all" },
+                      { label: `All Subcategories (${categoryCounts[filterCategory] || 0})`, value: "all" },
                       ...(filterCats.find(c => c.key === filterCategory)?.subcategories || []).map((sc: any) => ({
-                        label: sc.name,
+                        label: `${sc.name} (${subcategoryCounts[sc.id] || 0})`,
                         value: sc.id
                       }))
                     ]}
@@ -842,9 +1097,9 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
           <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center border-t border-slate-200 dark:border-white/5 pt-4">
             {/* Left side actions: Export, Clear */}
             <div className="flex flex-row items-center gap-3 shrink-0 flex-nowrap overflow-x-auto pb-1">
-              <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0">
+              <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-900 dark:text-white hover:text-brand-green hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0">
                 <Download size={16} className="text-brand-green" />
-                <span>Export JSON</span>
+                <span>Export CSV</span>
               </button>
 
               <button 
@@ -960,7 +1215,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                       }
                     }} 
                     onView={(q) => router.push(`/admin/questions/${(q as any).id}?module=${selectedModule}`)}
-                    categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
+                    categories={filterCats.map(c => ({ id: c.key, name: c.label, subcategories: c.subcategories }))}
                   />
 
                   {filtered.length > limit && (
@@ -1021,7 +1276,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
             question={editingQuestion === "new" ? null : editingQuestion} 
             assessmentType={selectedModule} 
             allowedQuestionKinds={allowedQuestionKinds}
-            categories={filterCats.map(c => ({ id: c.key, name: c.label }))}
+            categories={filterCats.map(c => ({ id: c.key, name: c.label, subcategories: c.subcategories }))}
             onSave={handleSaveQuestion} 
             onCancel={() => setEditingQuestion(null)} 
           />

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code, Brain, RefreshCw, Zap, BarChart3, Layers, Clock, Target, ChevronDown } from "lucide-react";
-import { ApiAssessment, fetchAssessments, updateAssessment } from "./api";
+import { ApiAssessment, fetchAssessments, updateAssessment, fetchQuestions } from "./api";
 import {
   AssessmentType,
   ASSESSMENT_TYPE_LABELS,
@@ -15,6 +15,8 @@ import {
   QuestionKind,
   QuestionKindEnabledMap,
   serializeQuestionKindEnabledMap,
+  matchCategory,
+  matchSubcategory,
 } from "./types";
 import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,6 +45,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [hasModifications, setHasModifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [questionsList, setQuestionsList] = useState<any[]>([]);
 
   // Form state ... (same as before)
   const [name, setName] = useState("");
@@ -255,7 +258,18 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
       setHasModifications(false);
       setSaveStatus("success");
       setTimeout(() => setSaveStatus("idle"), 3000);
-    } catch (err) { console.error(err); setSaveStatus("error"); setTimeout(() => setSaveStatus("idle"), 5000); }
+    } catch (err: any) { 
+      console.error(err); 
+      setSaveStatus("error"); 
+      confirm({
+        title: "Failed to Save",
+        message: err.message || "An error occurred while saving assessment settings.",
+        confirmLabel: "Ok",
+        cancelLabel: "Close",
+        variant: "danger"
+      });
+      setTimeout(() => setSaveStatus("idle"), 5000); 
+    }
     finally { setSaving(false); }
   };
 
@@ -353,6 +367,22 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     if (assessments[activeModule]) {
       populateForm(assessments[activeModule]);
     }
+  }, [activeModule, assessments]);
+
+  useEffect(() => {
+    const loadQuestions = async () => {
+      const currentAssessment = assessments[activeModule];
+      if (currentAssessment) {
+        try {
+          const qList = await fetchQuestions(activeModule, { assessmentId: currentAssessment.assessment_id });
+          setQuestionsList(qList || []);
+        } catch (e) {
+          console.error("Failed to load questions:", e);
+          setQuestionsList([]);
+        }
+      }
+    };
+    loadQuestions();
   }, [activeModule, assessments]);
 
   const parseMap = (val: any, fb: Record<string, any>) => {
@@ -960,6 +990,17 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                                             <button 
                                               type="button"
                                               onClick={async () => {
+                                                const catQuestions = questionsList.filter(q => matchCategory(q.category, cat.id));
+                                                if (catQuestions.length > 0) {
+                                                  await confirm({
+                                                    title: "Cannot Delete Category",
+                                                    message: `This category cannot be deleted because it has ${catQuestions.length} question(s) allocated to it. Please reassign or delete the questions first.`,
+                                                    confirmLabel: "Ok",
+                                                    cancelLabel: "Close",
+                                                    variant: "warning",
+                                                  });
+                                                  return;
+                                                }
                                                 const confirmed = await confirm({
                                                   title: "Delete Category?",
                                                   message: `Are you sure you want to delete "${cat.name}"? This will also delete all linked subcategories.`,
@@ -1013,8 +1054,30 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                                                           <span>{sc.name}</span>
                                                           <button 
                                                             type="button"
-                                                            onClick={() => handleRemoveSubCategory(cat.id, sc.id)} 
-                                                            className="text-slate-400 hover:text-red-500 transition-colors"
+                                                            onClick={async () => {
+                                                              const subQuestions = questionsList.filter(q => matchCategory(q.category, cat.id) && matchSubcategory(q.subcategory, sc.id));
+                                                              if (subQuestions.length > 0) {
+                                                                await confirm({
+                                                                  title: "Cannot Delete Subcategory",
+                                                                  message: `This subcategory cannot be deleted because it has ${subQuestions.length} question(s) allocated to it. Please reassign or delete the questions first.`,
+                                                                  confirmLabel: "Ok",
+                                                                  cancelLabel: "Close",
+                                                                  variant: "warning",
+                                                                });
+                                                                return;
+                                                              }
+                                                              const confirmed = await confirm({
+                                                                title: "Delete Subcategory?",
+                                                                message: `Are you sure you want to delete the subcategory "${sc.name}"?`,
+                                                                confirmLabel: "Delete",
+                                                                cancelLabel: "Cancel",
+                                                                variant: "danger",
+                                                              });
+                                                              if (confirmed) {
+                                                                handleRemoveSubCategory(cat.id, sc.id);
+                                                              }
+                                                            }} 
+                                                            className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                                                           >
                                                             <X size={11} strokeWidth={2.5} />
                                                           </button>

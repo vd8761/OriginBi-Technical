@@ -18,9 +18,11 @@ import {
     ReportTriangleIcon,
     LogoutIcon,
     NoNotificationsIcon,
+    AwardIcon,
 } from '../icons';
 import { capitalizeWords, getAvatarColor } from "../../lib/utils";
 import { useTheme } from "@/lib/contexts/ThemeContext";
+import { listAssignments } from "@/lib/api";
 
 type StudentHeaderView =
     | "dashboard"
@@ -32,7 +34,8 @@ type StudentHeaderView =
     | "roadmaps"
     | "counsellor"
     | "debrief"
-    | "explore";
+    | "explore"
+    | "my-score";
 
 interface HeaderProps {
     onLogout?: () => void;
@@ -119,6 +122,8 @@ const Header: React.FC<HeaderProps> = ({
     const [activeTab, setActiveTab] = useState("All");
     const [isResultsHash, setIsResultsHash] = useState(false);
 
+    const [hasCompletedAny, setHasCompletedAny] = useState(false);
+
     useEffect(() => {
         if (typeof window === "undefined") return;
         const checkHash = () => {
@@ -130,6 +135,54 @@ const Header: React.FC<HeaderProps> = ({
         return () => {
             window.removeEventListener("hashchange", checkHash);
             window.removeEventListener("popstate", checkHash);
+        };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        const readSet = (storageKey: string): Set<string> => {
+            if (typeof window === "undefined") return new Set();
+            try {
+                const raw = window.localStorage.getItem(storageKey);
+                if (!raw) return new Set();
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) return new Set(parsed);
+                return new Set();
+            } catch {
+                return new Set();
+            }
+        };
+
+        const checkCompleted = async () => {
+            // Check localStorage
+            const completedSet = readSet("originbi:completed-assessments");
+            if (completedSet.size > 0) {
+                if (active) setHasCompletedAny(true);
+                return;
+            }
+            // Check assignments (specifically for coding or others)
+            try {
+                const data = await listAssignments();
+                const hasCompletedAssignment = data?.assignments?.some(
+                    (a) => a.status === 'completed' || a.completed
+                );
+                if (hasCompletedAssignment && active) {
+                    setHasCompletedAny(true);
+                    return;
+                }
+            } catch {
+                // Ignore errors
+            }
+            if (active) setHasCompletedAny(false);
+        };
+
+        checkCompleted();
+        window.addEventListener("storage", checkCompleted);
+        window.addEventListener("originbi:completed-changed", checkCompleted);
+        return () => {
+            active = false;
+            window.removeEventListener("storage", checkCompleted);
+            window.removeEventListener("originbi:completed-changed", checkCompleted);
         };
     }, []);
     
@@ -190,20 +243,22 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     const isDashboardActive = currentView === 'dashboard' && !isResultsHash;
-    const isMyScoreActive = currentView === 'dashboard' && isResultsHash;
+    const isMyScoreActive = currentView === 'my-score';
     const isAssessmentActive = currentView === 'assessment';
     const isProfileSettingsActive = currentView === 'profile';
     const isExploreActive = currentView === 'explore';
 
     const renderNavItems = (isMobile: boolean) => (
         <>
-            <NavItem
-                icon={<DashboardIcon />}
-                label="Dashboard"
-                active={isDashboardActive}
-                isMobile={isMobile}
-                onClick={() => handleNavClick("dashboard")}
-            />
+            {hasCompletedAny && (
+                <NavItem
+                    icon={<DashboardIcon />}
+                    label="Dashboard"
+                    active={isDashboardActive}
+                    isMobile={isMobile}
+                    onClick={() => handleNavClick("dashboard")}
+                />
+            )}
             <NavItem
                 icon={<BrainIcon className="w-4 h-4" />}
                 label="Explore"
@@ -219,11 +274,11 @@ const Header: React.FC<HeaderProps> = ({
                 onClick={() => handleNavClick("assessment")}
             />
             <NavItem
-                icon={<ReportTriangleIcon fillColor={isMyScoreActive ? '#FFFFFF' : '#1ED36A'} />}
+                icon={<AwardIcon className="w-4 h-4" />}
                 label="My Score"
                 active={isMyScoreActive}
                 isMobile={isMobile}
-                onClick={() => handleNavClick("dashboard#results")}
+                onClick={() => handleNavClick("my-score")}
             />
             <NavItem
                 icon={<ProfileIcon />}
@@ -261,6 +316,7 @@ const Header: React.FC<HeaderProps> = ({
                         <ThemeToggle />
                     </div>
 
+                    {/* Temporarily disabled notifications
                     <div className="relative" ref={notificationsMenuRef}>
                         <button
                             onClick={() => setNotificationsOpen(!isNotificationsOpen)}
@@ -377,6 +433,7 @@ const Header: React.FC<HeaderProps> = ({
                             </div>
                         )}
                     </div>
+                    */}
 
                     <div className="w-px h-6 bg-gradient-to-b from-gray-200 to-gray-300 dark:from-white/[0.08] dark:to-white/[0.04] hidden lg:block mx-2"></div>
 
@@ -459,6 +516,8 @@ const Header: React.FC<HeaderProps> = ({
                     </nav>
                 </div>
             )}
+
+
         </header>
     );
 };
