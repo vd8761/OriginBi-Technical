@@ -607,7 +607,7 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
       return apiFetch<T>(path, { ...init, _retried: true });
     }
     // Refresh failed — clear tokens.
-    if (tokenScope === "user" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+    if (path.startsWith("/auth-api") || path.startsWith("/student-api")) {
       clearTokens(tokenScope);
       if (tokenScope === "user" && typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("originbi:session-expired"));
@@ -620,7 +620,7 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
   // every admin API call. Plugin/package/dashboard endpoints returning 401
   // should surface as errors in the UI, not trigger a logout.
   if (res.status === 401 && auth && typeof window !== "undefined") {
-    if (tokenScope === "user" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+    if (path.startsWith("/auth-api") || path.startsWith("/student-api")) {
       clearTokens(tokenScope);
       if (tokenScope === "user") {
         window.dispatchEvent(new CustomEvent("originbi:session-expired"));
