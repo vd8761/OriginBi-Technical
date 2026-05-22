@@ -355,9 +355,9 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   })();
   const answeredCount = Object.keys(allAnswers).length;
 
-  // Progress % = answered across ALL unlocked questions
-  const safeProgress = totalUnlockedQuestions > 0
-    ? Math.round((answeredCount / totalUnlockedQuestions) * 100)
+  // Progress % = answered out of the full assessment total (all blocks)
+  const safeProgress = (totalBlocks * questionsPerBlock) > 0
+    ? Math.round((answeredCount / (totalBlocks * questionsPerBlock)) * 100)
     : 0;
 
   const isLastQuestion = currentIndex === totalQuestions - 1;
@@ -378,9 +378,9 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   // Complete current block and get next block
+  // Skipped questions are allowed — the backend handles unanswered questions gracefully.
   const completeBlockAndProceed = async () => {
     if (!attemptToken || !currentBlock || isGeneratingNextBlock) return;
-    if (!isCurrentBlockFullyAnswered) return; // guard: all questions must be answered
 
     setIsGeneratingNextBlock(true);
     try {
@@ -525,9 +525,9 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     }
   };
 
-  // Handle block submission — only allowed when viewing the current block
+  // Handle block submission — allowed when viewing the current block (skipped questions are OK)
   const handleBlockSubmit = () => {
-    if (isCurrentBlockFullyAnswered && isViewingCurrentBlock) {
+    if (isViewingCurrentBlock) {
       completeBlockAndProceed();
     }
   };
@@ -552,8 +552,8 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       }
 
       const result = await response.json();
-      await clearSession();
       onComplete(result);
+      await clearSession();
     } catch (error) {
       setLoadError((error as Error).message);
     } finally {
@@ -612,7 +612,10 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   const handleNext = () => {
-    if (!isLastQuestion) {
+    if (isLastQuestion && isViewingCurrentBlock) {
+      // On the last question of the current block — trigger block completion or final submit
+      handleSubmit();
+    } else if (!isLastQuestion) {
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       cacheSaveNavigation(nextIndex, [...markedForReview], timeLeft);
@@ -633,9 +636,9 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       navigateToBlock(currentBlockNumber);
       return;
     }
-    if (currentBlockNumber === totalBlocks && isCurrentBlockFullyAnswered) {
+    if (currentBlockNumber === totalBlocks) {
       setShowSubmitModal(true);
-    } else if (isCurrentBlockFullyAnswered) {
+    } else {
       handleBlockSubmit();
     }
   };
@@ -959,16 +962,21 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
           </div>
 
           <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
-            {/* Block complete banner — shown when all questions in current block are answered */}
-            {isViewingCurrentBlock && isCurrentBlockFullyAnswered && currentBlockNumber < totalBlocks && (
+            {/* Block complete banner — shown when on last question of current block */}
+            {isViewingCurrentBlock && isLastQuestion && currentBlockNumber < totalBlocks && (
               <div className="mb-4 flex items-center gap-3 rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-3">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-green" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-brand-green">
-                    Block {currentBlockNumber} complete!
+                    Last question in Block {currentBlockNumber}
                   </p>
                   <p className="text-xs text-brand-green/70">
-                    All {currentBlockTotal} questions answered. Click &quot;Complete Block {currentBlockNumber}&quot; to unlock Block {currentBlockNumber + 1}.
+                    {answeredInCurrentBlock}/{currentBlockTotal} answered. Click &quot;Complete Block {currentBlockNumber}&quot; to unlock Block {currentBlockNumber + 1}.
+                    {answeredInCurrentBlock < currentBlockTotal && (
+                      <span className="ml-1 text-amber-600 dark:text-amber-400">
+                        ({currentBlockTotal - answeredInCurrentBlock} skipped — you can still proceed)
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -1073,35 +1081,27 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               >
                 Previous
               </button>
-              {isLastQuestion ? (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={!isCurrentBlockFullyAnswered || isGeneratingNextBlock || isSubmitting}
-                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isGeneratingNextBlock || isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {isSubmitting ? 'Submitting...' : 'Unlocking next block...'}
-                    </>
-                  ) : !isViewingCurrentBlock ? (
-                    `Return to Block ${currentBlockNumber}`
-                  ) : currentBlockNumber === totalBlocks ? (
-                    'Submit Assessment'
-                  ) : (
-                    `Complete Block ${currentBlockNumber}`
-                  )}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
-                >
-                  Save and next
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={(isLastQuestion && isViewingCurrentBlock && (isGeneratingNextBlock || isSubmitting))}
+                className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
+              >
+                {isLastQuestion && isViewingCurrentBlock && (isGeneratingNextBlock || isSubmitting) ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isSubmitting ? 'Submitting...' : 'Unlocking next block...'}
+                  </>
+                ) : isLastQuestion && !isViewingCurrentBlock ? (
+                  `Return to Block ${currentBlockNumber}`
+                ) : isLastQuestion && currentBlockNumber === totalBlocks ? (
+                  'Submit Assessment'
+                ) : isLastQuestion && isViewingCurrentBlock ? (
+                  'Next Block →'
+                ) : (
+                  'Save and next'
+                )}
+              </button>
             </div>
           </div>
         </section>

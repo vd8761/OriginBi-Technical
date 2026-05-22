@@ -18,8 +18,10 @@ import { PurchaseService } from './services/purchase.service';
 import { BulkAdminUsersService } from './services/bulk-admin-users.service';
 import { RegistrationController } from './controllers/registration.controller';
 import { RegistrationService } from './services/registration.service';
+import { EmailService } from './services/email.service';
 import { GroupsController } from './controllers/groups.controller';
 import { GroupsService } from './services/groups.service';
+import { AdminMeController } from './controllers/admin-me.controller';
 import * as Entities from '../../entities';
 
 import { R2Module } from '../r2/r2.module';
@@ -40,6 +42,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     PurchaseController,
     RegistrationController,
     GroupsController,
+    AdminMeController,
   ],
   providers: [
     AdminQuestionService,
@@ -53,6 +56,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     PurchaseService,
     BulkAdminUsersService,
     RegistrationService,
+    EmailService,
     GroupsService,
   ],
   exports: [
@@ -65,6 +69,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     PurchaseService,
     BulkAdminUsersService,
     RegistrationService,
+    EmailService,
     GroupsService,
   ],
 })

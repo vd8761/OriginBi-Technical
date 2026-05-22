@@ -206,6 +206,16 @@ export function usePaidAssessments() {
             // to whatever's in localStorage rather than block UI.
             setIsEntitlementsReady(true);
         }
+        const entitlements = await fetchServerEntitlements();
+        entitlements.paid.forEach((key) => next.add(key));
+        writeSet(PAID_KEY, PAID_EVENT, next);
+        setLocal(next);
+
+        if (entitlements.visible.size > 0) {
+            writeSet(VISIBLE_KEY, VISIBLE_EVENT, entitlements.visible);
+            setVisibleLocal(entitlements.visible);
+        }
+        setIsEntitlementsReady(true);
     }, []);
 
     useEffect(() => {
@@ -277,10 +287,11 @@ export function usePaidAssessments() {
             }
             try {
                 const { paid: serverPaid } = await fetchServerEntitlements();
+                const entitlements = await fetchServerEntitlements();
                 if (cancelled) return;
                 const current = readSet(PAID_KEY);
                 let changed = removeCodingKeys(current);
-                for (const code of serverPaid) {
+                for (const code of entitlements.paid) {
                     if (!current.has(code)) {
                         current.add(code);
                         changed = true;
@@ -289,7 +300,13 @@ export function usePaidAssessments() {
                 if (changed) {
                     writeSet(PAID_KEY, PAID_EVENT, current);
                 }
-                console.log("[usePaidAssessments] Synced purchases:", Array.from(serverPaid));
+                
+                if (entitlements.visible.size > 0) {
+                    writeSet(VISIBLE_KEY, VISIBLE_EVENT, entitlements.visible);
+                }
+
+                setIsEntitlementsReady(true);
+                console.log("[usePaidAssessments] Synced purchases:", Array.from(entitlements.paid));
             } catch (err: any) {
                 if (isNetworkError(err)) return;
                 console.error("[usePaidAssessments] Purchase sync failed:", err?.message || err);

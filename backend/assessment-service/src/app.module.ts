@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssessmentModule } from './modules/assessment/assessment.module';
+import { AdaptiveModule } from './modules/adaptive/adaptive.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
 
@@ -23,6 +24,7 @@ import { HealthController } from './health/health.controller';
     }),
     AuthModule,
     AssessmentModule,
+    AdaptiveModule,   // ← Snapshot-Based Marks Blueprint Adaptive Engine v2
   ],
   controllers: [HealthController],
 })

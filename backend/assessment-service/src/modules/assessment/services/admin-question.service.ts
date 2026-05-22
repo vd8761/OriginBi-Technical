@@ -72,7 +72,7 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'mnc_question_id',
     optionsTable: 'tech_mnc_options',
     optionsFk: 'mnc_question_id',
-    categoryColumn: 'topic_group',
+    categoryColumn: 'category',
   },
   role: {
     questionTable: 'tech_role_questions',
@@ -144,17 +144,19 @@ export class AdminQuestionService {
     return {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
-        ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
-           : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
-           : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
-           : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
-           : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
-           : row[config.categoryColumn])
-        : row[config.categoryColumn],
+      category: module === 'coding'
+        ? 'Coding'
+        : (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
+          ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
+             : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
+             : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
+             : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
+             : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
+             : row[config.categoryColumn])
+          : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
-      questionText: row.question_text,
+      questionText: module === 'coding' ? (row.problem_title || row.problem_statement || '') : row.question_text,
       explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
@@ -164,7 +166,7 @@ export class AdminQuestionService {
       marks: Number(row.marks),
       negativeMarks: Number(row.negative_marks),
       status: row.status,
-      mode: row.mode || 'trial',
+      mode: row.mode || 'main',
       imageUrl: row.image_url,
       metadata: row.metadata || {},
       createdAt: row.created_at,
@@ -185,7 +187,7 @@ export class AdminQuestionService {
       conditions.push(`q.assessment_id = $${paramIdx++}`);
       params.push(assessmentId);
     }
-    if (category) {
+    if (category && module !== 'coding') {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
     }
@@ -197,12 +199,17 @@ export class AdminQuestionService {
       conditions.push(`q.status = $${paramIdx++}`);
       params.push(status);
     }
-    if (mode) {
+    if (mode && module !== 'coding') {
       conditions.push(`q.mode = $${paramIdx++}`);
       params.push(mode);
     }
     if (search) {
-      conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
+      if (module === 'coding') {
+        conditions.push(`(LOWER(q.problem_title) LIKE $${paramIdx} OR LOWER(q.problem_statement) LIKE $${paramIdx})`);
+        paramIdx++;
+      } else {
+        conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
+      }
       params.push(`%${search.toLowerCase()}%`);
     }
 
@@ -678,10 +685,13 @@ export class AdminQuestionService {
                 a.categories, a.difficulty_marks, a.difficulty_negative_marks,
                 a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
                 a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
-                a.proctoring_require_fullscreen, a.fullscreen_exit_limit,
-                a.proctoring_block_devtools, a.devtools_open_limit,
-                a.mouse_focus_loss_limit, a.keypress_log_enabled,
+                a.keypress_log_enabled,
                 a.require_camera_mic, a.live_proctoring_enabled,
+                a.adaptive_enabled,
+                a.adaptive_total_questions,
+                a.adaptive_total_marks,
+                a.adaptive_total_blocks,
+                a.adaptive_seconds_per_mark,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -731,6 +741,11 @@ export class AdminQuestionService {
     const keypressLogEnabled = data.keypress_log_enabled;
     const requireCameraMic = data.require_camera_mic;
     const liveProctoringEnabled = data.live_proctoring_enabled;
+    const adaptiveEnabled = data.adaptive_enabled;
+    const adaptiveTotalQuestions = data.adaptive_total_questions ?? data.adaptiveTotalQuestions;
+    const adaptiveTotalMarks     = data.adaptive_total_marks     ?? data.adaptiveTotalMarks;
+    const adaptiveTotalBlocks    = data.adaptive_total_blocks    ?? data.adaptiveTotalBlocks;
+    const adaptiveSecondsPerMark = data.adaptive_seconds_per_mark ?? data.adaptiveSecondsPerMark;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -841,6 +856,11 @@ export class AdminQuestionService {
              keypress_log_enabled = COALESCE($21, keypress_log_enabled),
              require_camera_mic = COALESCE($22, require_camera_mic),
              live_proctoring_enabled = COALESCE($23, live_proctoring_enabled),
+             adaptive_enabled = COALESCE($24, adaptive_enabled),
+             adaptive_total_marks = COALESCE($25, adaptive_total_marks),
+             adaptive_total_blocks = COALESCE($26, adaptive_total_blocks),
+             adaptive_seconds_per_mark = COALESCE($27, adaptive_seconds_per_mark),
+             adaptive_total_questions = COALESCE($28, adaptive_total_questions),
              updated_at = NOW()
          WHERE assessment_id = $15`,
         [
@@ -867,6 +887,11 @@ export class AdminQuestionService {
           keypressLogEnabled !== undefined ? Boolean(keypressLogEnabled) : null,
           requireCameraMic !== undefined ? Boolean(requireCameraMic) : null,
           liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
+          adaptiveEnabled !== undefined ? Boolean(adaptiveEnabled) : null,
+          adaptiveTotalMarks !== undefined ? Number(adaptiveTotalMarks) : null,
+          adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : null,
+          adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : null,
+          adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : null,
         ]
       );
 

@@ -42,7 +42,8 @@ export function PluginProvider({ enabled, attemptId, children }: ProviderProps) 
       return { active: ordered, configByPlugin: {} as Record<string, Record<string, unknown>> };
     }
     const byId = new Map(enabled.filter((e) => e.enabled).map((e) => [e.id, e]));
-    const filtered = ordered.filter((p) => byId.has(p.id));
+    // Always include plugins marked alwaysActive (frontend-only plugins not in backend registry)
+    const filtered = ordered.filter((p) => p.alwaysActive || byId.has(p.id));
     const configMap: Record<string, Record<string, unknown>> = {};
     for (const p of filtered) {
       configMap[p.id] = byId.get(p.id)?.config ?? {};

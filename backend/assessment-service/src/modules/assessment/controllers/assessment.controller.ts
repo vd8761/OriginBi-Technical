@@ -15,6 +15,38 @@ export class AssessmentController {
     return { data };
   }
 
+  @Post('validate-certificate')
+  async validateCertificate(@Body() body: { userId: number; examId: string; mode: 'trial' | 'main' }) {
+    // SECURITY: Only main assessments can generate certificates
+    if (body.mode !== 'main') {
+      throw new BadRequestException('Certificates are only available for main assessments');
+    }
+    
+    const module = body.examId === 'communication' ? 'grammar' : body.examId;
+    const result = await this.assessmentService.getLatestSubmittedResult(module, body.userId.toString());
+    
+    if (!result || result.status !== 'completed') {
+      throw new BadRequestException('Assessment not completed or no valid result found');
+    }
+    
+    return { valid: true, result: result };
+  }
+
+  @Post('validate-eligibility')
+  async validateEligibility(@Body() body: { userId: number; assessmentCode: string; mode: 'trial' | 'main' }) {
+    const validation = await this.assessmentService.validateAttemptEligibility(
+      body.userId,
+      body.assessmentCode,
+      body.mode
+    );
+    
+    if (!validation.canStart) {
+      throw new BadRequestException(validation.reason);
+    }
+    
+    return { canStart: true, currentCount: validation.currentCount, limit: validation.limit };
+  }
+
   @Get('in-progress')
   async getInProgressAttempts(@Query('userId') userId?: string) {
     const data = await this.assessmentService.getInProgressAttempts(userId);
@@ -32,6 +64,19 @@ export class AssessmentController {
 
   @Post(':module/attempts')
   async startAttempt(@Param('module') module: string, @Body() body: any) {
+    // SECURITY: Validate attempt eligibility before starting
+    if (body.assessmentCode && body.userId && body.mode) {
+      const validation = await this.assessmentService.validateAttemptEligibility(
+        body.userId, 
+        body.assessmentCode, 
+        body.mode
+      );
+      
+      if (!validation.canStart) {
+        throw new BadRequestException(validation.reason);
+      }
+    }
+    
     return this.assessmentService.startAttempt(module, body);
   }
 
@@ -70,6 +115,19 @@ export class AssessmentController {
    */
   @Post(':module/attempts/block-based')
   async startBlockBasedAttempt(@Param('module') module: string, @Body() body: any) {
+    // SECURITY: Validate attempt eligibility before starting
+    if (body.assessmentCode && body.userId && body.mode) {
+      const validation = await this.assessmentService.validateAttemptEligibility(
+        body.userId, 
+        body.assessmentCode, 
+        body.mode
+      );
+      
+      if (!validation.canStart) {
+        throw new BadRequestException(validation.reason);
+      }
+    }
+    
     return this.assessmentService.startBlockBasedAttempt(module, body);
   }
 

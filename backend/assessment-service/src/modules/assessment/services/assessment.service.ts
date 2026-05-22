@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { AdaptiveBlockService } from './adaptive-block.service';
+import { EmailService } from './email.service';
 
 interface ModuleConfig {
   attempts: string;
@@ -22,6 +23,7 @@ export class AssessmentService {
   constructor(
     private dataSource: DataSource,
     private adaptiveBlockService: AdaptiveBlockService,
+    private emailService: EmailService,
   ) {}
 
   async getAttemptsStats(userIdParam?: any) {
@@ -38,18 +40,35 @@ export class AssessmentService {
         stats[module] = { trial: 0, main: 0 };
         
         try {
-          const trialRows = await queryRunner.query(
-            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND mode = 'trial' AND status IN ('submitted', 'evaluated')`,
-            [resolvedUserId]
-          );
-          const mainRows = await queryRunner.query(
-            `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1 AND (mode = 'main' OR mode IS NULL) AND status IN ('submitted', 'evaluated')`,
-            [resolvedUserId]
-          );
-          stats[module] = {
-            trial: Number(trialRows[0]?.count || 0),
-            main: Number(mainRows[0]?.count || 0)
-          };
+          if (!config.hasMode) {
+            const rows = await queryRunner.query(
+              `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1`,
+              [resolvedUserId]
+            );
+            const count = Number(rows[0]?.count || 0);
+            stats[module] = { trial: count, main: count };
+          } else {
+            const trialRows = await queryRunner.query(
+              `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
+               FROM ${config.attempts} a
+               JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+               JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+               WHERE a.user_id = $1 AND q.mode = 'trial'`,
+              [resolvedUserId]
+            );
+            const mainRows = await queryRunner.query(
+              `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
+               FROM ${config.attempts} a
+               JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+               JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+               WHERE a.user_id = $1 AND q.mode = 'main'`,
+              [resolvedUserId]
+            );
+            stats[module] = {
+              trial: Number(trialRows[0]?.count || 0),
+              main: Number(mainRows[0]?.count || 0)
+            };
+          }
         } catch (err: any) {
           this.logger.error(`Error querying attempts count for ${module}: ${err.message}`);
         }
@@ -198,6 +217,7 @@ export class AssessmentService {
         catCol: 'subcategory',
         hasDifficulty: true,
         hasMode: true,
+        hasImageUrl: true,
       },
       grammar: {
         attempts: 'tech_grammar_attempts',
@@ -217,7 +237,7 @@ export class AssessmentService {
         idCol: 'mnc_question_id',
         options: 'tech_mnc_options',
         attemptIdCol: 'mnc_attempt_id',
-        catCol: 'topic_group',
+        catCol: 'category',
         hasDifficulty: true,
         hasMode: true,
       },
@@ -256,7 +276,7 @@ export class AssessmentService {
     try {
       const dbModule = module === 'communication' ? 'grammar' : module;
       const tableMap = this.getTableMap();
-      const config = tableMap[module];
+      const config = tableMap[dbModule];
       if (!config) throw new BadRequestException(`Module ${module} not supported yet`);
 
       let assessment: any;
@@ -327,6 +347,21 @@ export class AssessmentService {
 
       if (!assessment) throw new NotFoundException(`${module} assessment not found`);
 
+      // ── Adaptive routing ──────────────────────────────────────────────────
+      // If adaptive_enabled is true on the assessment (and it's not coding),
+      // delegate to the block-based flow transparently.
+      const ADAPTIVE_SUPPORTED = ['aptitude', 'grammar', 'mnc', 'role'];
+      if (
+        Boolean(assessment.adaptive_enabled) &&
+        ADAPTIVE_SUPPORTED.includes(dbModule) &&
+        module !== 'coding'
+      ) {
+        await queryRunner.rollbackTransaction();
+        await queryRunner.release();
+        return this.startBlockBasedAttempt(module, data);
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const resolvedUserId = await this.resolveUserId(queryRunner, userId);
       if (!resolvedUserId) throw new BadRequestException('No users found.');
 
@@ -338,9 +373,9 @@ export class AssessmentService {
       // If there is an active in-progress attempt for this user+assessment, resume it.
       const existingRows = await queryRunner.query(
         `SELECT * FROM ${config.attempts}
-         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress' AND mode = $3
+         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress'
          ORDER BY started_at DESC LIMIT 1`,
-        [assessment.assessment_id, resolvedUserId, requestedMode],
+        [assessment.assessment_id, resolvedUserId],
       );
 
       if (existingRows.length > 0) {
@@ -381,15 +416,26 @@ export class AssessmentService {
 
       // Check if user has already completed the assessment (submitted or evaluated)
       // and enforce attempt limits to prevent re-taking
-      const completedAttemptsQuery = `
-        SELECT COUNT(*) as count
-        FROM ${config.attempts}
-        WHERE user_id = $1 AND assessment_id = $2 
-          AND status IN ('submitted', 'evaluated')
-          AND mode = $3
-      `;
+      const completedAttemptsQuery = config.hasMode
+        ? `
+          SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
+          FROM ${config.attempts} a
+          JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+          WHERE a.user_id = $1 AND a.assessment_id = $2 
+            AND a.status IN ('submitted', 'evaluated')
+            AND q.mode = $3
+        `
+        : `
+          SELECT COUNT(*) as count
+          FROM ${config.attempts}
+          WHERE user_id = $1 AND assessment_id = $2 
+            AND status IN ('submitted', 'evaluated')
+        `;
 
-      const completedAttemptsParams = [resolvedUserId, assessment.assessment_id, requestedMode];
+      const completedAttemptsParams = config.hasMode
+        ? [resolvedUserId, assessment.assessment_id, requestedMode]
+        : [resolvedUserId, assessment.assessment_id];
 
       const completedAttemptsResult = await queryRunner.query(
         completedAttemptsQuery,
@@ -416,18 +462,18 @@ export class AssessmentService {
       if (module === 'coding') {
         attemptResult = await queryRunner.query(
           `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, status, started_at, expires_at, mode, created_at, updated_at)
-           VALUES ($1, $2, $3, 'in_progress', $4, $5, $6, NOW(), NOW())
+              (assessment_id, user_id, attempt_token, status, started_at, expires_at, created_at, updated_at)
+           VALUES ($1, $2, $3, 'in_progress', $4, $5, NOW(), NOW())
            RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt, requestedMode],
+          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt],
         );
       } else {
         attemptResult = await queryRunner.query(
           `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, mode, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, NOW(), NOW())
+              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
            RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, requestedMode],
+          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
         );
       }
       const attemptId = attemptResult[0][config.attemptIdCol];
@@ -569,7 +615,7 @@ export class AssessmentService {
       // tech_role_questions has NO difficulty column
       extraSelect = ', q.domain, q.question_type, q.scenario_context, q.marks, q.negative_marks';
     } else if (isMnc) {
-      extraSelect = ', q.topic_group, q.marks, q.negative_marks';
+      extraSelect = ', q.topic_group, q.category, q.subcategory, q.marks, q.negative_marks';
     }
     extraSelect += ', q.metadata';
 
@@ -639,6 +685,8 @@ export class AssessmentService {
       }
       if (isMnc) {
         base.topic = q.topic_group;
+        base.category = q.category || q.topic_group;
+        base.subcategory = q.subcategory || q.topic_group;
       }
 
       questions.push(base);
@@ -692,12 +740,14 @@ export class AssessmentService {
     const currentBlockNumber = blockRow[0].block_number;
     const currentDifficulty = blockRow[0].difficulty_achieved;
 
+    const imgCol = config.hasImageUrl ? ', q.image_url' : '';
+
     // Fetch only the current block's questions — filter by block_number, NOT is_locked.
     // Previous blocks are locked in DB but the UI only ever sees the current block.
     const questionRows = await this.dataSource.query(
       `SELECT aq.display_order, aq.block_sequence_order, aq.block_number,
               q.${config.idCol} AS question_id, q.question_text, q.difficulty,
-              q.${config.catCol} AS category, q.marks, q.negative_marks, q.image_url
+              q.${config.catCol} AS category, q.marks, q.negative_marks${imgCol}
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1
@@ -728,7 +778,7 @@ export class AssessmentService {
         category: q.category,
         marks: Number(q.marks),
         negativeMarks: Number(q.negative_marks),
-        imageUrl: q.image_url ?? undefined,
+        imageUrl: config.hasImageUrl ? (q.image_url ?? undefined) : undefined,
         options: finalOptions,
         blockNumber: q.block_number,
         blockSequenceOrder: q.block_sequence_order,
@@ -799,12 +849,13 @@ export class AssessmentService {
     const config = tableMap[dbModule];
     if (!config) throw new BadRequestException(`Module ${module} not supported`);
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-
+    let queryRunner: any;
     try {
+      queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+
       const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
-      if (!resolvedUserId) throw new BadRequestException('No users found.');
+      if (!resolvedUserId) return null;
 
       let attemptRows: any[] = [];
       const sanitizedToken = String(attemptTokenParam ?? '').trim();
@@ -846,7 +897,9 @@ export class AssessmentService {
       this.logger.error(`getLatestSubmittedResult (${module}) error:`, error);
       throw error;
     } finally {
-      await queryRunner.release();
+      if (queryRunner) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -863,6 +916,12 @@ export class AssessmentService {
     const correctOptCol = isCoding ? `NULL as correct_option_id` : `q.correct_option_id`;
     const taskTypeCol = isGrammar ? `q.task_type` : `NULL as task_type`;
     const roleTypeCol = isRole ? `q.question_type` : `NULL as question_type`;
+    const questionMetadataCol = (!isCoding && !isGrammar)
+      ? `q.metadata as question_metadata`
+      : `NULL::jsonb as question_metadata`;
+    const attemptMetadataCol = (!isCoding && !isGrammar)
+      ? `aq.metadata as attempt_metadata`
+      : `NULL::jsonb as attempt_metadata`;
     // Only aptitude (block-based) junction tables have block_number
     const blockNumberCol = moduleType === 'aptitude' ? `aq.block_number` : `NULL as block_number`;
     // Grammar-only columns
@@ -884,8 +943,6 @@ export class AssessmentService {
               ${languageCol},
               aq.score_awarded,
               aq.negative_applied,
-              aq.metadata as attempt_metadata,
-              q.metadata as question_metadata,
               ${correctOptCol},
               q.question_text,
               q.marks,
@@ -893,6 +950,8 @@ export class AssessmentService {
               q.${config.catCol} as category,
               ${taskTypeCol},
               ${roleTypeCol},
+              ${questionMetadataCol},
+              ${attemptMetadataCol},
               ass.negative_mark_enabled,
               ass.negative_mark_value,
               ass.categories as assessment_categories
@@ -938,13 +997,29 @@ export class AssessmentService {
       objectiveAnsweredCount: number;
     }> = {};
 
+    const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+      const kind = String(rawKind || 'mcq').toLowerCase();
+      if (kind === 'true_false') return 'tf';
+      if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+      return 'mcq';
+    };
+
+    const asObject = (value: any): Record<string, any> => {
+      if (!value) return {};
+      if (typeof value === 'object' && !Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        } catch {
+          return {};
+        }
+      }
+      return {};
+    };
+
     for (const aq of attemptQuestions) {
-      let category = aq.category || 'General';
-      if (category === 'QA') category = 'Quantitative Aptitude';
-      else if (category === 'LR') category = 'Logical Reasoning';
-      else if (category === 'DI') category = 'Data Interpretation';
-      else if (category === 'AR') category = 'Abstract Reasoning';
-      else if (category === 'VA') category = 'Verbal Ability';
+      const category = aq.category || 'General';
 
       let categoryName = category;
       if (Array.isArray(assessmentCategories)) {
@@ -998,9 +1073,21 @@ export class AssessmentService {
         }
       }
 
-      const qMetadata = aq.question_metadata || {};
-      const kind = qMetadata.kind || 'mcq';
-      const attemptMeta = aq.attempt_metadata || {};
+      const questionMetadata = asObject(aq.question_metadata);
+      const attemptMetadata = asObject(aq.attempt_metadata);
+      const questionKind = (!isCoding && !isGrammar)
+        ? normalizeQuestionKind((questionMetadata as any).kind)
+        : null;
+      const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
+      const selectedAnswerValue =
+        (!isCoding &&
+          !isGrammar &&
+          (questionKind === 'msq' || questionKind === 'numerical') &&
+          metadataSubmittedAnswer !== undefined &&
+          metadataSubmittedAnswer !== null &&
+          metadataSubmittedAnswer !== '')
+          ? metadataSubmittedAnswer
+          : aq.selected_option_id;
 
       const review: any = {
         questionId: String(aq.question_id),
@@ -1012,30 +1099,22 @@ export class AssessmentService {
             ? String(aq.task_type || 'mcq').toLowerCase()
             : isRole
               ? String(aq.question_type || 'conceptual').toLowerCase()
-              : kind,
+              : (questionKind || 'mcq'),
         questionText: String(aq.question_text || ''),
         options: optionsForReview,
         selectedOptionId: null,
         selectedAnswerText: null,
         correctOptionId:
-          (kind === 'numerical' || kind === 'msq')
-            ? null
-            : (aq.correct_option_id !== null && aq.correct_option_id !== undefined ? String(aq.correct_option_id) : null),
+          aq.correct_option_id !== null && aq.correct_option_id !== undefined
+            ? String(aq.correct_option_id)
+            : null,
         correctAnswerText: null,
         isCorrect: null,
         status: 'unanswered',
       };
 
-      if (kind === 'numerical') {
-        review.correctAnswerText = qMetadata.correctAnswer ? String(qMetadata.correctAnswer) : null;
-      } else if (kind === 'msq') {
-        const correctOptionIds = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
-        const correctTexts = correctOptionIds.map((id: string) => optionTextById.get(id) || id).filter(Boolean);
-        review.correctAnswerText = correctTexts.join(', ');
-      } else {
-        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-          review.correctAnswerText = optionTextById.get(review.correctOptionId);
-        }
+      if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+        review.correctAnswerText = optionTextById.get(review.correctOptionId);
       }
 
       if (isCoding) {
@@ -1098,41 +1177,44 @@ export class AssessmentService {
         continue;
       }
 
-      let studentAns: any = null;
-      if (kind === 'numerical' || kind === 'msq') {
-        studentAns = attemptMeta.submittedAnswer;
-      } else {
-        studentAns = aq.selected_option_id !== null && aq.selected_option_id !== undefined ? String(aq.selected_option_id) : '';
-      }
-
-      if (studentAns !== null && studentAns !== undefined && studentAns !== '' && (!Array.isArray(studentAns) || studentAns.length > 0)) {
+      const hasObjectiveAnswer = Array.isArray(selectedAnswerValue)
+        ? selectedAnswerValue.length > 0
+        : !(selectedAnswerValue === undefined || selectedAnswerValue === null || selectedAnswerValue === '');
+      if (hasObjectiveAnswer) {
         answeredCount++;
         objectiveAnsweredCount++;
         sectionMap[category].answeredCount++;
         sectionMap[category].objectiveAnsweredCount++;
-
-        if (kind === 'numerical' || kind === 'msq') {
-          review.selectedAnswerText = Array.isArray(studentAns)
-            ? studentAns.map((id: any) => optionTextById.get(String(id)) || String(id)).join(', ')
-            : String(studentAns);
-        } else {
-          review.selectedOptionId = String(studentAns);
-          review.selectedAnswerText = optionTextById.get(review.selectedOptionId) ?? String(studentAns);
-        }
-
+        const kind = questionKind || 'mcq';
         let isCorrectAnswer = false;
+
         if (kind === 'msq') {
-          const studentChoices = Array.isArray(studentAns) ? studentAns.map(String) : [String(studentAns)];
-          const correctChoices = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
+          const studentChoices: string[] = Array.isArray(selectedAnswerValue)
+            ? selectedAnswerValue.map((id: any) => String(id))
+            : (selectedAnswerValue ? [String(selectedAnswerValue)] : []);
+          const correctChoices = Array.isArray((questionMetadata as any).correctOptionIds)
+            ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+            : [];
+          review.selectedOptionId = studentChoices;
+          review.selectedAnswerText = studentChoices
+            .map((id) => optionTextById.get(id) ?? id)
+            .join(', ');
           isCorrectAnswer = studentChoices.length > 0 &&
-                           studentChoices.length === correctChoices.length &&
-                           studentChoices.every((id: string) => correctChoices.includes(id));
+            studentChoices.length === correctChoices.length &&
+            studentChoices.every((id: string) => correctChoices.includes(id));
         } else if (kind === 'numerical') {
-          const studentAnswer = String(studentAns).trim().toLowerCase();
-          const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
-          isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
+          const studentAnswer = String(selectedAnswerValue ?? '').trim();
+          const correctAnswer = String((questionMetadata as any).correctAnswer ?? '').trim();
+          review.selectedOptionId = studentAnswer;
+          review.selectedAnswerText = studentAnswer;
+          isCorrectAnswer =
+            studentAnswer.length > 0 &&
+            studentAnswer.toLowerCase() === correctAnswer.toLowerCase();
         } else {
-          isCorrectAnswer = String(studentAns) === String(aq.correct_option_id);
+          const selectedOptionId = String(selectedAnswerValue);
+          review.selectedOptionId = selectedOptionId;
+          review.selectedAnswerText = optionTextById.get(selectedOptionId) ?? selectedOptionId;
+          isCorrectAnswer = selectedOptionId === String(aq.correct_option_id);
         }
 
         review.isCorrect = isCorrectAnswer;
@@ -1198,11 +1280,30 @@ export class AssessmentService {
       return orderA - orderB;
     });
 
+    let attemptMode = 'main';
+    if (config.hasMode) {
+      try {
+        const modeRows = await queryRunner.query(
+          `SELECT q.mode
+           FROM ${config.junction} aq
+           JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+           WHERE aq.${config.attemptIdCol} = $1 LIMIT 1`,
+          [attemptId]
+        );
+        if (modeRows.length > 0 && String(modeRows[0].mode).toLowerCase() === 'trial') {
+          attemptMode = 'trial';
+        }
+      } catch (err) {}
+    } else {
+      if (totalCount <= 5) attemptMode = 'trial';
+    }
+
     return {
       success: true,
       token: attempt.attempt_token,
       attemptToken: attempt.attempt_token,
       module: moduleType,
+      mode: attemptMode,
       overallScore: totalScore,
       overallScorePercent,
       totalScore,
@@ -1276,25 +1377,20 @@ export class AssessmentService {
 
     // MCQ modules: aptitude, mnc, role
     const rows = await this.dataSource.query(
-      `SELECT aq.${config.idCol} AS question_id, aq.selected_option_id, aq.metadata, q.metadata AS question_metadata
+      `SELECT aq.${config.idCol} AS question_id, aq.selected_option_id, aq.metadata
        FROM ${config.junction} aq
-       JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
        WHERE aq.${config.attemptIdCol} = $1`,
       [attemptId],
     );
     for (const row of rows) {
-      const qMetadata = row.question_metadata || {};
-      const kind = qMetadata.kind || 'mcq';
-
-      if (kind === 'numerical' || kind === 'msq') {
-        const subAnswer = row.metadata?.submittedAnswer;
-        if (subAnswer !== undefined && subAnswer !== null && subAnswer !== '') {
-          answers[String(row.question_id)] = { optionId: subAnswer };
-        }
-      } else {
-        if (row.selected_option_id !== null && row.selected_option_id !== undefined) {
-          answers[String(row.question_id)] = { optionId: String(row.selected_option_id) };
-        }
+      const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+      const submittedAnswer = (metadata as any).submittedAnswer;
+      if (submittedAnswer !== undefined && submittedAnswer !== null && submittedAnswer !== '') {
+        answers[String(row.question_id)] = { optionId: submittedAnswer };
+        continue;
+      }
+      if (row.selected_option_id !== null && row.selected_option_id !== undefined) {
+        answers[String(row.question_id)] = { optionId: String(row.selected_option_id) };
       }
     }
     return answers;
@@ -1327,10 +1423,11 @@ export class AssessmentService {
       const attemptId = attempt[config.attemptIdCol];
 
       const questionRows = await queryRunner.query(
-        `SELECT aq.attempt_question_id, aq.${config.idCol} AS question_id, q.metadata, q.correct_option_id
+        `SELECT aq.attempt_question_id, aq.${config.idCol} AS question_id
          ${dbModule === 'grammar' ? `, q.task_type` : ''}
+         ${dbModule !== 'grammar' && dbModule !== 'coding' ? `, q.metadata` : ''}
          FROM ${config.junction} aq
-         JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+         ${(dbModule === 'grammar' || (dbModule !== 'grammar' && dbModule !== 'coding')) ? `JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}` : ''}
          WHERE aq.${config.attemptIdCol} = $1`,
         [attemptId],
       );
@@ -1342,8 +1439,7 @@ export class AssessmentService {
           attemptQuestionId: row.attempt_question_id,
           questionId: row.question_id,
           taskType: row.task_type,
-          metadata: row.metadata || {},
-          correctOptionId: row.correct_option_id,
+          metadata: row.metadata,
         };
         byQuestionId.set(String(row.question_id), entry);
         byAttemptQuestionId.set(String(row.attempt_question_id), entry);
@@ -1467,62 +1563,47 @@ export class AssessmentService {
           }
         }
 
-        // MCQ modules: aptitude, mnc, role
-        const qMetadata = mapping.metadata || {};
-        const kind = qMetadata.kind || 'mcq';
+      const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        const kind = String(rawKind || 'mcq').toLowerCase();
+        if (kind === 'true_false') return 'tf';
+        if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+        return 'mcq';
+      };
 
-        if (kind === 'numerical' || kind === 'msq') {
-          const studentChoice = typeof rawAnswer === 'object'
-            ? (rawAnswer.optionId ?? rawAnswer.selectedOptionId ?? rawAnswer.value ?? rawAnswer.optionIds ?? null)
-            : rawAnswer;
+      // MCQ modules: aptitude, mnc, role
+      const selectedOptionId = extractOptionId(rawAnswer);
+      const questionMetadata = mapping?.metadata && typeof mapping.metadata === 'object'
+        ? mapping.metadata
+        : {};
+      const kind = normalizeQuestionKind((questionMetadata as any)?.kind);
+      const isMsq = kind === 'msq';
+      const isNumerical = kind === 'numerical';
+      const shouldUseMetadataAnswer = isMsq || isNumerical;
 
-          if (studentChoice !== undefined && studentChoice !== null && studentChoice !== '') {
-            // Retrieve existing metadata for this attempt question first
-            const attemptQuestRow = await queryRunner.query(
-              `SELECT metadata FROM ${config.junction} WHERE attempt_question_id = $1`,
-              [attemptQuestionId],
-            );
-            const currentMetadata = attemptQuestRow[0]?.metadata || {};
-            const metadataUpdate = {
-              ...currentMetadata,
-              submittedAnswer: studentChoice,
-            };
+      const hasAnswer = Array.isArray(selectedOptionId)
+        ? selectedOptionId.length > 0
+        : !(selectedOptionId === null || selectedOptionId === undefined || selectedOptionId === '');
 
-            await queryRunner.query(
-              `UPDATE ${config.junction}
-               SET selected_option_id = NULL, answered_at = NOW(), metadata = $1
-               WHERE attempt_question_id = $2`,
-              [JSON.stringify(metadataUpdate), attemptQuestionId],
-            );
-            saved++;
-          } else {
-            await queryRunner.query(
-              `UPDATE ${config.junction}
-               SET selected_option_id = NULL, answered_at = NULL, metadata = NULL
-               WHERE attempt_question_id = $1`,
-              [attemptQuestionId],
-            );
-          }
-        } else {
-          // Standard MCQ / TF
-          const selectedOptionId = extractOptionId(rawAnswer);
-          if (selectedOptionId) {
-            await queryRunner.query(
-              `UPDATE ${config.junction}
-               SET selected_option_id = $1, answered_at = NOW()
-               WHERE attempt_question_id = $2`,
-              [selectedOptionId, attemptQuestionId],
-            );
-            saved++;
-          } else {
-            await queryRunner.query(
-              `UPDATE ${config.junction}
-               SET selected_option_id = NULL, answered_at = NULL
-               WHERE attempt_question_id = $1`,
-              [attemptQuestionId],
-            );
-          }
-        }
+      if (hasAnswer) {
+        const metadataUpdate = {
+          ...(questionMetadata as Record<string, any>),
+          submittedAnswer: shouldUseMetadataAnswer ? selectedOptionId : null,
+        };
+        await queryRunner.query(
+          `UPDATE ${config.junction}
+             SET selected_option_id = $1, metadata = $2, answered_at = NOW()
+             WHERE attempt_question_id = $3`,
+            [shouldUseMetadataAnswer ? null : selectedOptionId, JSON.stringify(metadataUpdate), attemptQuestionId],
+        );
+        saved++;
+      } else {
+        await queryRunner.query(
+          `UPDATE ${config.junction}
+             SET selected_option_id = NULL, metadata = NULL, answered_at = NULL
+             WHERE attempt_question_id = $1`,
+            [attemptQuestionId],
+        );
+      }
       }
 
       await queryRunner.commitTransaction();
@@ -1818,13 +1899,25 @@ export class AssessmentService {
           continue;
         }
 
-        // Scoring Logic: Support MSQ, TF, and MCQ
+        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+          const kind = String(rawKind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        };
+
+        // Scoring Logic: Support MCQ, MSQ, TF, Numerical
         if (aq.mode !== 'trial' && !isCoding && !isGrammar) {
-          if (selectedOptionId !== undefined && selectedOptionId !== null && selectedOptionId !== '') {
+          const hasObjectiveAnswer = Array.isArray(selectedOptionId)
+            ? selectedOptionId.length > 0
+            : !(selectedOptionId === undefined || selectedOptionId === null || selectedOptionId === '');
+          if (hasObjectiveAnswer) {
             sectionMap[category].answeredCount++;
+            answeredCount++;
+            objectiveAnsweredCount++;
             
             const qMetadata = aq.question_metadata || {};
-            const kind = qMetadata.kind || 'mcq';
+            const kind = normalizeQuestionKind(qMetadata.kind);
             let isCorrectAnswer = false;
 
             if (kind === 'msq') {
@@ -1953,7 +2046,7 @@ export class AssessmentService {
         return orderA - orderB;
       });
 
-      return {
+      const result = {
         success: true,
         token,
         attemptToken: token,
@@ -1979,6 +2072,19 @@ export class AssessmentService {
         questionReviews,
         status: 'completed',
       };
+
+      // Fire certificate email asynchronously (non-blocking)
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          attempt.user_id,
+          attempt.assessment_id,
+          module,
+          overallScorePercent,
+          now.toISOString(),
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
+
+      return result;
     } catch (error) {
       if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
       this.logger.error(`submitAttempt (${module}) error:`, error);
@@ -2071,20 +2177,38 @@ export class AssessmentService {
       if (!resolvedUserId) throw new BadRequestException('No users found.');
       const durationMinutes = Number(assessment.total_time_minutes || 60);
 
-      // Resume existing block-based attempt if one is in progress with the requested mode
+      // Resume existing block-based attempt if one is in progress
       const blockPrefix = `${dbModule.substring(0, 3).toUpperCase()}-BLOCK-%`;
       const existingBlockRows = await queryRunner.query(
         `SELECT * FROM ${config.attempts}
          WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress'
-           AND attempt_token LIKE $3 AND mode = $4
+           AND attempt_token LIKE $3
          ORDER BY started_at DESC LIMIT 1`,
-        [assessment.assessment_id, resolvedUserId, blockPrefix, mode],
+        [assessment.assessment_id, resolvedUserId, blockPrefix],
       );
 
       if (existingBlockRows.length > 0) {
         const existing = existingBlockRows[0];
         const existingExpires = new Date(existing.expires_at);
         if (existingExpires > new Date()) {
+          // If adaptive_enabled, let the v2 engine handle resume — just return the token
+          if (Boolean(assessment.adaptive_enabled)) {
+            await queryRunner.commitTransaction();
+            return {
+              attemptToken: existing.attempt_token,
+              expiresAt: existing.expires_at,
+              durationSeconds: durationMinutes * 60,
+              timeLeftSeconds: Math.max(0, Math.round((existingExpires.getTime() - Date.now()) / 1000)),
+              mode,
+              totalBlocks,
+              questionsPerBlock,
+              totalQuestions,
+              currentBlock: null,
+              isBlockBased: true,
+              resumed: true,
+            };
+          }
+
           const blockRow = await queryRunner.query(
             `SELECT block_number FROM block_attempts
              WHERE attempt_token = $1 AND status = 'in_progress'
@@ -2093,38 +2217,42 @@ export class AssessmentService {
           );
           const currentBlockNumber = blockRow[0]?.block_number ?? 1;
 
-          await queryRunner.commitTransaction();
+          try {
+            const blockInfo = await this.adaptiveBlockService.getBlockQuestions(
+              existing.attempt_token,
+              currentBlockNumber,
+            );
+            const timeLeftSeconds = Math.max(
+              0,
+              Math.round((existingExpires.getTime() - Date.now()) / 1000),
+            );
 
-          const blockInfo = await this.adaptiveBlockService.getBlockQuestions(
-            existing.attempt_token,
-            currentBlockNumber,
-          );
-          const timeLeftSeconds = Math.max(
-            0,
-            Math.round((existingExpires.getTime() - Date.now()) / 1000),
-          );
+            await queryRunner.commitTransaction();
 
-          return {
-            attemptToken: existing.attempt_token,
-            expiresAt: existing.expires_at,
-            durationSeconds: durationMinutes * 60,
-            timeLeftSeconds,
-            mode,
-            totalBlocks,
-            questionsPerBlock,
-            totalQuestions,
-            currentBlockNumber,
-            currentBlock: {
-              blockId: blockInfo.blockNumber,
-              blockNumber: blockInfo.blockNumber,
-              questions: blockInfo.questions,
-              difficulty: blockInfo.difficulty,
-              timeLimit: blockInfo.questions.length * 2,
-              isAdaptive: true,
-            },
-            isBlockBased: true,
-            resumed: true,
-          };
+            return {
+              attemptToken: existing.attempt_token,
+              expiresAt: existing.expires_at,
+              durationSeconds: durationMinutes * 60,
+              timeLeftSeconds,
+              mode,
+              totalBlocks,
+              questionsPerBlock,
+              totalQuestions,
+              currentBlockNumber,
+              currentBlock: {
+                blockId: blockInfo.blockNumber,
+                blockNumber: blockInfo.blockNumber,
+                questions: blockInfo.questions,
+                difficulty: blockInfo.difficulty,
+                timeLimit: blockInfo.questions.length * 2,
+                isAdaptive: true,
+              },
+              isBlockBased: true,
+              resumed: true,
+            };
+          } catch (e) {
+            this.logger.warn(`Stale block attempt detected for token ${existing.attempt_token}: ${(e as any)?.message}`);
+          }
         }
 
         await queryRunner.query(
@@ -2142,21 +2270,38 @@ export class AssessmentService {
 
       await queryRunner.query(
         `INSERT INTO ${config.attempts}
-           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, mode, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, NOW(), NOW())`,
-        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, mode],
+           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())`,
+        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
       );
 
       // 7. Commit so generateBlock can read the attempt row
       await queryRunner.commitTransaction();
 
-      // 8. Initialize adaptive_blocks rows (idempotent)
+      // 8. If adaptive_enabled, skip old block generation — the v2 adaptive engine
+      //    (/api/adaptive/v2/block/generate) will handle blueprint + block generation.
+      //    Just return the attempt token so the frontend can redirect to the v2 page.
+      if (Boolean(assessment.adaptive_enabled)) {
+        return {
+          attemptToken,
+          expiresAt,
+          durationSeconds: durationMinutes * 60,
+          mode,
+          totalBlocks,
+          questionsPerBlock,
+          totalQuestions,
+          currentBlock: null,
+          isBlockBased: true,
+        };
+      }
+
+      // 9. Initialize adaptive_blocks rows (idempotent) — old flow only
       await this.adaptiveBlockService.initializeAdaptiveBlocks(assessment.assessment_id, {
         blocksPerAssessment: totalBlocks,
         questionsPerBlock,
       });
 
-      // 9. Generate block 1
+      // 10. Generate block 1 — old flow only
       const firstBlock = await this.adaptiveBlockService.generateBlock({
         assessmentId: assessment.assessment_id,
         blockNumber: 1,
@@ -2210,14 +2355,25 @@ export class AssessmentService {
       };
     }
 
-    // 2. Load attempt details for next-block generation
+    // 2. Load attempt details for next-block generation dynamically
+    const moduleType =
+      attemptToken.includes('BLOCK') && attemptToken.startsWith('APT') ? 'aptitude' :
+      attemptToken.includes('BLOCK') && attemptToken.startsWith('GRA') ? 'grammar' :
+      attemptToken.includes('BLOCK') && attemptToken.startsWith('MNC') ? 'mnc' :
+      attemptToken.startsWith('APT-') ? 'aptitude' :
+      attemptToken.startsWith('GRA-') || attemptToken.startsWith('COM-') ? 'grammar' :
+      attemptToken.startsWith('MNC-') ? 'mnc' : 'aptitude';
+    const tableMap = this.getTableMap();
+    const config = tableMap[moduleType];
+    if (!config) throw new BadRequestException(`Unknown module for token: ${attemptToken}`);
+
     const attemptRows = await this.dataSource.query(
-      `SELECT assessment_id, user_id, mode FROM tech_aptitude_attempts WHERE attempt_token = $1`,
+      `SELECT assessment_id, user_id FROM ${config.attempts} WHERE attempt_token = $1`,
       [attemptToken],
     );
     if (!attemptRows.length) throw new NotFoundException('Attempt not found');
 
-    const { assessment_id, user_id, mode: attemptMode } = attemptRows[0];
+    const { assessment_id, user_id } = attemptRows[0];
 
     // 3. Use the difficulty_achieved returned directly from completeBlock
     const difficultyAchieved = completionResult.difficultyAchieved ?? 'medium';
@@ -2232,7 +2388,7 @@ export class AssessmentService {
         difficultyAchieved,
       },
       userId: Number(user_id),
-      mode: (attemptMode || 'main') as 'trial' | 'main',
+      mode: 'main',
       attemptToken,
     });
 
@@ -2280,13 +2436,13 @@ export class AssessmentService {
                 aq.display_order,
                 aq.${config.idCol} AS question_id,
                 aq.selected_option_id,
+                aq.metadata as attempt_metadata,
                 aq.block_number,
-                aq.metadata AS attempt_metadata,
                 q.question_text,
                 q.correct_option_id,
+                q.metadata as question_metadata,
                 q.marks,
                 q.negative_marks,
-                q.metadata AS question_metadata,
                 q.${config.catCol} AS category,
                 ass.negative_mark_enabled,
                 ass.negative_mark_value
@@ -2316,15 +2472,40 @@ export class AssessmentService {
       // Per-block breakdown
       const blockMap: Record<number, { correct: number; total: number; positive: number; negative: number }> = {};
 
-      for (const aq of allQuestions) {
-        let cat = aq.category ?? 'General';
-        if (cat === 'QA') cat = 'Quantitative Aptitude';
-        else if (cat === 'LR') cat = 'Logical Reasoning';
-        else if (cat === 'DI') cat = 'Data Interpretation';
-        else if (cat === 'AR') cat = 'Abstract Reasoning';
-        else if (cat === 'VA') cat = 'Verbal Ability';
+      const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        const kind = String(rawKind || 'mcq').toLowerCase();
+        if (kind === 'true_false') return 'tf';
+        if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+        return 'mcq';
+      };
+      const asObject = (value: any): Record<string, any> => {
+        if (!value) return {};
+        if (typeof value === 'object' && !Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+          } catch {
+            return {};
+          }
+        }
+        return {};
+      };
 
+      for (const aq of allQuestions) {
+        const cat = aq.category ?? 'General';
         const blk = Number(aq.block_number ?? 0);
+        const questionMetadata = asObject(aq.question_metadata);
+        const attemptMetadata = asObject(aq.attempt_metadata);
+        const kind = normalizeQuestionKind((questionMetadata as any).kind);
+        const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
+        const selectedAnswerValue =
+          (kind === 'msq' || kind === 'numerical') &&
+          metadataSubmittedAnswer !== undefined &&
+          metadataSubmittedAnswer !== null &&
+          metadataSubmittedAnswer !== ''
+            ? metadataSubmittedAnswer
+            : aq.selected_option_id;
 
         if (!categoryMap[cat]) categoryMap[cat] = { correct: 0, total: 0, answered: 0, score: 0, maxScore: 0 };
         if (!blockMap[blk]) blockMap[blk] = { correct: 0, total: 0, positive: 0, negative: 0 };
@@ -2353,17 +2534,6 @@ export class AssessmentService {
         categoryMap[cat].maxScore += qMarks;
         blockMap[blk].total++;
 
-        const qMetadata = aq.question_metadata || {};
-        const kind = qMetadata.kind || 'mcq';
-        const attemptMeta = aq.attempt_metadata || {};
-
-        let studentAns: any = null;
-        if (kind === 'numerical' || kind === 'msq') {
-          studentAns = attemptMeta.submittedAnswer;
-        } else {
-          studentAns = aq.selected_option_id;
-        }
-
         const review: any = {
           questionId: String(aq.question_id),
           displayOrder: Number(aq.display_order || 0),
@@ -2371,57 +2541,56 @@ export class AssessmentService {
           type: kind,
           questionText: String(aq.question_text || ''),
           options: optionsForReview,
-          selectedOptionId: (kind === 'numerical' || kind === 'msq') ? null : (studentAns ? String(studentAns) : null),
+          selectedOptionId: null,
           selectedAnswerText: null,
           correctOptionId:
-            (kind === 'numerical' || kind === 'msq')
-              ? null
-              : (aq.correct_option_id !== null && aq.correct_option_id !== undefined ? String(aq.correct_option_id) : null),
+            aq.correct_option_id !== null && aq.correct_option_id !== undefined
+              ? String(aq.correct_option_id)
+              : null,
           correctAnswerText: null,
           isCorrect: null,
           status: 'unanswered',
         };
-
-        if (kind === 'numerical') {
-          review.correctAnswerText = qMetadata.correctAnswer ? String(qMetadata.correctAnswer) : null;
-        } else if (kind === 'msq') {
-          const correctOptionIds = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
-          const correctTexts = correctOptionIds.map((id: string) => optionTextById.get(id) || id).filter(Boolean);
-          review.correctAnswerText = correctTexts.join(', ');
-        } else {
-          if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-            review.correctAnswerText = optionTextById.get(review.correctOptionId);
-          }
+        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+          review.correctAnswerText = optionTextById.get(review.correctOptionId);
         }
 
-        const isAnswered = studentAns !== null && studentAns !== undefined && studentAns !== '' && (!Array.isArray(studentAns) || studentAns.length > 0);
+        const hasObjectiveAnswer = Array.isArray(selectedAnswerValue)
+          ? selectedAnswerValue.length > 0
+          : !(selectedAnswerValue === undefined || selectedAnswerValue === null || String(selectedAnswerValue) === '');
 
-        if (isAnswered) {
+        if (hasObjectiveAnswer) {
           answeredCount++;
           categoryMap[cat].answered++;
-
-          if (kind === 'numerical' || kind === 'msq') {
-            review.selectedAnswerText = Array.isArray(studentAns)
-              ? studentAns.map((id: any) => optionTextById.get(String(id)) || String(id)).join(', ')
-              : String(studentAns);
-          } else {
-            review.selectedOptionId = String(studentAns);
-            review.selectedAnswerText = optionTextById.get(review.selectedOptionId) ?? String(studentAns);
-          }
-
           let isCorrect = false;
+
           if (kind === 'msq') {
-            const studentChoices = Array.isArray(studentAns) ? studentAns.map(String) : [String(studentAns)];
-            const correctChoices = Array.isArray(qMetadata.correctOptionIds) ? qMetadata.correctOptionIds.map(String) : [];
+            const studentChoices: string[] = Array.isArray(selectedAnswerValue)
+              ? selectedAnswerValue.map((id: any) => String(id))
+              : (selectedAnswerValue ? [String(selectedAnswerValue)] : []);
+            const correctChoices = Array.isArray((questionMetadata as any).correctOptionIds)
+              ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+              : [];
+            review.selectedOptionId = studentChoices;
+            review.selectedAnswerText = studentChoices
+              .map((id) => optionTextById.get(id) ?? id)
+              .join(', ');
             isCorrect = studentChoices.length > 0 &&
-                        studentChoices.length === correctChoices.length &&
-                        studentChoices.every((id: string) => correctChoices.includes(id));
+              studentChoices.length === correctChoices.length &&
+              studentChoices.every((id: string) => correctChoices.includes(id));
           } else if (kind === 'numerical') {
-            const studentAnswer = String(studentAns).trim().toLowerCase();
-            const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
-            isCorrect = studentAnswer !== '' && studentAnswer === correctAnswer;
+            const studentAnswer = String(selectedAnswerValue ?? '').trim();
+            const correctAnswer = String((questionMetadata as any).correctAnswer ?? '').trim();
+            review.selectedOptionId = studentAnswer;
+            review.selectedAnswerText = studentAnswer;
+            isCorrect =
+              studentAnswer.length > 0 &&
+              studentAnswer.toLowerCase() === correctAnswer.toLowerCase();
           } else {
-            isCorrect = String(studentAns) === String(aq.correct_option_id);
+            const selectedOptionId = String(selectedAnswerValue);
+            review.selectedOptionId = selectedOptionId;
+            review.selectedAnswerText = optionTextById.get(selectedOptionId) ?? selectedOptionId;
+            isCorrect = selectedOptionId === String(aq.correct_option_id);
           }
 
           const scoreAwarded = isCorrect ? qMarks : 0;
@@ -2445,15 +2614,25 @@ export class AssessmentService {
           // Write final authoritative scores
           await queryRunner.query(
             `UPDATE ${config.junction}
-             SET is_correct=$1, score_awarded=$2, negative_applied=$3
-             WHERE attempt_question_id=$4`,
-            [isCorrect, scoreAwarded, negApplied, aq.attempt_question_id],
+             SET selected_option_id=$1, metadata=$2, is_correct=$3, score_awarded=$4, negative_applied=$5
+             WHERE attempt_question_id=$6`,
+            [
+              (kind === 'numerical' || kind === 'msq') ? null : review.selectedOptionId,
+              JSON.stringify({
+                ...(attemptMetadata || {}),
+                submittedAnswer: (kind === 'numerical' || kind === 'msq') ? review.selectedOptionId : null,
+              }),
+              isCorrect,
+              scoreAwarded,
+              negApplied,
+              aq.attempt_question_id,
+            ],
           );
         } else {
           // Unanswered — zero score
           await queryRunner.query(
             `UPDATE ${config.junction}
-             SET is_correct=NULL, score_awarded=0, negative_applied=0
+             SET selected_option_id=NULL, metadata=NULL, is_correct=NULL, score_awarded=0, negative_applied=0
              WHERE attempt_question_id=$1`,
             [aq.attempt_question_id],
           );
@@ -2555,6 +2734,17 @@ export class AssessmentService {
         ).catch(e => this.logger.error('Analytics write failed (non-fatal):', e));
       });
 
+      // Fire certificate email asynchronously (non-blocking)
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          attempt.user_id,
+          attempt.assessment_id,
+          module,
+          overallScorePercent,
+          now.toISOString(),
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
+
       return {
         success: true,
         token,
@@ -2587,6 +2777,199 @@ export class AssessmentService {
       if (queryRunner.isTransactionActive) await queryRunner.rollbackTransaction();
       this.logger.error(`submitBlockBasedAttempt (${module}) error:`, error);
       throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // ─── Email helper ────────────────────────────────────────────────────────────
+
+  /**
+   * Looks up the user's email + name from the DB and fires a certificate email.
+   * Called asynchronously after both submitAttempt and submitBlockBasedAttempt.
+   */
+  private async sendCertificateEmailForAttempt(
+    userId: number,
+    assessmentId: number,
+    module: string,
+    overallScorePercent: number,
+    completedAt: string,
+  ): Promise<void> {
+    try {
+      // Fetch user details
+      const userRows = await this.dataSource.query(
+        `SELECT email, name, full_name, first_name, last_name FROM users WHERE id = $1`,
+        [userId],
+      );
+      if (!userRows.length) {
+        this.logger.warn(`sendCertificateEmailForAttempt: user ${userId} not found`);
+        return;
+      }
+      const user = userRows[0];
+      const toEmail: string = user.email;
+      const userName: string =
+        user.full_name ||
+        user.name ||
+        [user.first_name, user.last_name].filter(Boolean).join(' ') ||
+        'Candidate';
+
+      // Fetch assessment title
+      const assessmentRows = await this.dataSource.query(
+        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1`,
+        [assessmentId],
+      );
+      const assessmentTitle: string =
+        assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(module);
+
+      // Derive grade
+      const grade = this.getGradeFromScore(overallScorePercent);
+
+      // Build a stable certificate ID
+      const dateCode = this.getYyMm(new Date(completedAt));
+      const assessmentCode = this.assessmentCodeForEmail(module);
+      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
+
+      this.logger.log(
+        `Sending certificate email to ${toEmail} for ${module} (score=${overallScorePercent}%, cert=${certificateId})`,
+      );
+
+      await this.emailService.sendCertificateEmail({
+        toEmail,
+        userName,
+        assessmentTitle,
+        assessmentModule: module,
+        overallScorePercent,
+        grade,
+        certificateId,
+        completedAt,
+      });
+    } catch (err: any) {
+      this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);
+    }
+  }
+
+  private getGradeFromScore(score: number): string {
+    if (score >= 90) return 'A+';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B+';
+    if (score >= 60) return 'B';
+    if (score >= 50) return 'C';
+    if (score >= 40) return 'D';
+    return 'F';
+  }
+
+  private getModuleLabelForEmail(module: string): string {
+    const map: Record<string, string> = {
+      aptitude: 'Technical Aptitude Assessment',
+      grammar: 'Communication Skills Assessment',
+      communication: 'Communication Skills Assessment',
+      mnc: 'MNC Readiness Assessment',
+      role: 'Role-Based Assessment',
+      coding: 'Coding Assessment',
+    };
+    return map[module] || `${module} Assessment`;
+  }
+
+  private assessmentCodeForEmail(module: string): string {
+    if (module.startsWith('coding:')) {
+      const lang = module.slice('coding:'.length).toLowerCase();
+      if (lang === 'python') return 'PYT';
+      if (lang === 'java') return 'JAV';
+      return 'COD';
+    }
+    const map: Record<string, string> = {
+      aptitude: 'APT',
+      grammar: 'COM',
+      communication: 'COM',
+      mnc: 'MNC',
+      role: 'RBA',
+      coding: 'COD',
+    };
+    return map[module] || module.slice(0, 3).toUpperCase();
+  }
+
+  private getYyMm(d: Date): string {
+    const yy = String(d.getFullYear() % 100).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yy}${mm}`;
+  }
+
+  private randomCode(length: number): string {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const buf = crypto.randomBytes(length);
+    return Array.from(buf).map(b => charset[b % charset.length]).join('');
+  }
+
+  /**
+   * Validates if user can start a new attempt for given assessment and mode
+   * SECURITY: Server-side validation to prevent attempt limit bypass
+   */
+  async validateAttemptEligibility(
+    userId: number | string,
+    assessmentCode: string,
+    mode: 'trial' | 'main'
+  ): Promise<{ canStart: boolean; reason?: string; currentCount: number; limit: number }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+
+    try {
+      // userId may arrive as an email (the frontend sends body.userId) — resolve
+      // it to the numeric users.id before counting attempts.
+      const resolvedUserId = await this.resolveUserId(queryRunner, userId);
+      if (!resolvedUserId) {
+        return { canStart: false, reason: 'No users found.', currentCount: 0, limit: 0 };
+      }
+      // Resolve the assessment from its code — module_type tells us which set
+      // of attempt tables to count against.
+      const assessment = await queryRunner.query(
+        `SELECT assessment_id, module_type, trial_attempts_limit, main_attempts_limit
+         FROM tech_assessments WHERE assessment_code = $1`,
+        [assessmentCode]
+      );
+
+      if (!assessment.length) {
+        return { canStart: false, reason: 'Assessment not found', currentCount: 0, limit: 0 };
+      }
+
+      const { assessment_id: assessmentId, module_type: moduleType } = assessment[0];
+      const limit = mode === 'trial' ? assessment[0].trial_attempts_limit : assessment[0].main_attempts_limit;
+
+      const config = this.getTableMap()[moduleType];
+      if (!config) {
+        return { canStart: false, reason: `Module ${moduleType} not supported`, currentCount: 0, limit };
+      }
+
+      // Only completed attempts (submitted/evaluated) consume the limit — expired
+      // or abandoned in-progress attempts must not block a retake. This mirrors
+      // the authoritative check inside startAttempt().
+      const requestedMode = mode === 'trial' ? 'trial' : 'main';
+      const completedQuery = config.hasMode
+        ? `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) AS count
+           FROM ${config.attempts} a
+           JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+           JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+           WHERE a.user_id = $1 AND a.assessment_id = $2
+             AND a.status IN ('submitted', 'evaluated')
+             AND q.mode = $3`
+        : `SELECT COUNT(*) AS count
+           FROM ${config.attempts}
+           WHERE user_id = $1 AND assessment_id = $2
+             AND status IN ('submitted', 'evaluated')`;
+      const completedParams = config.hasMode
+        ? [resolvedUserId, assessmentId, requestedMode]
+        : [resolvedUserId, assessmentId];
+
+      const completedResult = await queryRunner.query(completedQuery, completedParams);
+      const currentCount = Number(completedResult[0]?.count || 0);
+
+      const canStart = currentCount < limit;
+
+      return {
+        canStart,
+        reason: canStart ? undefined : `Attempt limit exceeded (${currentCount}/${limit})`,
+        currentCount,
+        limit
+      };
     } finally {
       await queryRunner.release();
     }
