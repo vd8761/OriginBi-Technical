@@ -9,6 +9,7 @@ import QRCode from "react-qr-code";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { validateCertificateEligibility, getUserId } from "@/lib/assessmentSecurity";
+import { DM_Serif_Display, Open_Sans } from "next/font/google";
 
 const dmSerif = DM_Serif_Display({
   weight: "400",

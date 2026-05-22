@@ -315,8 +315,11 @@ export class AdaptiveBlockGeneratorService {
       return rows[0] ?? null;
     };
 
-    const catFilter = `AND ${cfg.categoryCol}='${slot.category}'`;
-    const subFilter = `AND ${cfg.subcategoryCol}='${slot.subcategory}'`;
+    // Cast to text: categoryCol may be a Postgres enum (e.g. grammar task_type),
+    // and a non-member value like the 'General' fallback would otherwise error
+    // instead of simply matching no rows.
+    const catFilter = `AND ${cfg.categoryCol}::text='${slot.category}'`;
+    const subFilter = `AND ${cfg.subcategoryCol}::text='${slot.subcategory}'`;
 
     const phases: Array<() => Promise<any | null>> = [
       // Phase 1: exact category + subcategory + difficulty

@@ -349,13 +349,15 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     if (blockNum === viewingBlockNum || blockNum > currentBlockNum) return;
     let targetBlockState = blocks.get(blockNum);
 
-    // Save current block answers first (if post-snapshot)
+    // Persist the outgoing block's answers in the background. This save does not
+    // gate rendering the target block, so it must NOT be awaited — awaiting it
+    // made navigation between already-generated blocks wait on a network round-trip.
     const curBs = blocks.get(viewingBlockNum);
     if (curBs?.snapshotTaken) {
       const blockAnswers: Record<string, string | string[]> = {};
       curBs.block.questions.forEach(q => { if (answers[q.id]) blockAnswers[q.id] = answers[q.id]; });
       if (Object.keys(blockAnswers).length) {
-        await saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: blockAnswers })
+        void saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: blockAnswers })
           .catch(console.error);
       }
     }

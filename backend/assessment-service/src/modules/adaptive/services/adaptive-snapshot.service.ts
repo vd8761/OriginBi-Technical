@@ -200,8 +200,8 @@ export class AdaptiveSnapshotService {
               q.difficulty, q.marks, q.negative_marks,
               q.metadata AS question_meta,
               q.correct_option_id,
-              COALESCE(q.${cfg.categoryCol}, 'General') AS category,
-              COALESCE(q.${cfg.subcategoryCol}, 'General') AS subcategory
+              COALESCE(q.${cfg.categoryCol}::text, 'General') AS category,
+              COALESCE(q.${cfg.subcategoryCol}::text, 'General') AS subcategory
               ${imageColSelect}
               ${extraColsSelect}
        FROM ${cfg.junction} aq

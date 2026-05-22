@@ -855,7 +855,7 @@ export class AssessmentService {
       await queryRunner.connect();
 
       const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
-      if (!resolvedUserId) throw new BadRequestException('No users found.');
+      if (!resolvedUserId) return null;
 
       let attemptRows: any[] = [];
       const sanitizedToken = String(attemptTokenParam ?? '').trim();
@@ -2905,33 +2905,65 @@ export class AssessmentService {
    * SECURITY: Server-side validation to prevent attempt limit bypass
    */
   async validateAttemptEligibility(
-    userId: number, 
-    assessmentCode: string, 
+    userId: number | string,
+    assessmentCode: string,
     mode: 'trial' | 'main'
   ): Promise<{ canStart: boolean; reason?: string; currentCount: number; limit: number }> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    
+
     try {
-      // Get assessment limits
+      // userId may arrive as an email (the frontend sends body.userId) — resolve
+      // it to the numeric users.id before counting attempts.
+      const resolvedUserId = await this.resolveUserId(queryRunner, userId);
+      if (!resolvedUserId) {
+        return { canStart: false, reason: 'No users found.', currentCount: 0, limit: 0 };
+      }
+      // Resolve the assessment from its code — module_type tells us which set
+      // of attempt tables to count against.
       const assessment = await queryRunner.query(
-        `SELECT trial_attempts_limit, main_attempts_limit FROM tech_assessments WHERE assessment_code = $1`,
+        `SELECT assessment_id, module_type, trial_attempts_limit, main_attempts_limit
+         FROM tech_assessments WHERE assessment_code = $1`,
         [assessmentCode]
       );
-      
+
       if (!assessment.length) {
         return { canStart: false, reason: 'Assessment not found', currentCount: 0, limit: 0 };
       }
-      
+
+      const { assessment_id: assessmentId, module_type: moduleType } = assessment[0];
       const limit = mode === 'trial' ? assessment[0].trial_attempts_limit : assessment[0].main_attempts_limit;
-      
-      // Count existing attempts
-      const stats = await this.getAttemptsStats(userId);
-      const module = this.getModuleFromAssessmentCode(assessmentCode);
-      const currentCount = stats[module]?.[mode] || 0;
-      
+
+      const config = this.getTableMap()[moduleType];
+      if (!config) {
+        return { canStart: false, reason: `Module ${moduleType} not supported`, currentCount: 0, limit };
+      }
+
+      // Only completed attempts (submitted/evaluated) consume the limit — expired
+      // or abandoned in-progress attempts must not block a retake. This mirrors
+      // the authoritative check inside startAttempt().
+      const requestedMode = mode === 'trial' ? 'trial' : 'main';
+      const completedQuery = config.hasMode
+        ? `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) AS count
+           FROM ${config.attempts} a
+           JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
+           JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+           WHERE a.user_id = $1 AND a.assessment_id = $2
+             AND a.status IN ('submitted', 'evaluated')
+             AND q.mode = $3`
+        : `SELECT COUNT(*) AS count
+           FROM ${config.attempts}
+           WHERE user_id = $1 AND assessment_id = $2
+             AND status IN ('submitted', 'evaluated')`;
+      const completedParams = config.hasMode
+        ? [resolvedUserId, assessmentId, requestedMode]
+        : [resolvedUserId, assessmentId];
+
+      const completedResult = await queryRunner.query(completedQuery, completedParams);
+      const currentCount = Number(completedResult[0]?.count || 0);
+
       const canStart = currentCount < limit;
-      
+
       return {
         canStart,
         reason: canStart ? undefined : `Attempt limit exceeded (${currentCount}/${limit})`,
@@ -2941,19 +2973,6 @@ export class AssessmentService {
     } finally {
       await queryRunner.release();
     }
-  }
-
-  /**
-   * Maps assessment code to module name
-   */
-  private getModuleFromAssessmentCode(assessmentCode: string): string {
-    const codeToModule: Record<string, string> = {
-      'TECH_APT_001': 'aptitude',
-      'TECH_MNC_001': 'mnc', 
-      'TECH_COMM_001': 'grammar',
-      'TECH_CODING_001': 'coding'
-    };
-    return codeToModule[assessmentCode] || 'aptitude';
   }
 
   /** Safe column-existence check (used inside transactions) */

@@ -312,13 +312,16 @@ export class AdaptiveBlueprintService {
       return { categories: [], subcategoriesByCategory: {} };
     }
 
+    // Cast columns to text before COALESCE: catCol/subCol may be a Postgres
+    // enum (e.g. tech_grammar_questions.task_type), and the literal 'General'
+    // fallback is not a valid enum member — without ::text the query errors.
     const subColSql = t.subCol !== t.catCol
-      ? `COALESCE(${t.subCol}, ${t.catCol}, 'General') AS subcategory`
-      : `COALESCE(${t.catCol}, 'General') AS subcategory`;
+      ? `COALESCE(${t.subCol}::text, ${t.catCol}::text, 'General') AS subcategory`
+      : `COALESCE(${t.catCol}::text, 'General') AS subcategory`;
 
     const rows = await this.dataSource.query(
       `SELECT DISTINCT
-         COALESCE(${t.catCol}, 'General') AS category,
+         COALESCE(${t.catCol}::text, 'General') AS category,
          ${subColSql}
        FROM ${t.table}
        WHERE assessment_id=$1 AND status='active'
@@ -366,8 +369,8 @@ export class AdaptiveBlueprintService {
       rows = await this.dataSource.query(
         `SELECT
            COUNT(*)::int AS total,
-           COALESCE(${t.catCol}, 'General') AS category,
-           COALESCE(difficulty, 'medium') AS difficulty
+           COALESCE(${t.catCol}::text, 'General') AS category,
+           COALESCE(difficulty::text, 'medium') AS difficulty
          FROM ${t.table}
          WHERE assessment_id=$1 AND status='active'
          GROUP BY category, difficulty`,
@@ -377,7 +380,7 @@ export class AdaptiveBlueprintService {
       rows = await this.dataSource.query(
         `SELECT
            COUNT(*)::int AS total,
-           COALESCE(${t.catCol}, 'General') AS category,
+           COALESCE(${t.catCol}::text, 'General') AS category,
            'medium' AS difficulty
          FROM ${t.table}
          WHERE assessment_id=$1 AND status='active'

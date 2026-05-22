@@ -357,8 +357,8 @@ export class AdaptiveAnalyticsService {
               aq.expected_time_seconds,
               q.difficulty, q.marks, q.negative_marks,
               q.metadata AS question_meta, q.correct_option_id,
-              COALESCE(q.${t.categoryCol}, 'General') AS category,
-              COALESCE(q.${t.subcategoryCol}, 'General') AS subcategory
+              COALESCE(q.${t.categoryCol}::text, 'General') AS category,
+              COALESCE(q.${t.subcategoryCol}::text, 'General') AS subcategory
        FROM ${t.junction} aq
        JOIN ${t.questions} q ON q.${t.idCol}=aq.${t.idCol}
        WHERE aq.${t.attemptIdCol}=$1 AND aq.block_number IS NOT NULL
