@@ -114,15 +114,15 @@ export class AdminDashboardService {
       try {
         const liveSessionsResult = await queryRunner.query(`
           WITH all_attempts AS (
-            SELECT status, last_seen_at FROM tech_aptitude_attempts
-            UNION ALL SELECT status, last_seen_at FROM tech_grammar_attempts
-            UNION ALL SELECT status, last_seen_at FROM tech_mnc_attempts
-            UNION ALL SELECT status, last_seen_at FROM tech_role_attempts
-            UNION ALL SELECT status, last_seen_at FROM tech_coding_attempts
+            SELECT status, updated_at FROM tech_aptitude_attempts
+            UNION ALL SELECT status, updated_at FROM tech_grammar_attempts
+            UNION ALL SELECT status, updated_at FROM tech_mnc_attempts
+            UNION ALL SELECT status, updated_at FROM tech_role_attempts
+            UNION ALL SELECT status, updated_at FROM tech_coding_attempts
           )
           SELECT
             COUNT(*) FILTER (WHERE status = 'in_progress')::bigint AS live,
-            COUNT(*) FILTER (WHERE status = 'in_progress' AND last_seen_at > now() - interval '5 minutes')::bigint AS monitored
+            COUNT(*) FILTER (WHERE status = 'in_progress' AND updated_at > now() - interval '5 minutes')::bigint AS monitored
           FROM all_attempts
         `);
         out.kpis.liveSessions = Number(liveSessionsResult[0]?.live || 0);
@@ -134,11 +134,11 @@ export class AdminDashboardService {
       try {
         const activeCandidatesResult = await queryRunner.query(`
           WITH all_candidates AS (
-            SELECT user_id, COALESCE(last_seen_at, started_at, created_at) as activity_at FROM tech_aptitude_attempts
-            UNION ALL SELECT user_id, COALESCE(last_seen_at, started_at, created_at) as activity_at FROM tech_grammar_attempts
-            UNION ALL SELECT user_id, COALESCE(last_seen_at, started_at, created_at) as activity_at FROM tech_mnc_attempts
-            UNION ALL SELECT user_id, COALESCE(last_seen_at, started_at, created_at) as activity_at FROM tech_role_attempts
-            UNION ALL SELECT user_id, COALESCE(last_seen_at, started_at, created_at) as activity_at FROM tech_coding_attempts
+            SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_aptitude_attempts
+            UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_grammar_attempts
+            UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_mnc_attempts
+            UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_role_attempts
+            UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_coding_attempts
           )
           SELECT COUNT(DISTINCT user_id)::bigint as count
           FROM all_candidates
@@ -148,15 +148,15 @@ export class AdminDashboardService {
 
         const onlineCandidatesResult = await queryRunner.query(`
           WITH all_online AS (
-            SELECT user_id, last_seen_at FROM tech_aptitude_attempts WHERE status = 'in_progress'
-            UNION ALL SELECT user_id, last_seen_at FROM tech_grammar_attempts WHERE status = 'in_progress'
-            UNION ALL SELECT user_id, last_seen_at FROM tech_mnc_attempts WHERE status = 'in_progress'
-            UNION ALL SELECT user_id, last_seen_at FROM tech_role_attempts WHERE status = 'in_progress'
-            UNION ALL SELECT user_id, last_seen_at FROM tech_coding_attempts WHERE status = 'in_progress'
+            SELECT user_id, updated_at FROM tech_aptitude_attempts WHERE status = 'in_progress'
+            UNION ALL SELECT user_id, updated_at FROM tech_grammar_attempts WHERE status = 'in_progress'
+            UNION ALL SELECT user_id, updated_at FROM tech_mnc_attempts WHERE status = 'in_progress'
+            UNION ALL SELECT user_id, updated_at FROM tech_role_attempts WHERE status = 'in_progress'
+            UNION ALL SELECT user_id, updated_at FROM tech_coding_attempts WHERE status = 'in_progress'
           )
           SELECT COUNT(DISTINCT user_id)::bigint as count
           FROM all_online
-          WHERE last_seen_at > now() - interval '5 minutes'
+          WHERE updated_at > now() - interval '5 minutes'
         `);
         out.kpis.activeCandidatesOnline = Number(onlineCandidatesResult[0]?.count || 0);
       } catch (e: any) {
@@ -189,7 +189,7 @@ export class AdminDashboardService {
               COUNT(*)::bigint as total,
               COUNT(*) FILTER (WHERE status IN ('submitted', 'evaluated'))::bigint as completed
             FROM ${table}
-            WHERE assessment_id = $1::uuid
+            WHERE assessment_id = $1::bigint
           `, [row.assessment_id]);
 
           out.liveAssessments.push({

@@ -8,6 +8,7 @@ import Header from "@/components/student/Header";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSession } from "@/lib/api";
 import { useSession } from "@/lib/contexts/SessionContext";
+import { useCompletedAssessments, type PaymentKey } from "@/lib/payments";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 
@@ -54,6 +55,7 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 // Inner component that uses search params
 function HomeContent() {
   const { isLoggedIn, user, isLoading: bootstrapping } = useSession();
+  const { isCompleted } = useCompletedAssessments();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
   const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
@@ -69,10 +71,17 @@ function HomeContent() {
       if (nextPath) {
         router.replace(nextPath);
       } else {
-        router.replace("/explore");
+        // Check if user has completed any assessments
+        // If they have completed any assessment, redirect to dashboard instead of explore
+        const hasCompletedAny = (["aptitude", "communication", "coding", "mnc", "role"] as PaymentKey[]).some(id => isCompleted(id));
+        if (hasCompletedAny) {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/explore");
+        }
       }
     }
-  }, [isLoggedIn, bootstrapping, nextPath, router]);
+  }, [isLoggedIn, bootstrapping, nextPath, router, isCompleted]);
 
   useEffect(() => {
     // Check for view parameter

@@ -274,7 +274,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
           tags: tags,
           enabledQuestionTypes: dbExam.enabled_question_types,
-          requireCameraMic: Boolean(dbExam.require_camera_mic),
         };
       }
       return exam;
@@ -455,6 +454,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       return;
     }
 
+    // Prevent re-taking already-completed non-coding assessments
+    if (exam.id !== "coding" && isCompleted(exam.id as AssessmentId)) {
+      router.push("/dashboard");
+      return;
+    }
+
     const dbModule = exam.id === "communication" ? "grammar" : exam.id;
     const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
     const currentCount = mode === "trial" ? stats.trial : stats.main;
@@ -481,10 +486,41 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const handleResumeAttempt = (attempt: InProgressAttempt) => {
+    // SECURITY: Validate attempt token and prevent manipulation
+    if (!attempt.attemptToken || !attempt.module) {
+      console.error('Invalid attempt data:', attempt);
+      return;
+    }
+    
     const resumeModule = attempt.module === "grammar" ? "communication" : attempt.module;
-    const mode = attempt.mode ?? "main";
+    const validModes = ['trial', 'main'] as const;
+    const mode = validModes.includes(attempt.mode as any) ? attempt.mode : 'main';
+    
+    // Prevent infinite loops by checking if we're already on the target page
+    const currentPath = window.location.pathname;
+    const targetPath = resumeModule === "aptitude" && attempt.isBlockBased 
+      ? `/assessment/aptitude/adaptive`
+      : `/assessment/${resumeModule}`;
+      
+    if (currentPath === targetPath) {
+      console.warn('Already on target assessment page, preventing loop');
+      return;
+    }
+    
     if (resumeModule === "aptitude" && attempt.isBlockBased) {
-      router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      const matchingAssessment = assessmentsList.find(
+        (a) => a.assessment_code === attempt.assessmentCode
+      );
+      const assessmentId = matchingAssessment?.assessment_id || 1;
+      const isV2 = matchingAssessment?.block_config?.enabled ?? true;
+
+      if (isV2) {
+        router.push(
+          `/assessment/aptitude/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${attempt.attemptToken}`
+        );
+      } else {
+        router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      }
       return;
     }
     router.push(`/assessment/${resumeModule}?mode=${mode}`);
@@ -772,25 +808,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {showAptitudeModal && (() => {
         const exam = dynamicExams.find(e => e.id === 'aptitude') as any;
-        const qCount = assessmentMode === 'trial' 
-          ? 5 
-          : (exam?.questionLimit > 0 ? exam.questionLimit : (exam?.mainQuestionsCount > 0 ? exam.mainQuestionsCount : exam?.questions));
         const stats = attemptsStats['aptitude'] || { trial: 0, main: 0 };
-        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
         return (
-          <AptitudePreTest
+          <AdaptiveAptitudePreTest
             mode={assessmentMode}
             onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
             onClose={() => setShowAptitudeModal(false)}
             accentColor={exam?.accentColor}
             gradient={exam?.gradient}
-            questions={qCount}
-            duration={exam?.duration}
-            trialAttemptsLimit={exam?.trialAttemptsLimit}
-            mainAttemptsLimit={exam?.mainAttemptsLimit}
-            attemptsCount={currentCount}
-            skills={exam?.tags}
-            requireCameraMic={exam?.requireCameraMic}
           />
         );
       })()}
@@ -802,7 +827,15 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <CommunicationPreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'grammar');
+              if (dbExam?.adaptive_enabled) {
+                // Adaptive mode: go through standard engine which will detect isBlockBased and redirect
+                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowCommunicationModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
@@ -820,7 +853,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <RolePreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'role');
+              if (dbExam?.adaptive_enabled) {
+                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowRoleModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
@@ -838,7 +878,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <MNCPreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'mnc');
+              if (dbExam?.adaptive_enabled) {
+                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowMncModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}

@@ -30,6 +30,12 @@ export class TechMncQuestion {
     @Column({ name: "topic_group", type: "varchar", length: 100 })
     topicGroup!: string;
 
+    @Column({ name: "category", type: "varchar", length: 100, nullable: true })
+    category!: string | null;
+
+    @Column({ name: "subcategory", type: "varchar", length: 100, nullable: true })
+    subcategory!: string | null;
+
     @Column({
         name: "difficulty",
         type: "enum",

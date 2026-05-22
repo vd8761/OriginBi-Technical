@@ -132,6 +132,24 @@ export class TechAssessment {
     @Column({ name: "live_proctoring_enabled", type: "boolean", default: true })
     liveProctoringEnabled!: boolean;
 
+    @Column({ name: "adaptive_enabled", type: "boolean", default: false })
+    adaptiveEnabled!: boolean;
+
+    @Column({ name: "adaptive_total_questions", type: "int", default: 20 })
+    adaptiveTotalQuestions!: number;
+
+    @Column({ name: "adaptive_total_marks", type: "int", default: 100 })
+    adaptiveTotalMarks!: number;
+
+    @Column({ name: "adaptive_total_blocks", type: "int", default: 4 })
+    adaptiveTotalBlocks!: number;
+
+    @Column({ name: "adaptive_seconds_per_mark", type: "int", default: 45 })
+    adaptiveSecondsPerMark!: number;
+
+    @Column({ name: "block_config", type: "jsonb", nullable: true })
+    blockConfig!: any;
+
     @ManyToOne(() => UserEntity, { nullable: false })
     @JoinColumn({ name: "created_by" })
     createdBy!: UserEntity;

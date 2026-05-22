@@ -48,6 +48,7 @@ interface ModuleTableConfig {
   attempts: string; questions: string; junction: string;
   idCol: string; options: string; attemptIdCol: string;
   categoryCol: string; hasMode: boolean;
+  hasImageUrl?: boolean;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ export class AdaptiveBlockService {
         attempts: 'tech_aptitude_attempts', questions: 'tech_aptitude_questions',
         junction: 'tech_aptitude_attempt_questions', idCol: 'aptitude_question_id',
         options: 'tech_aptitude_options', attemptIdCol: 'aptitude_attempt_id',
-        categoryCol: 'subcategory', hasMode: true,
+        categoryCol: 'subcategory', hasMode: true, hasImageUrl: true,
       },
       grammar: {
         attempts: 'tech_grammar_attempts', questions: 'tech_grammar_questions',
@@ -79,10 +80,58 @@ export class AdaptiveBlockService {
         attempts: 'tech_mnc_attempts', questions: 'tech_mnc_questions',
         junction: 'tech_mnc_attempt_questions', idCol: 'mnc_question_id',
         options: 'tech_mnc_options', attemptIdCol: 'mnc_attempt_id',
-        categoryCol: 'topic_group', hasMode: true,
+        categoryCol: 'subcategory', hasMode: true,
+      },
+      role: {
+        attempts: 'tech_role_attempts', questions: 'tech_role_questions',
+        junction: 'tech_role_attempt_questions', idCol: 'role_question_id',
+        options: 'tech_role_options', attemptIdCol: 'role_attempt_id',
+        categoryCol: 'domain', hasMode: false,
       },
     };
     return map[moduleType] ?? null;
+  }
+
+  /**
+   * Resolve module type from attempt token.
+   *
+   * Strategy (in order):
+   *  1. Token prefix heuristic (legacy tokens that start with APT/GRA/MNC/ROL)
+   *  2. DB lookup across all attempt tables — reliable for any token format
+   *
+   * The DB lookup is cached per token so it only hits the DB once per request.
+   */
+  async getModuleFromToken(attemptToken: string): Promise<string> {
+    const token = (attemptToken || '').toUpperCase();
+
+    // Fast path: legacy prefix-based tokens
+    if (token.startsWith('APT')) return 'aptitude';
+    if (token.startsWith('GRA') || token.startsWith('COM')) return 'grammar';
+    if (token.startsWith('MNC')) return 'mnc';
+    if (token.startsWith('ROL')) return 'role';
+
+    // Slow path: DB lookup for tokens that don't match any prefix
+    // (e.g. tokens generated as `${assessmentId}-${userId}-${timestamp}`)
+    const tables: Array<{ table: string; module: string }> = [
+      { table: 'tech_aptitude_attempts', module: 'aptitude' },
+      { table: 'tech_grammar_attempts',  module: 'grammar' },
+      { table: 'tech_mnc_attempts',      module: 'mnc' },
+      { table: 'tech_role_attempts',     module: 'role' },
+    ];
+    for (const t of tables) {
+      try {
+        const rows = await this.dataSource.query(
+          `SELECT 1 FROM ${t.table} WHERE attempt_token=$1 LIMIT 1`,
+          [attemptToken],
+        );
+        if (rows.length) return t.module;
+      } catch {
+        // table may not exist yet — skip
+      }
+    }
+
+    this.logger.warn(`getModuleFromToken: could not resolve module for token "${attemptToken}", defaulting to aptitude`);
+    return 'aptitude';
   }
 
   // ── Column existence (cached) ──────────────────────────────────────────────
@@ -115,6 +164,27 @@ export class AdaptiveBlockService {
     if (accuracy >= 0.8 && timeSecs < 300) return order[Math.min(idx + 1, 2)];
     if (accuracy < 0.4  || timeSecs > 600) return order[Math.max(idx - 1, 0)];
     return order[idx];
+  }
+
+  private normalizeQuestionKind(rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' {
+    const kind = String(rawKind || 'mcq').toLowerCase();
+    if (kind === 'true_false') return 'tf';
+    if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+    return 'mcq';
+  }
+
+  private asObject(value: any): Record<string, any> {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch {
+        return {};
+      }
+    }
+    return {};
   }
 
   // ── Initialize blocks ──────────────────────────────────────────────────────
@@ -293,26 +363,31 @@ export class AdaptiveBlockService {
     await qr.connect();
     await qr.startTransaction();
     try {
+      const moduleType = await this.getModuleFromToken(attemptToken);
+      const cfg = this.getModuleConfig(moduleType);
+      if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
+
       // 1. Resolve attempt
       const ar = await qr.query(
-        `SELECT aptitude_attempt_id, assessment_id, mode FROM tech_aptitude_attempts WHERE attempt_token=$1`,
+        `SELECT ${cfg.attemptIdCol} AS attempt_id, assessment_id FROM ${cfg.attempts} WHERE attempt_token=$1`,
         [attemptToken],
       );
       if (!ar.length) throw new NotFoundException('Attempt not found');
-      const attemptId = Number(ar[0].aptitude_attempt_id);
+      const attemptId = Number(ar[0].attempt_id);
       const assessmentId = Number(ar[0].assessment_id);
-      const attemptMode = ar[0].mode || 'main';
 
       // 2. Load this block's questions with correct answers + marks
       const bqs = await qr.query(
-        `SELECT aq.attempt_question_id, aq.aptitude_question_id,
+        `SELECT aq.attempt_question_id, aq.${cfg.idCol} AS aptitude_question_id,
+                aq.metadata as attempt_metadata,
                 q.correct_option_id, q.marks, q.negative_marks,
-                q.subcategory AS category,
+                q.metadata as question_metadata,
+                q.${cfg.categoryCol} AS category,
                 ass.negative_mark_enabled, ass.negative_mark_value
-         FROM tech_aptitude_attempt_questions aq
-         JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
+         FROM ${cfg.junction} aq
+         JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
          JOIN tech_assessments ass ON ass.assessment_id=q.assessment_id
-         WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2`,
+         WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2`,
         [attemptId, blockNumber],
       );
 
@@ -322,37 +397,73 @@ export class AdaptiveBlockService {
       const categoryMap: Record<string, { correct: number; total: number }> = {};
 
       // 3. Save draft answers + compute accuracy for adaptive engine.
-      //    selected_option_id is saved so the UI can restore answers when user navigates back.
-      //    is_correct / score_awarded are also saved here as a preview — they will be
-      //    re-computed from scratch at final submit to reflect any changes the user made.
+      //    is_correct / score_awarded are preview values and are re-computed at final submit.
       for (const aq of bqs) {
         const cat = aq.category ?? 'General';
         if (!categoryMap[cat]) categoryMap[cat] = { correct: 0, total: 0 };
         categoryMap[cat].total++;
 
         const qIdStr = String(aq.aptitude_question_id);
-        const sel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const rawSel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const sel = (typeof rawSel === 'object' && rawSel !== null && !Array.isArray(rawSel))
+          ? ((rawSel as any).optionId ?? (rawSel as any).selectedOptionId ?? (rawSel as any).value ?? null)
+          : rawSel;
+        const questionMetadata = this.asObject(aq.question_metadata);
+        const attemptMetadata = this.asObject(aq.attempt_metadata);
+        const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
         const qMarks = Number(aq.marks || 1);
         const negMarks = aq.negative_mark_enabled
           ? Number(aq.negative_marks || aq.negative_mark_value || 0)
           : 0;
 
-        if (sel !== undefined && sel !== null && sel !== '') {
-          const isCorrect = String(sel) === String(aq.correct_option_id);
+        const hasAnswer = Array.isArray(sel)
+          ? sel.length > 0
+          : !(sel === undefined || sel === null || sel === '');
+
+        if (hasAnswer) {
+          let isCorrect = false;
+          if (kind === 'msq') {
+            const studentChoices: string[] = Array.isArray(sel)
+              ? sel.map((id: any) => String(id))
+              : (sel ? [String(sel)] : []);
+            const correctChoices = Array.isArray((questionMetadata as any).correctOptionIds)
+              ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+              : [];
+            isCorrect = studentChoices.length > 0 &&
+              studentChoices.length === correctChoices.length &&
+              studentChoices.every((id: string) => correctChoices.includes(id));
+          } else if (kind === 'numerical') {
+            const studentAnswer = String(sel ?? '').trim().toLowerCase();
+            const correctAnswer = String((questionMetadata as any).correctAnswer ?? '').trim().toLowerCase();
+            isCorrect = studentAnswer !== '' && studentAnswer === correctAnswer;
+          } else {
+            isCorrect = String(sel) === String(aq.correct_option_id);
+          }
+
           if (isCorrect) { correctCount++; categoryMap[cat].correct++; }
           // Save draft answer — NOT final, will be re-evaluated at submit
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=$1, is_correct=$2,
-                 score_awarded=$3, negative_applied=$4, answered_at=NOW()
-             WHERE attempt_question_id=$5`,
-            [sel, isCorrect, isCorrect ? qMarks : 0, isCorrect ? 0 : negMarks, aq.attempt_question_id],
+            `UPDATE ${cfg.junction}
+             SET selected_option_id=$1, metadata=$2, is_correct=$3,
+                 score_awarded=$4, negative_applied=$5, answered_at=NOW()
+             WHERE attempt_question_id=$6`,
+            [
+              (kind === 'numerical' || kind === 'msq') ? null : sel,
+              JSON.stringify({
+                ...(attemptMetadata || {}),
+                submittedAnswer: (kind === 'numerical' || kind === 'msq') ? sel : null,
+              }),
+              isCorrect,
+              isCorrect ? qMarks : 0,
+              isCorrect ? 0 : negMarks,
+              aq.attempt_question_id,
+            ],
           );
         } else {
           // User left this question unanswered — clear any previous draft
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=NULL, is_correct=NULL,
+            `UPDATE ${cfg.junction}
+             SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
                  score_awarded=0, negative_applied=0, answered_at=NULL
              WHERE attempt_question_id=$1`,
             [aq.attempt_question_id],
@@ -377,16 +488,17 @@ export class AdaptiveBlockService {
       //    Future (not-yet-generated) blocks are inaccessible because they don't exist in DB yet.
 
       // 7. Update block_attempts with draft performance metrics
+      // NOTE: performance_metrics column does not exist in the schema — store
+      // the category breakdown in the existing accuracy_score + correct_count fields only.
       await qr.query(
         `UPDATE block_attempts
          SET status='completed', completed_at=NOW(), time_taken_seconds=$1,
              accuracy_score=$2, correct_count=$3, total_count=$4,
              next_block_difficulty=$5,
-             performance_metrics=$6, updated_at=NOW()
-         WHERE attempt_token=$7 AND block_number=$8`,
+             updated_at=NOW()
+         WHERE attempt_token=$6 AND block_number=$7`,
         [
           timeTaken, accuracyScore, correctCount, totalCount, nextDiff,
-          JSON.stringify({ correctCount, totalCount, accuracyScore, timeTaken, categoryMap }),
           attemptToken, blockNumber,
         ],
       );
@@ -439,18 +551,22 @@ export class AdaptiveBlockService {
   async saveBlockAnswers(
     attemptToken: string,
     blockNumber: number,
-    answers: Record<string, string>,
+    answers: Record<string, any>,
   ): Promise<{ saved: number }> {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
     try {
+      const moduleType = await this.getModuleFromToken(attemptToken);
+      const cfg = this.getModuleConfig(moduleType);
+      if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
+
       const ar = await qr.query(
-        `SELECT aptitude_attempt_id FROM tech_aptitude_attempts WHERE attempt_token=$1`,
+        `SELECT ${cfg.attemptIdCol} AS attempt_id FROM ${cfg.attempts} WHERE attempt_token=$1`,
         [attemptToken],
       );
       if (!ar.length) throw new NotFoundException('Attempt not found');
-      const attemptId = Number(ar[0].aptitude_attempt_id);
+      const attemptId = Number(ar[0].attempt_id);
 
       // Verify this block exists and is accessible (was generated)
       const blockRow = await qr.query(
@@ -464,30 +580,47 @@ export class AdaptiveBlockService {
 
       // Load the questions for this block
       const bqs = await qr.query(
-        `SELECT aq.attempt_question_id, aq.aptitude_question_id
-         FROM tech_aptitude_attempt_questions aq
-         WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2`,
+        `SELECT aq.attempt_question_id, aq.${cfg.idCol} AS aptitude_question_id, aq.metadata as attempt_metadata, q.metadata as question_metadata
+         FROM ${cfg.junction} aq
+         JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
+         WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2`,
         [attemptId, blockNumber],
       );
 
       let saved = 0;
       for (const aq of bqs) {
         const qIdStr = String(aq.aptitude_question_id);
-        const sel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const rawSel = answers[qIdStr] ?? answers[String(aq.attempt_question_id)];
+        const sel = (typeof rawSel === 'object' && rawSel !== null && !Array.isArray(rawSel))
+          ? ((rawSel as any).optionId ?? (rawSel as any).selectedOptionId ?? (rawSel as any).value ?? null)
+          : rawSel;
+        const questionMetadata = this.asObject(aq.question_metadata);
+        const attemptMetadata = this.asObject(aq.attempt_metadata);
+        const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+        const hasAnswer = Array.isArray(sel)
+          ? sel.length > 0
+          : !(sel === undefined || sel === null || sel === '');
 
-        if (sel !== undefined && sel !== null && sel !== '') {
+        if (hasAnswer) {
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=$1, answered_at=NOW()
-             WHERE attempt_question_id=$2`,
-            [sel, aq.attempt_question_id],
+            `UPDATE ${cfg.junction}
+             SET selected_option_id=$1, metadata=$2, answered_at=NOW()
+             WHERE attempt_question_id=$3`,
+            [
+              (kind === 'numerical' || kind === 'msq') ? null : sel,
+              JSON.stringify({
+                ...(attemptMetadata || {}),
+                submittedAnswer: (kind === 'numerical' || kind === 'msq') ? sel : null,
+              }),
+              aq.attempt_question_id,
+            ],
           );
           saved++;
         } else {
           // Explicitly cleared
           await qr.query(
-            `UPDATE tech_aptitude_attempt_questions
-             SET selected_option_id=NULL, answered_at=NULL
+            `UPDATE ${cfg.junction}
+             SET selected_option_id=NULL, metadata=NULL, answered_at=NULL
              WHERE attempt_question_id=$1`,
             [aq.attempt_question_id],
           );
@@ -513,7 +646,7 @@ export class AdaptiveBlockService {
     blockNumber: number;
     difficulty: string;
     status: string;
-    questions: Array<BlockQuestion & { selectedOptionId: string | null; answeredAt: string | null }>;
+    questions: Array<BlockQuestion & { selectedOptionId: string | string[] | null; answeredAt: string | null }>;
   }> {
     // Verify block exists
     const baRow = await this.dataSource.query(
@@ -525,24 +658,30 @@ export class AdaptiveBlockService {
       throw new BadRequestException(`Block ${blockNumber} has not been unlocked yet`);
     }
 
+    const moduleType = await this.getModuleFromToken(attemptToken);
+    const cfg = this.getModuleConfig(moduleType);
+    if (!cfg) throw new BadRequestException(`Module ${moduleType} not supported`);
+
     const ar = await this.dataSource.query(
-      `SELECT a.aptitude_attempt_id, a.assessment_id
-       FROM tech_aptitude_attempts a WHERE a.attempt_token=$1`,
+      `SELECT a.${cfg.attemptIdCol} AS attempt_id, a.assessment_id
+       FROM ${cfg.attempts} a WHERE a.attempt_token=$1`,
       [attemptToken],
     );
     if (!ar.length) throw new NotFoundException('Attempt not found');
-    const attemptId = Number(ar[0].aptitude_attempt_id);
+    const attemptId = Number(ar[0].attempt_id);
     const assessmentId = Number(ar[0].assessment_id);
 
+    const imgCol = cfg.hasImageUrl ? ', q.image_url' : '';
+
     const rows = await this.dataSource.query(
-      `SELECT aq.attempt_question_id, aq.aptitude_question_id,
-              aq.selected_option_id, aq.answered_at,
+      `SELECT aq.attempt_question_id, aq.${cfg.idCol} AS aptitude_question_id,
+              aq.selected_option_id, aq.metadata as attempt_metadata, aq.answered_at,
               aq.block_sequence_order, aq.display_order,
-              q.question_text, q.difficulty, q.subcategory AS category,
-              q.marks, q.negative_marks, q.image_url
-       FROM tech_aptitude_attempt_questions aq
-       JOIN tech_aptitude_questions q ON q.aptitude_question_id=aq.aptitude_question_id
-       WHERE aq.aptitude_attempt_id=$1 AND aq.block_number=$2
+              q.question_text, q.difficulty, q.${cfg.categoryCol} AS category, q.metadata as question_metadata,
+              q.marks, q.negative_marks${imgCol}
+       FROM ${cfg.junction} aq
+       JOIN ${cfg.questions} q ON q.${cfg.idCol}=aq.${cfg.idCol}
+       WHERE aq.${cfg.attemptIdCol}=$1 AND aq.block_number=$2
        ORDER BY aq.block_sequence_order ASC`,
       [attemptId, blockNumber],
     );
@@ -551,9 +690,17 @@ export class AdaptiveBlockService {
     for (const r of rows) {
       const opts = await this.dataSource.query(
         `SELECT option_id::text AS id, option_text AS text
-         FROM tech_aptitude_options WHERE aptitude_question_id=$1 ORDER BY option_id`,
+         FROM ${cfg.options} WHERE ${cfg.idCol}=$1 ORDER BY option_id`,
         [r.aptitude_question_id],
       );
+      const questionMetadata = this.asObject(r.question_metadata);
+      const attemptMetadata = this.asObject(r.attempt_metadata);
+      const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+      const selectedValue =
+        (kind === 'msq' || kind === 'numerical')
+          ? ((attemptMetadata as any).submittedAnswer ?? null)
+          : (r.selected_option_id ? String(r.selected_option_id) : null);
+
       questions.push({
         id: String(r.aptitude_question_id),
         text: r.question_text,
@@ -561,12 +708,12 @@ export class AdaptiveBlockService {
         category: r.category ?? '',
         marks: Number(r.marks) || 1,
         negativeMarks: Number(r.negative_marks) || 0,
-        imageUrl: r.image_url ?? undefined,
+        imageUrl: cfg.hasImageUrl ? (r.image_url ?? undefined) : undefined,
         options: opts,
         blockSequenceOrder: r.block_sequence_order,
         displayOrder: r.display_order,
         // Restore previously saved answer
-        selectedOptionId: r.selected_option_id ? String(r.selected_option_id) : null,
+        selectedOptionId: selectedValue,
         answeredAt: r.answered_at,
       });
     }
@@ -763,9 +910,10 @@ export class AdaptiveBlockService {
       const params: any[] = [assessmentId];
       const where = buildWhere(params, diff, excl, topic);
       params.push(need);
+      const imgSelect = cfg.hasImageUrl ? ', q.image_url' : '';
       const rows = await qr.query(
         `SELECT q.${cfg.idCol}, q.question_text, q.difficulty,
-                q.${cfg.categoryCol} AS category, q.marks, q.negative_marks, q.image_url,
+                q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
                 json_agg(
                   json_build_object('option_id', o.option_id, 'option_text', o.option_text)
                   ORDER BY o.option_id
@@ -789,13 +937,13 @@ export class AdaptiveBlockService {
         category: q.category ?? '',
         marks: Number(q.marks) || 1,
         negativeMarks: Number(q.negative_marks) || 0,
-        imageUrl: q.image_url ?? undefined,
+        imageUrl: cfg.hasImageUrl ? (q.image_url ?? undefined) : undefined,
       }));
     };
 
     // ── Phase 1: 1 question per topic at target difficulty ─────────────────
     // Only applies to aptitude (4 known topics). For grammar/mnc we skip this.
-    const isAptitude = cfg.categoryCol === 'subcategory';
+    const isAptitude = cfg.questions === 'tech_aptitude_questions';
     const results: BlockQuestion[] = [];
     const usedIds = [...excludeIds];
 

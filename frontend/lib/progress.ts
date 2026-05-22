@@ -110,6 +110,7 @@ export interface AssessmentResult {
   netScore?: number;
   attemptToken?: string;
   module?: string;
+  mode?: string;
   maxScore?: number;
   objectiveAnsweredCount?: number;
   subjectiveAnsweredCount?: number;

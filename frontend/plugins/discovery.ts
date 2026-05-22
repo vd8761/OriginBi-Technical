@@ -58,26 +58,31 @@ export async function fetchCandidatePluginConfig(
 }
 
 export async function fetchAdminPluginConfig(): Promise<EnabledPluginConfig[]> {
-  const data = await fetchJson<{
-    plugins?: Array<{
-      slug: string;
-      enabled?: boolean;
-      enabledByDefault?: boolean;
-      platformState?: string;
-      schema?: Record<string, unknown>;
-      platformConfig?: Record<string, unknown>;
-    }>;
-  }>(`/v1/admin/plugins?context=admin`);
-  return (data.plugins ?? []).map((p) => {
-    const defaults = recordFromUnknown(p.schema?.defaults);
-    const platformConfig = recordFromUnknown(p.platformConfig);
+  try {
+    const data = await fetchJson<{
+      plugins?: Array<{
+        slug: string;
+        enabled?: boolean;
+        enabledByDefault?: boolean;
+        platformState?: string;
+        schema?: Record<string, unknown>;
+        platformConfig?: Record<string, unknown>;
+      }>;
+    }>(`/v1/admin/plugins?context=admin`);
+    return (data.plugins ?? []).map((p) => {
+      const defaults = recordFromUnknown(p.schema?.defaults);
+      const platformConfig = recordFromUnknown(p.platformConfig);
 
-    return {
-      id: p.slug,
-      enabled: p.enabled !== false && p.platformState !== "disabled",
-      config: { ...defaults, ...platformConfig },
-    };
-  });
+      return {
+        id: p.slug,
+        enabled: p.enabled !== false && p.platformState !== "disabled",
+        config: { ...defaults, ...platformConfig },
+      };
+    });
+  } catch (err) {
+    console.warn("[plugins] admin plugin config fetch failed", err);
+    return [];
+  }
 }
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {

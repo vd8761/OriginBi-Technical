@@ -1,17 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { 
-  BookOpen, 
-  Clock, 
-  Target, 
-  TrendingUp, 
-  CheckCircle, 
-  AlertCircle,
-  ArrowRight,
-  X,
-  Loader2
-} from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
+import { securityCheckBeforeStart, getUserId } from "@/lib/assessmentSecurity";
 
 interface AdaptiveAptitudePreTestProps {
   mode: 'trial' | 'main';
@@ -21,254 +10,360 @@ interface AdaptiveAptitudePreTestProps {
   gradient?: string;
 }
 
+const checklist = [
+  "Questions adapt in real-time based on your performance.",
+  "Each block has its own time limit — manage your pace.",
+  "Navigate freely within a block; previous blocks become read-only.",
+  "Do not refresh or navigate away during the assessment.",
+];
+
+const modules = [
+  { title: "Quantitative", desc: "Numbers & problem solving" },
+  { title: "Logical", desc: "Patterns & reasoning" },
+  { title: "Verbal", desc: "Language & comprehension" },
+];
+
 const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
   mode,
   onStart,
   onClose,
-  accentColor = "emerald",
-  gradient = "from-emerald-500 to-teal-600"
+  accentColor = '#1ED36A',
+  gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
 }) => {
   const router = useRouter();
-  const [isAdaptive, setIsAdaptive] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [blockConfig, setBlockConfig] = useState<any>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [blockConfig, setBlockConfig] = useState<{ blocksPerAssessment: number; questionsPerBlock: number } | null>(null);
+  const [assessmentId, setAssessmentId] = useState<number | null>(null);
+  const [isV2, setIsV2] = useState(false);
+  const [attemptsCount, setAttemptsCount] = useState<number>(0);
+  const [trialAttemptsLimit, setTrialAttemptsLimit] = useState<number>(5);
+  const [mainAttemptsLimit, setMainAttemptsLimit] = useState<number>(2);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   useEffect(() => {
     const checkAdaptiveMode = async () => {
       try {
         const API_BASE =
-          (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
+          (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+            ? ""
+            : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
           process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
           "";
-        const response = await fetch(`${API_BASE}/api/assessment/admin/assessments?moduleType=aptitude`);
-        
-        if (response.ok) {
-          const data = await response.json();
+
+        const [assessmentsRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/assessment/admin/assessments?moduleType=aptitude`),
+          (async () => {
+            try {
+              let activeEmail = "";
+              const storedProfile = localStorage.getItem("originbi:user-profile");
+              if (storedProfile) {
+                const parsed = JSON.parse(storedProfile);
+                if (parsed?.email) activeEmail = parsed.email;
+              }
+              if (!activeEmail) {
+                const storedUser = localStorage.getItem("user");
+                if (storedUser) {
+                  const parsed = JSON.parse(storedUser);
+                  if (parsed?.email) activeEmail = parsed.email;
+                }
+              }
+              const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+              return fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+            } catch {
+              return null;
+            }
+          })(),
+        ]);
+
+        if (assessmentsRes.ok) {
+          const data = await assessmentsRes.json();
           const aptitudeAssessment = data.data?.[0];
-          
-          if (aptitudeAssessment?.block_config?.enabled) {
-            setIsAdaptive(true);
-            setBlockConfig(aptitudeAssessment.block_config);
-          } else {
-            setIsAdaptive(false);
+
+          const isV2Adaptive = aptitudeAssessment?.adaptive_enabled === true;
+          const isV1Adaptive = aptitudeAssessment?.block_config?.enabled === true;
+          if (isV2Adaptive || isV1Adaptive) {
+            setIsV2(isV2Adaptive);
+            setAssessmentId(aptitudeAssessment.assessment_id ?? null);
+            setBlockConfig(
+              aptitudeAssessment.block_config ?? {
+                blocksPerAssessment: aptitudeAssessment.adaptive_total_blocks ?? 5,
+                questionsPerBlock: Math.ceil(
+                  (aptitudeAssessment.adaptive_total_marks ?? 45) /
+                    (aptitudeAssessment.adaptive_total_blocks ?? 5)
+                ),
+              }
+            );
           }
-        } else {
-          setIsAdaptive(false);
+
+          const tLim = aptitudeAssessment?.trial_attempts_limit;
+          const mLim = aptitudeAssessment?.main_attempts_limit;
+          if (tLim != null) setTrialAttemptsLimit(Number(tLim));
+          if (mLim != null) setMainAttemptsLimit(Number(mLim));
         }
-      } catch (error) {
-        console.error('Failed to check adaptive mode:', error);
-        setIsAdaptive(false);
+
+        if (statsRes) {
+          try {
+            const statsJson = await (statsRes as Response).json();
+            const statsData = statsJson.data || statsJson;
+            if (statsData) {
+              const stats = statsData['aptitude'] || { trial: 0, main: 0 };
+              setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+            }
+          } catch {}
+        }
+      } catch {
+        // non-fatal
       } finally {
         setIsLoading(false);
       }
     };
 
     checkAdaptiveMode();
-  }, []);
+  }, [mode]);
 
-  const handleStart = () => {
-    if (isAdaptive) {
-      // Navigate to adaptive assessment
-      router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+  const handleStart = async () => {
+    if (isV2 && assessmentId) {
+      setIsStarting(true);
+      setStartError(null);
+      try {
+        const API_BASE =
+          (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+            ? ""
+            : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
+          process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+          "";
+
+        // SECURITY: Comprehensive security check before starting
+        const securityCheck = await securityCheckBeforeStart('aptitude', mode, API_BASE);
+        
+        if (!securityCheck.canProceed) {
+          throw new Error(securityCheck.error || 'Security validation failed');
+        }
+        
+        const sanitizedMode = securityCheck.sanitizedMode;
+        const userId = getUserId();
+
+        const res = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/block-based`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assessmentCode: "TECH_APT_001", userId: userId, mode: sanitizedMode }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "Unknown error");
+          throw new Error(`Failed to start attempt: ${res.status} - ${errText}`);
+        }
+
+        const data = await res.json();
+        const token = data.attemptToken;
+        onClose();
+        router.push(`/assessment/aptitude/adaptive?v2=true&mode=${sanitizedMode}&assessmentId=${assessmentId}&attemptToken=${token}`);
+      } catch (err) {
+        setStartError((err as Error).message);
+        setIsStarting(false);
+      }
     } else {
-      // Use regular assessment
+      onClose();
       onStart(mode);
     }
-    onClose();
   };
 
-  if (isLoading) {
-    return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="bg-white dark:bg-[#111a15] rounded-2xl p-8 max-w-md w-full mx-4 border border-brand-green/20"
-          >
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-brand-green mb-4" />
-              <p className="text-sm text-slate-600 dark:text-slate-400">Checking assessment configuration...</p>
-            </div>
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
-    );
-  }
+  const blocks = blockConfig?.blocksPerAssessment ?? 5;
+  const qPerBlock = blockConfig?.questionsPerBlock ?? 9;
+  const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+  const currentAttempt = attemptsCount + 1;
+
+  const metrics = [
+    { label: "Blocks", value: `${blocks}` },
+    { label: "Questions/Block", value: `${qPerBlock}` },
+    { label: "Format", value: "Adaptive MCQ" },
+    { label: "Attempts", value: `${currentAttempt}/${limit}` },
+  ];
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        aria-hidden="true"
+      />
+
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adaptive-aptitude-pretest-title"
+        className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#111a15]"
       >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-white dark:bg-[#111a15] rounded-2xl p-8 max-w-lg w-full mx-4 border border-brand-green/20 shadow-2xl"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div 
-                className={`p-2 rounded-xl text-white ${!gradient.includes("linear-gradient") ? `bg-gradient-to-br ${gradient}` : ""}`}
-                style={gradient.includes("linear-gradient") ? { background: gradient } : {}}
-              >
-                <BookOpen className="h-6 w-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+        {/* Header */}
+        <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 sm:p-8 dark:border-white/10">
+          <div className="flex items-start gap-6">
+            <div
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg text-white"
+              style={{ background: gradient || accentColor }}
+            >
+              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+            </div>
+            <div className="flex flex-col">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2
+                  id="adaptive-aptitude-pretest-title"
+                  className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight"
+                >
                   Aptitude Assessment
                 </h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {mode === 'trial' ? 'Practice Mode' : 'Certified Assessment'}
-                </p>
+                {mode === 'trial' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 whitespace-nowrap">
+                    Trial Assessment
+                  </span>
+                )}
               </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-            </button>
-          </div>
-
-          {/* Assessment Type Indicator */}
-          {isAdaptive && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-1.5 rounded-lg bg-emerald-500 text-white">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <span className="font-semibold text-emerald-900 dark:text-emerald-100">
-                  Adaptive Assessment
-                </span>
-              </div>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                Questions will adapt to your performance level. The difficulty adjusts based on your answers to provide a personalized experience.
+              <p className="mt-2 text-sm leading-relaxed text-slate-900 dark:text-white">
+                Adaptive evaluation of quantitative reasoning, logical thinking, and verbal ability.
               </p>
-            </motion.div>
-          )}
-
-          {/* Features */}
-          <div className="space-y-4 mb-6">
-            <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 mt-0.5">
-                <Target className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white text-sm">
-                  {isAdaptive ? 'Block-Based Structure' : 'Comprehensive Coverage'}
-                </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  {isAdaptive 
-                    ? `${blockConfig?.blocksPerAssessment || 4} blocks with ${blockConfig?.questionsPerBlock || 5} questions each. Progress through adaptive difficulty levels.`
-                    : '20 questions covering quantitative aptitude, logical reasoning, and verbal ability.'
-                  }
-                </p>
-              </div>
             </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-brand-green hover:text-brand-green dark:border-white/10"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
+        </header>
 
-            <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 mt-0.5">
-                <Clock className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white text-sm">
-                  Time Management
-                </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  {isAdaptive 
-                    ? `${blockConfig?.blocksPerAssessment || 4} blocks with individual time limits for focused performance.`
-                    : '60 minutes total duration to complete all questions.'
-                  }
-                </p>
-              </div>
+        {/* Body */}
+        <div className="overflow-y-auto p-6 sm:p-8">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <svg className="h-6 w-6 animate-spin text-brand-green" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="ml-3 text-sm text-slate-500 dark:text-slate-400">
+                Checking assessment configuration...
+              </span>
             </div>
-
-            {isAdaptive && (
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 mt-0.5">
-                  <AlertCircle className="h-4 w-4" />
-                </div>
+          ) : (
+            <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
+              {/* Left column */}
+              <div className="space-y-8 order-2 lg:order-1">
                 <div>
-                  <h3 className="font-semibold text-slate-900 dark:text-white text-sm">
-                    Smart Navigation
-                  </h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                    Navigate freely within blocks. Previous blocks become read-only as you progress.
-                  </p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Core domains</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {modules.map((m) => (
+                      <div
+                        key={m.title}
+                        className="rounded-xl border p-4 dark:border-white/10 dark:bg-white/5"
+                        style={{
+                          borderColor: `${accentColor}1a`,
+                          backgroundColor: `${accentColor}0d`,
+                        }}
+                      >
+                        <p
+                          className="text-sm font-black uppercase tracking-wider mb-1"
+                          style={{ color: accentColor }}
+                        >
+                          {m.title}
+                        </p>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">{m.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Test Protocol</h3>
+                  <div className="space-y-3">
+                    {checklist.map((point) => (
+                      <div key={point} className="flex items-start gap-3">
+                        <div
+                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: accentColor }}
+                        />
+                        <p className="text-sm font-medium text-slate-900 dark:text-white">{point}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Mode-specific info */}
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-700 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              {mode === 'trial' ? (
-                <>
-                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  <span className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
-                    Practice Mode
-                  </span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="font-semibold text-emerald-900 dark:text-emerald-100 text-sm">
-                    Certified Assessment
-                  </span>
-                </>
-              )}
+              {/* Right sidebar */}
+              <aside
+                className="h-fit rounded-2xl p-6 dark:border-white/10 dark:bg-white/5 order-1 lg:order-2"
+                style={{
+                  border: `1px solid ${accentColor}1a`,
+                  backgroundColor: `${accentColor}08`,
+                }}
+              >
+                <h3
+                  className="text-sm font-bold uppercase tracking-wider mb-4"
+                  style={{ color: accentColor }}
+                >
+                  Session Stats
+                </h3>
+                <div className="space-y-4">
+                  {metrics.map((metric) => (
+                    <div
+                      key={metric.label}
+                      className="flex items-center justify-between gap-4 border-b pb-3 last:border-0 last:pb-0 dark:border-white/10"
+                      style={{ borderColor: `${accentColor}1a` }}
+                    >
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">{metric.label}</span>
+                      <strong className="text-sm font-bold text-slate-900 dark:text-white">{metric.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </aside>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              {mode === 'trial' 
-                ? 'Perfect for practice. Get familiar with the format without any pressure.'
-                : 'Official assessment attempt. Your performance will be recorded and certified.'
-              }
-            </p>
-          </div>
+          )}
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleStart}
-              className={`flex-1 px-4 py-3 rounded-xl text-white font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 ${!gradient.includes("linear-gradient") ? `bg-gradient-to-r ${gradient}` : ""}`}
-              style={gradient.includes("linear-gradient") ? { background: gradient } : {}}
-            >
-              Start Assessment
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Terms */}
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 text-center">
-            By starting, you agree to our terms and assessment guidelines.
-          </p>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+        {/* Footer */}
+        <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-6 sm:flex-row sm:items-center sm:justify-end sm:px-8 dark:border-white/10 dark:bg-transparent">
+          {startError && (
+            <p className="flex-1 text-xs text-red-500 dark:text-red-400">{startError}</p>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isStarting}
+            className="px-8 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-900 hover:opacity-80 dark:text-white dark:hover:opacity-80 transition-all disabled:opacity-50"
+          >
+            Go back
+          </button>
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={isLoading || isStarting}
+            className="rounded-lg px-10 py-3 text-[11px] font-bold uppercase tracking-wider text-white transition-all hover:opacity-90 disabled:opacity-50"
+            style={{ background: gradient || accentColor }}
+          >
+            {isStarting ? (
+              <span className="flex items-center gap-2">
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Starting...
+              </span>
+            ) : (
+              "Begin test"
+            )}
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 };
 

@@ -477,6 +477,12 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 			q.Topic = topicGroup.String
 			q.Category = category.String
 			q.Subcategory = subcategory.String
+			if q.Category == "" {
+				q.Category = topicGroup.String
+			}
+			if q.Subcategory == "" {
+				q.Subcategory = topicGroup.String
+			}
 		}
 
 		// Retrieve options

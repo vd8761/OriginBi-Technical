@@ -6,7 +6,8 @@
 -- ── 1. tech_assessments extra columns ────────────────────────────────────────
 ALTER TABLE tech_assessments
   ADD COLUMN IF NOT EXISTS block_config   JSONB DEFAULT '{"enabled":false,"blocksPerAssessment":0,"questionsPerBlock":5}'::jsonb,
-  ADD COLUMN IF NOT EXISTS adaptive_config JSONB DEFAULT '{"enabled":true,"adaptationStrategy":"performance_based"}'::jsonb;
+  ADD COLUMN IF NOT EXISTS adaptive_config JSONB DEFAULT '{"enabled":true,"adaptationStrategy":"performance_based"}'::jsonb,
+  ADD COLUMN IF NOT EXISTS adaptive_total_questions INT DEFAULT 20;
 
 -- ── 2. Block-tracking columns on aptitude junction ───────────────────────────
 ALTER TABLE tech_aptitude_attempt_questions

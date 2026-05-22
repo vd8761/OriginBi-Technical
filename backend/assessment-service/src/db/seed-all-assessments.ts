@@ -246,9 +246,9 @@ async function seedMNC(client: any, adminUserId: number) {
     for (const question of mncQuestions) {
         const mode = idx % 4 === 0 ? "trial" : "main"; // 25% trial, 75% main
         const questionResult = await client.query(
-            `INSERT INTO tech_mnc_questions (assessment_id, topic_group, difficulty, question_text, correct_option_id, marks, negative_marks, status, mode, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, 'active', $7, NOW(), NOW()) RETURNING mnc_question_id`,
-            [assessmentId, question.category, question.difficulty, question.question_text, question.marks, question.negative_marks, mode]
+            `INSERT INTO tech_mnc_questions (assessment_id, topic_group, category, subcategory, difficulty, question_text, correct_option_id, marks, negative_marks, status, mode, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, 'active', $9, NOW(), NOW()) RETURNING mnc_question_id`,
+            [assessmentId, question.category, question.category, question.category, question.difficulty, question.question_text, question.marks, question.negative_marks, mode]
         );
         const questionId = questionResult.rows[0].mnc_question_id;
         let correctOptionId: number | null = null;
