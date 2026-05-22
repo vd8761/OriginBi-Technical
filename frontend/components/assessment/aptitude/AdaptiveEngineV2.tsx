@@ -12,6 +12,7 @@ import ThemeToggle from "../../ui/ThemeToggle";
 import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
+import { NumericalQuestion } from "./question-types/NumericalQuestion";
 import {
   generateBlock, completeBlock, saveBlockAnswers, getBlockQuestions,
   submitAssessment, getAttemptStatus,
@@ -280,6 +281,19 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     const bs = blocks.get(viewingBlockNum);
     if (bs?.snapshotTaken) {
       saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: newAnswer } })
+        .catch(console.error);
+    }
+  };
+
+  const handleNumericalChange = (value: string) => {
+    if (!currentQuestion) return;
+    const cleanValue = value.replace(/\s/g, "");
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: cleanValue }));
+
+    // Auto-save to backend (fire-and-forget) for post-snapshot blocks
+    const bs = blocks.get(viewingBlockNum);
+    if (bs?.snapshotTaken) {
+      saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: cleanValue } })
         .catch(console.error);
     }
   };
@@ -603,16 +617,6 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
             </div>
             <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
               <span>Question {globalCurrentIndex + 1} of {effectiveTotalQuestions}</span>
-              <span className="text-slate-900 dark:text-white font-normal">&middot;</span>
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${difficultyColor(viewingBlock.difficulty)}`}>
-                {difficultyIcon(viewingBlock.difficulty)}
-                {viewingBlock.difficulty}
-              </span>
-              {currentQuestion && (
-                <span className="text-xs font-semibold text-slate-900 dark:text-white">
-                  {currentQuestion.marks} mark{currentQuestion.marks !== 1 ? "s" : ""}
-                </span>
-              )}
             </h1>
           </div>
         </div>
@@ -648,31 +652,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
           <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
-                  {currentQuestion?.category || "Question"}
-                </h2>
-                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                  {currentQuestion && (
-                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${difficultyColor(currentQuestion.difficulty)}`}>
-                      {difficultyIcon(currentQuestion.difficulty)}
-                      {currentQuestion.difficulty}
-                    </span>
-                  )}
-                  {currentQuestion && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300">
-                      {currentQuestion.marks} mark{currentQuestion.marks !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                  {currentQuestion && currentQuestion.negativeMarks > 0 && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
-                      -{currentQuestion.negativeMarks} negative
-                    </span>
-                  )}
-                  {currentQuestion?.subcategory && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-50 text-slate-500 dark:bg-white/5 dark:text-slate-400">
-                      {currentQuestion.subcategory}
-                    </span>
-                  )}
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {isQuestionMarked && (
                     <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
                       <div className="h-1 w-1 rounded-full bg-current" />
@@ -748,34 +728,50 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
                   )}
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {currentQuestion.options.map((option, idx) => {
-                    const kind = currentQuestion.kind;
-                    const curAns = answers[currentQuestion.id];
-                    const isSelected = Array.isArray(curAns)
-                      ? curAns.includes(option.id)
-                      : curAns === option.id;
+                {currentQuestion.kind === "numerical" && (
+                  <div className="mt-4 px-1">
+                    <p className="text-[10px] font-bold italic text-[#17201b] dark:text-white">
+                      * Note: Only exact numerical matches will be considered correct. Space is not allowed.
+                    </p>
+                  </div>
+                )}
 
-                    return (
-                      <button
-                        key={option.id}
-                        onClick={() => handleOptionSelect(option.id)}
-                        className={`group flex min-h-20 items-center gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
-                          isSelected
-                            ? "border-brand-green bg-brand-green/10"
-                            : "border-brand-green/20 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712] dark:hover:border-brand-green/50"
-                        }`}
-                      >
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${isSelected ? "bg-brand-green text-[#0f1712]" : "bg-brand-green/10 text-brand-green"}`}>
-                          {kind === "msq" && isSelected ? <Check size={18} strokeWidth={3} /> : labelForIndex(idx)}
-                        </span>
-                        <span className="text-sm font-semibold leading-6 text-[#17201b] dark:text-white">
-                          {option.text}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                {currentQuestion.kind === "numerical" ? (
+                  <NumericalQuestion
+                    questionId={currentQuestion.id}
+                    value={(answers[currentQuestion.id] as string) || ""}
+                    onChange={handleNumericalChange}
+                  />
+                ) : (
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {currentQuestion.options.map((option, idx) => {
+                      const kind = currentQuestion.kind;
+                      const curAns = answers[currentQuestion.id];
+                      const isSelected = Array.isArray(curAns)
+                        ? curAns.includes(option.id)
+                        : curAns === option.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={() => handleOptionSelect(option.id)}
+                          className={`group flex min-h-20 items-center gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
+                            isSelected
+                              ? "border-brand-green bg-brand-green/10"
+                              : "border-brand-green/20 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712] dark:hover:border-brand-green/50"
+                          }`}
+                        >
+                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${isSelected ? "bg-brand-green text-[#0f1712]" : "bg-brand-green/10 text-brand-green"}`}>
+                            {kind === "msq" && isSelected ? <Check size={18} strokeWidth={3} /> : labelForIndex(idx)}
+                          </span>
+                          <span className="text-sm font-semibold leading-6 text-[#17201b] dark:text-white">
+                            {option.text}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex items-center justify-center py-20 text-sm text-slate-500 dark:text-slate-400">
