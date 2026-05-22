@@ -59,7 +59,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'grammar_question_id',
     optionsTable: 'tech_grammar_options',
     optionsFk: 'grammar_question_id',
-    categoryColumn: 'task_type',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
   },
   coding: {
     questionTable: 'tech_coding_questions',
@@ -85,7 +86,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'grammar_question_id',
     optionsTable: 'tech_grammar_options',
     optionsFk: 'grammar_question_id',
-    categoryColumn: 'task_type',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
   },
 };
 
@@ -310,6 +312,12 @@ export class AdminQuestionService {
       const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode, data.metadata ? JSON.stringify(data.metadata) : null];
       let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11', '$12'];
 
+      if (module === 'communication' || module === 'grammar') {
+        columns.push('task_type');
+        values.push(data.taskType || 'mcq');
+        placeholders.push(`$${values.length}`);
+      }
+
       if (config.subcategoryColumn) {
         columns.push(config.subcategoryColumn);
         values.push(subcategory || 'General');
@@ -411,6 +419,10 @@ export class AdminQuestionService {
       if (mode !== undefined) { updates.push(`mode = $${pIdx++}`); params.push(mode); }
       if (imageUrl !== undefined) { updates.push(`image_url = $${pIdx++}`); params.push(imageUrl); }
       if (data.metadata !== undefined) { updates.push(`metadata = $${pIdx++}`); params.push(data.metadata ? JSON.stringify(data.metadata) : null); }
+      if (data.taskType !== undefined && (module === 'communication' || module === 'grammar')) {
+        updates.push(`task_type = $${pIdx++}`);
+        params.push(data.taskType);
+      }
 
       updates.push('updated_at = NOW()');
 
@@ -574,9 +586,16 @@ export class AdminQuestionService {
           const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial', JSON.stringify(metadata)];
           let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9', '$10'];
 
+          if (module === 'communication' || module === 'grammar') {
+            columns.push('task_type');
+            values.push(q.taskType || metadata.taskType || 'mcq');
+            placeholders.push(`$${values.length}`);
+          }
+
           if (config.subcategoryColumn) {
             columns.push(config.subcategoryColumn);
-            values.push(subcategory || category || 'General');
+            const subVal = subcategory || (module === 'communication' || module === 'grammar' ? 'General' : category) || 'General';
+            values.push(subVal);
             placeholders.push(`$${values.length}`);
           }
 

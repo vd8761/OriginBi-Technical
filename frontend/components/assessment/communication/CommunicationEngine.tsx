@@ -38,7 +38,7 @@ export interface BaseTask {
 export interface AudioTask extends BaseTask {
     type: "audio";
     audioUrl: string;
-    questions: { id: string; text: string; options: { id: string; text: string }[] }[];
+    questions: { id: string; text: string; options: { id: string; text: string }[]; metadata?: { kind?: string; [key: string]: any } }[];
 }
 
 export interface SpeakingTask extends BaseTask {
@@ -51,7 +51,7 @@ export interface SpeakingTask extends BaseTask {
 export interface ReadingTask extends BaseTask {
     type: "reading";
     passage: string;
-    questions: { id: string; text: string; options: { id: string; text: string }[] }[];
+    questions: { id: string; text: string; options: { id: string; text: string }[]; metadata?: { kind?: string; [key: string]: any } }[];
 }
 
 export interface WritingTask extends BaseTask {
@@ -63,11 +63,11 @@ export interface WritingTask extends BaseTask {
 
 export interface McqTask extends BaseTask {
     type: "mcq";
-    questions: { id: string; text: string; options: { id: string; text: string }[] }[];
+    questions: { id: string; text: string; options: { id: string; text: string }[]; metadata?: { kind?: string; [key: string]: any } }[];
 }
 
 export type AssessmentTask = AudioTask | SpeakingTask | ReadingTask | WritingTask | McqTask;
-export type CommunicationAnswer = Record<string, string> | { audioBlobUrl: string } | { text: string };
+export type CommunicationAnswer = Record<string, string | string[]> | { audioBlobUrl: string } | { text: string };
 export type CommunicationAnswers = Partial<Record<string, CommunicationAnswer>>;
 
 export interface AttemptSubmitResult {
@@ -111,7 +111,11 @@ const formatTime = (seconds: number) => {
 const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | undefined) => {
     if (!answer) return false;
     if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
-        return (task as any).questions?.every((question: any) => Boolean((answer as Record<string, string>)[question.id]));
+        return (task as any).questions?.every((question: any) => {
+            const ans = (answer as Record<string, any>)[question.id];
+            if (Array.isArray(ans)) return ans.length > 0;
+            return Boolean(ans);
+        });
     }
     if (task.type === "speaking") {
         return "audioBlobUrl" in answer && Boolean(answer.audioBlobUrl);
@@ -328,7 +332,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
             return {
                 ...base,
                 audioUrl: q.audioUrl ?? q.audio_url ?? "",
-                questions: [{ id, text: questionText, options }],
+                questions: [{ id, text: questionText, options, metadata: q.metadata || {} }],
             } as AudioTask;
         }
 
@@ -336,7 +340,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
             return {
                 ...base,
                 passage: q.passage ?? q.passageText ?? q.passage_text ?? "",
-                questions: [{ id, text: questionText, options }],
+                questions: [{ id, text: questionText, options, metadata: q.metadata || {} }],
             } as ReadingTask;
         }
 
@@ -362,7 +366,7 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 
         return {
             ...base,
-            questions: [{ id, text: questionText, options }],
+            questions: [{ id, text: questionText, options, metadata: q.metadata || {} }],
         } as McqTask;
     });
 
@@ -371,13 +375,16 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
 
         items.forEach((task) => {
             if (task.type === "audio" || task.type === "reading" || task.type === "mcq") {
-                const map: Record<string, string> = {};
+                const map: Record<string, string | string[]> = {};
                 task.questions.forEach((question) => {
                     const val = serverAnswers[question.id];
                     if (val && typeof val === "object" && "optionId" in val && (val as any).optionId) {
-                        map[question.id] = String((val as any).optionId);
+                        const optVal = (val as any).optionId;
+                        map[question.id] = Array.isArray(optVal) ? optVal.map(String) : String(optVal);
                     } else if (typeof val === "string" || typeof val === "number") {
                         map[question.id] = String(val);
+                    } else if (Array.isArray(val)) {
+                        map[question.id] = val.map(String);
                     }
                 });
                 if (Object.keys(map).length > 0) {
@@ -740,8 +747,8 @@ const CommunicationEngine: React.FC<CommunicationEngineProps> = ({
                 return (
                     <McqTaskComponent
                         task={currentTask}
-                        value={answers[currentTask.id] as Record<string, string> | undefined}
-                        onChange={(value: Record<string, string>) => updateAnswer(currentTask.id, value)}
+                        value={answers[currentTask.id] as Record<string, string | string[]> | undefined}
+                        onChange={(value: Record<string, string | string[]>) => updateAnswer(currentTask.id, value)}
                     />
                 );
             default:
