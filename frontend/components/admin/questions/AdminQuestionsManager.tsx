@@ -588,6 +588,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         setLoading(true);
         const payload = {
           ...frontendToPayload(selectedModule!, q),
+          assessmentId: q.assessmentId || activeAssessment?.assessment_id || undefined,
           mode
         };
         if (isExisting && !qId.startsWith("new-")) {
@@ -641,9 +642,10 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         setLoading(true);
         const payloads = imported.map(q => ({
           ...frontendToPayload(selectedModule!, q),
+          assessmentId: activeAssessment?.assessment_id || undefined,
           mode
         }));
-        const res = await bulkImportQuestions(selectedModule!, payloads);
+        const res = await bulkImportQuestions(selectedModule!, payloads, activeAssessment?.assessment_id || undefined);
         showToast(`Imported ${res.imported} questions`);
         await loadQuestionsForModule(selectedModule!, mode);
         await refreshModuleCounts(selectedModule!);
