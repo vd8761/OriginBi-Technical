@@ -325,14 +325,27 @@ export class AdaptiveController {
       }
     }
 
-    const block = await this.generator.generateBlock({
-      assessmentId: dto.assessmentId,
-      blockNumber: dto.blockNumber,
-      userId: dto.userId,
-      mode: dto.mode ?? 'main',
-      attemptToken: dto.attemptToken,
-      targetDifficulty,
-    });
+    let block;
+    try {
+      block = await this.generator.generateBlock({
+        assessmentId: dto.assessmentId,
+        blockNumber: dto.blockNumber,
+        userId: dto.userId,
+        mode: dto.mode ?? 'main',
+        attemptToken: dto.attemptToken,
+        targetDifficulty,
+      });
+    } catch (e: any) {
+      this.logger.error(
+        `generateBlock failed: assessment=${dto.assessmentId} block=${dto.blockNumber} user=${dto.userId} token=${dto.attemptToken} err=${e.message}`,
+        e.stack,
+      );
+      if (e.status) throw e; // Re-throw NestJS HTTP exceptions as-is
+      throw new BadRequestException(
+        `Failed to generate block ${dto.blockNumber} for assessment ${dto.assessmentId}. ` +
+        `Ensure the assessment has active questions and the blueprint is ready. Detail: ${e.message}`,
+      );
+    }
 
     return { success: true, block };
   }
@@ -364,13 +377,25 @@ export class AdaptiveController {
     );
     const secondsPerMark = Number(bpRows[0]?.seconds_per_mark ?? 45);
 
-    const result = await this.snapshot.writeSnapshot(
-      dto.attemptToken,
-      dto.blockNumber,
-      dto.answers ?? {},
-      dto.questionTiming ?? {},
-      secondsPerMark,
-    );
+    let result;
+    try {
+      result = await this.snapshot.writeSnapshot(
+        dto.attemptToken,
+        dto.blockNumber,
+        dto.answers ?? {},
+        dto.questionTiming ?? {},
+        secondsPerMark,
+      );
+    } catch (e: any) {
+      this.logger.error(
+        `writeSnapshot failed: token=${dto.attemptToken} block=${dto.blockNumber} err=${e.message}`,
+        e.stack,
+      );
+      if (e.status) throw e;
+      throw new BadRequestException(
+        `Failed to complete block ${dto.blockNumber}. Detail: ${e.message}`,
+      );
+    }
 
     return {
       success: true,
@@ -416,14 +441,26 @@ export class AdaptiveController {
     const bn = parseInt(blockNumber);
     if (isNaN(bn)) throw new BadRequestException('Invalid block number');
 
-    const rawQuestions = await this.snapshot.loadBlockQuestions(attemptToken, bn);
+    let rawQuestions: any[];
+    try {
+      rawQuestions = await this.snapshot.loadBlockQuestions(attemptToken, bn);
+    } catch (e: any) {
+      this.logger.error(`loadBlockQuestions failed: ${e.message}`, e.stack);
+      if (e.status === 404 || e instanceof NotFoundException) throw e;
+      if (e.status === 400 || e instanceof BadRequestException) throw e;
+      throw new NotFoundException(
+        `Block data could not be loaded for attempt ${attemptToken}, block ${bn}. ` +
+        `Ensure the attempt exists and all required migrations have been run. Detail: ${e.message}`,
+      );
+    }
+
     const baRows = await this.dataSource.query(
       `SELECT difficulty_achieved, status, snapshot_taken,
               marks_score, block_readiness_score, next_block_difficulty
        FROM block_attempts WHERE attempt_token=$1 AND block_number=$2`,
       [attemptToken, bn],
     );
-    if (!baRows.length) throw new NotFoundException(`Block ${bn} not found`);
+    if (!baRows.length) throw new NotFoundException(`Block ${bn} not found for attempt ${attemptToken}`);
 
     // Map to the AdaptiveQuestion shape the frontend expects
     const questions = rawQuestions.map(q => ({
