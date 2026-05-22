@@ -199,6 +199,8 @@ export function usePaidAssessments() {
                 writeSet(VISIBLE_KEY, VISIBLE_EVENT, visible);
                 setVisibleLocal(visible);
             }
+        } catch {
+            // Silence or log, already handled by fetchServerEntitlements
         } finally {
             // Always flip the readiness flag — otherwise downstream
             // `visibleExams` stays empty forever and the Explore / Library
@@ -206,16 +208,6 @@ export function usePaidAssessments() {
             // to whatever's in localStorage rather than block UI.
             setIsEntitlementsReady(true);
         }
-        const entitlements = await fetchServerEntitlements();
-        entitlements.paid.forEach((key) => next.add(key));
-        writeSet(PAID_KEY, PAID_EVENT, next);
-        setLocal(next);
-
-        if (entitlements.visible.size > 0) {
-            writeSet(VISIBLE_KEY, VISIBLE_EVENT, entitlements.visible);
-            setVisibleLocal(entitlements.visible);
-        }
-        setIsEntitlementsReady(true);
     }, []);
 
     useEffect(() => {
@@ -286,7 +278,6 @@ export function usePaidAssessments() {
                 return;
             }
             try {
-                const { paid: serverPaid } = await fetchServerEntitlements();
                 const entitlements = await fetchServerEntitlements();
                 if (cancelled) return;
                 const current = readSet(PAID_KEY);
