@@ -185,8 +185,16 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       }
     };
 
+    const handleSessionExpired = () => {
+      logout();
+    };
+
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    window.addEventListener("originbi:session-expired", handleSessionExpired);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("originbi:session-expired", handleSessionExpired);
+    };
   }, [logout]);
 
   const login = (accessToken: string, idToken: string, profile: UserProfile) => {

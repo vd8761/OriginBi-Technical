@@ -355,6 +355,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     return CODING_LANGUAGES.some((lang) => isPaid(`coding:${lang.id}` as PaymentKey));
   }, [visibleExams, isPaid, paidAssignments]);
 
+  const isDataLoading = !isEntitlementsReady || paidAssignments === null;
+
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);
   };
@@ -684,7 +686,56 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             </div>
 
-            {!hasPurchasedAny ? (
+            {isDataLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-3xl p-6 flex flex-col h-full animate-pulse"
+                  >
+                    <div className="flex gap-4 mb-4">
+                      {/* Left: Icon Skeleton */}
+                      <div className="shrink-0 w-14 h-14 rounded-2xl bg-slate-200 dark:bg-white/10" />
+                      {/* Title Skeleton */}
+                      <div className="flex-1 flex items-center">
+                        <div className="h-5 w-2/3 bg-slate-200 dark:bg-white/10 rounded-lg" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col">
+                      {/* Description lines */}
+                      <div className="h-4 w-full bg-slate-200 dark:bg-white/10 rounded-lg mb-2" />
+                      <div className="h-4 w-5/6 bg-slate-200 dark:bg-white/10 rounded-lg mb-4" />
+                      
+                      {/* Stats Row */}
+                      <div className="flex items-center gap-5 mb-4">
+                        {[1, 2, 3].map((j) => (
+                          <div key={j} className="flex flex-col gap-1.5">
+                            <div className="h-2.5 w-12 bg-slate-200 dark:bg-white/10 rounded" />
+                            <div className="h-4 w-16 bg-slate-200 dark:bg-white/10 rounded" />
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-2 mb-6 mt-auto">
+                        <div className="h-5 w-12 bg-slate-200 dark:bg-white/10 rounded-md" />
+                        <div className="h-5 w-16 bg-slate-200 dark:bg-white/10 rounded-md" />
+                      </div>
+                    </div>
+                    
+                    {/* Separator */}
+                    <div className="h-[1px] w-full bg-black/10 dark:bg-white/10 mb-5" />
+                    
+                    {/* Bottom buttons */}
+                    <div className="flex justify-end gap-2">
+                      <div className="h-8 w-16 bg-slate-200 dark:bg-white/10 rounded-full" />
+                      <div className="h-8 w-24 bg-slate-200 dark:bg-white/10 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !hasPurchasedAny ? (
               <div className="flex flex-col items-center justify-center text-center p-8 sm:p-16 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111a15] max-w-2xl mx-auto my-12 relative overflow-hidden">
                 <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[#1ED36A] mb-8">
                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

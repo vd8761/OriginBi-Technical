@@ -606,12 +606,12 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     if (ok) {
       return apiFetch<T>(path, { ...init, _retried: true });
     }
-    // Refresh failed — only clear tokens for the authoritative auth endpoints.
-    // Do NOT clear admin tokens for plugin/package/dashboard calls that happen
-    // to return 401 (e.g. exam-engine endpoints the admin doesn't have access
-    // to). Clearing admin tokens on those would log the admin out immediately.
-    if (path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+    // Refresh failed — clear tokens.
+    if (tokenScope === "user" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
       clearTokens(tokenScope);
+      if (tokenScope === "user" && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("originbi:session-expired"));
+      }
     }
   }
 
@@ -620,8 +620,11 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
   // every admin API call. Plugin/package/dashboard endpoints returning 401
   // should surface as errors in the UI, not trigger a logout.
   if (res.status === 401 && auth && typeof window !== "undefined") {
-    if (path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+    if (tokenScope === "user" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
       clearTokens(tokenScope);
+      if (tokenScope === "user") {
+        window.dispatchEvent(new CustomEvent("originbi:session-expired"));
+      }
       if (tokenScope === "admin") {
         if (window.location.pathname.startsWith("/admin") &&
             !window.location.pathname.startsWith("/admin/login")) {
@@ -892,6 +895,9 @@ export async function listAssignments(): Promise<AssignmentListResponse> {
   if (!HAS_EXAM_API) {
     return { assignments: [] };
   }
+  if (!getAccessToken("user")) {
+    return { assignments: [] };
+  }
   return apiFetch<AssignmentListResponse>("/v1/me/assignments");
 }
 
@@ -1067,6 +1073,9 @@ export async function getPluginDependents(
 // ── Candidate-side: language entitlements ─────────────────────────────────
 
 export async function listMyLanguages(): Promise<{ languages: MeLanguage[] }> {
+  if (!getAccessToken("user")) {
+    return { languages: [] };
+  }
   return apiFetch<{ languages: MeLanguage[] }>("/v1/me/languages");
 }
 

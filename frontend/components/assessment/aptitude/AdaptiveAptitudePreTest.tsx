@@ -59,7 +59,7 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
           "";
 
         const [assessmentsRes, statsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/assessment/admin/assessments?moduleType=aptitude`),
+          fetch(`${API_BASE}/api/assessment/admin/assessments?module=aptitude`),
           (async () => {
             try {
               let activeEmail = "";
@@ -85,7 +85,9 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
 
         if (assessmentsRes.ok) {
           const data = await assessmentsRes.json();
-          const aptitudeAssessment = data.data?.[0];
+          const aptitudeAssessment = data.data?.find(
+            (a: any) => a.module_type === "aptitude" || a.assessment_code === "TECH_APT_001"
+          ) || data.data?.[0];
 
           const isV2Adaptive = aptitudeAssessment?.adaptive_enabled === true;
           const isV1Adaptive = aptitudeAssessment?.block_config?.enabled === true;
