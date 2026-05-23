@@ -24,12 +24,15 @@ ALTER TABLE tech_aptitude_questions
 ALTER TABLE tech_grammar_questions
   ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'General',
   ADD COLUMN IF NOT EXISTS metadata JSONB,
-  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial';
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial',
+  ADD COLUMN IF NOT EXISTS image_url TEXT,
+  ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
 
 -- 4. tech_mnc_questions columns
 ALTER TABLE tech_mnc_questions
   ADD COLUMN IF NOT EXISTS metadata JSONB,
-  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial';
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial',
+  ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- 5. tech_role_questions columns
 ALTER TABLE tech_role_questions
@@ -40,3 +43,53 @@ ALTER TABLE tech_role_questions
 ALTER TABLE tech_coding_questions
   ADD COLUMN IF NOT EXISTS metadata JSONB,
   ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial';
+
+-- 7. attempts tables (metadata and mode)
+ALTER TABLE tech_aptitude_attempts
+  ADD COLUMN IF NOT EXISTS metadata JSONB,
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'main';
+
+ALTER TABLE tech_grammar_attempts
+  ADD COLUMN IF NOT EXISTS metadata JSONB,
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'main';
+
+ALTER TABLE tech_mnc_attempts
+  ADD COLUMN IF NOT EXISTS metadata JSONB,
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'main';
+
+ALTER TABLE tech_role_attempts
+  ADD COLUMN IF NOT EXISTS metadata JSONB,
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'main';
+
+ALTER TABLE tech_coding_attempts
+  ADD COLUMN IF NOT EXISTS metadata JSONB,
+  ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'main';
+
+-- 8. attempt_questions and attempt_options metadata columns
+ALTER TABLE tech_coding_attempt_questions
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_aptitude_attempt_question_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_grammar_attempt_question_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_mnc_attempt_question_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_role_attempt_question_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+-- 9. options tables metadata columns
+ALTER TABLE tech_aptitude_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_grammar_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_mnc_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+ALTER TABLE tech_role_options
+  ADD COLUMN IF NOT EXISTS metadata JSONB;
