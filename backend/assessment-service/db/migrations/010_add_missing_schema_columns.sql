@@ -39,10 +39,16 @@ ALTER TABLE tech_role_questions
   ADD COLUMN IF NOT EXISTS metadata JSONB,
   ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial';
 
+ALTER TABLE tech_role_questions
+  ALTER COLUMN mode SET NOT NULL;
+
 -- 6. tech_coding_questions columns
 ALTER TABLE tech_coding_questions
   ADD COLUMN IF NOT EXISTS metadata JSONB,
   ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'trial';
+
+ALTER TABLE tech_coding_questions
+  ALTER COLUMN mode SET NOT NULL;
 
 -- 7. attempts tables (metadata and mode)
 ALTER TABLE tech_aptitude_attempts
