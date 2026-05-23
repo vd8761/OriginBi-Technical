@@ -24,6 +24,7 @@ interface ExploreViewProps {
     assessments: ExploreExam[];
     examDetails: Record<string, ExamDetail>;
     onNavigateToDetails: (assessment: ExploreExam) => void;
+    isLoading?: boolean;
 }
 
 const TRACK_META: Record<Track, { label: string; description: string; accent: string }> = {
@@ -53,7 +54,7 @@ const FILTER_PILLS: { value: ExploreFilter; label: string }[] = [
 
 const TRACK_ORDER: Track[] = ['core', 'technical', 'career'];
 
-const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onNavigateToDetails }) => {
+const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onNavigateToDetails, isLoading = false }) => {
     const [filter, setFilter] = useState<ExploreFilter>('all');
     const [assignments, setAssignments] = useState<Assignment[]>([]);
     const { isPaid } = usePaidAssessments();
@@ -116,48 +117,82 @@ const ExploreView: React.FC<ExploreViewProps> = ({ assessments, examDetails, onN
 
             {/* Track sections */}
             <div className="flex flex-col gap-14">
-                {visibleTracks.map((track) => {
-                    const exams = grouped[track];
-                    if (!exams || exams.length === 0) return null;
-                    const meta = TRACK_META[track];
-                    return (
-                        <section key={track} className="flex flex-col gap-6">
-                            <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-3">
-                                    <span
-                                        className="h-2.5 w-2.5 rounded-full"
-                                        style={{ background: meta.accent }}
-                                    />
-                                    <h2 className="text-[18px] font-bold text-black dark:text-white tracking-tight">
-                                        {meta.label}
-                                    </h2>
-                                    <span className="text-[12px] font-medium text-black dark:text-white">
-                                        {exams.length} {exams.length === 1 ? 'assessment' : 'assessments'}
-                                    </span>
-                                </div>
-                                <p className="text-[13px] text-black dark:text-white leading-relaxed">
-                                    {meta.description}
-                                </p>
-                            </div>
-
-                            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                                {exams.map((exam) => {
-                                    const paidStatus = computePaidStatus(exam.id, isPaid, assignments);
-                                    return (
-                                        <ExploreAssessmentCard
-                                            key={exam.id}
-                                            exam={exam}
-                                            outcomes={examDetails[exam.id]?.outcomes ?? []}
-                                            focus={examDetails[exam.id]?.focus}
-                                            paidStatus={paidStatus}
-                                            onKnowMore={() => onNavigateToDetails(exam)}
+                {isLoading ? (
+                    visibleTracks.map((track) => {
+                        const meta = TRACK_META[track];
+                        const count = track === 'core' ? 2 : track === 'technical' ? 1 : 2;
+                        return (
+                            <section key={track} className="flex flex-col gap-6">
+                                <div className="flex flex-col gap-1.5 animate-pulse">
+                                    <div className="flex items-center gap-3">
+                                        <span
+                                            className="h-2.5 w-2.5 rounded-full"
+                                            style={{ background: meta.accent }}
                                         />
-                                    );
-                                })}
-                            </div>
-                        </section>
-                    );
-                })}
+                                        <h2 className="text-[18px] font-bold text-black dark:text-white tracking-tight">
+                                            {meta.label}
+                                        </h2>
+                                        <span className="text-[12px] font-medium text-black dark:text-white">
+                                            Loading...
+                                        </span>
+                                    </div>
+                                    <p className="text-[13px] text-black dark:text-white leading-relaxed">
+                                        {meta.description}
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                                    {Array.from({ length: count }).map((_, idx) => (
+                                        <ExploreAssessmentCardSkeleton key={idx} />
+                                    ))}
+                                </div>
+                            </section>
+                        );
+                    })
+                ) : (
+                    visibleTracks.map((track) => {
+                        const exams = grouped[track];
+                        if (!exams || exams.length === 0) return null;
+                        const meta = TRACK_META[track];
+                        return (
+                            <section key={track} className="flex flex-col gap-6">
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-3">
+                                        <span
+                                            className="h-2.5 w-2.5 rounded-full"
+                                            style={{ background: meta.accent }}
+                                        />
+                                        <h2 className="text-[18px] font-bold text-black dark:text-white tracking-tight">
+                                            {meta.label}
+                                        </h2>
+                                        <span className="text-[12px] font-medium text-black dark:text-white">
+                                            {exams.length} {exams.length === 1 ? 'assessment' : 'assessments'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[13px] text-black dark:text-white leading-relaxed">
+                                        {meta.description}
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                                    {exams.map((exam) => {
+                                        const paidStatus = computePaidStatus(exam.id, isPaid, assignments);
+                                        return (
+                                            <ExploreAssessmentCard
+                                                key={exam.id}
+                                                exam={exam}
+                                                outcomes={examDetails[exam.id]?.outcomes ?? []}
+                                                focus={examDetails[exam.id]?.focus}
+                                                paidStatus={paidStatus}
+                                                onKnowMore={() => onNavigateToDetails(exam)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        );
+                    })
+                )}
             </div>
 
             {/* Why these assessments */}
@@ -352,5 +387,55 @@ const WhyItem: React.FC<{ title: string; description: string }> = ({ title, desc
         </p>
     </div>
 );
+
+const ExploreAssessmentCardSkeleton: React.FC = () => {
+    return (
+        <div className="relative flex flex-col rounded-3xl border bg-white/80 dark:bg-white/[0.04] backdrop-blur-xl border-slate-200/70 dark:border-white/[0.08] p-6 min-h-[380px]">
+            {/* Top: icon + status */}
+            <div className="flex items-start justify-between mb-5">
+                <div className="h-14 w-14 rounded-2xl bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                <div className="h-6 w-20 rounded-full bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+            </div>
+
+            {/* Title + one-line focus */}
+            <div className="h-7 w-2/3 rounded-lg bg-slate-200/60 dark:bg-white/[0.06] animate-pulse mb-4" />
+            <div className="space-y-2 mb-5">
+                <div className="h-4 w-full rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                <div className="h-4 w-5/6 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+            </div>
+
+            {/* Tags */}
+            <div className="flex flex-wrap gap-1.5 mb-6">
+                <div className="h-5 w-16 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                <div className="h-5 w-14 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                <div className="h-5 w-20 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+            </div>
+
+            {/* How this helps */}
+            <div className="mb-6">
+                <div className="h-3 w-28 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse mb-3" />
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                        <div className="h-3 w-40 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                        <div className="h-3 w-32 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Meta + CTA */}
+            <div className="mt-auto flex items-center justify-between pt-5 border-t border-slate-200/60 dark:border-white/[0.06]">
+                <div className="space-y-1">
+                    <div className="h-3.5 w-20 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                    <div className="h-3 w-14 rounded bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+                </div>
+                <div className="h-8 w-24 rounded-full bg-slate-200/60 dark:bg-white/[0.06] animate-pulse" />
+            </div>
+        </div>
+    );
+};
 
 export default ExploreView;

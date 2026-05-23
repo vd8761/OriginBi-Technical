@@ -11,6 +11,7 @@ import { usePaidAssessments } from "@/lib/payments";
 export default function ExplorePage() {
   const router = useRouter();
   const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
+  const [isAssessmentsLoading, setIsAssessmentsLoading] = useState(true);
   const { isVisible, isEntitlementsReady } = usePaidAssessments();
 
   useEffect(() => {
@@ -19,13 +20,20 @@ export default function ExplorePage() {
       try {
         const apiBase = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) || "";
         const response = await fetch(`${apiBase}/api/assessment/admin/assessments`);
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (active) setIsAssessmentsLoading(false);
+          return;
+        }
         const json = await response.json();
         if (json && json.data && active) {
           setAssessmentsList(json.data);
         }
       } catch (err) {
         console.warn("Failed to fetch database assessments in explore view:", err);
+      } finally {
+        if (active) {
+          setIsAssessmentsLoading(false);
+        }
       }
     };
     fetchAll();
@@ -33,6 +41,8 @@ export default function ExplorePage() {
       active = false;
     };
   }, []);
+
+  const isLoading = isAssessmentsLoading || !isEntitlementsReady;
 
   const dynamicExams = useMemo(() => {
     const mapped = EXAMS.map((exam) => {
@@ -123,6 +133,7 @@ export default function ExplorePage() {
           assessments={visibleExams as any}
           examDetails={EXAM_DETAILS as any}
           onNavigateToDetails={handleNavigateToDetails}
+          isLoading={isLoading}
         />
       </main>
     </div>
