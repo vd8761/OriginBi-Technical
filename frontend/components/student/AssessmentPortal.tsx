@@ -125,7 +125,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
 
         const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-        if (!TECH_API_BASE) return;
+        if (TECH_API_BASE === undefined) return;
         const response = await fetch(`${TECH_API_BASE}/api/assessment/attempts-stats${emailParam}`);
         if (!response.ok) return;
         const json = await response.json();
@@ -173,7 +173,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
 
         const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-        if (!TECH_API_BASE) return;
+        if (TECH_API_BASE === undefined) return;
         const response = await fetch(`${TECH_API_BASE}/api/assessment/in-progress${emailParam}`);
         if (!response.ok) {
           if (active) setInProgressAttempt(null);
@@ -197,7 +197,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   useEffect(() => {
     let active = true;
     const fetchAll = async () => {
-      if (!LEGACY_TECH_API_URL) return;
+      if (LEGACY_TECH_API_URL === undefined) return;
       try {
         const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`);
         if (!response.ok) return;
