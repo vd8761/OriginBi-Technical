@@ -516,14 +516,14 @@ export class AdaptiveSnapshotService {
     const { attemptId, moduleType, cfg } = await this.resolveAttempt(attemptToken);
     if (!cfg) throw new BadRequestException('Module not supported');
 
-    // Verify block was already snapshotted
-    const snap = await this.dataSource.query(
-      `SELECT snapshot_id FROM block_snapshots WHERE attempt_token=$1 AND block_number=$2`,
+    // Verify block has been unlocked / generated
+    const attempt = await this.dataSource.query(
+      `SELECT block_attempt_id FROM block_attempts WHERE attempt_token=$1 AND block_number=$2`,
       [attemptToken, blockNumber],
     );
-    if (!snap.length) {
+    if (!attempt.length) {
       throw new BadRequestException(
-        `Block ${blockNumber} has not been completed yet. Complete the block first.`,
+        `Block ${blockNumber} has not been unlocked yet.`,
       );
     }
 
