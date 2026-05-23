@@ -488,9 +488,16 @@ export class AdaptiveController {
     const asmRows = await this.dataSource.query(
       `SELECT a.adaptive_total_questions, a.adaptive_total_blocks
        FROM tech_assessments a
-       JOIN block_attempts ba ON ba.assessment_id = a.assessment_id
-       WHERE ba.attempt_token = $1
-       LIMIT 1`,
+       WHERE a.assessment_id = (
+         SELECT assessment_id FROM tech_aptitude_attempts WHERE attempt_token = $1
+         UNION ALL
+         SELECT assessment_id FROM tech_grammar_attempts WHERE attempt_token = $1
+         UNION ALL
+         SELECT assessment_id FROM tech_mnc_attempts WHERE attempt_token = $1
+         UNION ALL
+         SELECT assessment_id FROM tech_role_attempts WHERE attempt_token = $1
+         LIMIT 1
+       )`,
       [attemptToken],
     );
     const totalBlocks = Math.max(1, Number(asmRows[0]?.adaptive_total_blocks ?? 1));
