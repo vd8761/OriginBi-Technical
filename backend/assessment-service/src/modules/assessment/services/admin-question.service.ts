@@ -837,9 +837,9 @@ export class AdminQuestionService {
          SET assessment_name = COALESCE($1, assessment_name),
              total_time_minutes = COALESCE($2, total_time_minutes),
              question_limit = COALESCE($3, question_limit),
-             categories = COALESCE($4, categories),
-             difficulty_marks = COALESCE($5, difficulty_marks),
-             difficulty_negative_marks = COALESCE($6, difficulty_negative_marks),
+             categories = COALESCE($4::jsonb, categories),
+             difficulty_marks = COALESCE($5::jsonb, difficulty_marks),
+             difficulty_negative_marks = COALESCE($6::jsonb, difficulty_negative_marks),
              tab_switch_limit = COALESCE($7, tab_switch_limit),
              anti_copy_enabled = COALESCE($8, anti_copy_enabled),
              shuffle_questions = COALESCE($9, shuffle_questions),
@@ -847,7 +847,7 @@ export class AdminQuestionService {
              amount = COALESCE($11, amount),
              trial_attempts_limit = COALESCE($12, trial_attempts_limit),
              main_attempts_limit = COALESCE($13, main_attempts_limit),
-             enabled_question_types = COALESCE($14, enabled_question_types),
+             enabled_question_types = COALESCE($14::jsonb, enabled_question_types),
              proctoring_require_fullscreen = COALESCE($16, proctoring_require_fullscreen),
              fullscreen_exit_limit = COALESCE($17, fullscreen_exit_limit),
              proctoring_block_devtools = COALESCE($18, proctoring_block_devtools),
@@ -922,6 +922,9 @@ export class AdminQuestionService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`updateAssessment (${id}) error:`, error);
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to update assessment configurations');
     } finally {
       await queryRunner.release();
