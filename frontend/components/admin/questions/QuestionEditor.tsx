@@ -376,8 +376,14 @@ export default function QuestionEditor({
           break;
         case "communication":
           onSave({
-            ...common, taskType: commTaskType, instructions: commInstructions.trim(),
-            category: commCategory.trim(), subcategory: commSubCategory.trim(),
+            ...common,
+            taskType: commTaskType,
+            instructions: commInstructions.trim(),
+            category: commCategory.trim(),
+            subcategory: commSubCategory.trim(),
+            text: text.trim(),
+            options: options.filter(o => o.text.trim()),
+            correctOptionId: correctId,
             ...(finalAudioUrl ? { audioUrl: finalAudioUrl } : {}),
             ...(commPassage ? { passage: commPassage } : {}),
             ...(commPrompt ? { prompt: commPrompt } : {}),
