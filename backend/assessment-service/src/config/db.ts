@@ -13,6 +13,7 @@ const pool = new Pool({
     database: process.env.DB_NAME || "obidatanew",
     max: 10,
     idleTimeoutMillis: 30000,
+    ssl: process.env.DB_HOST !== "localhost" && process.env.DB_HOST !== "127.0.0.1" ? { rejectUnauthorized: false } : false,
 });
 
 export const testConnection = async () => {
