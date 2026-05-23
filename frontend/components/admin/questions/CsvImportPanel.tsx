@@ -724,6 +724,7 @@ export default function CsvImportPanel({
     step: string;
     progress: number;
     total: number;
+    unit?: "rows" | "percent";
   }>({ active: false, step: "", progress: 0, total: 0 });
 
   // Dynamic Validation Map (Question ID -> Validation Errors)
@@ -765,7 +766,7 @@ export default function CsvImportPanel({
 
   const handleCsvParsing = useCallback(async (text: string) => {
     setErrorMsg(null);
-    setProcessing({ active: true, step: "Parsing CSV structure...", progress: 0, total: 0 });
+    setProcessing({ active: true, step: "Parsing CSV structure...", progress: 0, total: 0, unit: "rows" });
 
     // Yield to the UI so the overlay renders before heavy work starts
     await new Promise(resolve => requestAnimationFrame(resolve));
@@ -777,7 +778,7 @@ export default function CsvImportPanel({
       }
 
       const totalDataRows = parsed.length - 1;
-      setProcessing({ active: true, step: "Mapping question fields...", progress: 0, total: totalDataRows });
+      setProcessing({ active: true, step: "Mapping question fields...", progress: 0, total: totalDataRows, unit: "rows" });
       await new Promise(resolve => requestAnimationFrame(resolve));
 
       // Process in chunks to keep UI responsive
@@ -798,6 +799,7 @@ export default function CsvImportPanel({
           step: `Processing questions (${processed.toLocaleString()} / ${totalDataRows.toLocaleString()})...`,
           progress: processed,
           total: totalDataRows,
+          unit: "rows",
         });
 
         // Yield to the browser to repaint progress
@@ -808,7 +810,7 @@ export default function CsvImportPanel({
         throw new Error("No valid question records could be resolved from CSV.");
       }
 
-      setProcessing({ active: true, step: "Running validations...", progress: totalDataRows, total: totalDataRows });
+      setProcessing({ active: true, step: "Running validations...", progress: totalDataRows, total: totalDataRows, unit: "rows" });
       await new Promise(resolve => requestAnimationFrame(resolve));
 
       setQuestions(allMapped);
@@ -922,7 +924,8 @@ export default function CsvImportPanel({
       active: true,
       step: `Preparing ${questions.length.toLocaleString()} questions for database ingestion...`,
       progress: 10,
-      total: 100
+      total: 100,
+      unit: "percent"
     });
 
     try {
@@ -933,7 +936,8 @@ export default function CsvImportPanel({
         active: true,
         step: `Ingesting questions into the database... Please do not close this tab.`,
         progress: 50,
-        total: 100
+        total: 100,
+        unit: "percent"
       });
 
       await onImport(questions);
@@ -942,7 +946,8 @@ export default function CsvImportPanel({
         active: true,
         step: "Refreshing assessment configuration and inventory...",
         progress: 95,
-        total: 100
+        total: 100,
+        unit: "percent"
       });
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (err) {
@@ -1000,7 +1005,11 @@ export default function CsvImportPanel({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-white/30">
-                    {processing.progress.toLocaleString()} / {processing.total.toLocaleString()} rows
+                    {processing.unit === "percent" ? (
+                      ""
+                    ) : (
+                      `${processing.progress.toLocaleString()} / ${processing.total.toLocaleString()} rows`
+                    )}
                   </span>
                   <span className="text-[10px] font-black text-brand-green">
                     {Math.round((processing.progress / processing.total) * 100)}%
