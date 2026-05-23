@@ -39,7 +39,7 @@ func (s *Server) listAssignments(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT a.id,
 		       COALESCE(a.assignment_ref, ''),
-		       COALESCE(pi.item_ref, a.assignment_ref, ''),
+		       COALESCE(a.assignment_ref, ''),
 		       a.status::text,
 		       a.exam_version_id,
 		       a.available_from,
@@ -54,7 +54,6 @@ func (s *Server) listAssignments(w http.ResponseWriter, r *http.Request) {
 		             AND done.status IN ('submitted','timed_out','under_review','evaluated','published')
 		       ) AS completed
 		FROM exam_assignments a
-		LEFT JOIN pricing_items pi ON pi.item_ref = a.assignment_ref
 		LEFT JOIN LATERAL (
 		    SELECT id, status
 		    FROM attempts

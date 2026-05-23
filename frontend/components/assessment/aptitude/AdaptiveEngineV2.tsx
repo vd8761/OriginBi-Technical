@@ -481,7 +481,6 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
-    setShowSubmitModal(false);
     try {
       // Snapshot the current (final) block before submitting. Until a block is
       // snapshotted its answers live ONLY in React state — they are never
@@ -507,8 +506,10 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       }
 
       const report = await submitAssessment({ attemptToken, assessmentId, userId });
+      setShowSubmitModal(false);
       onComplete(report);
     } catch (e) {
+      setShowSubmitModal(false);
       setLoadError((e as Error).message);
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -568,6 +569,17 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         <Logo className="h-12 w-auto mb-8" />
         <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
         <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Initializing adaptive assessment...</p>
+      </div>
+    );
+  }
+
+  if (isSubmitting) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712]">
+        <Logo className="h-12 w-auto mb-8" />
+        <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+        <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Submitting your assessment...</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please do not close this window or refresh the page.</p>
       </div>
     );
   }

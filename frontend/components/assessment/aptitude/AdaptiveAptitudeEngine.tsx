@@ -552,9 +552,11 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       }
 
       const result = await response.json();
+      setShowSubmitModal(false);
       onComplete(result);
       await clearSession();
     } catch (error) {
+      setShowSubmitModal(false);
       setLoadError((error as Error).message);
     } finally {
       setIsSubmitting(false);
@@ -644,7 +646,6 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   };
 
   const confirmSubmit = () => {
-    setShowSubmitModal(false);
     handleSubmitAttempt();
   };
 
@@ -701,6 +702,17 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         <Logo className="h-12 w-auto mb-8" />
         <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
         <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Initializing adaptive assessment...</p>
+      </div>
+    );
+  }
+
+  if (isSubmitting) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+        <Logo className="h-12 w-auto mb-8" />
+        <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+        <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Submitting your assessment...</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please do not close this window or refresh the page.</p>
       </div>
     );
   }
@@ -1165,16 +1177,24 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShowSubmitModal(false)}
-                  className="px-4 py-2 rounded-lg border border-brand-green/20 text-sm font-semibold text-[#17201b] dark:text-white hover:bg-brand-green/10"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-lg border border-brand-green/20 text-sm font-semibold text-[#17201b] dark:text-white hover:bg-brand-green/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmSubmit}
                   disabled={isSubmitting}
-                  className="px-4 py-2 rounded-lg bg-brand-green text-sm font-semibold text-white hover:bg-[#19be5e] disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-brand-green text-sm font-semibold text-white hover:bg-[#19be5e] disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit'}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    'Submit'
+                  )}
                 </button>
               </div>
             </motion.div>

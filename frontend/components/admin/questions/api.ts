@@ -198,6 +198,57 @@ export async function bulkImportQuestions(
     });
 }
 
+/**
+ * Import questions in safe, sequential chunks to prevent request timeouts.
+ * Each chunk is a separate API call with its own DB transaction.
+ * If a chunk fails, previously committed chunks remain in the database.
+ */
+export const BULK_CHUNK_SIZE = 25;
+
+export interface ChunkedImportProgress {
+    /** Total questions queued for import */
+    total: number;
+    /** Questions successfully imported so far */
+    imported: number;
+    /** Current chunk index (0-based) */
+    chunkIndex: number;
+    /** Total number of chunks */
+    totalChunks: number;
+    /** Errors collected across all chunks */
+    errors: string[];
+}
+
+export async function chunkedBulkImportQuestions(
+    module: string,
+    questions: CreateQuestionPayload[],
+    assessmentId?: number,
+    onProgress?: (progress: ChunkedImportProgress) => void
+): Promise<{ imported: number; total: number; errors: string[] }> {
+    const totalChunks = Math.ceil(questions.length / BULK_CHUNK_SIZE);
+    let totalImported = 0;
+    const allErrors: string[] = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * BULK_CHUNK_SIZE;
+        const chunk = questions.slice(start, start + BULK_CHUNK_SIZE);
+
+        const result = await bulkImportQuestions(module, chunk, assessmentId);
+
+        totalImported += result.imported;
+        if (result.errors) allErrors.push(...result.errors);
+
+        onProgress?.({
+            total: questions.length,
+            imported: totalImported,
+            chunkIndex: i,
+            totalChunks,
+            errors: allErrors,
+        });
+    }
+
+    return { imported: totalImported, total: questions.length, errors: allErrors };
+}
+
 // ─── Assessments ───────────────────────────────────────────────────────────────
 
 export async function fetchAssessments(module?: string): Promise<ApiAssessment[]> {
