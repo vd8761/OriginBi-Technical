@@ -277,12 +277,9 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
     setAnswers(prev => ({ ...prev, [currentQuestion.id]: newAnswer }));
 
-    // Auto-save to backend (fire-and-forget) for post-snapshot blocks
-    const bs = blocks.get(viewingBlockNum);
-    if (bs?.snapshotTaken) {
-      saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: newAnswer } })
-        .catch(console.error);
-    }
+    // Auto-save to backend (fire-and-forget)
+    saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: newAnswer } })
+      .catch(console.error);
   };
 
   const handleNumericalChange = (value: string) => {
@@ -290,17 +287,18 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     const cleanValue = value.replace(/\s/g, "");
     setAnswers(prev => ({ ...prev, [currentQuestion.id]: cleanValue }));
 
-    // Auto-save to backend (fire-and-forget) for post-snapshot blocks
-    const bs = blocks.get(viewingBlockNum);
-    if (bs?.snapshotTaken) {
-      saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: cleanValue } })
-        .catch(console.error);
-    }
+    // Auto-save to backend (fire-and-forget)
+    saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: cleanValue } })
+      .catch(console.error);
   };
 
   const handleClear = () => {
     if (!currentQuestion) return;
     setAnswers(prev => { const n = { ...prev }; delete n[currentQuestion.id]; return n; });
+    
+    // Auto-save cleared answer to backend (fire-and-forget)
+    saveBlockAnswers({ attemptToken, blockNumber: viewingBlockNum, answers: { [currentQuestion.id]: "" } })
+      .catch(console.error);
   };
 
   const handleMarkReview = () => {
@@ -367,7 +365,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     // gate rendering the target block, so it must NOT be awaited — awaiting it
     // made navigation between already-generated blocks wait on a network round-trip.
     const curBs = blocks.get(viewingBlockNum);
-    if (curBs?.snapshotTaken) {
+    if (curBs) {
       const blockAnswers: Record<string, string | string[]> = {};
       curBs.block.questions.forEach(q => { if (answers[q.id]) blockAnswers[q.id] = answers[q.id]; });
       if (Object.keys(blockAnswers).length) {
