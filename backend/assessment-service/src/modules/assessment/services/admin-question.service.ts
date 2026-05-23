@@ -330,6 +330,21 @@ export class AdminQuestionService {
         columns.push('task_type');
         values.push(data.taskType || 'mcq');
         placeholders.push(`$${values.length}`);
+
+        const audioUrlVal = data.audioUrl || data.metadata?.audioUrl || null;
+        columns.push('audio_url');
+        values.push(audioUrlVal);
+        placeholders.push(`$${values.length}`);
+
+        const passageTextVal = data.passageText || data.passage || data.metadata?.passage || data.metadata?.passageText || null;
+        columns.push('passage_text');
+        values.push(passageTextVal);
+        placeholders.push(`$${values.length}`);
+
+        const refAnswerVal = data.referenceAnswer || data.metadata?.referenceAnswer || null;
+        columns.push('reference_answer');
+        values.push(refAnswerVal);
+        placeholders.push(`$${values.length}`);
       }
 
       if (config.subcategoryColumn) {
@@ -436,6 +451,23 @@ export class AdminQuestionService {
       if (data.taskType !== undefined && (module === 'communication' || module === 'grammar')) {
         updates.push(`task_type = $${pIdx++}`);
         params.push(data.taskType);
+      }
+      if (module === 'communication' || module === 'grammar') {
+        const audioUrlVal = data.audioUrl !== undefined ? data.audioUrl : (data.metadata?.audioUrl !== undefined ? data.metadata.audioUrl : undefined);
+        if (audioUrlVal !== undefined) {
+          updates.push(`audio_url = $${pIdx++}`);
+          params.push(audioUrlVal);
+        }
+        const passageTextVal = data.passageText !== undefined ? data.passageText : (data.passage !== undefined ? data.passage : (data.metadata?.passage !== undefined ? data.metadata.passage : (data.metadata?.passageText !== undefined ? data.metadata.passageText : undefined)));
+        if (passageTextVal !== undefined) {
+          updates.push(`passage_text = $${pIdx++}`);
+          params.push(passageTextVal);
+        }
+        const refAnswerVal = data.referenceAnswer !== undefined ? data.referenceAnswer : (data.metadata?.referenceAnswer !== undefined ? data.metadata.referenceAnswer : undefined);
+        if (refAnswerVal !== undefined) {
+          updates.push(`reference_answer = $${pIdx++}`);
+          params.push(refAnswerVal);
+        }
       }
 
       updates.push('updated_at = NOW()');
@@ -603,6 +635,21 @@ export class AdminQuestionService {
           if (module === 'communication' || module === 'grammar') {
             columns.push('task_type');
             values.push(q.taskType || metadata.taskType || 'mcq');
+            placeholders.push(`$${values.length}`);
+
+            const audioUrlVal = q.audioUrl || metadata.audioUrl || null;
+            columns.push('audio_url');
+            values.push(audioUrlVal);
+            placeholders.push(`$${values.length}`);
+
+            const passageTextVal = q.passageText || q.passage || metadata.passage || metadata.passageText || null;
+            columns.push('passage_text');
+            values.push(passageTextVal);
+            placeholders.push(`$${values.length}`);
+
+            const refAnswerVal = q.referenceAnswer || metadata.referenceAnswer || null;
+            columns.push('reference_answer');
+            values.push(refAnswerVal);
             placeholders.push(`$${values.length}`);
           }
 

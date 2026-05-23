@@ -204,7 +204,15 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
 
 function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuestionPayload {
   const common = q as any;
-  const correctIdx = common.options?.findIndex((o: any) => o.id === common.correctOptionId) ?? 0;
+  
+  let finalOptions = common.options;
+  let finalCorrectOptionId = common.correctOptionId;
+  if (!finalOptions && module === "communication" && Array.isArray(common.questions) && common.questions[0]?.options) {
+    finalOptions = common.questions[0].options;
+    finalCorrectOptionId = common.questions[0].correctOptionId || finalCorrectOptionId;
+  }
+
+  const correctIdx = finalOptions?.findIndex((o: any) => o.id === finalCorrectOptionId) ?? 0;
   
   let category = "";
   let subcategory = "";
@@ -232,7 +240,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
   // Build the complete metadata object containing all assessment-specific fields
   const metadata: any = {
     kind: common.kind || "mcq",
-    correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+    correctOptionIds: common.kind === "msq" ? (common.correctOptionIds || (finalCorrectOptionId ? [finalCorrectOptionId] : [])) : [finalCorrectOptionId || common.correctOptionId],
     correctAnswer: common.correctAnswer,
   };
 
@@ -260,7 +268,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     subcategory,
     difficulty: common.difficulty || "medium",
     questionText: common.text || common.instructions || "",
-    options: common.options?.map((o: any) => ({ text: o.text })),
+    options: finalOptions?.map((o: any) => ({ text: o.text })),
     correctOptionIndex: correctIdx >= 0 ? correctIdx : 0,
     explanation: common.explanation,
     marks: common.marks ?? 1,

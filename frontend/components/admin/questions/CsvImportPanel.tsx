@@ -534,6 +534,7 @@ function csvToQuestions(rows: string[][], assessmentType: AssessmentType): AnyQu
           text: questionText,
           explanation,
           instructions: questionText,
+          options,
           questions: subQuestions,
         } as any;
       }
