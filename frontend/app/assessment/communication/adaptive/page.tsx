@@ -91,13 +91,27 @@ function AdaptiveCommunicationContent() {
         reliabilityScore:     r.reliabilityScore,
         reliabilityLevel:     r.reliabilityLevel,
       }));
+      const sections = Object.entries(r.categoryPerformance || {}).map(([name, cat]: [string, any]) => ({
+        name,
+        score: cat.marksScore ?? cat.accuracy ?? 0,
+        weight: `${cat.obtainedMarks ?? 0}/${cat.totalMarks ?? 0}`,
+        totalCount: cat.totalQuestions,
+        correctCount: cat.correctCount,
+        wrongCount: cat.wrongCount,
+        skippedCount: cat.skippedCount,
+      }));
       const assessmentResult = mapSubmissionToAssessmentResult({
         assessmentId: "communication",
         submission: {
-          totalScore:      r.obtainedMarks,
-          correctCount:    r.correctAnswers,
-          wrongCount:      r.wrongAnswers,
-          timeTakenSeconds: r.timeTakenSeconds,
+          overallScorePercent:  r.marksPercentage,
+          totalScore:           r.obtainedMarks,
+          maxScore:             r.totalMarks,
+          correctCount:         r.correctAnswers,
+          wrongCount:           r.wrongAnswers,
+          skippedCount:         r.skippedQuestions,
+          totalQuestions:       r.totalQuestions,
+          timeTakenSeconds:     r.timeTakenSeconds,
+          sections,
         },
         detail: EXAM_DETAILS.communication,
       });
