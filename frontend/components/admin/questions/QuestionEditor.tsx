@@ -101,9 +101,17 @@ export default function QuestionEditor({
   // Populate from existing question
   useEffect(() => {
     if (!question) {
-      if (categories && categories.length > 0) {
-        if (assessmentType === "aptitude") setAptCategory(categories[0].id);
-        else if (assessmentType === "mnc") setMncTopic(categories[0].id);
+      const firstCat = categories?.[0];
+      if (firstCat) {
+        if (assessmentType === "aptitude") setAptCategory(firstCat.id);
+        else if (assessmentType === "mnc") setMncTopic(firstCat.id);
+        else if (assessmentType === "communication") {
+          setCommCategory(firstCat.id);
+          const firstSub = firstCat.subcategories?.[0];
+          if (firstSub) {
+            setCommSubCategory(firstSub.id);
+          }
+        }
       }
       return;
     }
@@ -553,12 +561,42 @@ export default function QuestionEditor({
                   </>
                  )}
                  {assessmentType === "communication" && (
-                  <>
-                    <div><label className={labelCls}>Category</label><input value={commCategory} onChange={e => setCommCategory(e.target.value)} className={inputCls} placeholder="Professional Ethics" /></div>
-                    <div><label className={labelCls}>Sub-Category</label><input value={commSubCategory} onChange={e => setCommSubCategory(e.target.value)} className={inputCls} placeholder="Email Communication" /></div>
-
-
-                  </>
+                  <div className="sm:col-span-2 space-y-4">
+                    {categories && categories.length > 0 ? (
+                      <>
+                        <CustomSelect
+                          label="Category"
+                          value={commCategory}
+                          onChange={(v) => {
+                            setCommCategory(v);
+                            setCommSubCategory(""); // Reset subcategory on category change
+                          }}
+                          options={categories.map(c => ({ label: c.name, value: c.id }))}
+                        />
+                        <CustomSelect
+                          label="Sub-Category"
+                          value={commSubCategory}
+                          onChange={setCommSubCategory}
+                          options={(() => {
+                            const selectedCat = categories.find((c: any) =>
+                              c.id === commCategory ||
+                              matchCategory(commCategory, c.id) ||
+                              String(c.id) === String(commCategory)
+                            );
+                            if (selectedCat && selectedCat.subcategories) {
+                              return selectedCat.subcategories.map((sc: any) => ({ label: sc.name, value: sc.id }));
+                            }
+                            return [];
+                          })()}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div><label className={labelCls}>Category</label><input value={commCategory} onChange={e => setCommCategory(e.target.value)} className={inputCls} placeholder="Verbal Communication" /></div>
+                        <div><label className={labelCls}>Sub-Category</label><input value={commSubCategory} onChange={e => setCommSubCategory(e.target.value)} className={inputCls} placeholder="Self Introduction" /></div>
+                      </>
+                    )}
+                  </div>
                  )}
                </div>
             </div>

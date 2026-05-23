@@ -149,13 +149,25 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     case "mnc":
       return { ...common, topic: q.category } as MNCQuestion;
     case "communication": {
-      let taskType = q.category as CommTaskType;
-      if (taskType === ("listening_mcq" as any)) taskType = "audio";
-      if (taskType === ("reading_mcq" as any)) taskType = "reading";
+      // taskType comes from the dedicated task_type column via the API.
+      // For legacy data where category stored the taskType, fall back gracefully.
+      const knownTaskTypes = ["mcq", "reading", "speaking", "writing", "audio", "listening_mcq", "reading_mcq"];
+      let taskType: string = (q as any).taskType || q.metadata?.taskType || "mcq";
+      let realCategory = q.category || q.metadata?.category || "General";
+
+      // Legacy compatibility: if category looks like a taskType, swap them
+      if (knownTaskTypes.includes(realCategory)) {
+        taskType = realCategory === "listening_mcq" ? "audio" : realCategory === "reading_mcq" ? "reading" : realCategory;
+        realCategory = q.metadata?.category || "General";
+      }
+
+      if (taskType === "listening_mcq") taskType = "audio";
+      if (taskType === "reading_mcq") taskType = "reading";
+
       const commQ: any = {
         ...common,
-        taskType,
-        category: q.metadata?.category || "General",
+        taskType: taskType as CommTaskType,
+        category: realCategory,
         subcategory: q.subcategory || q.metadata?.subcategory || "",
         instructions: q.questionText,
         passage: q.metadata?.passage,
@@ -206,10 +218,10 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     case "mnc": category = (q as MNCQuestion).topic; break;
     case "communication": {
       const cq = q as CommQuestion;
-      const tType = cq.taskType;
-      if (tType === "audio") category = "listening_mcq";
-      else if (tType === "reading") category = "reading_mcq";
-      else category = tType;
+      // Use the actual category/subcategory from the question object.
+      // The CSV template provides real categories like "Verbal Communication"
+      // while taskType (mcq/reading/speaking/writing/audio) is stored in task_type column.
+      category = (cq as any).category || cq.taskType || "mcq";
       subcategory = cq.subcategory || "";
       break;
     }
@@ -243,7 +255,7 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     if (common.reportedBy) metadata.reportedBy = common.reportedBy;
   }
 
-  return {
+  const payload: any = {
     category,
     subcategory,
     difficulty: common.difficulty || "medium",
@@ -258,6 +270,13 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     assessmentId: common.assessmentId,
     metadata
   };
+
+  // Include taskType for communication/grammar so backend sets the task_type column
+  if (module === "communication") {
+    payload.taskType = common.taskType || common.kind || "mcq";
+  }
+
+  return payload;
 }
 
 // All modules except specialized ones are now DB-backed
