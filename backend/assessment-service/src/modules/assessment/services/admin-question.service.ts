@@ -141,7 +141,7 @@ export class AdminQuestionService {
 
   private formatQuestionResponse(module: ModuleType, row: any, options: any[]) {
     const config = MODULE_CONFIGS[module];
-    return {
+    const response: any = {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
       category: module === 'coding'
@@ -172,6 +172,13 @@ export class AdminQuestionService {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+
+    // Include task_type for grammar/communication so frontend can distinguish taskType from category
+    if ((module === 'grammar' || module === 'communication') && row.task_type) {
+      response.taskType = row.task_type;
+    }
+
+    return response;
   }
 
   // ─── Generic CRUD Methods ──────────────────────────────────────────────────────
