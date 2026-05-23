@@ -636,8 +636,14 @@ export class AdminQuestionService {
             const correctIdx = q.correctOptionIndex ?? q.correctOptionId ?? 0;
             let correctOptionId: number | null = null;
             if (insertedOpts.length > 0) {
-              const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
-              correctOptionId = insertedOpts[safeIdx].option_id;
+              let idx = Number(correctIdx);
+              if (isNaN(idx) && typeof correctIdx === 'string' && correctIdx.startsWith('opt_')) {
+                if (correctIdx === 'opt_true') idx = 0;
+                else if (correctIdx === 'opt_false') idx = 1;
+                else idx = parseInt(correctIdx.split('_')[1], 10);
+              }
+              const safeIdx = Math.min(Math.max(0, isNaN(idx) ? 0 : idx), insertedOpts.length - 1);
+              correctOptionId = insertedOpts[safeIdx]?.option_id ?? null;
             }
 
             // Resolve temp correctOptionIds in metadata
