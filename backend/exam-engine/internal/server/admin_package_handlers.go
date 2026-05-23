@@ -40,13 +40,6 @@ type adminExamPackageRequest struct {
 	Currency         string   `json:"currency"`
 }
 
-type adminPricingItemRequest struct {
-	ItemKind   string `json:"item_kind"`
-	ItemRef    string `json:"item_ref"`
-	PluginID   string `json:"plugin_id"`
-	PriceCents int    `json:"price_cents"`
-	Currency   string `json:"currency"`
-}
 
 func (s *Server) listExamPackages(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
