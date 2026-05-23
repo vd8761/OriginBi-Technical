@@ -10,7 +10,7 @@ import {
 } from "./types";
 import { generateId } from "./storage";
 import CustomSelect from "@/components/ui/CustomSelect";
-import { uploadQuestionAsset } from "./api";
+import { uploadQuestionAsset, ChunkedImportProgress } from "./api";
 import { 
   AlertCircle, CheckCircle2, Upload, Trash2, Plus, Download,
   FileSpreadsheet, Edit3, HelpCircle, Check, AlertTriangle, X, UploadCloud, Loader2
@@ -19,7 +19,7 @@ import {
 interface CsvImportPanelProps {
   assessmentType: AssessmentType;
   allowedQuestionKinds: QuestionKind[];
-  onImport: (questions: AnyQuestion[]) => void;
+  onImport: (questions: AnyQuestion[], onProgress?: (p: ChunkedImportProgress) => void) => void;
   onCancel: () => void;
 }
 
@@ -920,34 +920,36 @@ export default function CsvImportPanel({
       return;
     }
 
+    const total = questions.length;
+
     setProcessing({
       active: true,
-      step: `Preparing ${questions.length.toLocaleString()} questions for database ingestion...`,
-      progress: 10,
-      total: 100,
-      unit: "percent"
+      step: `Preparing ${total.toLocaleString()} questions for database ingestion...`,
+      progress: 0,
+      total,
+      unit: "rows"
     });
 
     try {
       // Short delay for smooth UI transition
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      setProcessing({
-        active: true,
-        step: `Ingesting questions into the database... Please do not close this tab.`,
-        progress: 50,
-        total: 100,
-        unit: "percent"
+      await onImport(questions, (p: ChunkedImportProgress) => {
+        setProcessing({
+          active: true,
+          step: `Importing questions... Batch ${p.chunkIndex + 1} of ${p.totalChunks} complete. Please do not close this tab.`,
+          progress: p.imported,
+          total: p.total,
+          unit: "rows"
+        });
       });
-
-      await onImport(questions);
 
       setProcessing({
         active: true,
         step: "Refreshing assessment configuration and inventory...",
-        progress: 95,
-        total: 100,
-        unit: "percent"
+        progress: total,
+        total,
+        unit: "rows"
       });
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (err) {

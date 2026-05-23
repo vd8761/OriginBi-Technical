@@ -19,12 +19,13 @@ import {
   createQuestion,
   updateQuestion,
   deleteQuestion as apiDeleteQuestion,
-  bulkImportQuestions,
+  chunkedBulkImportQuestions,
   clearQuestions as apiClearQuestions,
   ApiQuestion,
   CreateQuestionPayload,
   fetchAssessments,
   ApiAssessment,
+  ChunkedImportProgress,
 } from "./api";
 import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
@@ -636,7 +637,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     }
   };
 
-  const handleImport = async (imported: AnyQuestion[]) => {
+  const handleImport = async (imported: AnyQuestion[], onProgress?: (p: ChunkedImportProgress) => void) => {
     if (isDbModule(selectedModule)) {
       try {
         setLoading(true);
@@ -645,8 +646,16 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
           assessmentId: activeAssessment?.assessment_id || undefined,
           mode
         }));
-        const res = await bulkImportQuestions(selectedModule!, payloads, activeAssessment?.assessment_id || undefined);
+        const res = await chunkedBulkImportQuestions(
+          selectedModule!,
+          payloads,
+          activeAssessment?.assessment_id || undefined,
+          onProgress
+        );
         showToast(`Imported ${res.imported} questions`);
+        if (res.errors.length > 0) {
+          console.warn(`Import completed with ${res.errors.length} errors:`, res.errors);
+        }
         await loadQuestionsForModule(selectedModule!, mode);
         await refreshModuleCounts(selectedModule!);
       } catch (err) {
