@@ -485,6 +485,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 if (response.status === 400 && errorText.includes('already submitted')) {
                     console.warn('Attempt already submitted — performing hard redirect');
                     await clearSession();
+                    setShowSubmitModal(false);
                     // Use window.location.href for a guaranteed redirect even if router state is stale
                     if (mode === 'trial') {
                         window.location.href = '/assessment';
@@ -501,6 +502,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             console.log("Aptitude: Submission API success (200), clearing session...");
             const result = await response.json();
             // Clear cache after successful submission
+            setShowSubmitModal(false);
             await Promise.resolve(onComplete(result));
             await clearSession();
             // Guarantee post-submit navigation even if parent callback does not route.
@@ -554,6 +556,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     status: "submitted",
                 };
                 await clearSession();
+                setShowSubmitModal(false);
                 await Promise.resolve(onComplete(fallbackResult));
                 return;
             }
@@ -562,6 +565,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             // Only allow retry if it wasn't an "already submitted" error
             // (which would have returned early above)
             submittingRef.current = false;
+            setShowSubmitModal(false);
             setLoadError((error as Error).message);
         } finally {
             console.log("Aptitude: Submission finally block.");
@@ -695,7 +699,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     };
 
     const confirmSubmit = () => {
-        setShowSubmitModal(false);
         handleSubmitAttempt();
     };
 

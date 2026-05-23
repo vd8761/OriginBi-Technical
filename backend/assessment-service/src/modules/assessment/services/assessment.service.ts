@@ -462,18 +462,18 @@ export class AssessmentService {
       if (module === 'coding') {
         attemptResult = await queryRunner.query(
           `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, status, started_at, expires_at, created_at, updated_at)
-           VALUES ($1, $2, $3, 'in_progress', $4, $5, NOW(), NOW())
+              (assessment_id, user_id, attempt_token, status, started_at, expires_at, created_at, updated_at, mode)
+           VALUES ($1, $2, $3, 'in_progress', $4, $5, NOW(), NOW(), $6)
            RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt],
+          [assessment.assessment_id, resolvedUserId, attemptToken, now, expiresAt, requestedMode],
         );
       } else {
         attemptResult = await queryRunner.query(
           `INSERT INTO ${config.attempts}
-              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())
+              (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at, mode)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW(), $7)
            RETURNING *`,
-          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+          [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, requestedMode],
         );
       }
       const attemptId = attemptResult[0][config.attemptIdCol];
@@ -864,7 +864,7 @@ export class AssessmentService {
         attemptRows = await queryRunner.query(
           `SELECT *
            FROM ${config.attempts}
-           WHERE attempt_token = $1 AND user_id = $2 AND status = 'submitted'
+           WHERE attempt_token = $1 AND user_id = $2 AND status IN ('submitted', 'evaluated')
            ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
            LIMIT 1`,
           [sanitizedToken, resolvedUserId],
@@ -875,7 +875,7 @@ export class AssessmentService {
         attemptRows = await queryRunner.query(
           `SELECT *
            FROM ${config.attempts}
-           WHERE user_id = $1 AND status = 'submitted'
+           WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
            ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
            LIMIT 1`,
           [resolvedUserId],
@@ -1280,22 +1280,24 @@ export class AssessmentService {
       return orderA - orderB;
     });
 
-    let attemptMode = 'main';
-    if (config.hasMode) {
-      try {
-        const modeRows = await queryRunner.query(
-          `SELECT q.mode
-           FROM ${config.junction} aq
-           JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-           WHERE aq.${config.attemptIdCol} = $1 LIMIT 1`,
-          [attemptId]
-        );
-        if (modeRows.length > 0 && String(modeRows[0].mode).toLowerCase() === 'trial') {
-          attemptMode = 'trial';
-        }
-      } catch (err) {}
-    } else {
-      if (totalCount <= 5) attemptMode = 'trial';
+    let attemptMode = attempt.mode || 'main';
+    if (!attempt.mode) {
+      if (config.hasMode) {
+        try {
+          const modeRows = await queryRunner.query(
+            `SELECT q.mode
+             FROM ${config.junction} aq
+             JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+             WHERE aq.${config.attemptIdCol} = $1 LIMIT 1`,
+            [attemptId]
+          );
+          if (modeRows.length > 0 && String(modeRows[0].mode).toLowerCase() === 'trial') {
+            attemptMode = 'trial';
+          }
+        } catch (err) {}
+      } else {
+        if (totalCount <= 5) attemptMode = 'trial';
+      }
     }
 
     return {
@@ -1694,6 +1696,30 @@ export class AssessmentService {
         correctCount: number;
         objectiveAnsweredCount: number;
       }> = {};
+      const questionIds = attemptQuestions.map((q: any) => q[config.idCol]);
+      const allOptions = (config.options && questionIds.length > 0) ? await queryRunner.query(
+        `SELECT ${config.idCol} AS question_id, option_id::text AS id, option_text AS text
+         FROM ${config.options}
+         WHERE ${config.idCol} = ANY($1)
+         ORDER BY option_id ASC`,
+        [questionIds],
+      ) : [];
+
+      const optionsByQuestionId = new Map<string, Array<{ id: string; text: string }>>();
+      for (const opt of allOptions) {
+        const qId = String(opt.question_id);
+        if (!optionsByQuestionId.has(qId)) {
+          optionsByQuestionId.set(qId, []);
+        }
+        optionsByQuestionId.get(qId)!.push({ id: String(opt.id), text: String(opt.text ?? '') });
+      }
+
+      const codingUpdates: any[] = [];
+      const grammarMcqUpdates: any[] = [];
+      const grammarWritingUpdates: any[] = [];
+      const grammarSpeakingUpdates: any[] = [];
+      const grammarOtherUpdates: any[] = [];
+      const standardUpdates: any[] = [];
 
       for (const aq of attemptQuestions) {
         const questionIdStr = String(aq[config.idCol]);
@@ -1737,17 +1763,7 @@ export class AssessmentService {
         const optionTextById = new Map<string, string>();
         let optionsForReview: Array<{ id: string; text: string }> = [];
         if (config.options) {
-          const optionRows = await queryRunner.query(
-            `SELECT option_id::text as id, option_text as text
-             FROM ${config.options}
-             WHERE ${config.idCol} = $1
-             ORDER BY option_id ASC`,
-            [aq[config.idCol]],
-          );
-          optionsForReview = optionRows.map((row: any) => ({
-            id: String(row.id),
-            text: String(row.text ?? ''),
-          }));
+          optionsForReview = optionsByQuestionId.get(String(aq[config.idCol])) ?? [];
           for (const option of optionsForReview) {
             optionTextById.set(option.id, option.text);
           }
@@ -1806,12 +1822,11 @@ export class AssessmentService {
               sectionMap[category].answeredCount++;
               review.selectedAnswerText = String(submittedCode);
               review.status = 'subjective';
-              await queryRunner.query(
-                `UPDATE ${config.junction}
-                 SET submitted_code = $1, language = COALESCE($2, language), submitted_at = NOW()
-                 WHERE attempt_question_id = $3`,
-                [submittedCode, language, aq.attempt_question_id],
-              );
+              codingUpdates.push({
+                submittedCode,
+                language,
+                attempt_question_id: aq.attempt_question_id
+              });
             }
           }
           questionReviews.push(review);
@@ -1831,12 +1846,11 @@ export class AssessmentService {
                 : rawAnswer;
               if (optId) {
                 const isCorrect = Number(optId) === Number(aq.correct_option_id);
-                await queryRunner.query(
-                  `UPDATE ${config.junction}
-                   SET selected_option_id = $1, is_correct = $2, answered_at = NOW()
-                   WHERE attempt_question_id = $3`,
-                  [optId, isCorrect, aq.attempt_question_id],
-                );
+                grammarMcqUpdates.push({
+                  optId,
+                  isCorrect,
+                  attempt_question_id: aq.attempt_question_id
+                });
                 if (isCorrect) {
                   totalPositive += questionMarks;
                   sectionMap[category].score += questionMarks;
@@ -1855,10 +1869,10 @@ export class AssessmentService {
                 subjectiveAnsweredCount++;
                 review.selectedAnswerText = String(answerText);
                 review.status = 'subjective';
-                await queryRunner.query(
-                  `UPDATE ${config.junction} SET answer_text = $1, answered_at = NOW() WHERE attempt_question_id = $2`,
-                  [answerText, aq.attempt_question_id],
-                );
+                grammarWritingUpdates.push({
+                  answerText,
+                  attempt_question_id: aq.attempt_question_id
+                });
               }
             } else if (taskType === 'speaking') {
               const audioPayload = typeof rawAnswer === 'string'
@@ -1873,12 +1887,11 @@ export class AssessmentService {
                   ? String(answerText)
                   : '[Audio response submitted]';
                 review.status = 'subjective';
-                await queryRunner.query(
-                  `UPDATE ${config.junction}
-                   SET answer_audio_url = $1, answer_text = COALESCE($2, answer_text), answered_at = NOW()
-                   WHERE attempt_question_id = $3`,
-                  [audioPayload, answerText, aq.attempt_question_id],
-                );
+                grammarSpeakingUpdates.push({
+                  audioPayload,
+                  answerText,
+                  attempt_question_id: aq.attempt_question_id
+                });
               }
             } else {
               const answerText = typeof rawAnswer === 'string'
@@ -1888,10 +1901,10 @@ export class AssessmentService {
                 subjectiveAnsweredCount++;
                 review.selectedAnswerText = String(answerText);
                 review.status = 'subjective';
-                await queryRunner.query(
-                  `UPDATE ${config.junction} SET answer_text = $1, answered_at = NOW() WHERE attempt_question_id = $2`,
-                  [answerText, aq.attempt_question_id],
-                );
+                grammarOtherUpdates.push({
+                  answerText,
+                  attempt_question_id: aq.attempt_question_id
+                });
               }
             }
           }
@@ -1950,7 +1963,7 @@ export class AssessmentService {
               correctCount++;
               sectionMap[category].score += scoreAwarded;
               sectionMap[category].correctCount++;
-          } else {
+            } else {
               totalNegative += negativeApplied;
               sectionMap[category].score -= negativeApplied;
             }
@@ -1960,30 +1973,164 @@ export class AssessmentService {
               submittedAnswer: (kind === 'numerical' || kind === 'msq') ? selectedOptionId : null 
             };
 
-            await queryRunner.query(
-              `UPDATE ${config.junction}
-               SET selected_option_id = $1, is_correct = $2, score_awarded = $3, negative_applied = $4, answered_at = NOW(), metadata = $5
-               WHERE attempt_question_id = $6`,
-              [
-                (kind === 'numerical' || kind === 'msq') ? null : selectedOptionId, 
-                isCorrectAnswer, 
-                scoreAwarded, 
-                negativeApplied, 
-                JSON.stringify(metadataUpdate),
-                aq.attempt_question_id,
-              ],
-            );
+            standardUpdates.push({
+              selected_option_id: (kind === 'numerical' || kind === 'msq') ? null : selectedOptionId,
+              is_correct: isCorrectAnswer,
+              score_awarded: scoreAwarded,
+              negative_applied: negativeApplied,
+              metadata: metadataUpdate,
+              answered_at: new Date(),
+              attempt_question_id: aq.attempt_question_id
+            });
           } else {
-            await queryRunner.query(
-              `UPDATE ${config.junction}
-               SET selected_option_id = NULL, is_correct = NULL, score_awarded = 0, negative_applied = 0, answered_at = NULL
-               WHERE attempt_question_id = $1`,
-              [aq.attempt_question_id],
-            );
+            standardUpdates.push({
+              selected_option_id: null,
+              is_correct: null,
+              score_awarded: 0,
+              negative_applied: 0,
+              metadata: null,
+              answered_at: null,
+              attempt_question_id: aq.attempt_question_id
+            });
           }
         }
-
         questionReviews.push(review);
+      }
+
+      // Perform batch updates
+      if (codingUpdates.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of codingUpdates) {
+          valueStrings.push(`($${index}, $${index + 1}, $${index + 2}::integer)`);
+          queryParams.push(row.submittedCode, row.language, row.attempt_question_id);
+          index += 3;
+        }
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            submitted_code = v.submitted_code,
+            language = COALESCE(v.language, j.language),
+            submitted_at = NOW()
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(submitted_code, language, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
+      }
+
+      if (grammarMcqUpdates.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of grammarMcqUpdates) {
+          valueStrings.push(`($${index}::integer, $${index + 1}::boolean, $${index + 2}::integer)`);
+          queryParams.push(row.optId, row.isCorrect, row.attempt_question_id);
+          index += 3;
+        }
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            selected_option_id = v.selected_option_id,
+            is_correct = v.is_correct,
+            answered_at = NOW()
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(selected_option_id, is_correct, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
+      }
+
+      if (grammarWritingUpdates.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of grammarWritingUpdates) {
+          valueStrings.push(`($${index}, $${index + 1}::integer)`);
+          queryParams.push(row.answerText, row.attempt_question_id);
+          index += 2;
+        }
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            answer_text = v.answer_text,
+            answered_at = NOW()
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(answer_text, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
+      }
+
+      if (grammarSpeakingUpdates.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of grammarSpeakingUpdates) {
+          valueStrings.push(`($${index}, $${index + 1}, $${index + 2}::integer)`);
+          queryParams.push(row.audioPayload, row.answerText, row.attempt_question_id);
+          index += 3;
+        }
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            answer_audio_url = v.answer_audio_url,
+            answer_text = COALESCE(v.answer_text, j.answer_text),
+            answered_at = NOW()
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(answer_audio_url, answer_text, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
+      }
+
+      if (grammarOtherUpdates.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of grammarOtherUpdates) {
+          valueStrings.push(`($${index}, $${index + 1}::integer)`);
+          queryParams.push(row.answerText, row.attempt_question_id);
+          index += 2;
+        }
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            answer_text = v.answer_text,
+            answered_at = NOW()
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(answer_text, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
+      }
+
+      if (standardUpdates.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of standardUpdates) {
+          valueStrings.push(`($${index}::integer, $${index + 1}::boolean, $${index + 2}::numeric, $${index + 3}::numeric, $${index + 4}::jsonb, $${index + 5}::timestamp, $${index + 6}::integer)`);
+          queryParams.push(
+            row.selected_option_id,
+            row.is_correct,
+            row.score_awarded,
+            row.negative_applied,
+            row.metadata ? JSON.stringify(row.metadata) : null,
+            row.answered_at,
+            row.attempt_question_id
+          );
+          index += 7;
+        }
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            selected_option_id = v.selected_option_id,
+            is_correct = v.is_correct,
+            score_awarded = v.score_awarded,
+            negative_applied = v.negative_applied,
+            answered_at = v.answered_at,
+            metadata = v.metadata
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(selected_option_id, is_correct, score_awarded, negative_applied, metadata, answered_at, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
       }
 
       const maxScore = attemptQuestions.reduce(
@@ -2270,9 +2417,9 @@ export class AssessmentService {
 
       await queryRunner.query(
         `INSERT INTO ${config.attempts}
-           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW())`,
-        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt],
+           (assessment_id, user_id, attempt_token, shuffle_seed, status, started_at, expires_at, created_at, updated_at, mode)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, NOW(), NOW(), $7)`,
+        [assessment.assessment_id, resolvedUserId, attemptToken, shuffleSeed, now, expiresAt, mode === 'trial' ? 'trial' : 'main'],
       );
 
       // 7. Commit so generateBlock can read the attempt row
@@ -2492,6 +2639,27 @@ export class AssessmentService {
         return {};
       };
 
+      // Batch fetch option rows for all questions
+      const questionIds = allQuestions.map((q: any) => q.question_id);
+      const allOptions = questionIds.length > 0 ? await queryRunner.query(
+        `SELECT ${config.idCol} AS question_id, option_id::text AS id, option_text AS text
+         FROM ${config.options}
+         WHERE ${config.idCol} = ANY($1)
+         ORDER BY option_id ASC`,
+        [questionIds],
+      ) : [];
+
+      const optionsByQuestionId = new Map<string, Array<{ id: string; text: string }>>();
+      for (const opt of allOptions) {
+        const qId = String(opt.question_id);
+        if (!optionsByQuestionId.has(qId)) {
+          optionsByQuestionId.set(qId, []);
+        }
+        optionsByQuestionId.get(qId)!.push({ id: String(opt.id), text: String(opt.text ?? '') });
+      }
+
+      const updateRows: any[] = [];
+
       for (const aq of allQuestions) {
         const cat = aq.category ?? 'General';
         const blk = Number(aq.block_number ?? 0);
@@ -2515,20 +2683,11 @@ export class AssessmentService {
           ? Number(aq.negative_marks || aq.negative_mark_value || 0)
           : 0;
 
-        const optionRows = await queryRunner.query(
-          `SELECT option_id::text AS id, option_text AS text
-           FROM ${config.options}
-           WHERE ${config.idCol} = $1
-           ORDER BY option_id ASC`,
-          [aq.question_id],
-        );
+        const optionsForReview = optionsByQuestionId.get(String(aq.question_id)) ?? [];
         const optionTextById = new Map<string, string>();
-        const optionsForReview = optionRows.map((row: any) => {
-          const id = String(row.id);
-          const text = String(row.text ?? '');
-          optionTextById.set(id, text);
-          return { id, text };
-        });
+        for (const opt of optionsForReview) {
+          optionTextById.set(opt.id, opt.text);
+        }
 
         categoryMap[cat].total++;
         categoryMap[cat].maxScore += qMarks;
@@ -2611,33 +2770,61 @@ export class AssessmentService {
             blockMap[blk].negative += negApplied;
           }
 
-          // Write final authoritative scores
-          await queryRunner.query(
-            `UPDATE ${config.junction}
-             SET selected_option_id=$1, metadata=$2, is_correct=$3, score_awarded=$4, negative_applied=$5
-             WHERE attempt_question_id=$6`,
-            [
-              (kind === 'numerical' || kind === 'msq') ? null : review.selectedOptionId,
-              JSON.stringify({
-                ...(attemptMetadata || {}),
-                submittedAnswer: (kind === 'numerical' || kind === 'msq') ? review.selectedOptionId : null,
-              }),
-              isCorrect,
-              scoreAwarded,
-              negApplied,
-              aq.attempt_question_id,
-            ],
-          );
+          updateRows.push({
+            selected_option_id: (kind === 'numerical' || kind === 'msq') ? null : review.selectedOptionId,
+            metadata: {
+              ...(attemptMetadata || {}),
+              submittedAnswer: (kind === 'numerical' || kind === 'msq') ? review.selectedOptionId : null,
+            },
+            is_correct: isCorrect,
+            score_awarded: scoreAwarded,
+            negative_applied: negApplied,
+            attempt_question_id: aq.attempt_question_id
+          });
         } else {
           // Unanswered — zero score
-          await queryRunner.query(
-            `UPDATE ${config.junction}
-             SET selected_option_id=NULL, metadata=NULL, is_correct=NULL, score_awarded=0, negative_applied=0
-             WHERE attempt_question_id=$1`,
-            [aq.attempt_question_id],
-          );
+          updateRows.push({
+            selected_option_id: null,
+            metadata: null,
+            is_correct: null,
+            score_awarded: 0,
+            negative_applied: 0,
+            attempt_question_id: aq.attempt_question_id
+          });
         }
         questionReviews.push(review);
+      }
+
+      // Perform batch update of attempt question answers
+      if (updateRows.length > 0) {
+        const valueStrings: string[] = [];
+        const queryParams: any[] = [];
+        let index = 1;
+        for (const row of updateRows) {
+          valueStrings.push(`($${index}::integer, $${index + 1}::jsonb, $${index + 2}::boolean, $${index + 3}::numeric, $${index + 4}::numeric, $${index + 5}::integer)`);
+          queryParams.push(
+            row.selected_option_id,
+            row.metadata ? JSON.stringify(row.metadata) : null,
+            row.is_correct,
+            row.score_awarded,
+            row.negative_applied,
+            row.attempt_question_id
+          );
+          index += 6;
+        }
+
+        const batchQuery = `
+          UPDATE ${config.junction} AS j
+          SET
+            selected_option_id = v.selected_option_id,
+            metadata = v.metadata,
+            is_correct = v.is_correct,
+            score_awarded = v.score_awarded,
+            negative_applied = v.negative_applied
+          FROM (VALUES ${valueStrings.join(', ')}) AS v(selected_option_id, metadata, is_correct, score_awarded, negative_applied, attempt_question_id)
+          WHERE j.attempt_question_id = v.attempt_question_id
+        `;
+        await queryRunner.query(batchQuery, queryParams);
       }
 
       const rawTotal = totalPositive - totalNegative;

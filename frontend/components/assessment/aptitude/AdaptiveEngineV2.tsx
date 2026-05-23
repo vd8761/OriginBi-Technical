@@ -481,7 +481,6 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
-    setShowSubmitModal(false);
     try {
       // Snapshot the current (final) block before submitting. Until a block is
       // snapshotted its answers live ONLY in React state — they are never
@@ -507,8 +506,10 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       }
 
       const report = await submitAssessment({ attemptToken, assessmentId, userId });
+      setShowSubmitModal(false);
       onComplete(report);
     } catch (e) {
+      setShowSubmitModal(false);
       setLoadError((e as Error).message);
       isSubmittingRef.current = false;
       setIsSubmitting(false);
