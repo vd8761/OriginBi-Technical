@@ -166,8 +166,10 @@ const getTraitImage = (archetype: string): string => {
 const RingChart: React.FC<{ results: Record<string, AssessmentResult> }> = ({ results }) => {
   const metrics = [
     { r: 70, score: results.aptitude?.overallScore || 0, color: "#10b981" },
-    { r: 56, score: results.communication?.overallScore || 0, color: "#06b6d4" },
-    { r: 42, score: results.coding?.overallScore || 0, color: "#f59e0b" },
+    { r: 60, score: results.communication?.overallScore || 0, color: "#06b6d4" },
+    { r: 50, score: results.coding?.overallScore || 0, color: "#f59e0b" },
+    { r: 40, score: results.mnc?.overallScore || 0, color: "#6366f1" },
+    { r: 30, score: results.role?.overallScore || 0, color: "#84cc16" },
   ].filter(m => m.score > 0);
   const avg = metrics.length > 0
     ? Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length)
@@ -193,10 +195,10 @@ const RingChart: React.FC<{ results: Record<string, AssessmentResult> }> = ({ re
           />
         );
       })}
-      <text x="80" y="75" textAnchor="middle" className="fill-gray-900 dark:fill-white text-2xl font-black" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
+      <text x="80" y="76" textAnchor="middle" className="fill-gray-900 dark:fill-white text-xl font-black" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
         {avg}
       </text>
-      <text x="80" y="90" textAnchor="middle" className="fill-gray-500 dark:fill-gray-400 text-[8px] font-bold uppercase tracking-wider" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
+      <text x="80" y="92" textAnchor="middle" className="fill-gray-500 dark:fill-gray-400 text-[8px] font-bold uppercase tracking-wider" style={{ transform: "rotate(90deg)", transformOrigin: "80px 80px" }}>
         Growth
       </text>
     </>
@@ -266,6 +268,14 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
   const completedCount = completedIds.length;
   const purchasedCount = purchasedExams.length;
+  const normalizeModuleKey = (module: string) => module === "grammar" ? "communication" : module;
+  const inProgressModuleKey = inProgressAttempt
+    ? normalizeModuleKey(inProgressAttempt.module)
+    : null;
+  const hasCompletedInProgressModule = inProgressModuleKey
+    ? Boolean(results[inProgressModuleKey as AssessmentId] && results[inProgressModuleKey as AssessmentId]?.mode !== "trial")
+    : false;
+  const effectiveInProgressAttempt = hasCompletedInProgressModule ? null : inProgressAttempt;
 
   return (
     <div className="flex flex-col gap-8 pt-2" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
@@ -290,7 +300,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
         )}
       </motion.div>
 
-      {inProgressAttempt && onResumeAttempt && (
+      {effectiveInProgressAttempt && onResumeAttempt && (
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -307,18 +317,18 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Incomplete Assessment</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
-                  Resume {inProgressAttempt.assessmentName || labelForModule(inProgressAttempt.module)}
+                  Resume {effectiveInProgressAttempt.assessmentName || labelForModule(effectiveInProgressAttempt.module)}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  {inProgressAttempt.timeLeftSeconds !== undefined
-                    ? `Time left: ${formatTimeLeft(inProgressAttempt.timeLeftSeconds)}`
+                  {effectiveInProgressAttempt.timeLeftSeconds !== undefined
+                    ? `Time left: ${formatTimeLeft(effectiveInProgressAttempt.timeLeftSeconds)}`
                     : "Your previous session is still active."}
                 </p>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => onResumeAttempt(inProgressAttempt)}
+              onClick={() => onResumeAttempt(effectiveInProgressAttempt)}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-amber-500/30 transition hover:bg-amber-600"
             >
               Resume Now
@@ -396,8 +406,10 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
               <div className="relative w-40 h-40 sm:w-48 sm:h-48">
                 <svg viewBox="0 0 160 160" className="w-full h-full -rotate-90">
                   <circle cx="80" cy="80" r="70" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
-                  <circle cx="80" cy="80" r="56" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
-                  <circle cx="80" cy="80" r="42" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
+                  <circle cx="80" cy="80" r="60" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
+                  <circle cx="80" cy="80" r="50" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
+                  <circle cx="80" cy="80" r="40" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
+                  <circle cx="80" cy="80" r="30" fill="none" stroke="currentColor" className="text-[#f3f4f6] dark:text-white/10" strokeWidth="6" />
 
                   <RingChart results={results} />
                 </svg>
