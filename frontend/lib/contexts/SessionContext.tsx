@@ -62,7 +62,11 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.removeItem("originbi:assessment-results");
       localStorage.removeItem("originbi:paid-assessments");
       localStorage.removeItem("originbi:completed-assessments");
-      localStorage.removeItem("user");
+      
+      // Do not clear the admin's user info if they are in an admin session
+      if (localStorage.getItem("originbi:admin-session") !== "true") {
+        localStorage.removeItem("user");
+      }
 
       // Clear any legacy userEmail keys if present
       localStorage.removeItem("userEmail");
@@ -100,7 +104,8 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
         // Admin auth uses its own token namespace; if the explicit admin gate
         // is active, never try to restore a student session from this provider.
-        if (hasAdminSession && isAdminPath) {
+        if (hasAdminSession) {
+          setIsLoading(false);
           return;
         }
 

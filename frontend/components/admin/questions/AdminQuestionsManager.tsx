@@ -1332,6 +1332,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
             categories={filterCats.map(c => ({ id: c.key, name: c.label, subcategories: c.subcategories }))}
             onSave={handleSaveQuestion} 
             onCancel={() => setEditingQuestion(null)} 
+            activeAssessment={activeAssessment}
           />
         )}
       </AnimatePresence>
