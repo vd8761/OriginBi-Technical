@@ -212,6 +212,13 @@ function formatRelativeFromIso(iso: string | null): string {
 // Narrowing happens field-by-field below.
 type BackendGroupRow = Record<string, unknown>;
 
+function readGroupStatus(value: unknown): Group["status"] {
+  if (value === "active" || value === "draft" || value === "archived") {
+    return value;
+  }
+  return "draft";
+}
+
 function mapBackendGroup(bg: BackendGroupRow): Group {
   const readObj = (v: unknown): Record<string, unknown> =>
     v && typeof v === "object" ? (v as Record<string, unknown>) : {};
@@ -242,7 +249,9 @@ function mapBackendGroup(bg: BackendGroupRow): Group {
     code: readStr(bg.code),
     name: readStr(bg.name),
     description: readStr(meta.description),
-    status: readStr(meta.status) || (readBool(bg.isActive) ? "active" : "draft"),
+    status: meta.status != null
+      ? readGroupStatus(meta.status)
+      : (readBool(bg.isActive) ? "active" : "draft"),
     createdAt: readStr(bg.createdAt) || readStr(bg.created_at) || new Date().toISOString(),
     proctoring: Object.keys(proctoring).length > 0
       ? (proctoring as Group["proctoring"])
@@ -521,7 +530,7 @@ function GroupsInner() {
         assessments: selectedGroup.assessments,
       };
 
-      const updated = await updateAdminGroup(selectedGroup.id, body);
+      const updated: BackendGroupRow = await updateAdminGroup(selectedGroup.id, body);
       await loadLatestGroups();
       setSelectedGroup(mapBackendGroup(updated));
       
