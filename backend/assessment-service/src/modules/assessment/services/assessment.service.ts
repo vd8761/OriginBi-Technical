@@ -624,9 +624,11 @@ export class AssessmentService {
 
     const questionRows = await this.dataSource.query(
       `SELECT aq.display_order, q.${config.idCol} as question_id,
-              ${textColumn} as question_text${difficultySelect}${extraSelect}
+              ${textColumn} as question_text${difficultySelect}${extraSelect},
+              ass.negative_mark_enabled, ass.negative_mark_value, ass.difficulty_negative_marks
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+       JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
        WHERE aq.${config.attemptIdCol} = $1
        ORDER BY aq.display_order ASC`,
       [attemptId],
@@ -658,12 +660,31 @@ export class AssessmentService {
         }
       }
 
+      let qNegMarks = q.negative_marks ? Number(q.negative_marks) : undefined;
+      if (q.negative_mark_enabled) {
+        if (q.difficulty_negative_marks) {
+          const diffMap = typeof q.difficulty_negative_marks === 'object'
+            ? q.difficulty_negative_marks
+            : (() => { try { return JSON.parse(q.difficulty_negative_marks); } catch { return {}; } })();
+          const diffKey = String(q.difficulty || 'medium').toLowerCase();
+          if (diffMap && diffMap[diffKey] !== undefined && diffMap[diffKey] !== null) {
+            qNegMarks = Number(diffMap[diffKey]);
+          } else {
+            qNegMarks = q.negative_marks ? Number(q.negative_marks) : (q.negative_mark_value ? Number(q.negative_mark_value) : 0);
+          }
+        } else {
+          qNegMarks = q.negative_marks ? Number(q.negative_marks) : (q.negative_mark_value ? Number(q.negative_mark_value) : 0);
+        }
+      } else {
+        qNegMarks = 0;
+      }
+
       const base: any = {
         id: q.question_id,
         text: q.question_text,
         options: finalOptions,
         marks: q.marks ? Number(q.marks) : undefined,
-        negativeMarks: q.negative_marks ? Number(q.negative_marks) : undefined,
+        negativeMarks: qNegMarks,
         metadata: questionMetadata,
       };
 
@@ -747,9 +768,11 @@ export class AssessmentService {
     const questionRows = await this.dataSource.query(
       `SELECT aq.display_order, aq.block_sequence_order, aq.block_number,
               q.${config.idCol} AS question_id, q.question_text, q.difficulty,
-              q.${config.catCol} AS category, q.marks, q.negative_marks${imgCol}
+              q.${config.catCol} AS category, q.marks, q.negative_marks${imgCol},
+              ass.negative_mark_enabled, ass.negative_mark_value, ass.difficulty_negative_marks
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
+       JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
        WHERE aq.${config.attemptIdCol} = $1
          AND aq.block_number = $2
        ORDER BY aq.block_sequence_order ASC`,
@@ -771,13 +794,32 @@ export class AssessmentService {
         finalOptions = this.shuffleWithSeed(options, (attempt.shuffle_seed || '') + q.question_id);
       }
       
+      let qNegMarks = Number(q.negative_marks);
+      if (q.negative_mark_enabled) {
+        if (q.difficulty_negative_marks) {
+          const diffMap = typeof q.difficulty_negative_marks === 'object'
+            ? q.difficulty_negative_marks
+            : (() => { try { return JSON.parse(q.difficulty_negative_marks); } catch { return {}; } })();
+          const diffKey = String(q.difficulty || 'medium').toLowerCase();
+          if (diffMap && diffMap[diffKey] !== undefined && diffMap[diffKey] !== null) {
+            qNegMarks = Number(diffMap[diffKey]);
+          } else {
+            qNegMarks = q.negative_marks ? Number(q.negative_marks) : (q.negative_mark_value ? Number(q.negative_mark_value) : 0);
+          }
+        } else {
+          qNegMarks = q.negative_marks ? Number(q.negative_marks) : (q.negative_mark_value ? Number(q.negative_mark_value) : 0);
+        }
+      } else {
+        qNegMarks = 0;
+      }
+
       questions.push({
         id: q.question_id,
         text: q.question_text,
         difficulty: q.difficulty,
         category: q.category,
         marks: Number(q.marks),
-        negativeMarks: Number(q.negative_marks),
+        negativeMarks: qNegMarks,
         imageUrl: config.hasImageUrl ? (q.image_url ?? undefined) : undefined,
         options: finalOptions,
         blockNumber: q.block_number,
@@ -930,6 +972,7 @@ export class AssessmentService {
     // Coding-only columns
     const submittedCodeCol = isCoding ? `aq.submitted_code` : `NULL::text as submitted_code`;
     const languageCol = isCoding ? `aq.language` : `NULL::text as language`;
+    const difficultyCol = config.hasDifficulty ? `q.difficulty` : `'medium'::text as difficulty`;
 
     const attemptQuestions = await queryRunner.query(
       `SELECT aq.attempt_question_id,
@@ -947,6 +990,7 @@ export class AssessmentService {
               q.question_text,
               q.marks,
               q.negative_marks,
+              ${difficultyCol},
               q.${config.catCol} as category,
               ${taskTypeCol},
               ${roleTypeCol},
@@ -954,6 +998,7 @@ export class AssessmentService {
               ${attemptMetadataCol},
               ass.negative_mark_enabled,
               ass.negative_mark_value,
+              ass.difficulty_negative_marks,
               ass.categories as assessment_categories
        FROM ${config.junction} aq
        JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
@@ -1047,7 +1092,21 @@ export class AssessmentService {
       const questionMarks = Number(aq.marks || 1);
       let questionNegMarks = 0;
       if (aq.negative_mark_enabled) {
-        questionNegMarks = Number(aq.negative_marks || aq.negative_mark_value || 0);
+        let diffNeg = 0;
+        if (aq.difficulty_negative_marks) {
+          const diffMap = typeof aq.difficulty_negative_marks === 'object'
+            ? aq.difficulty_negative_marks
+            : (() => { try { return JSON.parse(aq.difficulty_negative_marks); } catch { return {}; } })();
+          const diffKey = String(aq.difficulty || 'medium').toLowerCase();
+          if (diffMap && diffMap[diffKey] !== undefined && diffMap[diffKey] !== null) {
+            diffNeg = Number(diffMap[diffKey]);
+          } else {
+            diffNeg = Number(aq.negative_marks || aq.negative_mark_value || 0);
+          }
+        } else {
+          diffNeg = Number(aq.negative_marks || aq.negative_mark_value || 0);
+        }
+        questionNegMarks = diffNeg;
       }
 
       sectionMap[category].totalCount += 1;
@@ -1656,7 +1715,7 @@ export class AssessmentService {
       const attemptQuestions = await queryRunner.query(
         `SELECT aq.*, ${correctOptCol}, q.question_text, q.marks, q.negative_marks, q.mode,
                 q.${config.catCol} as category, ${difficultyCol},
-                ass.negative_mark_enabled, ass.negative_mark_value, ${taskTypeCol},
+                ass.negative_mark_enabled, ass.negative_mark_value, ass.difficulty_negative_marks, ${taskTypeCol},
                 ${roleTypeCol}, ass.categories as assessment_categories, q.metadata as question_metadata
          FROM ${config.junction} aq
          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
@@ -1754,7 +1813,21 @@ export class AssessmentService {
         const questionMarks = Number(aq.marks || 1);
         let questionNegMarks = 0;
         if (aq.negative_mark_enabled) {
-          questionNegMarks = Number(aq.negative_marks || aq.negative_mark_value || 0);
+          let diffNeg = 0;
+          if (aq.difficulty_negative_marks) {
+            const diffMap = typeof aq.difficulty_negative_marks === 'object'
+              ? aq.difficulty_negative_marks
+              : (() => { try { return JSON.parse(aq.difficulty_negative_marks); } catch { return {}; } })();
+            const diffKey = String(aq.difficulty || 'medium').toLowerCase();
+            if (diffMap && diffMap[diffKey] !== undefined && diffMap[diffKey] !== null) {
+              diffNeg = Number(diffMap[diffKey]);
+            } else {
+              diffNeg = Number(aq.negative_marks || aq.negative_mark_value || 0);
+            }
+          } else {
+            diffNeg = Number(aq.negative_marks || aq.negative_mark_value || 0);
+          }
+          questionNegMarks = diffNeg;
         }
 
         sectionMap[category].totalCount += 1;
@@ -2590,9 +2663,11 @@ export class AssessmentService {
                 q.metadata as question_metadata,
                 q.marks,
                 q.negative_marks,
+                q.difficulty,
                 q.${config.catCol} AS category,
                 ass.negative_mark_enabled,
-                ass.negative_mark_value
+                ass.negative_mark_value,
+                ass.difficulty_negative_marks
          FROM ${config.junction} aq
          JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
          JOIN tech_assessments ass ON ass.assessment_id = q.assessment_id
@@ -2679,9 +2754,24 @@ export class AssessmentService {
         if (!blockMap[blk]) blockMap[blk] = { correct: 0, total: 0, positive: 0, negative: 0 };
 
         const qMarks = Number(aq.marks || 1);
-        const negMarks = aq.negative_mark_enabled
-          ? Number(aq.negative_marks || aq.negative_mark_value || 0)
-          : 0;
+        let negMarks = 0;
+        if (aq.negative_mark_enabled) {
+          let diffNeg = 0;
+          if (aq.difficulty_negative_marks) {
+            const diffMap = typeof aq.difficulty_negative_marks === 'object'
+              ? aq.difficulty_negative_marks
+              : (() => { try { return JSON.parse(aq.difficulty_negative_marks); } catch { return {}; } })();
+            const diffKey = String(aq.difficulty || 'medium').toLowerCase();
+            if (diffMap && diffMap[diffKey] !== undefined && diffMap[diffKey] !== null) {
+              diffNeg = Number(diffMap[diffKey]);
+            } else {
+              diffNeg = Number(aq.negative_marks || aq.negative_mark_value || 0);
+            }
+          } else {
+            diffNeg = Number(aq.negative_marks || aq.negative_mark_value || 0);
+          }
+          negMarks = diffNeg;
+        }
 
         const optionsForReview = optionsByQuestionId.get(String(aq.question_id)) ?? [];
         const optionTextById = new Map<string, string>();

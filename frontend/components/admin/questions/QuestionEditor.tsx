@@ -10,7 +10,7 @@ import {
   matchCategory, matchSubcategory
 } from "./types";
 import { generateId } from "./storage";
-import { uploadQuestionAsset } from "./api";
+import { uploadQuestionAsset, ApiAssessment } from "./api";
 import { X, Plus, Trash2, CheckCircle2, Image, Music, UploadCloud, CheckSquare, Square } from "lucide-react";
 import { McqEditor } from "./question-types/McqEditor";
 import { MsqEditor } from "./question-types/MsqEditor";
@@ -25,6 +25,7 @@ interface QuestionEditorProps {
   categories?: { id: string; name: string; subcategories?: any[] }[];
   onSave: (q: AnyQuestion) => void;
   onCancel: () => void;
+  activeAssessment?: ApiAssessment | null;
 }
 
 const LABELS = ["A", "B", "C", "D", "E", "F"];
@@ -36,6 +37,7 @@ export default function QuestionEditor({
   categories = [],
   onSave,
   onCancel,
+  activeAssessment,
 }: QuestionEditorProps) {
   // Common state
   const [text, setText] = useState("");
@@ -98,6 +100,30 @@ export default function QuestionEditor({
     ? allowedQuestionKinds
     : [...allowedQuestionKinds, kind];
 
+  const getDifficultyNegativeMark = (diff: DifficultyLevel): number => {
+    if (!activeAssessment) return 0.25;
+    const val = activeAssessment.difficulty_negative_marks;
+    const fb = { easy: 0, medium: 0.25, hard: 0.25 };
+    if (!val) return fb[diff] ?? 0.25;
+    if (typeof val === "object") {
+      const merged = { ...fb, ...val };
+      return merged[diff] ?? 0.25;
+    }
+    try {
+      const parsed = typeof val === "string" ? JSON.parse(val) : val;
+      const merged = { ...fb, ...parsed };
+      return merged[diff] ?? 0.25;
+    } catch {
+      return fb[diff] ?? 0.25;
+    }
+  };
+
+  useEffect(() => {
+    if (!question) {
+      setNegMarks(getDifficultyNegativeMark(difficulty));
+    }
+  }, [activeAssessment, question, difficulty]);
+
   // Populate from existing question
   useEffect(() => {
     if (!question) {
@@ -118,12 +144,21 @@ export default function QuestionEditor({
     const q = question as any;
     const diff = q.difficulty || "medium";
     setDifficulty(diff);
-    // Auto-standardize marks on load based on difficulty
-    if (diff === 'easy') setMarks(1);
-    else if (diff === 'medium') setMarks(2);
-    else if (diff === 'hard') setMarks(5);
-    else setMarks(q.marks ?? 1);
-    setNegMarks(0.25); // Always 0.25
+    // Use the saved marks, or default to difficulty-based standardization if not defined
+    if (q.marks !== undefined && q.marks !== null) {
+      setMarks(Number(q.marks));
+    } else {
+      if (diff === 'easy') setMarks(1);
+      else if (diff === 'medium') setMarks(2);
+      else if (diff === 'hard') setMarks(5);
+      else setMarks(1);
+    }
+    
+    if (q.negativeMarks !== undefined && q.negativeMarks !== null) {
+      setNegMarks(Number(q.negativeMarks));
+    } else {
+      setNegMarks(getDifficultyNegativeMark(diff));
+    }
     setStatus(q.status || "active");
     setAssessmentId(q.assessmentId);
 
@@ -351,7 +386,7 @@ export default function QuestionEditor({
         id,
         difficulty,
         marks,
-        negativeMarks: 0.25,
+        negativeMarks: negMarks,
         status,
         assessmentId,
         explanation: explanation.trim(),
@@ -441,6 +476,9 @@ export default function QuestionEditor({
                         if (d === 'easy') setMarks(1);
                         else if (d === 'medium') setMarks(2);
                         else if (d === 'hard') setMarks(5);
+                        
+                        // Auto-assign negative marks based on difficulty configuration
+                        setNegMarks(getDifficultyNegativeMark(d));
                       }}
                       options={[
                         { label: 'Easy', value: 'easy' },
@@ -462,11 +500,26 @@ export default function QuestionEditor({
                   </div>
                   <div>
                     <label className={labelCls}>Marks</label>
-                    <input type="number" value={marks} disabled className={`${inputCls} opacity-60 cursor-not-allowed`} />
+                    <input
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      value={marks === undefined || marks === null ? "" : marks}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMarks(val === "" ? 0 : Number(val));
+                      }}
+                      className={inputCls}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Negative Marks</label>
-                    <input type="number" value={0.25} disabled className={`${inputCls} opacity-60 cursor-not-allowed`} />
+                    <input
+                      type="number"
+                      value={negMarks}
+                      disabled
+                      className={`${inputCls} opacity-60 cursor-not-allowed`}
+                    />
                   </div>
 
                   <div className="sm:col-span-2">

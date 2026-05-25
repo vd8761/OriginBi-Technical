@@ -127,7 +127,11 @@ function clearTokens(scope: TokenScope = "user") {
   }
 
   const cookieBase = "path=/; samesite=lax; max-age=0";
-  document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=; ${cookieBase}`;
+  // Only clear the legacy cookie if we are clearing admin tokens,
+  // or if there is no active admin session (to prevent wiping admin's cookie).
+  if (scope === "admin" || window.localStorage.getItem(ADMIN_SESSION_FLAG_KEY) !== "true") {
+    document.cookie = `${LEGACY_ACCESS_TOKEN_COOKIE}=; ${cookieBase}`;
+  }
   document.cookie = `${keys.access}=; ${cookieBase}`;
   document.cookie = `${keys.id}=; ${cookieBase}`;
 }
