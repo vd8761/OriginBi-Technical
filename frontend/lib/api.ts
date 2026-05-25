@@ -24,11 +24,6 @@ export const TECH_API_BASE =
     ? ""  // browser: use same-origin proxy (/api/* → assessment service via next.config.ts)
     : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
 
-const IS_BROWSER = typeof window !== "undefined";
-const IS_DEV = process.env.NODE_ENV === "development";
-const EXAM_SAME_ORIGIN = true;
-const TECH_SAME_ORIGIN = true;
-
 export const HAS_EXAM_API = true;
 export const HAS_TECH_API = true;
 
@@ -289,6 +284,8 @@ export interface CodeRunResponse {
     | "partial"
     | "error"
     | "compile-error"
+    | "runtime-error"
+    | "wrong-answer"
     | "timeout"
     | "memory-exceeded"
     | "output-exceeded"
@@ -687,7 +684,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
   await assertRegistrationPhoneAvailable(input.mobileNumber);
   const hasGroup = !!input.groupCode?.trim();
 
-  await apiFetch<any>("/api/auth/register", {
+  await apiFetch<unknown>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email: input.email,
@@ -714,13 +711,13 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
   });
 
   return {
-    user: { email: input.email } as any,
+    user: { email: input.email } as unknown as AuthResponse["user"],
     registration: null,
-  } as any;
+  } as unknown as AuthResponse;
 }
 
-export async function getDepartments(): Promise<any[]> {
-  return apiFetch<any[]>("/student/departments", {
+export async function getDepartments(): Promise<unknown[]> {
+  return apiFetch<unknown[]>("/student/departments", {
     method: "POST",
     baseOverride: STUDENT_API_BASE,
     auth: false,
@@ -810,10 +807,22 @@ export async function loginUser(
   }
 
   if (!session) {
-    // Fallback: Fetch actual database profile and role from student-service
-    let dbUser: any = null;
+    // Fallback: Fetch actual database profile and role from student-service.
+    // StudentProfile captures only the fields this fallback reads — the actual
+    // /student/profile response carries more keys we don't use here.
+    interface StudentProfile {
+      id?: number;
+      fullName?: string;
+      gender?: string;
+      mobileNumber?: string;
+      role?: string;
+      status?: string;
+      isTechAssessment?: number;
+      metadata?: { cognitoSub?: string | null; countryCode?: string };
+    }
+    let dbUser: StudentProfile | null = null;
     try {
-      dbUser = await apiFetch<any>("/student/profile", {
+      dbUser = await apiFetch<StudentProfile>("/student/profile", {
         method: "POST",
         body: JSON.stringify({ email }),
         baseOverride: STUDENT_API_BASE,
@@ -833,7 +842,7 @@ export async function loginUser(
         cognitoSub: dbUser?.metadata?.cognitoSub || null,
         emailVerified: true,
         isActive: true,
-      } as any,
+      } as unknown as AuthResponse["user"],
       registration: dbUser ? {
         id: dbUser.id,
         fullName: dbUser.fullName,
@@ -842,7 +851,7 @@ export async function loginUser(
         mobileNumber: dbUser.mobileNumber,
         status: dbUser.status || "ACTIVE",
         isTechAssessment: dbUser.isTechAssessment || 0,
-      } as any : null,
+      } as unknown as AuthResponse["registration"] : null,
       tokens,
     };
   }
@@ -1328,8 +1337,8 @@ export async function getPurchasedAssessments(email: string): Promise<{ purchase
   });
 }
 
-export async function getLatestSubmittedResult(module: string, userId: string): Promise<any> {
-  return apiFetch<any>(
+export async function getLatestSubmittedResult(module: string, userId: string): Promise<unknown> {
+  return apiFetch<unknown>(
     `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}`,
     {
       baseOverride: TECH_API_BASE,
@@ -1467,70 +1476,70 @@ export async function listAdminUsers(
   );
 }
 
-export async function bulkAdminUsersPreview(file: File) {
+export async function bulkAdminUsersPreview(file: File): Promise<unknown> {
   const formData = new FormData();
   formData.append("file", file);
-  return apiFetch<any>("/api/admin/users/bulk/preview", {
+  return apiFetch<unknown>("/api/admin/users/bulk/preview", {
     method: "POST",
     body: formData,
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function bulkAdminUsersExecute(importId: string, overrides?: any[]) {
-  return apiFetch<any>("/api/admin/users/bulk/execute", {
+export async function bulkAdminUsersExecute(importId: string, overrides?: unknown[]): Promise<unknown> {
+  return apiFetch<unknown>("/api/admin/users/bulk/execute", {
     method: "POST",
     body: JSON.stringify({ import_id: importId, overrides }),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getBulkAdminUsersJobStatus(importId: string) {
-  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}`, {
+export async function getBulkAdminUsersJobStatus(importId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/admin/users/bulk-jobs/${importId}`, {
     method: "GET",
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getBulkAdminUsersJobRows(importId: string) {
-  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
+export async function getBulkAdminUsersJobRows(importId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
     method: "GET",
     baseOverride: TECH_API_BASE,
   });
 }
 
 // ── Admin Groups & Cohorts Database-backed CRUD ─────────────────────────────
-export async function getAdminGroups(): Promise<any[]> {
-  return apiFetch<any[]>("/api/admin/groups", {
+export async function getAdminGroups(): Promise<unknown[]> {
+  return apiFetch<unknown[]>("/api/admin/groups", {
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function createAdminGroup(body: any): Promise<any> {
-  return apiFetch<any>("/api/admin/groups", {
+export async function createAdminGroup(body: Record<string, unknown>): Promise<unknown> {
+  return apiFetch<unknown>("/api/admin/groups", {
     method: "POST",
     body: JSON.stringify(body),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function updateAdminGroup(id: number | string, body: any): Promise<any> {
-  return apiFetch<any>(`/api/admin/groups/${id}`, {
+export async function updateAdminGroup(id: number | string, body: Record<string, unknown>): Promise<unknown> {
+  return apiFetch<unknown>(`/api/admin/groups/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function deleteAdminGroup(id: number | string): Promise<any> {
-  return apiFetch<any>(`/api/admin/groups/${id}`, {
+export async function deleteAdminGroup(id: number | string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/admin/groups/${id}`, {
     method: "DELETE",
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getAdminAssessments(): Promise<any> {
-  return apiFetch<any>("/api/assessment/admin/assessments", {
+export async function getAdminAssessments(): Promise<unknown> {
+  return apiFetch<unknown>("/api/assessment/admin/assessments", {
     baseOverride: TECH_API_BASE,
   });
 }

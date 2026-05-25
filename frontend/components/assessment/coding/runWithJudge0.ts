@@ -6,6 +6,7 @@ import {
     toJudge0Limits,
     type Judge0Result,
 } from "@/lib/judge0";
+import { compare } from "@/lib/comparators";
 import { buildBundle } from "@/lib/judge0Bundle";
 import type { ExecutionLimits, FileNode, TestCase } from "./data";
 
@@ -20,6 +21,8 @@ export type RunResultType =
     | "partial"
     | "error"
     | "compile-error"
+    | "runtime-error"
+    | "wrong-answer"
     | "timeout"
     | "memory-exceeded"
     | "output-exceeded"
@@ -55,10 +58,10 @@ const formatMemory = (kb: number | null): string => {
 // 6 Compilation Error, 7-12 Runtime Errors, 13 Internal, 14 Exec Format.
 const mapStatus = (statusId: number, hasFailingTests: boolean): RunResultType => {
     if (statusId === 3) return hasFailingTests ? "partial" : "success";
-    if (statusId === 4) return "partial";
+    if (statusId === 4) return "wrong-answer";
     if (statusId === 5) return "timeout";
     if (statusId === 6) return "compile-error";
-    if (statusId >= 7 && statusId <= 12) return "error";
+    if (statusId >= 7 && statusId <= 12) return "runtime-error";
     return "error";
 };
 
@@ -78,12 +81,27 @@ const stderrFor = (r: Judge0Result): string => {
 
 // Strip CommonJS export wrapper so a helper file's declarations become plain
 // top-level declarations when concatenated into the entry.
-//   module.exports = { foo, bar };  ->  removed
-//   exports.foo = ...;              ->  foo = ...;
-//   module.exports = foo;           ->  removed
+//   module.exports = { foo, bar };               ->  removed
+//   exports.foo = ...;                            ->  foo = ...;
+//   module.exports = foo;                         ->  removed
+//   module.exports = function foo(...) { ... };  ->  function foo(...) { ... };
+//   module.exports = function(...) { ... };      ->  warned (left alone)
+//   module.exports = (...) => { ... };           ->  warned (left alone)
+// Truly anonymous forms (function expression and arrow) cannot be safely
+// hoisted into a top-level statement without losing the only handle to them.
+// Keep this in lockstep with backend/exam-engine/plugins/runner-judge0/payload.go.
 const stripJsExports = (src: string): string => {
+    if (/^\s*module\.exports\s*=\s*(function\s*\(|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/m.test(src)) {
+        if (typeof console !== "undefined") {
+            console.warn(
+                "[originbi] helper file uses anonymous module.exports = function(...) or arrow form; " +
+                "wrap in a named function or const so it can be inlined for Judge0.",
+            );
+        }
+    }
     return src
         .replace(/^\s*module\.exports\s*=\s*\{[^}]*\}\s*;?\s*$/gm, "")
+        .replace(/^(\s*)module\.exports\s*=\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm, "$1function $2(")
         .replace(/^\s*module\.exports\s*=\s*[A-Za-z_$][\w$]*\s*;?\s*$/gm, "")
         .replace(/^\s*exports\.([A-Za-z_$][\w$]*)\s*=\s*/gm, "const $1 = ");
 };
@@ -133,7 +151,7 @@ const buildSubmissionPayload = async (
     }
 
     const executableFiles = files.filter(
-        (f) => !f.readOnly || /\.(py|js|java|cpp|cc|cxx|c|h|hpp)$/.test(f.path),
+        (f) => !f.readOnly || /\.(py|js|java|cpp|cc|cxx|c|h|hpp|go)$/.test(f.path),
     );
     const useMultiFile = executableFiles.length > 1;
     if (useMultiFile) {
@@ -183,10 +201,7 @@ const sourceTooLarge = (files: FileNode[], limits: ExecutionLimits): RunResult |
 
 const stdinFor = (tc: TestCase): string => tc.stdin ?? tc.input ?? "";
 
-const expectedFor = (tc: TestCase): string => (tc.expected ?? "").trim();
-
-const compareOutput = (actual: string, expected: string): boolean =>
-    actual.trim() === expected.trim();
+const expectedFor = (tc: TestCase): string => tc.expected ?? "";
 
 export async function runWithJudge0(input: RunWithJudge0Input): Promise<RunResult> {
     const tooLarge = sourceTooLarge(input.files, input.limits);
@@ -245,7 +260,9 @@ export async function runWithJudge0(input: RunWithJudge0Input): Promise<RunResul
     let firstNonAccepted: Judge0Result | null = null;
     const testResults: TestResult[] = tests.map((tc, i) => {
         const r = results[i];
-        const passed = r.status.id === 3 && compareOutput(r.stdout, expectedFor(tc));
+        const passed =
+            r.status.id === 3 &&
+            compare(tc.comparator, expectedFor(tc), r.stdout, tc.comparatorConfig);
         if (!passed && !firstNonAccepted) firstNonAccepted = r;
         return {
             ...tc,

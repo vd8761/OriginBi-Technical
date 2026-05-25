@@ -1,10 +1,20 @@
 ﻿"use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminGuard from "@/components/admin/AdminGuard";
-import { createPlugin } from "@/lib/api";
+import { apiFetch, createPlugin } from "@/lib/api";
+
+interface Judge0Language {
+  id: number;
+  name: string;
+}
+
+interface Judge0HealthResponse {
+  status?: string;
+  available?: Judge0Language[];
+}
 
 interface FormState {
   slug: string;
@@ -35,7 +45,7 @@ const initial: FormState = {
   memoryLimitKb: 131072,
   stackLimitKb: 32768,
   processesLimit: 32,
-  outputLimitKb: 16384,
+  outputLimitKb: 4096,
   supportsMultiFile: true,
   compileFlags: "",
   legacyItemRef: "",
@@ -47,6 +57,32 @@ function NewLanguageInner() {
   const [form, setForm] = useState<FormState>(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Live list of Judge0 language IDs from the deployed image. Used to warn
+  // (not block) the admin when the entered judge0LanguageId is unrecognized.
+  // Empty array = not loaded yet OR Judge0 is unreachable; in both cases we
+  // suppress the warning to avoid false positives.
+  const [knownJudge0Ids, setKnownJudge0Ids] = useState<number[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<Judge0HealthResponse>("/v1/admin/judge0/health")
+      .then((resp) => {
+        if (cancelled) return;
+        const ids = (resp.available ?? []).map((l) => l.id).filter((id) => typeof id === "number");
+        setKnownJudge0Ids(ids);
+      })
+      .catch(() => {
+        // Judge0 unreachable — leave knownJudge0Ids empty so we render no warning.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const judge0IdWarning =
+    knownJudge0Ids.length > 0 && form.judge0LanguageId > 0 && !knownJudge0Ids.includes(form.judge0LanguageId)
+      ? `ID ${form.judge0LanguageId} is not exposed by the deployed Judge0 image. Save anyway if you're staging for a future upgrade.`
+      : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,6 +179,11 @@ function NewLanguageInner() {
                 onChange={(e) => set("judge0LanguageId", Number(e.target.value))}
                 className="input-base"
               />
+              {judge0IdWarning && (
+                <p className="mt-1 text-[12px] text-amber-600 dark:text-amber-400">
+                  {judge0IdWarning}
+                </p>
+              )}
             </Field>
             <Field label="Monaco language ID">
               <input
@@ -185,8 +226,8 @@ function NewLanguageInner() {
             <Field label="Stack (KB)">
               <input type="number" value={form.stackLimitKb} onChange={(e) => set("stackLimitKb", Number(e.target.value))} className="input-base" />
             </Field>
-            <Field label="Output (KB)">
-              <input type="number" value={form.outputLimitKb} onChange={(e) => set("outputLimitKb", Number(e.target.value))} className="input-base" />
+            <Field label="Output (KB)" hint="Judge0 image caps at 4096; higher values are silently clamped.">
+              <input type="number" max={4096} value={form.outputLimitKb} onChange={(e) => set("outputLimitKb", Math.min(4096, Number(e.target.value)))} className="input-base" />
             </Field>
           </div>
 

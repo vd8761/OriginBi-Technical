@@ -4,11 +4,25 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic";
 import type { FileNode, Question } from "./data";
 import { getLimitsFor, type ExecutionLimits } from "./data";
-import { runWithJudge0, type RunResult } from "./runWithJudge0";
+import { runWithJudge0, type RunResult, type TestResult } from "./runWithJudge0";
 import { reindent } from "./reindent";
 import FileTabs from "./FileTabs";
 import FileTreePanel from "./FileTreePanel";
+import { usePluginRuntime } from "@/plugins";
 import type { CodeRunRequest } from "@/lib/api";
+
+interface StreamingTestEvent {
+    runId?: string;
+    ordinal?: number;
+    passed?: boolean;
+    actual?: string;
+    time?: string;
+}
+
+interface StreamingRunStart {
+    runId?: string;
+    totalTests?: number;
+}
 
 export const PREFS_KEY = "originbi.coding.prefs";
 
@@ -146,16 +160,29 @@ const OutputPanel: React.FC<{
     result: RunResult | null;
     running: boolean;
     theme: "dark" | "light";
-}> = ({ result, running, theme }) => {
+    streamingTests?: TestResult[];
+    streamingTotal?: number;
+}> = ({ result, running, theme, streamingTests, streamingTotal }) => {
     const isLight = theme === "light";
     if (running) {
+        const passed = streamingTests?.filter((t) => t.passed).length ?? 0;
+        const completed = streamingTests?.length ?? 0;
+        const total = streamingTotal ?? 0;
+        const showProgress = total > 0;
         return (
             <div
-                className="flex flex-1 items-center justify-center gap-3 text-[14px]"
+                className="flex flex-1 flex-col items-center justify-center gap-2 text-[14px]"
                 style={{ color: isLight ? "rgba(15,23,18,0.55)" : "rgba(255,255,255,0.5)" }}
             >
-                <div className="h-[18px] w-[18px] rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
-                Executing code...
+                <div className="flex items-center gap-3">
+                    <div className="h-[18px] w-[18px] rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
+                    {showProgress ? `Running tests… ${completed}/${total}` : "Executing code…"}
+                </div>
+                {showProgress && completed > 0 && (
+                    <div className="text-[12px]">
+                        {passed}/{completed} passed so far
+                    </div>
+                )}
             </div>
         );
     }
@@ -175,7 +202,7 @@ const OutputPanel: React.FC<{
     }
 
     const isSuccess = result.type === "success";
-    const isPartial = result.type === "partial";
+    const isPartial = result.type === "partial" || result.type === "wrong-answer";
     const isLimit =
         result.type === "timeout" ||
         result.type === "memory-exceeded" ||
@@ -194,17 +221,21 @@ const OutputPanel: React.FC<{
             ? isCustomRun ? "Run Successful" : "All Tests Passed"
             : result.type === "partial"
                 ? "Partial Pass"
-                : result.type === "compile-error"
-                    ? "Compile Error"
-                    : result.type === "timeout"
-                        ? "Time Limit Exceeded"
-                        : result.type === "memory-exceeded"
-                            ? "Memory Limit Exceeded"
-                            : result.type === "output-exceeded"
-                                ? "Output Limit Exceeded"
-                                : result.type === "source-too-large"
-                                    ? "Source Too Large"
-                                    : "Error";
+                : result.type === "wrong-answer"
+                    ? "Wrong Answer"
+                    : result.type === "compile-error"
+                        ? "Compile Error"
+                        : result.type === "runtime-error"
+                            ? "Runtime Error"
+                            : result.type === "timeout"
+                                ? "Time Limit Exceeded"
+                                : result.type === "memory-exceeded"
+                                    ? "Memory Limit Exceeded"
+                                    : result.type === "output-exceeded"
+                                        ? "Output Limit Exceeded"
+                                        : result.type === "source-too-large"
+                                            ? "Source Too Large"
+                                            : "Error";
 
     const stdoutBg = isLight ? "#F7FAF8" : "#0F1712";
     const stdoutBorder = isLight ? "rgba(15,23,18,0.08)" : "rgba(255,255,255,0.07)";
@@ -426,6 +457,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const [treeOpen, setTreeOpen] = useState(true);
     const [result, setResult] = useState<RunResult | null>(null);
     const [running, setRunning] = useState(false);
+    // Per-test results streamed in via SSE before the final HTTP response lands.
+    // Cleared at the start of each run; the full result from setResult takes over
+    // once the HTTP response returns.
+    const [streamingTests, setStreamingTests] = useState<TestResult[]>([]);
+    const [streamingTotal, setStreamingTotal] = useState(0);
+    const currentRunIdRef = useRef<string | null>(null);
+    const pluginRuntime = usePluginRuntime();
     const [outputOpen, setOutputOpen] = useState(false);
     const [outputHeight, setOutputHeight] = useState(260);
     const [showLimits, setShowLimits] = useState(true);
@@ -545,6 +583,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             const controller = new AbortController();
             runAbortRef.current = controller;
             setRunning(true);
+            setStreamingTests([]);
+            setStreamingTotal(0);
+            currentRunIdRef.current = null;
             setOutputOpen(true);
             setBottomTab("output");
             try {
@@ -608,6 +649,44 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             serverRun,
         ],
     );
+
+    // Subscribe to the per-attempt SSE channel for incremental "Run tests"
+    // progress. The server emits coding.run_started (with runId + totalTests)
+    // and coding.test_finished (one per test). We bind the first runId we see
+    // after a run kicks off and ignore stragglers from prior runs.
+    useEffect(() => {
+        if (!pluginRuntime) return;
+        const offStart = pluginRuntime.subscribe("coding.run_started", (payload: unknown) => {
+            const p = payload as StreamingRunStart;
+            if (typeof p?.runId === "string") {
+                currentRunIdRef.current = p.runId;
+                setStreamingTests([]);
+                setStreamingTotal(typeof p.totalTests === "number" ? p.totalTests : 0);
+            }
+        });
+        const offFinish = pluginRuntime.subscribe("coding.test_finished", (payload: unknown) => {
+            const p = payload as StreamingTestEvent;
+            if (!p || typeof p.ordinal !== "number") return;
+            if (currentRunIdRef.current && p.runId && p.runId !== currentRunIdRef.current) return;
+            setStreamingTests((prev) => {
+                const next = prev.filter((t) => (t as TestResult & { ordinal?: number }).ordinal !== p.ordinal);
+                next.push({
+                    input: "",
+                    expected: "",
+                    passed: !!p.passed,
+                    actual: p.actual ?? "",
+                    time: p.time ?? "",
+                    ordinal: p.ordinal,
+                } as TestResult & { ordinal?: number });
+                next.sort((a, b) => ((a as { ordinal?: number }).ordinal ?? 0) - ((b as { ordinal?: number }).ordinal ?? 0));
+                return next;
+            });
+        });
+        return () => {
+            offStart?.();
+            offFinish?.();
+        };
+    }, [pluginRuntime]);
 
     const handleRun = useCallback(() => {
         void executeRun("custom");
@@ -1044,7 +1123,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                                 />
                             </div>
                         ) : (
-                            <OutputPanel result={result} running={running} theme={theme} />
+                            <OutputPanel
+                                result={result}
+                                running={running}
+                                theme={theme}
+                                streamingTests={streamingTests}
+                                streamingTotal={streamingTotal}
+                            />
                         )}
                     </div>
                 ) : (

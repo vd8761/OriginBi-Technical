@@ -207,38 +207,52 @@ function formatRelativeFromIso(iso: string | null): string {
 }
 
 // ── Mapper function ─────────────────────────────────────────────────────────
-function mapBackendGroup(bg: any): Group {
+// Accepts a loose record because the backend returns either the raw SQL row
+// (snake_case + groupMetadata) or the TypeORM entity (camelCase + metadata).
+// Narrowing happens field-by-field below.
+type BackendGroupRow = Record<string, unknown>;
+
+function mapBackendGroup(bg: BackendGroupRow): Group {
+  const readObj = (v: unknown): Record<string, unknown> =>
+    v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const readStr = (v: unknown, fallback = ""): string =>
+    typeof v === "string" ? v : v == null ? fallback : String(v);
+  const readBool = (v: unknown): boolean => v === true;
+  const readArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
   // Handle both SQL query shape (groupMetadata) and TypeORM entity shape (metadata)
-  const meta = bg.groupMetadata || bg.metadata || {};
-  
+  const meta = readObj(bg.groupMetadata ?? bg.metadata);
+
   // Handle both legacy objects and raw string arrays of assessments
-  const rawAssessments = Array.isArray(bg.assessments)
-    ? bg.assessments
-    : Array.isArray(meta.assessments)
-    ? meta.assessments
-    : [];
-  const assessments = rawAssessments.map((a: any) => {
+  const rawAssessments = Array.isArray(bg.assessments) ? readArr(bg.assessments) : readArr(meta.assessments);
+  const assessments = rawAssessments.map((a): string => {
     if (typeof a === "string") return a;
-    if (a && typeof a === "object" && a.name) return a.name;
+    if (a && typeof a === "object" && "name" in a) {
+      return readStr((a as Record<string, unknown>).name);
+    }
     return String(a);
   });
 
-  const isFree = meta.isFree === true;
+  const isFree = readBool(meta.isFree);
+  const proctoring = readObj(meta.proctoring);
+  const candidateCount = typeof bg.candidateCount === "number" ? bg.candidateCount : 0;
 
   return {
     id: String(bg.id),
-    code: bg.code || "",
-    name: bg.name || "",
-    description: meta.description || "",
-    status: meta.status || (bg.isActive ? "active" : "draft"),
-    createdAt: bg.createdAt || bg.created_at || new Date().toISOString(),
-    proctoring: meta.proctoring || {
-      fullScreenLock: true,
-      tabSwitchLimit: 3,
-      webcamProctoring: true,
-    },
+    code: readStr(bg.code),
+    name: readStr(bg.name),
+    description: readStr(meta.description),
+    status: readStr(meta.status) || (readBool(bg.isActive) ? "active" : "draft"),
+    createdAt: readStr(bg.createdAt) || readStr(bg.created_at) || new Date().toISOString(),
+    proctoring: Object.keys(proctoring).length > 0
+      ? (proctoring as Group["proctoring"])
+      : {
+          fullScreenLock: true,
+          tabSwitchLimit: 3,
+          webcamProctoring: true,
+        },
     assessments,
-    members: Array.from({ length: bg.candidateCount || 0 }).map((_, i) => ({
+    members: Array.from({ length: candidateCount }).map((_, i) => ({
       id: `m-${i}`,
       fullName: `Candidate #${i + 1}`,
       email: `candidate${i + 1}@cohort.com`,
@@ -318,16 +332,17 @@ function GroupsInner() {
         setLoading(true);
         
         try {
-          const backendGroups = await getAdminGroups();
+          const backendGroups = (await getAdminGroups()) as BackendGroupRow[];
           setGroups(backendGroups.map(mapBackendGroup));
         } catch (groupsErr) {
           console.error("Failed to load cohort groups:", groupsErr);
         }
 
         try {
-          const assessmentsRes = await getAdminAssessments();
-          if (assessmentsRes && Array.isArray(assessmentsRes.data) && assessmentsRes.data.length > 0) {
-            const names = assessmentsRes.data.map((a: any) => a.assessment_name).filter(Boolean);
+          const assessmentsRes = (await getAdminAssessments()) as { data?: Array<{ assessment_name?: string }> } | null;
+          const data = assessmentsRes?.data;
+          if (Array.isArray(data) && data.length > 0) {
+            const names = data.map((a) => a.assessment_name).filter((n): n is string => !!n);
             setAvailableAssessments(names.length > 0 ? names : DEFAULT_ASSESSMENTS);
           } else {
             setAvailableAssessments(DEFAULT_ASSESSMENTS);

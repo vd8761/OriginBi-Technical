@@ -26,6 +26,10 @@ type PayloadRequest struct {
 	EntryFile string
 }
 
+// judge0MaxFileSizeKB is the upper bound for Judge0's max_file_size. The
+// deployed image (mrkushalsm/judge0:cgv2) rejects submissions with a higher
+// value. judge0FileSizeLimit clamps to this; admin-entered language schemas
+// with outputLimitKb > 4096 are silently capped here.
 const judge0MaxFileSizeKB = 4096
 
 func BuildPayload(runtime *Runtime, req PayloadRequest) (map[string]any, error) {
@@ -259,11 +263,26 @@ func javaMainClass(files []File, entryFile string) string {
 	return "Main"
 }
 
+// stripJSExports removes CommonJS export syntax so helper files can be
+// concatenated into a single source for Judge0 (multi-file JS lang id 89 is
+// not reliably available on the deployed image). Recognized forms:
+//   module.exports = { foo, bar };               -> removed
+//   exports.foo = ...;                            -> foo = ...;
+//   module.exports = foo;                         -> removed
+//   module.exports = function foo(...) { ... };  -> function foo(...) { ... };
+//
+// Truly anonymous forms (function expression and arrow) cannot be safely
+// hoisted into a top-level statement without losing the only handle to them,
+// so we leave them alone — the candidate's run will surface a clear syntax
+// error. Keep this in lockstep with frontend/components/assessment/coding/
+// runWithJudge0.ts:stripJsExports.
 func stripJSExports(src string) string {
 	reObject := regexp.MustCompile(`(?m)^\s*module\.exports\s*=\s*\{[^}]*\}\s*;?\s*$`)
+	reNamedFn := regexp.MustCompile(`(?m)^(\s*)module\.exports\s*=\s*function\s+([A-Za-z_$][\w$]*)\s*\(`)
 	reSingle := regexp.MustCompile(`(?m)^\s*module\.exports\s*=\s*[A-Za-z_$][\w$]*\s*;?\s*$`)
 	reNamed := regexp.MustCompile(`(?m)^\s*exports\.([A-Za-z_$][\w$]*)\s*=`)
 	src = reObject.ReplaceAllString(src, "")
+	src = reNamedFn.ReplaceAllString(src, "${1}function $2(")
 	src = reSingle.ReplaceAllString(src, "")
 	return reNamed.ReplaceAllString(src, "const $1 =")
 }

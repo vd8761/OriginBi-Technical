@@ -55,11 +55,16 @@ The `.env.example` uses the compose-exposed Postgres port `55432` and `HTTP_ADDR
 | `HEARTBEAT_GRACE_SECONDS` | `60` | heartbeat grace for connectivity gap records |
 | `RUN_MIGRATIONS` | `true` | auto-run embedded migrations on boot |
 | `ENSURE_PARTITIONS_ON_BOOT` | `true` | ensure current/upcoming telemetry partitions on boot |
-| `JUDGE0_URL` | `http://localhost:2358` | Judge0 base URL |
+| `JUDGE0_URL` | `http://localhost:2358` | Judge0 base URL. After upgrading the Judge0 image, hit `GET /v1/admin/judge0/health` (admin) to verify each `language.*` plugin's `judge0LanguageId` still resolves on the new image. |
 | `JUDGE0_MAX_CONCURRENCY` | `12` | per-engine concurrent code-run cap |
 | `JUDGE0_HTTP_TIMEOUT_SECONDS` | `95` | Judge0 HTTP timeout |
 | `JUDGE0_MAX_IDLE_CONNS` | `100` | Judge0 HTTP client idle pool |
 | `JUDGE0_MAX_IDLE_CONNS_PER_HOST` | `32` | Judge0 per-host idle pool |
+| `JUDGE0_BATCH_MAX_CHUNK` | `20` | max stdins per Judge0 `/submissions/batch` POST (must be ≤ Judge0's `MAX_SUBMISSION_BATCH_SIZE`) |
+| `JUDGE0_BATCH_POLL_INTERVAL_MS` | `200` | how often the engine polls Judge0 for batch results until all are terminal |
+| `STRANDED_SWEEPER_INTERVAL_SECONDS` | `60` | how often the background sweeper scans for stranded `submitted` attempts |
+| `STRANDED_SWEEPER_AGE_SECONDS` | `300` | re-kick Phase-2 grading for attempts in `submitted` longer than this |
+| `STRANDED_SWEEPER_BATCH` | `50` | max attempts re-kicked per sweep tick |
 | `DB_POOL_MAX_CONNS` | `20` | pgx pool max connections |
 | `DB_POOL_MIN_CONNS` | `2` | pgx pool min connections |
 | `DB_POOL_MAX_CONN_LIFETIME_SECONDS` | `1800` | pgx max connection lifetime |
