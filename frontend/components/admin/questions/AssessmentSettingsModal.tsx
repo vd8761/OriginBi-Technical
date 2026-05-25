@@ -669,7 +669,7 @@ export default function AssessmentSettingsModal({
                                 <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl flex gap-3 text-amber-200">
                                     <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
                                     <p className="text-xs leading-relaxed">
-                                        <strong>Pluggable Weight Matrix:</strong> These values represent default scoring configurations. Marks entered below dynamically override individual question-level markings to guarantee absolute consistency across the assessment.
+                                        <strong>Pluggable Weight Matrix:</strong> These values define the negative marks (penalties) for each difficulty level if negative marking is enabled. Positive marks are configured individually on each question to keep them flexible.
                                     </p>
                                 </div>
 
@@ -679,35 +679,19 @@ export default function AssessmentSettingsModal({
                                         <h3 className="text-xs font-bold text-emerald-400 tracking-wider uppercase">
                                             Easy Complexity Score
                                         </h3>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                                                    Positive Marks
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    step="0.25"
-                                                    min="0"
-                                                    required
-                                                    value={easyMarks}
-                                                    onChange={(e) => setEasyMarks(Math.max(0, Number(e.target.value)))}
-                                                    className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                                                    Negative Deduction
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    step="0.05"
-                                                    min="0"
-                                                    required
-                                                    value={easyNegMarks}
-                                                    onChange={(e) => setEasyNegMarks(Math.max(0, Number(e.target.value)))}
-                                                    className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
-                                                />
-                                            </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                                                Negative Deduction (Penalty)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.05"
+                                                min="0"
+                                                required
+                                                value={easyNegMarks}
+                                                onChange={(e) => setEasyNegMarks(Math.max(0, Number(e.target.value)))}
+                                                className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
+                                            />
                                         </div>
                                     </div>
 
@@ -716,35 +700,19 @@ export default function AssessmentSettingsModal({
                                         <h3 className="text-xs font-bold text-teal-400 tracking-wider uppercase">
                                             Medium Complexity Score
                                         </h3>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                                                    Positive Marks
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    step="0.25"
-                                                    min="0"
-                                                    required
-                                                    value={mediumMarks}
-                                                    onChange={(e) => setMediumMarks(Math.max(0, Number(e.target.value)))}
-                                                    className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                                                    Negative Deduction
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    step="0.05"
-                                                    min="0"
-                                                    required
-                                                    value={mediumNegMarks}
-                                                    onChange={(e) => setMediumNegMarks(Math.max(0, Number(e.target.value)))}
-                                                    className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
-                                                />
-                                            </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                                                Negative Deduction (Penalty)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.05"
+                                                min="0"
+                                                required
+                                                value={mediumNegMarks}
+                                                onChange={(e) => setMediumNegMarks(Math.max(0, Number(e.target.value)))}
+                                                className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
+                                            />
                                         </div>
                                     </div>
 
@@ -753,35 +721,19 @@ export default function AssessmentSettingsModal({
                                         <h3 className="text-xs font-bold text-amber-500 tracking-wider uppercase">
                                             Hard Complexity Score
                                         </h3>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                                                    Positive Marks
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    step="0.25"
-                                                    min="0"
-                                                    required
-                                                    value={hardMarks}
-                                                    onChange={(e) => setHardMarks(Math.max(0, Number(e.target.value)))}
-                                                    className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-slate-400 uppercase">
-                                                    Negative Deduction
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    step="0.05"
-                                                    min="0"
-                                                    required
-                                                    value={hardNegMarks}
-                                                    onChange={(e) => setHardNegMarks(Math.max(0, Number(e.target.value)))}
-                                                    className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
-                                                />
-                                            </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                                                Negative Deduction (Penalty)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.05"
+                                                min="0"
+                                                required
+                                                value={hardNegMarks}
+                                                onChange={(e) => setHardNegMarks(Math.max(0, Number(e.target.value)))}
+                                                className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/30 rounded-lg py-1.5 px-3 text-sm text-white outline-none transition"
+                                            />
                                         </div>
                                     </div>
                                 </div>

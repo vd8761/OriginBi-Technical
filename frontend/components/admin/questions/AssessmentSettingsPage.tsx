@@ -1117,7 +1117,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                           <Info className="w-6 h-6 text-brand-green flex-shrink-0" />
                           <div>
                             <p className="text-sm font-bold text-slate-900 dark:text-white">Pluggable Weight Matrix</p>
-                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">These values dynamically override individual question markings to ensure consistency across the entire assessment.</p>
+                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">These negative marks (penalties) dynamically apply to questions based on their difficulty level if negative marking is enabled. Positive marks are configured individually per question to remain flexible.</p>
                           </div>
                         </div>
                       )}
@@ -1130,13 +1130,9 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                           <div key={label} className={`flex flex-col sm:flex-row sm:items-start justify-between gap-8 ${i < arr.length - 1 ? "pb-10 border-b border-slate-50 dark:border-white/[0.02]" : ""}`}>
                             <div className="sm:max-w-md">
                               <label className={labelCls}>{label} Complexity Score</label>
-                              <p className={descCls}>Marks and penalties for {label.toLowerCase()}-tier questions.</p>
+                              <p className={descCls}>Penalties for {label.toLowerCase()}-tier questions.</p>
                             </div>
                             <div className="flex gap-4 sm:max-w-[400px] w-full">
-                              <div className="flex-1">
-                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">+ Marks</label>
-                                <input type="number" step="0.25" min="0" value={marks} onChange={e => { const val = e.target.value; (setM as any)(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} />
-                              </div>
                               <div className="flex-1">
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">− Penalty</label>
                                 <input type="number" step="0.05" min="0" value={neg} onChange={e => { const val = e.target.value; (setN as any)(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} />
