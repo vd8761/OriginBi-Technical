@@ -1,10 +1,12 @@
 /**
  * API service layer for admin question CRUD operations.
  * Replaces the localStorage-based storage.ts for real DB persistence.
+ *
+ * Always use the same-origin proxy path (/api/...) so the Next.js rewrite
+ * forwards to the assessment service — avoids CORS blocks on localhost.
  */
 
-const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
-const ADMIN_BASE = `${API_BASE}/api/assessment/admin`;
+const ADMIN_BASE = `/api/assessment/admin`;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,11 @@ export interface ApiAssessment {
     keypress_log_enabled?: boolean;
     require_camera_mic?: boolean;
     live_proctoring_enabled?: boolean;
+    adaptive_enabled?: boolean;
+    adaptive_total_questions?: number;
+    adaptive_total_marks?: number;
+    adaptive_total_blocks?: number;
+    adaptive_seconds_per_mark?: number;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────
@@ -189,6 +196,57 @@ export async function bulkImportQuestions(
         method: "POST",
         body: JSON.stringify({ questions, assessmentId }),
     });
+}
+
+/**
+ * Import questions in safe, sequential chunks to prevent request timeouts.
+ * Each chunk is a separate API call with its own DB transaction.
+ * If a chunk fails, previously committed chunks remain in the database.
+ */
+export const BULK_CHUNK_SIZE = 25;
+
+export interface ChunkedImportProgress {
+    /** Total questions queued for import */
+    total: number;
+    /** Questions successfully imported so far */
+    imported: number;
+    /** Current chunk index (0-based) */
+    chunkIndex: number;
+    /** Total number of chunks */
+    totalChunks: number;
+    /** Errors collected across all chunks */
+    errors: string[];
+}
+
+export async function chunkedBulkImportQuestions(
+    module: string,
+    questions: CreateQuestionPayload[],
+    assessmentId?: number,
+    onProgress?: (progress: ChunkedImportProgress) => void
+): Promise<{ imported: number; total: number; errors: string[] }> {
+    const totalChunks = Math.ceil(questions.length / BULK_CHUNK_SIZE);
+    let totalImported = 0;
+    const allErrors: string[] = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * BULK_CHUNK_SIZE;
+        const chunk = questions.slice(start, start + BULK_CHUNK_SIZE);
+
+        const result = await bulkImportQuestions(module, chunk, assessmentId);
+
+        totalImported += result.imported;
+        if (result.errors) allErrors.push(...result.errors);
+
+        onProgress?.({
+            total: questions.length,
+            imported: totalImported,
+            chunkIndex: i,
+            totalChunks,
+            errors: allErrors,
+        });
+    }
+
+    return { imported: totalImported, total: questions.length, errors: allErrors };
 }
 
 // ─── Assessments ───────────────────────────────────────────────────────────────

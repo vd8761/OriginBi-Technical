@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssessmentModule } from './modules/assessment/assessment.module';
+import { AdaptiveModule } from './modules/adaptive/adaptive.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
 
@@ -20,9 +21,11 @@ import { HealthController } from './health/health.controller';
       database: process.env.DB_NAME || 'obidatanew',
       autoLoadEntities: true,
       synchronize: false,
+      ssl: process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1' ? { rejectUnauthorized: false } : false,
     }),
     AuthModule,
     AssessmentModule,
+    AdaptiveModule,   // ← Snapshot-Based Marks Blueprint Adaptive Engine v2
   ],
   controllers: [HealthController],
 })

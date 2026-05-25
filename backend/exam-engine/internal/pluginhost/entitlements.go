@@ -52,15 +52,15 @@ func (r *Registry) UserLanguagePlugins(ctx context.Context, userID int64) ([]Lan
 
 	out := map[string]LanguageEntitlement{}
 
-	// 1) Assignments (backed by NestJS tech_assessment_purchases).
+	// 1) Assignments — resolve language plugin via schema->>legacyItemRef.
 	rows, err := r.pool.Query(ctx, `
-		SELECT p.slug, pi.item_ref
+		SELECT p.slug, a.assignment_ref
 		FROM exam_assignments a
-		JOIN pricing_items pi ON pi.item_ref = a.assignment_ref
-		JOIN plugins p ON p.id = pi.plugin_id
+		JOIN plugins p ON p.schema->>'legacyItemRef' = a.assignment_ref
 		WHERE a.candidate_user_id = $1
 		  AND a.status = 'active'
 		  AND p.category = 'language'
+		  AND a.assignment_ref IS NOT NULL
 	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("pluginhost: list assignments for user %d: %w", userID, err)
@@ -169,10 +169,10 @@ func (r *Registry) IsLanguageEntitledForUser(ctx context.Context, userID int64, 
 func (r *Registry) LanguagePluginByItemRef(ctx context.Context, itemRef string) (*Manifest, error) {
 	var pluginID string
 	err := r.pool.QueryRow(ctx, `
-		SELECT plugin_id::text
-		FROM pricing_items
-		WHERE item_ref = $1
-		  AND plugin_id IS NOT NULL
+		SELECT id::text
+		FROM plugins
+		WHERE schema->>'legacyItemRef' = $1
+		  AND category = 'language'
 		LIMIT 1
 	`, itemRef).Scan(&pluginID)
 	if err == pgx.ErrNoRows {

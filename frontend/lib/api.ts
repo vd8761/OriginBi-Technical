@@ -1,13 +1,12 @@
 "use client";
 
 // Go exam-engine (attempts, code runs, plugins, etc.)
-// If process.env.NEXT_PUBLIC_API_BASE is set, use it; otherwise, leave empty so it resolves same-origin to /v1 (proxied via next.config.ts)
+// Browser: always use same-origin proxy (/v1/* → exam-engine via next.config.ts) to avoid CORS blocks.
+// Server-side (SSR): use the direct URL from env.
 export const API_BASE =
-  typeof window !== "undefined" &&
-  window.location.hostname !== "localhost" &&
-  window.location.hostname !== "127.0.0.1"
-    ? ""
-    : (process.env.NEXT_PUBLIC_API_BASE || "");
+  typeof window !== "undefined"
+    ? ""  // browser: use same-origin proxy (/v1/* → exam-engine via next.config.ts)
+    : (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8088");
 
 // OriginBI auth-service (Cognito auth).
 // Proxied same-origin via /auth-api to prevent CORS blocks
@@ -18,8 +17,12 @@ export const AUTH_API_BASE = "/auth-api";
 export const STUDENT_API_BASE = "/student-api";
 
 // NestJS Assessment Service.
-// Leave empty so it resolves same-origin to /api (proxied via next.config.ts)
-export const TECH_API_BASE = "";
+// Browser: always use same-origin proxy (/api/* → assessment service via next.config.ts) to avoid CORS blocks.
+// Server-side (SSR): use the direct URL from env.
+export const TECH_API_BASE =
+  typeof window !== "undefined"
+    ? ""  // browser: use same-origin proxy (/api/* → assessment service via next.config.ts)
+    : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
 
 const IS_BROWSER = typeof window !== "undefined";
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -587,7 +590,9 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     path.startsWith("/auth-api") ||
     path.startsWith("/student-api")
       ? ""
-      : (baseOverride ?? API_BASE);
+      : path.startsWith("/api/") && baseOverride === undefined
+        ? (TECH_API_BASE || "")
+        : (baseOverride ?? API_BASE);
   const res = await fetch(`${base}${path}`, {
     ...rest,
     headers,
@@ -601,26 +606,32 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     if (ok) {
       return apiFetch<T>(path, { ...init, _retried: true });
     }
-    // Refresh failed (token revoked / expired refresh) — drop credentials so
-    // the proxy bounces the user to login on the next navigation.
-    // Only clear student tokens if this is the authoritative auth service or student service.
-    if (tokenScope === "admin" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+    // Refresh failed — clear tokens.
+    if (path.startsWith("/auth-api") || path.startsWith("/student-api")) {
       clearTokens(tokenScope);
+      if (tokenScope === "user" && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("originbi:session-expired"));
+      }
     }
   }
 
-  // Final 401 from an admin-API call: the user has no usable session for the
-  // exam-engine. Redirect to /admin/login so they can re-authenticate instead
-  // of letting the page sit on stale data and re-fire 401s on every refetch.
+  // Final 401 from an auth-service call: the session is genuinely expired.
+  // Only redirect to login for the authoritative auth endpoints — NOT for
+  // every admin API call. Plugin/package/dashboard endpoints returning 401
+  // should surface as errors in the UI, not trigger a logout.
   if (res.status === 401 && auth && typeof window !== "undefined") {
-    // Only clear student tokens if this is the authoritative auth service or student service.
-    if (tokenScope === "admin" || path.startsWith("/auth-api") || path.startsWith("/student-api")) {
+    if (path.startsWith("/auth-api") || path.startsWith("/student-api")) {
       clearTokens(tokenScope);
-      if (window.location.pathname.startsWith("/admin") &&
-          !window.location.pathname.startsWith("/admin/login")) {
-        window.location.replace(
-          `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
-        );
+      if (tokenScope === "user") {
+        window.dispatchEvent(new CustomEvent("originbi:session-expired"));
+      }
+      if (tokenScope === "admin") {
+        if (window.location.pathname.startsWith("/admin") &&
+            !window.location.pathname.startsWith("/admin/login")) {
+          window.location.replace(
+            `/admin/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+          );
+        }
       }
     }
   }
@@ -884,6 +895,9 @@ export async function listAssignments(): Promise<AssignmentListResponse> {
   if (!HAS_EXAM_API) {
     return { assignments: [] };
   }
+  if (!getAccessToken("user")) {
+    return { assignments: [] };
+  }
   return apiFetch<AssignmentListResponse>("/v1/me/assignments");
 }
 
@@ -1059,6 +1073,9 @@ export async function getPluginDependents(
 // ── Candidate-side: language entitlements ─────────────────────────────────
 
 export async function listMyLanguages(): Promise<{ languages: MeLanguage[] }> {
+  if (!getAccessToken("user")) {
+    return { languages: [] };
+  }
   return apiFetch<{ languages: MeLanguage[] }>("/v1/me/languages");
 }
 

@@ -19,12 +19,13 @@ import {
   createQuestion,
   updateQuestion,
   deleteQuestion as apiDeleteQuestion,
-  bulkImportQuestions,
+  chunkedBulkImportQuestions,
   clearQuestions as apiClearQuestions,
   ApiQuestion,
   CreateQuestionPayload,
   fetchAssessments,
   ApiAssessment,
+  ChunkedImportProgress,
 } from "./api";
 import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
@@ -148,9 +149,26 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
     case "mnc":
       return { ...common, topic: q.category } as MNCQuestion;
     case "communication": {
+      // taskType comes from the dedicated task_type column via the API.
+      // For legacy data where category stored the taskType, fall back gracefully.
+      const knownTaskTypes = ["mcq", "reading", "speaking", "writing", "audio", "listening_mcq", "reading_mcq"];
+      let taskType: string = (q as any).taskType || q.metadata?.taskType || "mcq";
+      let realCategory = q.category || q.metadata?.category || "General";
+
+      // Legacy compatibility: if category looks like a taskType, swap them
+      if (knownTaskTypes.includes(realCategory)) {
+        taskType = realCategory === "listening_mcq" ? "audio" : realCategory === "reading_mcq" ? "reading" : realCategory;
+        realCategory = q.metadata?.category || "General";
+      }
+
+      if (taskType === "listening_mcq") taskType = "audio";
+      if (taskType === "reading_mcq") taskType = "reading";
+
       const commQ: any = {
         ...common,
-        taskType: q.category as CommTaskType,
+        taskType: taskType as CommTaskType,
+        category: realCategory,
+        subcategory: q.subcategory || q.metadata?.subcategory || "",
         instructions: q.questionText,
         passage: q.metadata?.passage,
         audioUrl: q.metadata?.audioUrl,
@@ -186,7 +204,15 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
 
 function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuestionPayload {
   const common = q as any;
-  const correctIdx = common.options?.findIndex((o: any) => o.id === common.correctOptionId) ?? 0;
+  
+  let finalOptions = common.options;
+  let finalCorrectOptionId = common.correctOptionId;
+  if (!finalOptions && module === "communication" && Array.isArray(common.questions) && common.questions[0]?.options) {
+    finalOptions = common.questions[0].options;
+    finalCorrectOptionId = common.questions[0].correctOptionId || finalCorrectOptionId;
+  }
+
+  const correctIdx = finalOptions?.findIndex((o: any) => o.id === finalCorrectOptionId) ?? 0;
   
   let category = "";
   let subcategory = "";
@@ -198,7 +224,15 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
       break;
     }
     case "mnc": category = (q as MNCQuestion).topic; break;
-    case "communication": category = (q as CommQuestion).taskType; break;
+    case "communication": {
+      const cq = q as CommQuestion;
+      // Use the actual category/subcategory from the question object.
+      // The CSV template provides real categories like "Verbal Communication"
+      // while taskType (mcq/reading/speaking/writing/audio) is stored in task_type column.
+      category = (cq as any).category || cq.taskType || "mcq";
+      subcategory = cq.subcategory || "";
+      break;
+    }
     case "role": category = (q as RoleQuestion).questionType; break;
     case "coding": category = (q as CodingQuestion).category; break;
   }
@@ -206,11 +240,13 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
   // Build the complete metadata object containing all assessment-specific fields
   const metadata: any = {
     kind: common.kind || "mcq",
-    correctOptionIds: common.kind === "msq" ? common.correctOptionIds : [common.correctOptionId],
+    correctOptionIds: common.kind === "msq" ? (common.correctOptionIds || (finalCorrectOptionId ? [finalCorrectOptionId] : [])) : [finalCorrectOptionId || common.correctOptionId],
     correctAnswer: common.correctAnswer,
   };
 
   if (module === "communication") {
+    if (common.category) metadata.category = common.category;
+    if (common.subcategory) metadata.subcategory = common.subcategory;
     if (common.passage) metadata.passage = common.passage;
     if (common.audioUrl) metadata.audioUrl = common.audioUrl;
     if (common.prompt) metadata.prompt = common.prompt;
@@ -227,12 +263,12 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     if (common.reportedBy) metadata.reportedBy = common.reportedBy;
   }
 
-  return {
+  const payload: any = {
     category,
     subcategory,
     difficulty: common.difficulty || "medium",
     questionText: common.text || common.instructions || "",
-    options: common.options?.map((o: any) => ({ text: o.text })),
+    options: finalOptions?.map((o: any) => ({ text: o.text })),
     correctOptionIndex: correctIdx >= 0 ? correctIdx : 0,
     explanation: common.explanation,
     marks: common.marks ?? 1,
@@ -242,6 +278,13 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
     assessmentId: common.assessmentId,
     metadata
   };
+
+  // Include taskType for communication/grammar so backend sets the task_type column
+  if (module === "communication") {
+    payload.taskType = common.taskType || common.kind || "mcq";
+  }
+
+  return payload;
 }
 
 // All modules except specialized ones are now DB-backed
@@ -573,6 +616,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         setLoading(true);
         const payload = {
           ...frontendToPayload(selectedModule!, q),
+          assessmentId: q.assessmentId || activeAssessment?.assessment_id || undefined,
           mode
         };
         if (isExisting && !qId.startsWith("new-")) {
@@ -620,16 +664,25 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     }
   };
 
-  const handleImport = async (imported: AnyQuestion[]) => {
+  const handleImport = async (imported: AnyQuestion[], onProgress?: (p: ChunkedImportProgress) => void) => {
     if (isDbModule(selectedModule)) {
       try {
         setLoading(true);
         const payloads = imported.map(q => ({
           ...frontendToPayload(selectedModule!, q),
+          assessmentId: activeAssessment?.assessment_id || undefined,
           mode
         }));
-        const res = await bulkImportQuestions(selectedModule!, payloads);
+        const res = await chunkedBulkImportQuestions(
+          selectedModule!,
+          payloads,
+          activeAssessment?.assessment_id || undefined,
+          onProgress
+        );
         showToast(`Imported ${res.imported} questions`);
+        if (res.errors.length > 0) {
+          console.warn(`Import completed with ${res.errors.length} errors:`, res.errors);
+        }
         await loadQuestionsForModule(selectedModule!, mode);
         await refreshModuleCounts(selectedModule!);
       } catch (err) {

@@ -10,7 +10,7 @@ import {
 } from "./types";
 import { generateId } from "./storage";
 import CustomSelect from "@/components/ui/CustomSelect";
-import { uploadQuestionAsset } from "./api";
+import { uploadQuestionAsset, ChunkedImportProgress } from "./api";
 import { 
   AlertCircle, CheckCircle2, Upload, Trash2, Plus, Download,
   FileSpreadsheet, Edit3, HelpCircle, Check, AlertTriangle, X, UploadCloud, Loader2
@@ -19,7 +19,7 @@ import {
 interface CsvImportPanelProps {
   assessmentType: AssessmentType;
   allowedQuestionKinds: QuestionKind[];
-  onImport: (questions: AnyQuestion[]) => void;
+  onImport: (questions: AnyQuestion[], onProgress?: (p: ChunkedImportProgress) => void) => void;
   onCancel: () => void;
 }
 
@@ -61,11 +61,9 @@ function getCsvHeaders(assessmentType: AssessmentType): string[] {
       ];
     case "communication":
       return [
-        "Task Type", "Category", "Subcategory", "Instructions", "Passage", "Audio URL", "Prompt",
-        "Prep Time (Seconds)", "Record Time (Seconds)", "Min Words", "Max Words",
-        "Question Text", "Option 1", "Option 2", "Option 3", "Option 4",
-        "Correct Option Index", "Difficulty", "Marks", "Negative Marks",
-        "Explanation", "Status"
+        "Category", "Subcategory", "Question Type", "Question Text",
+        "Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Option 6",
+        "Correct Option Index", "Difficulty", "Marks", "Explanation", "Status"
       ];
     default:
       return [];
@@ -98,10 +96,9 @@ function getCsvSampleRows(assessmentType: AssessmentType): string[][] {
       ];
     case "communication":
       return [
-        ["mcq", "Professional", "Email", "Choose the most appropriate professional response.", "", "", "", "0", "0", "0", "0", "Choose the most professional email opening:", "Hey, just checking in.", "It was a pleasure meeting with you earlier today.", "I forgot to ask something.", "Did you look at the notes?", "2", "medium", "2", "0.25", "Polite opening is best.", "active"],
-        ["reading", "Workplace", "Project", "Read the passage and answer questions.", "Subject: Project Alpha Update\\n\\nThe delivery date has been moved up by two weeks...", "", "", "0", "0", "0", "0", "What is the main reason for the schedule change?", "The team was working too slowly.", "The client has an upcoming product launch.", "The PM is going on leave.", "There was a contract error.", "2", "medium", "2", "0.25", "Client's product launch is critical.", "active"],
-        ["writing", "Customer", "Support", "Draft an email response.", "", "", "A client is frustrated about a broken feature. Draft a professional response.", "0", "0", "50", "200", "", "", "", "", "", "", "medium", "2", "0.25", "Professional tone, active listening, clear timelines.", "active"],
-        ["speaking", "Management", "Pitch", "Record a speaking response.", "", "", "Explain a complex technical problem to a non-technical stakeholder.", "30", "90", "0", "0", "", "", "", "", "", "", "medium", "2", "0.25", "Assess clarity, pace, and lack of technical jargon.", "active"]
+        ["Verbal Communication", "Self Introduction", "mcq", "Which of the following is the most professional way to start a self-introduction in an interview?", "Hi, I am John.", "Good morning, my name is John Doe and I am a software engineer.", "What's up, I'm John.", "Myself John.", "", "", "2", "easy", "1", "Polite and complete name with role is professional.", "active"],
+        ["Verbal Communication", "Public Speaking", "msq", "Which of the following are effective ways to maintain audience engagement?", "Making eye contact with different sections of the room", "Speaking in a flat, monotone voice", "Using stories and relevant examples", "Reading directly from the slides at all times", "", "", "1,3", "medium", "2", "Eye contact and storytelling enhance engagement.", "active"],
+        ["Verbal Communication", "Group Discussion", "tf", "Interrupting others constantly is considered a sign of leadership in a group discussion.", "True", "False", "", "", "", "", "2", "easy", "1", "Interrupting others shows lack of active listening.", "active"]
       ];
     default:
       return [];
@@ -210,7 +207,35 @@ function validateQuestionRow(q: AnyQuestion, assessmentType: AssessmentType): Va
 
   // Option / Option correctness validation
   const kind = common.kind || "mcq";
-  if (assessmentType !== "coding" && assessmentType !== "communication") {
+  if (assessmentType === "communication" && common.taskType === "mcq") {
+    const subQ = common.questions?.[0];
+    const options = subQ?.options || [];
+    if (options.length < 2) {
+      errors.push({ field: "options", message: "At least 2 options are required." });
+    }
+    const emptyOptions = options.some((o: any) => !o.text || !o.text.trim());
+    if (emptyOptions) {
+      errors.push({ field: "options", message: "Option descriptions cannot be empty." });
+    }
+
+    if (kind === "msq") {
+      const correctIds = common.correctOptionIds || [];
+      if (correctIds.length === 0) {
+        errors.push({ field: "correctOptionIds", message: "At least one correct option index is required for MSQ." });
+      }
+      const invalidIds = correctIds.filter((id: string) => !options.some((o: any) => o.id === id));
+      if (invalidIds.length > 0) {
+        errors.push({ field: "correctOptionIds", message: "One or more correct option selections are invalid." });
+      }
+    } else {
+      const correctId = common.correctOptionId || subQ?.correctOptionId;
+      if (!correctId) {
+        errors.push({ field: "correctOptionId", message: "Correct option selection is required." });
+      } else if (!options.some((o: any) => o.id === correctId)) {
+        errors.push({ field: "correctOptionId", message: "Correct option selection is invalid." });
+      }
+    }
+  } else if (assessmentType !== "coding" && assessmentType !== "communication") {
     if (kind === "numerical") {
       if (!common.correctAnswer || !common.correctAnswer.trim()) {
         errors.push({ field: "correctAnswer", message: "Correct Answer is required for numerical questions." });
@@ -451,55 +476,67 @@ function csvToQuestions(rows: string[][], assessmentType: AssessmentType): AnyQu
         } as CodingQuestion;
       }
       case "communication": {
-        const taskType = (getValue("tasktype").toLowerCase() || "mcq") as any;
-        const category = getValue("category");
-        const subcategory = getValue("subcategory");
-        const instructions = getValue("instructions");
-        const passage = getValue("passage");
-        const audioUrl = getValue("audiourl");
-        const prompt = getValue("prompt");
+        const rawType = (getValue("questiontype") || getValue("questionkind") || getValue("tasktype") || "mcq").toLowerCase();
         
-        const prepTimeSeconds = getValue("preptimeseconds") ? Number(getValue("preptimeseconds")) : 30;
-        const recordTimeSeconds = getValue("recordtimeseconds") ? Number(getValue("recordtimeseconds")) : 90;
-        const minWords = getValue("minwords") ? Number(getValue("minwords")) : 50;
-        const maxWords = getValue("maxwords") ? Number(getValue("maxwords")) : 200;
-
-        const subQuestions: any[] = [];
-        const subQText = getValue("questiontext");
-        if (subQText) {
-          const subQOpts: QuestionOption[] = [];
-          for (let i = 1; i <= 4; i++) {
-            const optText = getValue(`option${i}`);
-            if (optText) {
-              subQOpts.push({ id: `opt_sq0_${i - 1}`, text: optText });
-            }
-          }
-          const correctIdx = Number(getValue("correctoptionindex")) - 1;
-          const correctOptionId = !isNaN(correctIdx) && subQOpts[correctIdx] ? subQOpts[correctIdx].id : undefined;
-
-          subQuestions.push({
-            id: `sq_${baseId}_0`,
-            text: subQText,
-            options: subQOpts,
-            correctOptionId,
-          });
+        const taskType: any = "mcq";
+        let kind = "mcq";
+        
+        if (rawType === "msq") {
+          kind = "msq";
+        } else if (rawType === "tf" || rawType === "true/false" || rawType === "true_false") {
+          kind = "tf";
         }
+
+        const category = getValue("category") || "General";
+        const subcategory = getValue("subcategory");
+        const questionText = getValue("questiontext") || getValue("question") || "";
+        const explanation = getValue("explanation") || "";
+
+        const options: QuestionOption[] = [];
+        for (let i = 1; i <= 6; i++) {
+          const optText = getValue(`option${i}`);
+          if (optText) {
+            options.push({ id: `opt_${i - 1}`, text: optText });
+          }
+        }
+
+        const correctIndexStr = getValue("correctoptionindex");
+        let correctOptionId = "";
+        let correctOptionIds: string[] = [];
+
+        if (kind === "msq") {
+          const indices = correctIndexStr.split(/[;,]+/).map(x => Number(x.trim()) - 1).filter(idx => !isNaN(idx));
+          correctOptionIds = indices.map(idx => options[idx]?.id).filter(Boolean);
+          correctOptionId = correctOptionIds[0] || "";
+        } else {
+          const idx = Number(correctIndexStr.trim()) - 1;
+          if (!isNaN(idx) && options[idx]) {
+            correctOptionId = options[idx].id;
+            correctOptionIds = [correctOptionId];
+          }
+        }
+
+        const subQuestions: any[] = [{
+          id: `sq_${baseId}_0`,
+          text: questionText,
+          options,
+          correctOptionId,
+        }];
 
         return {
           ...baseQuestion,
+          kind,
+          correctOptionId,
+          correctOptionIds,
           taskType,
           category,
           subcategory,
-          instructions,
-          passage,
-          audioUrl,
-          prompt,
-          prepTimeSeconds,
-          recordTimeSeconds,
-          minWords,
-          maxWords,
+          text: questionText,
+          explanation,
+          instructions: questionText,
+          options,
           questions: subQuestions,
-        } as CommQuestion;
+        } as any;
       }
     }
   });
@@ -688,6 +725,7 @@ export default function CsvImportPanel({
     step: string;
     progress: number;
     total: number;
+    unit?: "rows" | "percent";
   }>({ active: false, step: "", progress: 0, total: 0 });
 
   // Dynamic Validation Map (Question ID -> Validation Errors)
@@ -729,7 +767,7 @@ export default function CsvImportPanel({
 
   const handleCsvParsing = useCallback(async (text: string) => {
     setErrorMsg(null);
-    setProcessing({ active: true, step: "Parsing CSV structure...", progress: 0, total: 0 });
+    setProcessing({ active: true, step: "Parsing CSV structure...", progress: 0, total: 0, unit: "rows" });
 
     // Yield to the UI so the overlay renders before heavy work starts
     await new Promise(resolve => requestAnimationFrame(resolve));
@@ -741,7 +779,7 @@ export default function CsvImportPanel({
       }
 
       const totalDataRows = parsed.length - 1;
-      setProcessing({ active: true, step: "Mapping question fields...", progress: 0, total: totalDataRows });
+      setProcessing({ active: true, step: "Mapping question fields...", progress: 0, total: totalDataRows, unit: "rows" });
       await new Promise(resolve => requestAnimationFrame(resolve));
 
       // Process in chunks to keep UI responsive
@@ -762,6 +800,7 @@ export default function CsvImportPanel({
           step: `Processing questions (${processed.toLocaleString()} / ${totalDataRows.toLocaleString()})...`,
           progress: processed,
           total: totalDataRows,
+          unit: "rows",
         });
 
         // Yield to the browser to repaint progress
@@ -772,7 +811,7 @@ export default function CsvImportPanel({
         throw new Error("No valid question records could be resolved from CSV.");
       }
 
-      setProcessing({ active: true, step: "Running validations...", progress: totalDataRows, total: totalDataRows });
+      setProcessing({ active: true, step: "Running validations...", progress: totalDataRows, total: totalDataRows, unit: "rows" });
       await new Promise(resolve => requestAnimationFrame(resolve));
 
       setQuestions(allMapped);
@@ -882,31 +921,36 @@ export default function CsvImportPanel({
       return;
     }
 
+    const total = questions.length;
+
     setProcessing({
       active: true,
-      step: `Preparing ${questions.length.toLocaleString()} questions for database ingestion...`,
-      progress: 10,
-      total: 100
+      step: `Preparing ${total.toLocaleString()} questions for database ingestion...`,
+      progress: 0,
+      total,
+      unit: "rows"
     });
 
     try {
       // Short delay for smooth UI transition
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      setProcessing({
-        active: true,
-        step: `Ingesting questions into the database... Please do not close this tab.`,
-        progress: 50,
-        total: 100
+      await onImport(questions, (p: ChunkedImportProgress) => {
+        setProcessing({
+          active: true,
+          step: `Importing questions... Batch ${p.chunkIndex + 1} of ${p.totalChunks} complete. Please do not close this tab.`,
+          progress: p.imported,
+          total: p.total,
+          unit: "rows"
+        });
       });
-
-      await onImport(questions);
 
       setProcessing({
         active: true,
         step: "Refreshing assessment configuration and inventory...",
-        progress: 95,
-        total: 100
+        progress: total,
+        total,
+        unit: "rows"
       });
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (err) {
@@ -964,7 +1008,11 @@ export default function CsvImportPanel({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-white/30">
-                    {processing.progress.toLocaleString()} / {processing.total.toLocaleString()} rows
+                    {processing.unit === "percent" ? (
+                      ""
+                    ) : (
+                      `${processing.progress.toLocaleString()} / ${processing.total.toLocaleString()} rows`
+                    )}
                   </span>
                   <span className="text-[10px] font-black text-brand-green">
                     {Math.round((processing.progress / processing.total) * 100)}%
@@ -1200,17 +1248,16 @@ export default function CsvImportPanel({
 
                           {assessmentType === "communication" && (
                             <div className="w-full">
-                              <CustomSelect
-                                label="Task Type"
-                                value={(activeQuestion as CommQuestion).taskType || "mcq"}
-                                onChange={(val) => updateActiveQuestion({ taskType: val as any })}
-                                options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({
-                                  label: v,
-                                  value: k
-                                }))}
+                              <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Category</label>
+                              <input
+                                type="text"
+                                value={(activeQuestion as any).category || ""}
+                                onChange={(e) => updateActiveQuestion({ category: e.target.value })}
+                                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 text-[12px] font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                                placeholder="e.g. Verbal Communication"
                               />
-                              {getFieldError("taskType") && (
-                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("taskType")}</p>
+                              {getFieldError("category") && (
+                                <p className="text-[11px] font-bold text-red-500 mt-1">{getFieldError("category")}</p>
                               )}
                             </div>
                           )}
@@ -1373,7 +1420,7 @@ export default function CsvImportPanel({
                         </div>
 
                         {/* Main Question / Instructions textareas */}
-                        {assessmentType === "communication" ? (
+                        {assessmentType === "communication" && false ? (
                           <div className="space-y-4">
                             <div>
                               <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Direct Instructions</label>

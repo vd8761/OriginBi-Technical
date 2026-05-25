@@ -26,7 +26,7 @@ import (
 const (
 	sessionCookieName           = "ob_session"
 	sessionTTL                  = 24 * time.Hour
-	technicalRegistrationSource = "originbi-technical"
+	technicalRegistrationSource = "SELF"
 )
 
 type authResponse struct {
@@ -242,9 +242,9 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			mobile_number, status, payment_status, payment_required,
 			metadata, is_deleted, is_tech_assessment, created_at, updated_at
 		)
-		VALUES ($1, 'SELF', $2, $3, $4, $5, 'COMPLETED',
-		        'NOT_REQUIRED', FALSE, $6::jsonb, FALSE, $7, now(), now())
-	`, user.ID, req.Name, req.Gender, req.CountryCode, req.Phone, metadataBytes, isTechAssessment); err != nil {
+		VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED',
+		        'NOT_REQUIRED', FALSE, $7::jsonb, FALSE, CASE WHEN $8 THEN 1 ELSE 0 END, now(), now())
+	`, user.ID, req.RegistrationSource, req.Name, req.Gender, req.CountryCode, req.Phone, metadataBytes, isTechAssessment); err != nil {
 		writeError(w, http.StatusInternalServerError, "create registration failed")
 		return
 	}
@@ -858,7 +858,7 @@ func metadataString(metadata map[string]any, key string) string {
 func isOriginBITechnicalSource(source string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(source))
 	normalized = strings.NewReplacer("-", "", "_", "", " ", "").Replace(normalized)
-	return normalized == "originbitechnical"
+	return normalized == "originbitechnical" || normalized == "self" || normalized == "admin"
 }
 
 func normalizeRegistrationInput(req *registerRequest, requirePassword bool) error {

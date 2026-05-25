@@ -59,7 +59,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'grammar_question_id',
     optionsTable: 'tech_grammar_options',
     optionsFk: 'grammar_question_id',
-    categoryColumn: 'task_type',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
   },
   coding: {
     questionTable: 'tech_coding_questions',
@@ -71,7 +72,7 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'mnc_question_id',
     optionsTable: 'tech_mnc_options',
     optionsFk: 'mnc_question_id',
-    categoryColumn: 'topic_group',
+    categoryColumn: 'category',
   },
   role: {
     questionTable: 'tech_role_questions',
@@ -85,7 +86,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     idColumn: 'grammar_question_id',
     optionsTable: 'tech_grammar_options',
     optionsFk: 'grammar_question_id',
-    categoryColumn: 'task_type',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
   },
 };
 
@@ -139,20 +141,22 @@ export class AdminQuestionService {
 
   private formatQuestionResponse(module: ModuleType, row: any, options: any[]) {
     const config = MODULE_CONFIGS[module];
-    return {
+    const response: any = {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
-        ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
-           : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
-           : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
-           : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
-           : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
-           : row[config.categoryColumn])
-        : row[config.categoryColumn],
+      category: module === 'coding'
+        ? 'Coding'
+        : (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
+          ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
+             : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
+             : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
+             : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
+             : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
+             : row[config.categoryColumn])
+          : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
-      questionText: row.question_text,
+      questionText: module === 'coding' ? (row.problem_title || row.problem_statement || '') : row.question_text,
       explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
@@ -162,12 +166,19 @@ export class AdminQuestionService {
       marks: Number(row.marks),
       negativeMarks: Number(row.negative_marks),
       status: row.status,
-      mode: row.mode || 'trial',
+      mode: row.mode || 'main',
       imageUrl: row.image_url,
       metadata: row.metadata || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+
+    // Include task_type for grammar/communication so frontend can distinguish taskType from category
+    if ((module === 'grammar' || module === 'communication') && row.task_type) {
+      response.taskType = row.task_type;
+    }
+
+    return response;
   }
 
   // ─── Generic CRUD Methods ──────────────────────────────────────────────────────
@@ -183,7 +194,7 @@ export class AdminQuestionService {
       conditions.push(`q.assessment_id = $${paramIdx++}`);
       params.push(assessmentId);
     }
-    if (category) {
+    if (category && module !== 'coding') {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
     }
@@ -195,12 +206,17 @@ export class AdminQuestionService {
       conditions.push(`q.status = $${paramIdx++}`);
       params.push(status);
     }
-    if (mode) {
+    if (mode && module !== 'coding') {
       conditions.push(`q.mode = $${paramIdx++}`);
       params.push(mode);
     }
     if (search) {
-      conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
+      if (module === 'coding') {
+        conditions.push(`(LOWER(q.problem_title) LIKE $${paramIdx} OR LOWER(q.problem_statement) LIKE $${paramIdx})`);
+        paramIdx++;
+      } else {
+        conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
+      }
       params.push(`%${search.toLowerCase()}%`);
     }
 
@@ -310,6 +326,27 @@ export class AdminQuestionService {
       const values = [assessmentId, category, difficulty, questionText, explanation, imageUrl, null, marks, negativeMarks, status, mode, data.metadata ? JSON.stringify(data.metadata) : null];
       let placeholders = ['$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11', '$12'];
 
+      if (module === 'communication' || module === 'grammar') {
+        columns.push('task_type');
+        values.push(data.taskType || 'mcq');
+        placeholders.push(`$${values.length}`);
+
+        const audioUrlVal = data.audioUrl || data.metadata?.audioUrl || null;
+        columns.push('audio_url');
+        values.push(audioUrlVal);
+        placeholders.push(`$${values.length}`);
+
+        const passageTextVal = data.passageText || data.passage || data.metadata?.passage || data.metadata?.passageText || null;
+        columns.push('passage_text');
+        values.push(passageTextVal);
+        placeholders.push(`$${values.length}`);
+
+        const refAnswerVal = data.referenceAnswer || data.metadata?.referenceAnswer || null;
+        columns.push('reference_answer');
+        values.push(refAnswerVal);
+        placeholders.push(`$${values.length}`);
+      }
+
       if (config.subcategoryColumn) {
         columns.push(config.subcategoryColumn);
         values.push(subcategory || 'General');
@@ -411,6 +448,27 @@ export class AdminQuestionService {
       if (mode !== undefined) { updates.push(`mode = $${pIdx++}`); params.push(mode); }
       if (imageUrl !== undefined) { updates.push(`image_url = $${pIdx++}`); params.push(imageUrl); }
       if (data.metadata !== undefined) { updates.push(`metadata = $${pIdx++}`); params.push(data.metadata ? JSON.stringify(data.metadata) : null); }
+      if (data.taskType !== undefined && (module === 'communication' || module === 'grammar')) {
+        updates.push(`task_type = $${pIdx++}`);
+        params.push(data.taskType);
+      }
+      if (module === 'communication' || module === 'grammar') {
+        const audioUrlVal = data.audioUrl !== undefined ? data.audioUrl : (data.metadata?.audioUrl !== undefined ? data.metadata.audioUrl : undefined);
+        if (audioUrlVal !== undefined) {
+          updates.push(`audio_url = $${pIdx++}`);
+          params.push(audioUrlVal);
+        }
+        const passageTextVal = data.passageText !== undefined ? data.passageText : (data.passage !== undefined ? data.passage : (data.metadata?.passage !== undefined ? data.metadata.passage : (data.metadata?.passageText !== undefined ? data.metadata.passageText : undefined)));
+        if (passageTextVal !== undefined) {
+          updates.push(`passage_text = $${pIdx++}`);
+          params.push(passageTextVal);
+        }
+        const refAnswerVal = data.referenceAnswer !== undefined ? data.referenceAnswer : (data.metadata?.referenceAnswer !== undefined ? data.metadata.referenceAnswer : undefined);
+        if (refAnswerVal !== undefined) {
+          updates.push(`reference_answer = $${pIdx++}`);
+          params.push(refAnswerVal);
+        }
+      }
 
       updates.push('updated_at = NOW()');
 
@@ -574,9 +632,31 @@ export class AdminQuestionService {
           const values = [assessmentId, category, q.difficulty || 'medium', questionText, explanation, q.marks ?? 1, q.negativeMarks ?? 0, q.status || 'active', q.mode || 'trial', JSON.stringify(metadata)];
           let placeholders = ['$1', '$2', '$3', '$4', '$5', 'NULL', '$6', '$7', '$8', '$9', '$10'];
 
+          if (module === 'communication' || module === 'grammar') {
+            columns.push('task_type');
+            values.push(q.taskType || metadata.taskType || 'mcq');
+            placeholders.push(`$${values.length}`);
+
+            const audioUrlVal = q.audioUrl || metadata.audioUrl || null;
+            columns.push('audio_url');
+            values.push(audioUrlVal);
+            placeholders.push(`$${values.length}`);
+
+            const passageTextVal = q.passageText || q.passage || metadata.passage || metadata.passageText || null;
+            columns.push('passage_text');
+            values.push(passageTextVal);
+            placeholders.push(`$${values.length}`);
+
+            const refAnswerVal = q.referenceAnswer || metadata.referenceAnswer || null;
+            columns.push('reference_answer');
+            values.push(refAnswerVal);
+            placeholders.push(`$${values.length}`);
+          }
+
           if (config.subcategoryColumn) {
             columns.push(config.subcategoryColumn);
-            values.push(subcategory || category || 'General');
+            const subVal = subcategory || (module === 'communication' || module === 'grammar' ? 'General' : category) || 'General';
+            values.push(subVal);
             placeholders.push(`$${values.length}`);
           }
 
@@ -588,17 +668,36 @@ export class AdminQuestionService {
           );
           const newQId = qInsert[0][config.idColumn];
 
-          if (config.optionsTable && Array.isArray(q.options)) {
+          if (config.optionsTable && Array.isArray(q.options) && q.options.length > 0) {
             const insertedOpts: any[] = [];
-            for (const opt of q.options) {
+            const optValues: any[] = [];
+            const optPlaceholders: string[] = [];
+
+            q.options.forEach((opt: any, idx: number) => {
               const optText = typeof opt === 'string' ? opt : opt.text || opt.option_text;
-              const oInsert = await queryRunner.query(`INSERT INTO ${config.optionsTable} (${config.optionsFk}, option_text) VALUES ($1, $2) RETURNING option_id`, [newQId, optText]);
-              insertedOpts.push(oInsert[0]);
-            }
+              optValues.push(newQId, optText);
+              optPlaceholders.push(`($${idx * 2 + 1}, $${idx * 2 + 2})`);
+            });
+
+            const inserted = await queryRunner.query(
+              `INSERT INTO ${config.optionsTable} (${config.optionsFk}, option_text)
+               VALUES ${optPlaceholders.join(', ')}
+               RETURNING option_id`,
+              optValues
+            );
+            insertedOpts.push(...inserted);
+
             const correctIdx = q.correctOptionIndex ?? q.correctOptionId ?? 0;
+            let correctOptionId: number | null = null;
             if (insertedOpts.length > 0) {
-              const safeIdx = Math.min(Math.max(0, Number(correctIdx)), insertedOpts.length - 1);
-              await queryRunner.query(`UPDATE ${config.questionTable} SET correct_option_id = $1 WHERE ${config.idColumn} = $2`, [insertedOpts[safeIdx].option_id, newQId]);
+              let idx = Number(correctIdx);
+              if (isNaN(idx) && typeof correctIdx === 'string' && correctIdx.startsWith('opt_')) {
+                if (correctIdx === 'opt_true') idx = 0;
+                else if (correctIdx === 'opt_false') idx = 1;
+                else idx = parseInt(correctIdx.split('_')[1], 10);
+              }
+              const safeIdx = Math.min(Math.max(0, isNaN(idx) ? 0 : idx), insertedOpts.length - 1);
+              correctOptionId = insertedOpts[safeIdx]?.option_id ?? null;
             }
 
             // Resolve temp correctOptionIds in metadata
@@ -612,13 +711,16 @@ export class AdminQuestionService {
                 }
                 return id;
               }).filter(Boolean);
-              
+
               metadata.correctOptionIds = resolvedIds;
-              await queryRunner.query(
-                `UPDATE ${config.questionTable} SET metadata = $1 WHERE ${config.idColumn} = $2`,
-                [JSON.stringify(metadata), newQId]
-              );
             }
+
+            await queryRunner.query(
+              `UPDATE ${config.questionTable}
+               SET correct_option_id = $1, metadata = $2
+               WHERE ${config.idColumn} = $3`,
+              [correctOptionId, JSON.stringify(metadata), newQId]
+            );
           }
           imported++;
         } catch (e: any) {
@@ -659,10 +761,13 @@ export class AdminQuestionService {
                 a.categories, a.difficulty_marks, a.difficulty_negative_marks,
                 a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
                 a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
-                a.proctoring_require_fullscreen, a.fullscreen_exit_limit,
-                a.proctoring_block_devtools, a.devtools_open_limit,
-                a.mouse_focus_loss_limit, a.keypress_log_enabled,
+                a.keypress_log_enabled,
                 a.require_camera_mic, a.live_proctoring_enabled,
+                a.adaptive_enabled,
+                a.adaptive_total_questions,
+                a.adaptive_total_marks,
+                a.adaptive_total_blocks,
+                a.adaptive_seconds_per_mark,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -712,6 +817,11 @@ export class AdminQuestionService {
     const keypressLogEnabled = data.keypress_log_enabled;
     const requireCameraMic = data.require_camera_mic;
     const liveProctoringEnabled = data.live_proctoring_enabled;
+    const adaptiveEnabled = data.adaptive_enabled;
+    const adaptiveTotalQuestions = data.adaptive_total_questions ?? data.adaptiveTotalQuestions;
+    const adaptiveTotalMarks     = data.adaptive_total_marks     ?? data.adaptiveTotalMarks;
+    const adaptiveTotalBlocks    = data.adaptive_total_blocks    ?? data.adaptiveTotalBlocks;
+    const adaptiveSecondsPerMark = data.adaptive_seconds_per_mark ?? data.adaptiveSecondsPerMark;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -803,9 +913,9 @@ export class AdminQuestionService {
          SET assessment_name = COALESCE($1, assessment_name),
              total_time_minutes = COALESCE($2, total_time_minutes),
              question_limit = COALESCE($3, question_limit),
-             categories = COALESCE($4, categories),
-             difficulty_marks = COALESCE($5, difficulty_marks),
-             difficulty_negative_marks = COALESCE($6, difficulty_negative_marks),
+             categories = COALESCE($4::jsonb, categories),
+             difficulty_marks = COALESCE($5::jsonb, difficulty_marks),
+             difficulty_negative_marks = COALESCE($6::jsonb, difficulty_negative_marks),
              tab_switch_limit = COALESCE($7, tab_switch_limit),
              anti_copy_enabled = COALESCE($8, anti_copy_enabled),
              shuffle_questions = COALESCE($9, shuffle_questions),
@@ -813,7 +923,7 @@ export class AdminQuestionService {
              amount = COALESCE($11, amount),
              trial_attempts_limit = COALESCE($12, trial_attempts_limit),
              main_attempts_limit = COALESCE($13, main_attempts_limit),
-             enabled_question_types = COALESCE($14, enabled_question_types),
+             enabled_question_types = COALESCE($14::jsonb, enabled_question_types),
              proctoring_require_fullscreen = COALESCE($16, proctoring_require_fullscreen),
              fullscreen_exit_limit = COALESCE($17, fullscreen_exit_limit),
              proctoring_block_devtools = COALESCE($18, proctoring_block_devtools),
@@ -822,6 +932,11 @@ export class AdminQuestionService {
              keypress_log_enabled = COALESCE($21, keypress_log_enabled),
              require_camera_mic = COALESCE($22, require_camera_mic),
              live_proctoring_enabled = COALESCE($23, live_proctoring_enabled),
+             adaptive_enabled = COALESCE($24, adaptive_enabled),
+             adaptive_total_marks = COALESCE($25, adaptive_total_marks),
+             adaptive_total_blocks = COALESCE($26, adaptive_total_blocks),
+             adaptive_seconds_per_mark = COALESCE($27, adaptive_seconds_per_mark),
+             adaptive_total_questions = COALESCE($28, adaptive_total_questions),
              updated_at = NOW()
          WHERE assessment_id = $15`,
         [
@@ -848,6 +963,11 @@ export class AdminQuestionService {
           keypressLogEnabled !== undefined ? Boolean(keypressLogEnabled) : null,
           requireCameraMic !== undefined ? Boolean(requireCameraMic) : null,
           liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
+          adaptiveEnabled !== undefined ? Boolean(adaptiveEnabled) : null,
+          adaptiveTotalMarks !== undefined ? Number(adaptiveTotalMarks) : null,
+          adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : null,
+          adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : null,
+          adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : null,
         ]
       );
 
@@ -878,6 +998,9 @@ export class AdminQuestionService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`updateAssessment (${id}) error:`, error);
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to update assessment configurations');
     } finally {
       await queryRunner.release();

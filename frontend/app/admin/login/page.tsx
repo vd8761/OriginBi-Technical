@@ -135,11 +135,9 @@ function AdminLoginForm() {
       const accessTokenJwt = tokens.accessToken;
       const refreshTokenJwt = tokens.refreshToken || "";
 
-      // Use the same-origin Next.js proxy to bypass CORS restrictions in the browser.
-      // If NEXT_PUBLIC_ADMIN_API_BASE_URL is not set but NEXT_PUBLIC_AUTH_SERVICE_URL is,
-      // we fallback to the auth-api proxy. Otherwise we use the admin-api proxy.
-      const useAuthFallback = !process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL && process.env.NEXT_PUBLIC_AUTH_SERVICE_URL;
-      const proxyUrl = useAuthFallback ? `/auth-api/admin/me` : `/admin-api/admin/me`;
+      // The admin/me endpoint lives on the assessment service (port 5000),
+      // proxied via Next.js /api/* → http://localhost:5000/api/*.
+      const proxyUrl = `/api/admin/me`;
 
       const res = await fetch(proxyUrl, {
         method: "GET",
@@ -181,14 +179,11 @@ function AdminLoginForm() {
         refreshToken: refreshTokenJwt || undefined,
       });
 
-      localStorage.setItem("originbi:id-token", idTokenJwt);
-      localStorage.setItem("originbi:access-token", accessTokenJwt);
-      if (refreshTokenJwt) localStorage.setItem("originbi:refresh-token", refreshTokenJwt);
-
-      localStorage.setItem("originbi_id_token", idTokenJwt);
-      localStorage.setItem("accessToken", accessTokenJwt);
-      sessionStorage.setItem("idToken", idTokenJwt);
-      sessionStorage.setItem("accessToken", accessTokenJwt);
+      // NOTE: Do NOT write to the student token namespace (originbi:access-token /
+      // originbi:id-token). SessionContext.loadSession() watches those keys and
+      // will call logout() — which clears originbi:admin-session — if it finds a
+      // token there without a matching student profile, causing an immediate
+      // redirect back to the login page.
 
       document.cookie = `obi.accessToken=${accessTokenJwt}; path=/; samesite=lax; max-age=${60 * 60 * 24 * 7}`;
 

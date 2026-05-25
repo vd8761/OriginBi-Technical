@@ -125,7 +125,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
 
         const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-        if (!TECH_API_BASE) return;
+        if (TECH_API_BASE === undefined) return;
         const response = await fetch(`${TECH_API_BASE}/api/assessment/attempts-stats${emailParam}`);
         if (!response.ok) return;
         const json = await response.json();
@@ -173,7 +173,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         }
 
         const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-        if (!TECH_API_BASE) return;
+        if (TECH_API_BASE === undefined) return;
         const response = await fetch(`${TECH_API_BASE}/api/assessment/in-progress${emailParam}`);
         if (!response.ok) {
           if (active) setInProgressAttempt(null);
@@ -197,7 +197,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   useEffect(() => {
     let active = true;
     const fetchAll = async () => {
-      if (!LEGACY_TECH_API_URL) return;
+      if (LEGACY_TECH_API_URL === undefined) return;
       try {
         const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`);
         if (!response.ok) return;
@@ -274,7 +274,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
           tags: tags,
           enabledQuestionTypes: dbExam.enabled_question_types,
-          requireCameraMic: Boolean(dbExam.require_camera_mic),
         };
       }
       return exam;
@@ -355,6 +354,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     }
     return CODING_LANGUAGES.some((lang) => isPaid(`coding:${lang.id}` as PaymentKey));
   }, [visibleExams, isPaid, paidAssignments]);
+
+  const isDataLoading = !isEntitlementsReady || paidAssignments === null;
 
   const handleSelectExam = (exam: Exam) => {
     router.push(`/explore/${exam.id}`);
@@ -455,6 +456,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       return;
     }
 
+    // Prevent re-taking already-completed non-coding assessments
+    if (exam.id !== "coding" && isCompleted(exam.id as AssessmentId)) {
+      router.push("/dashboard");
+      return;
+    }
+
     const dbModule = exam.id === "communication" ? "grammar" : exam.id;
     const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
     const currentCount = mode === "trial" ? stats.trial : stats.main;
@@ -481,10 +488,41 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const handleResumeAttempt = (attempt: InProgressAttempt) => {
+    // SECURITY: Validate attempt token and prevent manipulation
+    if (!attempt.attemptToken || !attempt.module) {
+      console.error('Invalid attempt data:', attempt);
+      return;
+    }
+    
     const resumeModule = attempt.module === "grammar" ? "communication" : attempt.module;
-    const mode = attempt.mode ?? "main";
+    const validModes = ['trial', 'main'] as const;
+    const mode = validModes.includes(attempt.mode as any) ? attempt.mode : 'main';
+    
+    // Prevent infinite loops by checking if we're already on the target page
+    const currentPath = window.location.pathname;
+    const targetPath = resumeModule === "aptitude" && attempt.isBlockBased 
+      ? `/assessment/aptitude/adaptive`
+      : `/assessment/${resumeModule}`;
+      
+    if (currentPath === targetPath) {
+      console.warn('Already on target assessment page, preventing loop');
+      return;
+    }
+    
     if (resumeModule === "aptitude" && attempt.isBlockBased) {
-      router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      const matchingAssessment = assessmentsList.find(
+        (a) => a.assessment_code === attempt.assessmentCode
+      );
+      const assessmentId = matchingAssessment?.assessment_id || 1;
+      const isV2 = matchingAssessment?.block_config?.enabled ?? true;
+
+      if (isV2) {
+        router.push(
+          `/assessment/aptitude/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${attempt.attemptToken}`
+        );
+      } else {
+        router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+      }
       return;
     }
     router.push(`/assessment/${resumeModule}?mode=${mode}`);
@@ -648,7 +686,56 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             </div>
 
-            {!hasPurchasedAny ? (
+            {isDataLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/20 dark:border-white/[0.08] rounded-3xl p-6 flex flex-col h-full animate-pulse"
+                  >
+                    <div className="flex gap-4 mb-4">
+                      {/* Left: Icon Skeleton */}
+                      <div className="shrink-0 w-14 h-14 rounded-2xl bg-slate-200 dark:bg-white/10" />
+                      {/* Title Skeleton */}
+                      <div className="flex-1 flex items-center">
+                        <div className="h-5 w-2/3 bg-slate-200 dark:bg-white/10 rounded-lg" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col">
+                      {/* Description lines */}
+                      <div className="h-4 w-full bg-slate-200 dark:bg-white/10 rounded-lg mb-2" />
+                      <div className="h-4 w-5/6 bg-slate-200 dark:bg-white/10 rounded-lg mb-4" />
+                      
+                      {/* Stats Row */}
+                      <div className="flex items-center gap-5 mb-4">
+                        {[1, 2, 3].map((j) => (
+                          <div key={j} className="flex flex-col gap-1.5">
+                            <div className="h-2.5 w-12 bg-slate-200 dark:bg-white/10 rounded" />
+                            <div className="h-4 w-16 bg-slate-200 dark:bg-white/10 rounded" />
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-2 mb-6 mt-auto">
+                        <div className="h-5 w-12 bg-slate-200 dark:bg-white/10 rounded-md" />
+                        <div className="h-5 w-16 bg-slate-200 dark:bg-white/10 rounded-md" />
+                      </div>
+                    </div>
+                    
+                    {/* Separator */}
+                    <div className="h-[1px] w-full bg-black/10 dark:bg-white/10 mb-5" />
+                    
+                    {/* Bottom buttons */}
+                    <div className="flex justify-end gap-2">
+                      <div className="h-8 w-16 bg-slate-200 dark:bg-white/10 rounded-full" />
+                      <div className="h-8 w-24 bg-slate-200 dark:bg-white/10 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !hasPurchasedAny ? (
               <div className="flex flex-col items-center justify-center text-center p-8 sm:p-16 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111a15] max-w-2xl mx-auto my-12 relative overflow-hidden">
                 <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[#1ED36A] mb-8">
                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -772,25 +859,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
 
       {showAptitudeModal && (() => {
         const exam = dynamicExams.find(e => e.id === 'aptitude') as any;
-        const qCount = assessmentMode === 'trial' 
-          ? 5 
-          : (exam?.questionLimit > 0 ? exam.questionLimit : (exam?.mainQuestionsCount > 0 ? exam.mainQuestionsCount : exam?.questions));
         const stats = attemptsStats['aptitude'] || { trial: 0, main: 0 };
-        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
         return (
-          <AptitudePreTest
+          <AdaptiveAptitudePreTest
             mode={assessmentMode}
             onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
             onClose={() => setShowAptitudeModal(false)}
             accentColor={exam?.accentColor}
             gradient={exam?.gradient}
-            questions={qCount}
-            duration={exam?.duration}
-            trialAttemptsLimit={exam?.trialAttemptsLimit}
-            mainAttemptsLimit={exam?.mainAttemptsLimit}
-            attemptsCount={currentCount}
-            skills={exam?.tags}
-            requireCameraMic={exam?.requireCameraMic}
           />
         );
       })()}
@@ -802,7 +878,15 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <CommunicationPreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'grammar');
+              if (dbExam?.adaptive_enabled) {
+                // Adaptive mode: go through standard engine which will detect isBlockBased and redirect
+                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowCommunicationModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
@@ -820,7 +904,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <RolePreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'role');
+              if (dbExam?.adaptive_enabled) {
+                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowRoleModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
@@ -838,7 +929,14 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <MNCPreTest
             mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            onStart={(mode) => {
+              const dbExam = assessmentsList.find((a: any) => a.module_type === 'mnc');
+              if (dbExam?.adaptive_enabled) {
+                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              } else {
+                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+              }
+            }}
             onClose={() => setShowMncModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}

@@ -40,13 +40,6 @@ type adminExamPackageRequest struct {
 	Currency         string   `json:"currency"`
 }
 
-type adminPricingItemRequest struct {
-	ItemKind   string `json:"item_kind"`
-	ItemRef    string `json:"item_ref"`
-	PluginID   string `json:"plugin_id"`
-	PriceCents int    `json:"price_cents"`
-	Currency   string `json:"currency"`
-}
 
 func (s *Server) listExamPackages(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
@@ -148,19 +141,8 @@ func (s *Server) createExamPackage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if req.PriceCents != nil {
-		currency := req.Currency
-		if currency == "" {
-			currency = "INR"
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO pricing_items (id, org_id, item_kind, item_ref, price_cents, currency)
-			VALUES ($1, $2, 'exam_package', $3, $4, $5)
-		`, uuid.New(), s.systemOrgID(), "exam:"+req.Slug, *req.PriceCents, currency); err != nil {
-			writeError(w, http.StatusInternalServerError, "pricing create failed")
-			return
-		}
-	}
+	// NOTE: pricing_items table was removed in migration 025.
+	// Price info is no longer stored here.
 	if err := tx.Commit(ctx); err != nil {
 		writeError(w, http.StatusInternalServerError, "commit failed")
 		return
@@ -260,41 +242,8 @@ func (s *Server) updateExamPackage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createPricingItem(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
-	var req adminPricingItemRequest
-	if !decodeJSON(w, r, &req, maxRuntimeBodyBytes) {
-		return
-	}
-	if req.ItemKind == "" || req.ItemRef == "" || req.PriceCents < 0 {
-		writeError(w, http.StatusBadRequest, "item_kind, item_ref, and non-negative price_cents are required")
-		return
-	}
-	var pluginID any
-	if req.PluginID != "" {
-		parsed, err := uuid.Parse(req.PluginID)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid plugin_id")
-			return
-		}
-		pluginID = parsed
-	}
-	currency := req.Currency
-	if currency == "" {
-		currency = "INR"
-	}
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	id := uuid.New()
-	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO pricing_items (id, org_id, item_kind, item_ref, price_cents, currency, plugin_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, id, s.systemOrgID(), req.ItemKind, req.ItemRef, req.PriceCents, currency, pluginID); err != nil {
-		writeError(w, http.StatusInternalServerError, "pricing item create failed")
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id.String()})
+	// pricing_items table was removed in migration 025.
+	writeError(w, http.StatusGone, "pricing_items table has been removed")
 }
 
 func (s *Server) fetchExamPackage(ctx context.Context, examID uuid.UUID) (adminExamPackageDTO, error) {

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code, ChevronDown } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code, Brain, RefreshCw, Zap, BarChart3, Layers, Clock, Target, ChevronDown } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment, fetchQuestions } from "./api";
 import {
   AssessmentType,
@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/Switch";
 import { useConfirm } from "@/components/admin/ui";
 
-type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading";
+type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading" | "adaptive";
 
 // ... (Removed ProperToggle as it's replaced by the new Switch component)
 
@@ -99,6 +99,118 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [requireCameraMic, setRequireCameraMic] = useState(false);
   const [liveProctoringEnabled, setLiveProctoringEnabled] = useState(true);
 
+  // Adaptive Questions plugin state
+  const [adaptiveEnabled, setAdaptiveEnabled] = useState(false);
+  const [adaptiveTotalQuestions, setAdaptiveTotalQuestions] = useState<number | "">(20);
+  const [adaptiveTotalMarks, setAdaptiveTotalMarks] = useState<number | "">(100);
+  const [adaptiveTotalBlocks, setAdaptiveTotalBlocks] = useState<number | "">(4);
+  const [adaptiveSecondsPerMark, setAdaptiveSecondsPerMark] = useState<number | "">(45);
+  const [adaptiveBlueprintStatus, setAdaptiveBlueprintStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [adaptiveBlueprintInfo, setAdaptiveBlueprintInfo] = useState<{
+    exists: boolean;
+    totalMarks?: number;
+    totalBlocks?: number;
+    categories?: string[];
+    categoryBlueprint?: Record<string, { weightPct: number; targetMarks: number }>;
+  } | null>(null);
+  const [adaptiveQuestionStats, setAdaptiveQuestionStats] = useState<{
+    totalActiveQuestions: number;
+    categories: string[];
+    questionsByDifficulty: Record<string, number>;
+    questionsByCategory: Record<string, number>;
+  } | null>(null);
+  // Load adaptive blueprint info when switching to the adaptive tab
+  const loadAdaptiveInfo = async (assessmentId: number) => {
+    setAdaptiveBlueprintStatus("loading");
+    setAdaptiveQuestionStats(null);
+    setAdaptiveBlueprintInfo(null);
+    try {
+      const TECH_BASE =
+        typeof window !== "undefined" &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1"
+          ? ""
+          : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+
+      const [settingsRes, bpRes] = await Promise.allSettled([
+        fetch(`${TECH_BASE}/api/adaptive/v2/settings/${assessmentId}`).then(r => r.json()),
+        fetch(`${TECH_BASE}/api/adaptive/v2/blueprint/${assessmentId}`).then(r => r.json()),
+      ]);
+
+      if (settingsRes.status === "fulfilled" && settingsRes.value?.success) {
+        const qb = settingsRes.value.questionBank;
+        if (qb) {
+          setAdaptiveQuestionStats({
+            totalActiveQuestions: qb.totalActiveQuestions ?? 0,
+            categories: qb.categories ?? [],
+            questionsByDifficulty: qb.questionsByDifficulty ?? {},
+            questionsByCategory: qb.questionsByCategory ?? {},
+          });
+        }
+        const bp = settingsRes.value.blueprint;
+        if (bp) {
+          setAdaptiveBlueprintInfo(bp);
+        }
+      }
+
+      if (bpRes.status === "fulfilled" && bpRes.value?.success && bpRes.value?.blueprint) {
+        const bp = bpRes.value.blueprint;
+        setAdaptiveBlueprintInfo({
+          exists: true,
+          totalMarks: bp.totalMarks,
+          totalBlocks: bp.totalBlocks,
+          categories: Object.keys(bp.categoryBlueprint ?? {}),
+          categoryBlueprint: bp.categoryBlueprint,
+        });
+      }
+
+      setAdaptiveBlueprintStatus("success");
+    } catch {
+      setAdaptiveBlueprintStatus("error");
+    }
+  };
+
+  const handleRefreshBlueprint = async () => {
+    const a = assessments[activeModule];
+    if (!a) return;
+    setAdaptiveBlueprintStatus("loading");
+    try {
+      const TECH_BASE =
+        typeof window !== "undefined" &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1"
+          ? ""
+          : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+      const res = await fetch(`${TECH_BASE}/api/adaptive/v2/blueprint/${a.assessment_id}/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.success && data.blueprint) {
+        const bp = data.blueprint;
+        setAdaptiveBlueprintInfo({
+          exists: true,
+          totalMarks: bp.totalMarks,
+          totalBlocks: bp.totalBlocks,
+          categories: Object.keys(bp.categoryBlueprint ?? {}),
+          categoryBlueprint: bp.categoryBlueprint,
+        });
+        setAdaptiveBlueprintStatus("success");
+      } else {
+        setAdaptiveBlueprintStatus("error");
+      }
+    } catch {
+      setAdaptiveBlueprintStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "adaptive") {
+      const a = assessments[activeModule];
+      if (a) loadAdaptiveInfo(a.assessment_id);
+    }
+  }, [activeTab, activeModule, assessments]);
+
   const handleSave = async () => {
     const a = assessments[activeModule];
     if (!a) return;
@@ -135,6 +247,11 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         keypress_log_enabled: keypressLogEnabled,
         require_camera_mic: requireCameraMic,
         live_proctoring_enabled: liveProctoringEnabled,
+        adaptive_enabled: adaptiveEnabled,
+        adaptive_total_questions: adaptiveTotalQuestions === "" ? 20 : Number(adaptiveTotalQuestions),
+        adaptive_total_marks: adaptiveTotalMarks === "" ? 100 : Number(adaptiveTotalMarks),
+        adaptive_total_blocks: adaptiveTotalBlocks === "" ? 4 : Number(adaptiveTotalBlocks),
+        adaptive_seconds_per_mark: adaptiveSecondsPerMark === "" ? 45 : Number(adaptiveSecondsPerMark),
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -324,6 +441,13 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     setRequireCameraMic(Boolean(a.require_camera_mic));
     setLiveProctoringEnabled(a.live_proctoring_enabled !== false);
 
+    // Adaptive Questions plugin
+    setAdaptiveEnabled(Boolean(a.adaptive_enabled));
+    setAdaptiveTotalQuestions(a.adaptive_total_questions !== undefined ? Number(a.adaptive_total_questions) : 20);
+    setAdaptiveTotalMarks(a.adaptive_total_marks !== undefined ? Number(a.adaptive_total_marks) : 100);
+    setAdaptiveTotalBlocks(a.adaptive_total_blocks !== undefined ? Number(a.adaptive_total_blocks) : 4);
+    setAdaptiveSecondsPerMark(a.adaptive_seconds_per_mark !== undefined ? Number(a.adaptive_seconds_per_mark) : 45);
+
     // Populate Question Types
     setEnabledQuestionKinds(parseQuestionKindEnabledMap(activeModule, a.enabled_question_types));
 
@@ -379,6 +503,9 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     matchesQuery(["Easy Complexity Score", "Marks and penalties for easy-tier questions.", "easy", "marks", "penalty", "grading", "scoring", "points"]) ||
     matchesQuery(["Medium Complexity Score", "Marks and penalties for medium-tier questions.", "medium", "marks", "penalty", "grading", "scoring", "points"]) ||
     matchesQuery(["Hard Complexity Score", "Marks and penalties for hard-tier questions.", "hard", "marks", "penalty", "grading", "scoring", "points"]);
+
+  const hasAdaptiveMatches =
+    matchesQuery(["Adaptive Mode", "Enable adaptive block-based assessment", "adaptive", "blueprint", "blocks", "marks", "seconds per mark", "auto"]);
 
   const inputCls = "block w-full max-w-lg rounded-xl border-0 py-3 px-4 bg-slate-50 dark:bg-white/5 text-black dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-black/30 dark:placeholder:text-white/30 focus:ring-2 focus:ring-inset focus:ring-brand-green sm:text-sm transition-all hover:ring-slate-300 dark:hover:ring-white/20";
   const labelCls = "block text-[15px] font-bold leading-tight text-slate-900 dark:text-white";
@@ -479,7 +606,14 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
               </div>
             ) : (
               <div className="flex border-b border-slate-100 dark:border-white/5 px-8 sm:px-12 pt-8 gap-8 overflow-x-auto no-scrollbar">
-                {([["general", "General", SlidersHorizontal], ["question_type", "Question Type", ListChecks], ["rules_limits", "Rules & Limits", Shield], ["categories", "Dynamic Categories", LayoutGrid], ["grading", "Scoring Matrix", Award]] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
+                {([
+                  ["general",       "General",            SlidersHorizontal],
+                  ["question_type", "Question Type",      ListChecks],
+                  ["rules_limits",  "Rules & Limits",     Shield],
+                  ["categories",    "Dynamic Categories", LayoutGrid],
+                  ["grading",       "Scoring Matrix",     Award],
+                  ...(activeModule !== "coding" ? [["adaptive", "Adaptive", Brain] as [SettingsTab, string, any]] : []),
+                ] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
                   <button 
                     key={key} 
                     onClick={() => setActiveTab(key)}
@@ -489,6 +623,11 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   >
                     <Icon className={`w-4 h-4 transition-transform duration-300 ${activeTab === key ? "scale-110" : ""}`} />
                     <span>{label}</span>
+                    {key === "adaptive" && adaptiveEnabled && (
+                      <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-green/15 text-brand-green border border-brand-green/20">
+                        ON
+                      </span>
+                    )}
                     {activeTab === key && (
                       <motion.div 
                         layoutId="activeTab"
@@ -548,6 +687,10 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                           <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
                         </div>
                       )}
+
+                      {/* Adaptive Questions Plugin Mount — intentionally removed.
+                          The Adaptive toggle and settings now live in the dedicated
+                          "Adaptive" tab. Nothing is mounted here anymore. */}
 
                       {activeModule === "coding" && (
                         <div className="pt-10 mt-2 border-t border-slate-100 dark:border-white/[0.04]">
@@ -1004,7 +1147,235 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                     </div>
                   )}
 
-                  {!hasGeneralMatches && !hasQuestionTypeMatches && !hasRulesLimitsMatches && !hasCategoriesMatches && !hasGradingMatches && (
+                  {/* ── Adaptive Tab ─────────────────────────────────────────── */}
+                  {(activeTab === "adaptive" || (searchQuery && hasAdaptiveMatches)) && activeModule !== "coding" && (
+                    <div className="space-y-10">
+                      {searchQuery && (
+                        <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">
+                          <Brain className="w-4 h-4 text-brand-green" />
+                          <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500">Adaptive Settings</h3>
+                        </div>
+                      )}
+
+                      {/* Enable / Disable toggle */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                        <div className="sm:max-w-md">
+                          <label className={labelCls}>Enable Adaptive Mode</label>
+                          <p className={descCls}>
+                            When on, candidates receive questions in adaptive blocks. Difficulty adjusts
+                            automatically after each block based on performance. The blueprint is built
+                            automatically from the question bank — no manual setup needed.
+                          </p>
+                        </div>
+                        <div className="sm:max-w-[400px] w-full flex justify-end">
+                          <Switch
+                            checked={adaptiveEnabled}
+                            onCheckedChange={val => { setAdaptiveEnabled(val); markDirty(); }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Settings grid — always visible so admin can configure before enabling */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                        <div>
+                          <label className={labelCls}>Total Questions</label>
+                          <p className={descCls}>Total number of questions in the exam.</p>
+                          <input
+                            type="number" min={5} max={500}
+                            value={adaptiveTotalQuestions}
+                            onChange={e => {
+                              const v = e.target.value;
+                              const qCount = v === "" ? "" : Number(v);
+                              setAdaptiveTotalQuestions(qCount);
+                              if (typeof qCount === "number" && qCount > 0) {
+                                setAdaptiveTotalBlocks(Math.max(1, Math.ceil(qCount / 5)));
+                                setAdaptiveTotalMarks(qCount);
+                              }
+                              markDirty();
+                            }}
+                            className={inputCls + " mt-4"}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Total Marks</label>
+                          <p className={descCls}>Full exam marks distributed across all blocks.</p>
+                          <input
+                            type="number" min={10} max={500} step={5}
+                            value={adaptiveTotalMarks}
+                            onChange={e => { const v = e.target.value; setAdaptiveTotalMarks(v === "" ? "" : Number(v)); markDirty(); }}
+                            className={inputCls + " mt-4"}
+                          />
+                          {adaptiveTotalMarks !== "" && adaptiveTotalBlocks !== "" && Number(adaptiveTotalBlocks) > 0 && (
+                            <p className="text-[11px] text-brand-green mt-1 font-semibold">
+                              = {Math.round(Number(adaptiveTotalMarks) / Number(adaptiveTotalBlocks))} marks per block
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className={labelCls}>Number of Blocks</label>
+                          <p className={descCls}>Each block adapts difficulty based on the previous block.</p>
+                          <input
+                            type="number" min={1} max={20}
+                            value={adaptiveTotalBlocks}
+                            onChange={e => { const v = e.target.value; setAdaptiveTotalBlocks(v === "" ? "" : Number(v)); markDirty(); }}
+                            className={inputCls + " mt-4"}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Seconds per Mark</label>
+                          <p className={descCls}>Time budget per mark for per-question time limits.</p>
+                          <input
+                            type="number" min={10} max={300}
+                            value={adaptiveSecondsPerMark}
+                            onChange={e => { const v = e.target.value; setAdaptiveSecondsPerMark(v === "" ? "" : Number(v)); markDirty(); }}
+                            className={inputCls + " mt-4"}
+                          />
+                          {adaptiveTotalMarks !== "" && adaptiveSecondsPerMark !== "" && (
+                            <p className="text-[11px] text-slate-400 mt-1 font-semibold">
+                              ≈ {Math.round(Number(adaptiveTotalMarks) * Number(adaptiveSecondsPerMark) / 60)} min total
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Auto-blueprint status panel */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Brain className="w-4 h-4 text-brand-green" />
+                            <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Auto-Blueprint Status</h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRefreshBlueprint}
+                            disabled={adaptiveBlueprintStatus === "loading"}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-brand-green/40 hover:text-brand-green transition-all disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${adaptiveBlueprintStatus === "loading" ? "animate-spin" : ""}`} />
+                            Rebuild from Questions
+                          </button>
+                        </div>
+
+                        <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          The blueprint is computed <strong className="text-slate-700 dark:text-slate-300">automatically</strong> from
+                          the question bank every time a candidate starts an adaptive attempt. Categories, subcategories, and
+                          mark distribution are derived directly from the questions you have added — no manual configuration needed.
+                        </p>
+
+                        {adaptiveBlueprintStatus === "loading" && (
+                          <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                            <Loader2 className="w-4 h-4 animate-spin text-brand-green" />
+                            <span className="text-sm text-slate-500">Loading blueprint info…</span>
+                          </div>
+                        )}
+
+                        {adaptiveBlueprintStatus !== "loading" && adaptiveQuestionStats && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {[
+                              { label: "Active Questions", value: adaptiveQuestionStats.totalActiveQuestions, icon: <Zap className="w-4 h-4" /> },
+                              { label: "Categories", value: adaptiveQuestionStats.categories.length, icon: <BarChart3 className="w-4 h-4" /> },
+                              { label: "Easy", value: adaptiveQuestionStats.questionsByDifficulty?.easy ?? 0, icon: <Target className="w-4 h-4" /> },
+                              { label: "Medium + Hard", value: (adaptiveQuestionStats.questionsByDifficulty?.medium ?? 0) + (adaptiveQuestionStats.questionsByDifficulty?.hard ?? 0), icon: <Layers className="w-4 h-4" /> },
+                            ].map(s => (
+                              <div key={s.label} className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                                <span className="p-2 rounded-lg bg-brand-green/10 text-brand-green">{s.icon}</span>
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{s.label}</p>
+                                  <p className="text-xl font-bold text-slate-900 dark:text-white">{s.value}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {adaptiveBlueprintStatus !== "loading" && adaptiveBlueprintInfo?.exists && adaptiveBlueprintInfo.categoryBlueprint && (
+                          <div className="p-5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Blueprint — Category Distribution</p>
+                              <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                                <span className="flex items-center gap-1"><Target className="w-3 h-3" />{adaptiveBlueprintInfo.totalMarks} marks</span>
+                                <span className="flex items-center gap-1"><Layers className="w-3 h-3" />{adaptiveBlueprintInfo.totalBlocks} blocks</span>
+                                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{adaptiveSecondsPerMark}s/mark</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {Object.entries(adaptiveBlueprintInfo.categoryBlueprint).map(([cat, bp]) => (
+                                <div key={cat}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{cat}</span>
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                      <span>{bp.weightPct.toFixed(1)}%</span>
+                                      <span className="font-bold text-slate-600 dark:text-slate-300">{bp.targetMarks}m</span>
+                                    </div>
+                                  </div>
+                                  <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full bg-brand-green transition-all"
+                                      style={{ width: `${bp.weightPct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {adaptiveBlueprintStatus !== "loading" && (!adaptiveBlueprintInfo?.exists || !adaptiveBlueprintInfo?.categoryBlueprint) && (
+                          <div className="p-5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 flex items-start gap-3">
+                            <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-bold text-amber-700 dark:text-amber-400">No blueprint yet</p>
+                              <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 leading-relaxed">
+                                Add active questions to this assessment, then enable Adaptive Mode and save.
+                                The blueprint will be built automatically on the first candidate attempt,
+                                or you can click <strong>Rebuild from Questions</strong> above.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {adaptiveBlueprintStatus !== "loading" && adaptiveQuestionStats && adaptiveQuestionStats.totalActiveQuestions === 0 && (
+                          <div className="p-5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 flex items-start gap-3">
+                            <Info className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-bold text-red-700 dark:text-red-400">No active questions found</p>
+                              <p className="text-xs text-red-600 dark:text-red-500 mt-1">
+                                Go to the Question Banks page and add questions with categories and difficulty levels.
+                                The blueprint will be built automatically once questions are available.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* How it works */}
+                      {!searchQuery && (
+                        <div className="p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 space-y-3">
+                          <p className="text-xs font-black uppercase tracking-wider text-slate-400">How Adaptive Mode Works</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-700 dark:text-slate-300">📋 Blueprint (automatic)</p>
+                              <p>Categories and mark distribution are derived from your question bank. Equal weight across all categories by default.</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-700 dark:text-slate-300">🧠 Adaptive Engine</p>
+                              <p>After each block, the Block Readiness Score determines whether the next block is easier, same, or harder.</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-700 dark:text-slate-300">📸 Snapshot Model</p>
+                              <p>Answers are locked per block when the candidate clicks Next. They can still edit previous blocks — reliability is tracked.</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-700 dark:text-slate-300">📊 Final Report</p>
+                              <p>Includes marks %, topic mastery, difficulty handling, speed efficiency, and reliability score.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!hasGeneralMatches && !hasQuestionTypeMatches && !hasRulesLimitsMatches && !hasCategoriesMatches && !hasGradingMatches && !hasAdaptiveMatches && (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                       <div className="p-4 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-white/20 mb-4">
                         <Search size={32} />

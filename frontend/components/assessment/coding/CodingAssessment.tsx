@@ -669,9 +669,10 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
 
     useEffect(() => {
         const fetchEngineStats = async () => {
-            if (!LEGACY_TECH_API_URL) {
+            if (LEGACY_TECH_API_URL === undefined) {
                 setAttemptsCount(1);
                 setAttemptsLimit(null);
+                return;
             }
             try {
                 let activeEmail: string | undefined = undefined;

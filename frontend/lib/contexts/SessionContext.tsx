@@ -4,6 +4,7 @@ import React, {
   createContext,
   useState,
   useEffect,
+  useCallback,
   useContext,
   ReactNode,
 } from "react";
@@ -46,6 +47,33 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Defined before the session-restore effect so that effect can both call it
+  // (on an invalid session) and depend on it for the cross-tab storage listener.
+  const logout = useCallback(() => {
+    try {
+      // Clear all assessment caches first to prevent cross-student leakage
+      clearAllAssessmentCaches().catch(() => {});
+
+      // Clear all originbi keys to avoid state leakage
+      localStorage.removeItem("originbi:access-token");
+      localStorage.removeItem("originbi:id-token");
+      localStorage.removeItem("originbi:user-profile");
+      localStorage.removeItem("originbi:assessment-results");
+      localStorage.removeItem("originbi:paid-assessments");
+      localStorage.removeItem("originbi:completed-assessments");
+      localStorage.removeItem("user");
+
+      // Clear any legacy userEmail keys if present
+      localStorage.removeItem("userEmail");
+      sessionStorage.removeItem("userEmail");
+
+      setUser(null);
+      setIsLoggedIn(false);
+    } catch (error) {
+      console.error("Error clearing session storage", error);
+    }
+  }, []);
 
   useEffect(() => {
     // Check localStorage on mount
@@ -91,9 +119,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
           if (storedProfile) {
             const parsedProfile = JSON.parse(storedProfile);
             setUser(parsedProfile);
-              setIsLoggedIn(true);
-              setActiveStudent(parsedProfile.email ?? null);
-              window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: parsedProfile }));
+            setIsLoggedIn(true);
+            setActiveStudent(parsedProfile.email ?? null);
+            window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: parsedProfile }));
           } else {
             // If token exists but profile doesn't, fetch it from API
             const { getSession } = await import("@/lib/api");
@@ -109,6 +137,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               setActiveStudent(profile.email ?? null);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+            } else {
+              // Session invalid, logout
+              logout();
             }
           }
         } else {
@@ -129,18 +160,42 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
               localStorage.setItem("originbi:access-token", accessToken);
               localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
               window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
+            } else {
+              // Session invalid, logout
+              logout();
             }
           }
         }
       } catch (error) {
         console.error("[SessionContext] Failed to restore session from localStorage:", error);
+        // On error, logout to ensure clean state
+        logout();
       } finally {
         setIsLoading(false);
       }
     };
 
     loadSession();
-  }, []);
+
+    // Listen for storage events (cross-tab sync and cache clear detection)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "originbi:access-token" && e.newValue === null) {
+        // Token was removed (cache cleared / logged out in another tab)
+        logout();
+      }
+    };
+
+    const handleSessionExpired = () => {
+      logout();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("originbi:session-expired", handleSessionExpired);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("originbi:session-expired", handleSessionExpired);
+    };
+  }, [logout]);
 
   const login = (accessToken: string, idToken: string, profile: UserProfile) => {
     try {
@@ -161,31 +216,6 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));
     } catch (error) {
       console.error("Error setting session storage", error);
-    }
-  };
-
-  const logout = () => {
-    try {
-      // Clear all assessment caches first to prevent cross-student leakage
-      clearAllAssessmentCaches().catch(() => {});
-
-      // Clear all originbi keys to avoid state leakage
-      localStorage.removeItem("originbi:access-token");
-      localStorage.removeItem("originbi:id-token");
-      localStorage.removeItem("originbi:user-profile");
-      localStorage.removeItem("originbi:assessment-results");
-      localStorage.removeItem("originbi:paid-assessments");
-      localStorage.removeItem("originbi:completed-assessments");
-      localStorage.removeItem("user");
-      
-      // Clear any legacy userEmail keys if present
-      localStorage.removeItem("userEmail");
-      sessionStorage.removeItem("userEmail");
-
-      setUser(null);
-      setIsLoggedIn(false);
-    } catch (error) {
-      console.error("Error clearing session storage", error);
     }
   };
 

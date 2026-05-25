@@ -101,9 +101,17 @@ export default function QuestionEditor({
   // Populate from existing question
   useEffect(() => {
     if (!question) {
-      if (categories && categories.length > 0) {
-        if (assessmentType === "aptitude") setAptCategory(categories[0].id);
-        else if (assessmentType === "mnc") setMncTopic(categories[0].id);
+      const firstCat = categories?.[0];
+      if (firstCat) {
+        if (assessmentType === "aptitude") setAptCategory(firstCat.id);
+        else if (assessmentType === "mnc") setMncTopic(firstCat.id);
+        else if (assessmentType === "communication") {
+          setCommCategory(firstCat.id);
+          const firstSub = firstCat.subcategories?.[0];
+          if (firstSub) {
+            setCommSubCategory(firstSub.id);
+          }
+        }
       }
       return;
     }
@@ -170,18 +178,19 @@ export default function QuestionEditor({
       }
       case "communication": {
         const cq = question as CommQuestion;
-        setCommTaskType(cq.taskType); 
         setCommCategory(cq.category || "");
         setCommSubCategory(cq.subcategory || "");
-        setCommInstructions(cq.instructions);
-        setCommPassage(cq.passage || ""); setCommPrompt(cq.prompt || "");
-        setCommPrepTime(cq.prepTimeSeconds || 30); setCommRecordTime(cq.recordTimeSeconds || 90);
-        setCommMinWords(cq.minWords || 50); setCommMaxWords(cq.maxWords || 200);
+        setText(cq.text || cq.instructions || "");
+        setOptions(cq.options || [
+          { id: "opt_0", text: "" }, { id: "opt_1", text: "" },
+          { id: "opt_2", text: "" }, { id: "opt_3", text: "" }
+        ]);
+        if (cq.correctOptionId) {
+          setCorrectId(cq.correctOptionId);
+          setCorrectIds([cq.correctOptionId]);
+        }
         setExplanation(cq.explanation || "");
-        setAudioUrl(cq.audioUrl || null);
-        if (cq.questions) setCommSubQuestions(cq.questions.map(sq => ({
-          id: sq.id, text: sq.text, options: sq.options, correctOptionId: sq.correctOptionId || sq.options[0]?.id || "",
-        })));
+        setImageUrl(cq.imageUrl || null);
         break;
       }
     }
@@ -302,23 +311,16 @@ export default function QuestionEditor({
 
   const validate = (): boolean => {
     const errs: string[] = [];
-    if (assessmentType === "communication") {
-      if (!commInstructions.trim()) errs.push("Instructions required.");
-      if (["speaking", "writing"].includes(commTaskType) && !commPrompt.trim()) errs.push("Prompt required.");
-      if (["mcq", "reading", "audio"].includes(commTaskType) && commSubQuestions.length === 0) errs.push("At least 1 sub-question required.");
+    if (!text.trim()) errs.push("Question text required.");
+    if (kind === "numerical") {
+      if (!explanation.trim()) errs.push("Correct answer (Numerical) required in the explanation or specific field.");
+      if (!(question as any)?.correctAnswer && !explanation.trim()) errs.push("Numerical answer required.");
     } else {
-      if (!text.trim()) errs.push("Question text required.");
-      if (kind === "numerical") {
-        if (!explanation.trim()) errs.push("Correct answer (Numerical) required in the explanation or specific field.");
-        // We'll use explanation field for the answer in some contexts, but let's assume we use metadata.correctAnswer
-        if (!(question as any).correctAnswer && !explanation.trim()) errs.push("Numerical answer required.");
-      } else {
-        const filledOptions = options.filter(o => o.text.trim());
-        if (filledOptions.length < 2) errs.push("At least 2 non-empty options required.");
-        if (filledOptions.length > 6) errs.push("Maximum 6 options allowed.");
-        
-        if (kind === "msq" && correctIds.length === 0) errs.push("At least one correct option required.");
-      }
+      const filledOptions = options.filter(o => o.text.trim());
+      if (filledOptions.length < 2) errs.push("At least 2 non-empty options required.");
+      if (filledOptions.length > 6) errs.push("Maximum 6 options allowed.");
+      
+      if (kind === "msq" && correctIds.length === 0) errs.push("At least one correct option required.");
     }
     setErrors(errs);
     return errs.length === 0;
@@ -374,8 +376,14 @@ export default function QuestionEditor({
           break;
         case "communication":
           onSave({
-            ...common, taskType: commTaskType, instructions: commInstructions.trim(),
-            category: commCategory.trim(), subcategory: commSubCategory.trim(),
+            ...common,
+            taskType: commTaskType,
+            instructions: commInstructions.trim(),
+            category: commCategory.trim(),
+            subcategory: commSubCategory.trim(),
+            text: text.trim(),
+            options: options.filter(o => o.text.trim()),
+            correctOptionId: correctId,
             ...(finalAudioUrl ? { audioUrl: finalAudioUrl } : {}),
             ...(commPassage ? { passage: commPassage } : {}),
             ...(commPrompt ? { prompt: commPrompt } : {}),
@@ -559,34 +567,42 @@ export default function QuestionEditor({
                   </>
                  )}
                  {assessmentType === "communication" && (
-                  <>
-                    <div className="sm:col-span-2">
-                      <CustomSelect
-                        label="Test Type"
-                        value={commTaskType}
-                        onChange={(v) => setCommTaskType(v as CommTaskType)}
-                        options={Object.entries(COMM_TASK_LABELS).map(([k, v]) => ({ label: v, value: k }))}
-                      />
-                    </div>
-                    <div><label className={labelCls}>Category</label><input value={commCategory} onChange={e => setCommCategory(e.target.value)} className={inputCls} placeholder="Professional Ethics" /></div>
-                    <div><label className={labelCls}>Sub-Category</label><input value={commSubCategory} onChange={e => setCommSubCategory(e.target.value)} className={inputCls} placeholder="Email Communication" /></div>
-                    <div className="sm:col-span-2"><label className={labelCls}>Instructions</label><textarea value={commInstructions} onChange={e => setCommInstructions(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Direct instructions..." /></div>
-                    <div className="sm:col-span-2"><label className={labelCls}>Explanation (Admin Only)</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Explain the answer for reference..." /></div>
-                    {commTaskType === "reading" && <div className="sm:col-span-2"><label className={labelCls}>Passage</label><textarea value={commPassage} onChange={e => setCommPassage(e.target.value)} className={`${inputCls} resize-none`} rows={3} placeholder="Reading corpus..." /></div>}
-                    {["speaking", "writing"].includes(commTaskType) && <div className="sm:col-span-2"><label className={labelCls}>Prompt</label><textarea value={commPrompt} onChange={e => setCommPrompt(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="User prompt..." /></div>}
-                    {commTaskType === "speaking" && (
+                  <div className="sm:col-span-2 space-y-4">
+                    {categories && categories.length > 0 ? (
                       <>
-                        <div><label className={labelCls}>Prep (s)</label><input type="number" value={commPrepTime} onChange={e => setCommPrepTime(Number(e.target.value))} className={inputCls} /></div>
-                        <div><label className={labelCls}>Record (s)</label><input type="number" value={commRecordTime} onChange={e => setCommRecordTime(Number(e.target.value))} className={inputCls} /></div>
+                        <CustomSelect
+                          label="Category"
+                          value={commCategory}
+                          onChange={(v) => {
+                            setCommCategory(v);
+                            setCommSubCategory(""); // Reset subcategory on category change
+                          }}
+                          options={categories.map(c => ({ label: c.name, value: c.id }))}
+                        />
+                        <CustomSelect
+                          label="Sub-Category"
+                          value={commSubCategory}
+                          onChange={setCommSubCategory}
+                          options={(() => {
+                            const selectedCat = categories.find((c: any) =>
+                              c.id === commCategory ||
+                              matchCategory(commCategory, c.id) ||
+                              String(c.id) === String(commCategory)
+                            );
+                            if (selectedCat && selectedCat.subcategories) {
+                              return selectedCat.subcategories.map((sc: any) => ({ label: sc.name, value: sc.id }));
+                            }
+                            return [];
+                          })()}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div><label className={labelCls}>Category</label><input value={commCategory} onChange={e => setCommCategory(e.target.value)} className={inputCls} placeholder="Verbal Communication" /></div>
+                        <div><label className={labelCls}>Sub-Category</label><input value={commSubCategory} onChange={e => setCommSubCategory(e.target.value)} className={inputCls} placeholder="Self Introduction" /></div>
                       </>
                     )}
-                    {commTaskType === "writing" && (
-                      <>
-                        <div><label className={labelCls}>Min Words</label><input type="number" value={commMinWords} onChange={e => setCommMinWords(Number(e.target.value))} className={inputCls} /></div>
-                        <div><label className={labelCls}>Max Words</label><input type="number" value={commMaxWords} onChange={e => setCommMaxWords(Number(e.target.value))} className={inputCls} /></div>
-                      </>
-                    )}
-                  </>
+                  </div>
                  )}
                </div>
             </div>
@@ -594,7 +610,7 @@ export default function QuestionEditor({
             <div className={groupCls}>
               <p className="text-[10px] font-black uppercase tracking-widest text-brand-green mb-3">Content Data</p>
               
-              {assessmentType !== "communication" ? (
+              {assessmentType !== "communication" || true ? (
                 <div className="space-y-5">
                   <div><label className={labelCls}>Question Text</label><textarea value={text} onChange={e => setText(e.target.value)} className={`${inputCls} resize-none font-bold`} rows={2} placeholder="Question text..." /></div>
                   
@@ -686,64 +702,7 @@ export default function QuestionEditor({
                       })()}
                     </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {commTaskType === "audio" && (
-                    <div className="space-y-1.5">
-                      <label className={labelCls}>Comprehension Audio File</label>
-                      {audioUrl ? (
-                        <div className="relative group rounded-xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/[0.02] flex items-center gap-4 animate-in fade-in duration-200">
-                          <audio src={audioUrl} controls className="flex-1 h-8" />
-                          <button
-                            type="button"
-                            onClick={handleClearFile}
-                            className="p-2 rounded-full hover:bg-red-500/10 hover:text-red-500 text-slate-400 hover:scale-105 active:scale-95 transition-all"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex flex-col items-center justify-center border border-dashed border-slate-300 dark:border-white/10 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-white/[0.01] hover:border-slate-400 dark:hover:border-white/20 cursor-pointer transition-all">
-                          <Music className="h-6 w-6 text-brand-green mb-1.5" />
-                          <span className="text-[11px] font-bold text-slate-600 dark:text-white/60">Choose audio file</span>
-                          <span className="text-[9px] font-medium text-slate-400 mt-0.5">Supports MP3 or WAV</span>
-                          <input type="file" accept="audio/*" onChange={(e) => handleFileSelect(e, "audio")} className="hidden" />
-                        </label>
-                      )}
-                    </div>
-                  )}
-
-                  {["mcq", "reading", "audio"].includes(commTaskType) && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <p className={labelCls}>Tasks</p>
-                        <button onClick={addSubQuestion} className="px-2 py-1 rounded-md bg-brand-green/10 text-[9px] font-black uppercase text-brand-green hover:bg-brand-green hover:text-white transition-all">+ Add Task</button>
-                      </div>
-                      <div className="space-y-3">
-                        {commSubQuestions.map((sq, sqIdx) => (
-                          <div key={sq.id} className="rounded-xl bg-white dark:bg-[#111a15] border border-brand-green/10 p-3 shadow-sm">
-                            <div className="flex items-start gap-3 mb-3">
-                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-brand-green text-[10px] font-black text-white">{sqIdx + 1}</span>
-                              <textarea value={sq.text} onChange={e => updateSubQText(sqIdx, e.target.value)} className="flex-1 bg-transparent text-[12px] font-bold focus:outline-none dark:text-white resize-none" rows={1} placeholder="Inquiry..." />
-                              <button onClick={() => removeSubQuestion(sqIdx)} className="text-red-400/30 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                            </div>
-                            <div className="grid gap-1.5 sm:grid-cols-2">
-                              {sq.options.map((opt, oIdx) => (
-                                <div key={opt.id} className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all ${sq.correctOptionId === opt.id ? "bg-brand-green/5 border-brand-green/40" : "bg-brand-green/5 dark:bg-white/5 border-transparent"}`}>
-                                  <button onClick={() => setSubQCorrect(sqIdx, opt.id)} className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[9px] font-black ${sq.correctOptionId === opt.id ? "bg-brand-green text-white" : "bg-brand-green/10 text-brand-green"}`}>
-                                    {LABELS[oIdx]}
-                                  </button>
-                                  <input value={opt.text} onChange={e => updateSubQOption(sqIdx, oIdx, e.target.value)} className="flex-1 bg-transparent text-[11px] font-bold focus:outline-none dark:text-white" placeholder="..." />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              ) : null}
             </div>
 
             {errors.length > 0 && (

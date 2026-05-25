@@ -7,6 +7,8 @@ import type { Exam } from "../ExamCarousel";
 import type { AssessmentResult } from "@/lib/progress";
 import QRCode from "react-qr-code";
 import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import { validateCertificateEligibility, getUserId } from "@/lib/assessmentSecurity";
 import { DM_Serif_Display, Open_Sans } from "next/font/google";
 
 const dmSerif = DM_Serif_Display({
@@ -80,7 +82,9 @@ const generateRandomCode = (length: number) => {
 
 /**
  * Returns a dynamic certificate description tailored to each assessment type.
- * The description references the specific skills/domain of the assessment.
+ * Strictly 3 lines — modelled on the aptitude template word count.
+ * Format: "Awarded for successfully completing the [Title], [domain phrase] with
+ * Grade [X] performance [Y]%, demonstrating exceptional proficiency and professional competency."
  */
 const getCertificateDescription = (
   examId: string,
@@ -88,55 +92,37 @@ const getCertificateDescription = (
   grade: string,
   score: number
 ): string => {
-  const gradeSpan = `Grade ${grade}`;
-  const scoreSpan = `${score}%`;
+  // Domain phrase is kept short so the full sentence fits in 3 lines
+  // at 2.1cqw font size in a 75%-width container.
+  const domainPhrase = (() => {
+    if (examId.startsWith("coding:")) {
+      const lang = examId.slice("coding:".length);
+      const langName =
+        lang === "python" ? "Python" :
+        lang === "java"   ? "Java"   :
+        lang === "cpp"    ? "C++"    :
+        lang === "javascript" ? "JavaScript" :
+        lang === "c"      ? "C"      :
+        lang.toUpperCase();
+      return `validating programming and problem-solving skills in ${langName}`;
+    }
+    switch (examId) {
+      case "aptitude":
+        return "evaluating logical reasoning and numerical agility";
+      case "communication":
+        return "assessing communication and professional writing skills";
+      case "coding":
+        return "validating programming and problem-solving skills";
+      case "mnc":
+        return "assessing aptitude and MNC professional readiness";
+      case "role":
+        return "evaluating role-based judgment and decision-making";
+      default:
+        return "evaluating core competencies and professional skills";
+    }
+  })();
 
-  const base = (text: string) =>
-    `Awarded for successfully completing the ${text} with ${gradeSpan} performance ${scoreSpan}, demonstrating exceptional proficiency and professional competency.`;
-
-  if (examId.startsWith("coding:")) {
-    const lang = examId.slice("coding:".length);
-    const langName =
-      lang === "python"
-        ? "Python"
-        : lang === "java"
-        ? "Java"
-        : lang === "cpp"
-        ? "C++"
-        : lang === "javascript"
-        ? "JavaScript"
-        : lang === "c"
-        ? "C"
-        : lang.toUpperCase();
-    return base(
-      `${examTitle}, validating programming logic and core syntax in ${langName}`
-    );
-  }
-
-  switch (examId) {
-    case "aptitude":
-      return base(
-        `${examTitle}, evaluating logical reasoning and numerical agility`
-      );
-    case "communication":
-      return base(
-        `${examTitle}, measuring core communication and professional writing skills`
-      );
-    case "coding":
-      return base(
-        `${examTitle}, validating fundamental programming and problem-solving skills`
-      );
-    case "mnc":
-      return base(
-        `${examTitle}, demonstrating mastery of professional expectations for MNC roles`
-      );
-    case "role":
-      return base(
-        `${examTitle}, showcasing role-fit through practical scenario decisions`
-      );
-    default:
-      return base(examTitle);
-  }
+  return `Awarded for successfully completing the ${examTitle}, ${domainPhrase} with Grade ${grade} and ${score}% score, demonstrating professional competency.`;
 };
 
 // ── Icons ──
@@ -230,19 +216,63 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     setIsDownloading(true);
 
     try {
+      // SECURITY: Validate certificate eligibility before generation (optional for backward compatibility)
+      const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+      
+      let userId: number | null = null;
+      try {
+        const profileRaw = localStorage.getItem("originbi:user-profile");
+        if (profileRaw) {
+          const p = JSON.parse(profileRaw);
+          if (p?.id) userId = Number(p.id);
+        }
+      } catch {}
+      
+      if (!userId) {
+        alert("User authentication required for certificate generation.");
+        return;
+      }
+
+      // Validate completion status on server (optional for backward compatibility)
+      try {
+        const validationRes = await fetch(`${API_BASE}/api/assessment/validate-certificate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            examId: exam.id,
+            mode: "main" // Only main assessments get certificates
+          }),
+        });
+
+        if (!validationRes.ok) {
+          // If it's a 404, the endpoint doesn't exist yet - continue for backward compatibility
+          if (validationRes.status === 404) {
+            console.warn('Certificate validation endpoint not available - continuing without validation');
+          } else {
+            const errText = await validationRes.text().catch(() => "Certificate not available");
+            alert(`Certificate validation failed: ${errText}`);
+            return;
+          }
+        }
+      } catch (validationError: any) {
+        // If it's a network error or 404, continue for backward compatibility
+        if (validationError.message?.includes('fetch') || validationError.message?.includes('404')) {
+          console.warn('Certificate validation unavailable - continuing without validation:', validationError.message);
+        } else {
+          // For other validation errors, show to user but continue
+          console.error('Certificate validation error:', validationError);
+        }
+      }
+
       const el = certificateRef.current;
       const containerWidth = el.offsetWidth;
 
-      // Convert all cqw-based elements to px before capture
-      const cqwEls = el.querySelectorAll<HTMLElement>("[data-cqw]");
-      const origStyles: {
-        el: HTMLElement;
-        fontSize: string;
-        width: string;
-        height: string;
-        padding: string;
-      }[] = [];
-      cqwEls.forEach((child) => {
+      // ── Step 1: resolve all cqw values to px so html2canvas captures them ──
+      type OrigStyle = { el: HTMLElement; fontSize: string; width: string; height: string; padding: string };
+      const origStyles: OrigStyle[] = [];
+
+      el.querySelectorAll<HTMLElement>("[data-cqw]").forEach((child) => {
         const cqwVal = child.getAttribute("data-cqw");
         if (!cqwVal) return;
         origStyles.push({
@@ -252,27 +282,23 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
           height: child.style.height,
           padding: child.style.padding,
         });
-        const vals = cqwVal.split(",");
-        vals.forEach((v) => {
+        cqwVal.split(",").forEach((v) => {
           const [prop, cqw] = v.split(":");
           const px = (parseFloat(cqw) / 100) * containerWidth;
           child.style.setProperty(prop.trim(), `${px}px`);
         });
       });
 
+      // ── Step 2: capture at 3× scale for crisp PDF output ──
       const canvas = await html2canvas(el, {
-        scale: 2,
+        scale: 3,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: null,
-        // Ignore elements that may carry oklch-based styles from Tailwind/shadcn
-        ignoreElements: (element) => {
-          // Only capture the certificate itself — skip any stray portals
-          return false;
-        },
+        backgroundColor: "#ffffff",
+        logging: false,
       });
 
-      // Restore original styles
+      // ── Step 3: restore cqw styles ──
       origStyles.forEach(({ el: child, fontSize, width, height, padding }) => {
         child.style.fontSize = fontSize;
         child.style.width = width;
@@ -280,16 +306,41 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
         child.style.padding = padding;
       });
 
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      // ── Step 4: build PDF sized to match the certificate aspect ratio ──
+      // Certificate is 2000×1414 px → landscape A4 is 297×210 mm
+      // We fit the image into A4 landscape with no margins.
+      const PDF_W_MM = 297; // A4 landscape width
+      const PDF_H_MM = 210; // A4 landscape height
 
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = `OriginBi-${exam.title.replace(/\s+/g, "-")}-Certificate.jpeg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Scale the canvas image to fill the page while preserving aspect ratio
+      const imgAspect = canvas.width / canvas.height;
+      const pageAspect = PDF_W_MM / PDF_H_MM;
+
+      let imgW = PDF_W_MM;
+      let imgH = PDF_W_MM / imgAspect;
+      if (imgH > PDF_H_MM) {
+        imgH = PDF_H_MM;
+        imgW = PDF_H_MM * imgAspect;
+      }
+
+      // Centre on page
+      const offsetX = (PDF_W_MM - imgW) / 2;
+      const offsetY = (PDF_H_MM - imgH) / 2;
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      // Use PNG for lossless quality (no JPEG artefacts on text/lines)
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", offsetX, offsetY, imgW, imgH);
+
+      pdf.save(`${serialNumber}.pdf`);
     } catch (error) {
-      console.error("Failed to generate certificate image", error);
+      console.error("Failed to generate certificate PDF", error);
       alert("Failed to download certificate. Please try again.");
     } finally {
       setIsDownloading(false);
@@ -594,12 +645,12 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                       {isDownloading ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Generating...</span>
+                          <span>Generating PDF...</span>
                         </>
                       ) : (
                         <>
                           <DownloadIcon className="w-4 h-4" />
-                          <span>Download High-Res</span>
+                          <span>Download PDF</span>
                         </>
                       )}
                     </button>

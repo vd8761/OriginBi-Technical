@@ -9,6 +9,7 @@ export interface BackendAssessmentSubmissionResult {
   token?: string;
   attemptToken?: string;
   module?: string;
+  mode?: string;
   overallScore?: number;
   overallScorePercent?: number;
   totalScore?: number;
@@ -56,6 +57,49 @@ const parseWeightRatio = (weight: unknown): { score: number; max: number } | nul
   return { score: left, max: right };
 };
 
+// Map raw DB/enum category values to human-readable display names
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  // Communication / Grammar (task_type enum values)
+  mcq: "Multiple Choice",
+  reading_mcq: "Reading Comprehension",
+  listening_mcq: "Listening",
+  reading: "Reading",
+  writing: "Writing",
+  speaking: "Speaking",
+  audio: "Listening",
+  // Aptitude (subcategory values)
+  QA: "Quantitative Aptitude",
+  LR: "Logical Reasoning",
+  DI: "Data Interpretation",
+  AR: "Abstract Reasoning",
+  VA: "Verbal Ability",
+  "Quantitative Aptitude": "Quantitative Aptitude",
+  "Logical Reasoning": "Logical Reasoning",
+  "Verbal Ability": "Verbal Ability",
+  "Data Interpretation": "Data Interpretation",
+  "Abstract Reasoning": "Abstract Reasoning",
+  // MNC (topic_group values)
+  "Data Structures": "Data Structures",
+  Algorithms: "Algorithms",
+  "Dynamic Programming": "Dynamic Programming",
+  "Graph Theory": "Graph Theory",
+  "System Design": "System Design",
+  OOP: "Object-Oriented Programming",
+  Databases: "Databases",
+  Networking: "Networking",
+  "OS Concepts": "OS Concepts",
+  General: "General",
+  // MNC short forms
+  Quantitative: "Quantitative",
+  Logical: "Logical Reasoning",
+  Technical: "Technical",
+  Verbal: "Verbal Ability",
+  // Role assessment
+  conceptual: "Conceptual",
+  scenario: "Scenario-Based",
+  situational: "Situational",
+};
+
 const normalizeSections = (
   rawSections: BackendAssessmentSubmissionResult["sections"],
   overallScore: number,
@@ -65,7 +109,9 @@ const normalizeSections = (
   }
 
   return rawSections.map((section, index) => {
-    const name = asString(section.name, `Section ${index + 1}`);
+    const rawName = asString(section.name, `Section ${index + 1}`);
+    // Apply display name mapping — fall back to the raw name if no mapping exists
+    const name = CATEGORY_DISPLAY_NAMES[rawName] ?? rawName;
     const scoreRaw = toNumber(section.score, NaN);
     const maxScoreRaw = toNumber(section.maxScore, NaN);
     const weight = asString(section.weight, "");
@@ -188,7 +234,7 @@ const normalizeQuestionReviews = (
     return {
       questionId: asString(review.questionId, `q-${index + 1}`),
       displayOrder: toNumber(review.displayOrder, index + 1),
-      category: typeof review.category === "string" ? review.category : undefined,
+      category: typeof review.category === "string" ? (CATEGORY_DISPLAY_NAMES[review.category] ?? review.category) : undefined,
       type: asString(review.type, "mcq"),
       questionText: asString(review.questionText, `Question ${index + 1}`),
       options,
@@ -271,8 +317,7 @@ export const mapSubmissionToAssessmentResult = ({
     new Date().toISOString(),
   );
   const attemptToken = asString(submission.attemptToken ?? submission.token, "");
-  const submissionModule = asString(submission.module, "");
-
+  const submissionModule = asString(submission.module, "");    const submissionMode = asString(submission.mode, "main");
   const rawTotalScore = toNumber(
     submission.totalScore,
     toNumber(submission.overallScore, 0),
@@ -372,6 +417,7 @@ export const mapSubmissionToAssessmentResult = ({
     netScore: rawTotalScore,
     attemptToken: attemptToken || undefined,
     module: submissionModule || undefined,
+    mode: submissionMode || undefined,
     maxScore: Number.isFinite(maxScore) ? maxScore : undefined,
     objectiveAnsweredCount,
     subjectiveAnsweredCount,

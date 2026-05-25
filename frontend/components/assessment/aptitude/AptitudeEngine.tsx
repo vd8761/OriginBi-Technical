@@ -322,34 +322,14 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const isQuestionAnswered = currentQuestion ? !!answers[currentQuestionId] : false;
     const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestionId) : false;
 
-    // ── Block-wise unlock logic ──────────────────────────────────────────────
-    // Questions are grouped in blocks of 5. Block 1 = Q1-5, Block 2 = Q6-10, etc.
-    // A block unlocks when ALL questions in the previous block are answered.
+    // ── Block grouping (display only — no locking) ──────────────────────────
+    // Questions are grouped in blocks of 5 for the navigator display.
+    // Users can freely navigate to any question — skipping is allowed.
     const QUESTIONS_PER_BLOCK = 5;
 
-    // Compute the highest unlocked question index (0-based, inclusive)
-    const getUnlockedUpTo = (): number => {
-        if (questions.length === 0) return -1;
-        let unlockedUpTo = QUESTIONS_PER_BLOCK - 1; // Block 1 always unlocked
-        while (unlockedUpTo + 1 < questions.length) {
-            // Check if all questions in the current unlocked block are answered
-            const blockStart = unlockedUpTo - (QUESTIONS_PER_BLOCK - 1);
-            const allAnsweredInBlock = questions
-                .slice(blockStart, unlockedUpTo + 1)
-                .every(q => !!answers[q.id]);
-            if (allAnsweredInBlock) {
-                // Unlock next block
-                unlockedUpTo = Math.min(unlockedUpTo + QUESTIONS_PER_BLOCK, questions.length - 1);
-            } else {
-                break;
-            }
-        }
-        return unlockedUpTo;
-    };
-
-    const unlockedUpTo = getUnlockedUpTo();
-
-    const isQuestionLocked = (index: number) => index > unlockedUpTo;
+    // All questions are always unlocked — no restriction on navigation.
+    const unlockedUpTo = questions.length - 1;
+    const isQuestionLocked = (_index: number) => false;
 
 
     useEffect(() => {
@@ -401,6 +381,17 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 }
 
                 const data = await response.json();
+
+                // If backend returned block-based adaptive mode, redirect to adaptive engine
+                if (data.isBlockBased) {
+                    const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+                    const assessmentsJson = await assessmentsRes.json();
+                    const found = assessmentsJson?.data?.find((a: any) => a.module_type === "aptitude");
+                    const assessmentId = found?.assessment_id || 1;
+                    window.location.href = `/assessment/aptitude/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${data.attemptToken}`;
+                    return;
+                }
+
                 const token = data.attemptToken || data.token;
                 setAttemptToken(token || null);
 
@@ -494,6 +485,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 if (response.status === 400 && errorText.includes('already submitted')) {
                     console.warn('Attempt already submitted — performing hard redirect');
                     await clearSession();
+                    setShowSubmitModal(false);
                     // Use window.location.href for a guaranteed redirect even if router state is stale
                     if (mode === 'trial') {
                         window.location.href = '/assessment';
@@ -510,9 +502,9 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             console.log("Aptitude: Submission API success (200), clearing session...");
             const result = await response.json();
             // Clear cache after successful submission
-            await clearSession();
-            console.log("Aptitude: Calling onComplete...");
+            setShowSubmitModal(false);
             await Promise.resolve(onComplete(result));
+            await clearSession();
             // Guarantee post-submit navigation even if parent callback does not route.
             if (mode === 'trial') {
                 window.location.href = '/assessment';
@@ -564,6 +556,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     status: "submitted",
                 };
                 await clearSession();
+                setShowSubmitModal(false);
                 await Promise.resolve(onComplete(fallbackResult));
                 return;
             }
@@ -572,6 +565,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             // Only allow retry if it wasn't an "already submitted" error
             // (which would have returned early above)
             submittingRef.current = false;
+            setShowSubmitModal(false);
             setLoadError((error as Error).message);
         } finally {
             console.log("Aptitude: Submission finally block.");
@@ -705,7 +699,6 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     };
 
     const confirmSubmit = () => {
-        setShowSubmitModal(false);
         handleSubmitAttempt();
     };
 
@@ -714,6 +707,17 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
                 <Logo className="h-12 w-auto mb-8" />
                 <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (isSubmitting) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+                <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Submitting your assessment...</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please do not close this window or refresh the page.</p>
             </div>
         );
     }
@@ -980,8 +984,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleNext}
-                                    disabled={isQuestionLocked(currentIndex + 1)}
-                                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="min-h-10 rounded-lg bg-brand-green px-7 text-sm font-bold text-white transition hover:bg-[#19be5e] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                                 >
                                     Save and next
                                 </button>
@@ -1160,17 +1163,22 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                                 </div>
                             </div>
 
-                            {navigatorQuestions.some(q => !q.isAnswered && !q.isLocked) && (
-                                <div className="mt-6 flex w-full items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
-                                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-                                    <div>
-                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions</p>
-                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
-                                            We recommend attempting all questions before final submission.
+                            {navigatorQuestions.some(q => !q.isAnswered && !q.isLocked) && (() => {
+                                const missed = navigatorQuestions
+                                    .filter(q => !q.isAnswered && !q.isLocked)
+                                    .map(q => q.number);
+                                return (
+                                    <div className="mt-6 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4 text-left">
+                                        <p className="text-sm font-black text-[#17201b] dark:text-white leading-relaxed">
+                                            You have not answered {missed.length === 1 ? 'question' : 'questions'}{' '}
+                                            <span className="font-black text-red-600 dark:text-red-400">
+                                                {missed.join(', ')}
+                                            </span>
+                                            . Please complete {missed.length === 1 ? 'it' : 'all of them'} before submitting.
                                         </p>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
                                 <button
