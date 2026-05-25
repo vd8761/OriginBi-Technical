@@ -1140,7 +1140,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 			return fmt.Errorf("question %s final payload: %w", ans.ExamQuestionID, err)
 		}
 		runCtx, runCancel := context.WithTimeout(ctx, 120*time.Second)
-		_, err = s.executeJudge0(runCtx, runID, req, judgePayload, tests)
+		_, err = s.executeJudge0(runCtx, attemptID, runID, req, judgePayload, tests)
 		runCancel()
 		if err != nil {
 			_ = s.finishRunWithError(ctx, runID, err.Error())

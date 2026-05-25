@@ -556,7 +556,7 @@ func (s *Server) validateQuestionRequest(req adminQuestionRequest) error {
 			continue
 		}
 		switch strings.ToLower(strings.TrimSpace(tc.Comparator)) {
-		case "trim_equal", "strict", "json", "regex", "custom_checker":
+		case "trim_equal", "strict", "json", "regex":
 		default:
 			return fmt.Errorf("test_cases[%d].comparator is invalid", i)
 		}

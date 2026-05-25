@@ -211,6 +211,9 @@ INSERT INTO plugins (
     '["assessment.coding"]'::jsonb,
     '["language.runtime"]'::jsonb
 ),
+-- NOTE: judge0LanguageId is reset to 60 (Go 1.13) by migration 023 to match
+-- the deployed Judge0 image (mrkushalsm/judge0:cgv2). Do not edit this row in
+-- place; add a new migration if the deployed image changes.
 (
     '00000000-0000-0000-0000-000000000095', 'language', 'language.go', 'Go 1.22', '1.0.0',
     '{"displayName":"Go 1.22","judge0LanguageId":95,"fileExtension":".go","defaultEntryFile":"main.go","compileFlags":null,"timeLimitMs":3000,"memoryLimitKb":131072,"stackLimitKb":32768,"processesLimit":32,"outputLimitKb":16384,"supportsMultiFile":true,"monacoLanguageId":"go","icon":null,"legacyItemRef":null}'::jsonb,

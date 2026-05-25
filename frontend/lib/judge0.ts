@@ -12,6 +12,7 @@ export const JUDGE0_LANG_ID: Record<string, number> = {
     java: 62,
     cpp: 54,
     c: 50,
+    go: 60,
 };
 
 export const JUDGE0_MULTIFILE_ID = 89;
