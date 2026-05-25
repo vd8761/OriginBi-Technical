@@ -3,10 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { EXAM_DETAILS } from "@/lib/exams";
-import {
-  mapSubmissionToAssessmentResult,
-  saveAssessmentResultToStorage,
-} from "@/lib/assessmentResultMapper";
+import { persistAdaptiveResult } from "@/lib/adaptiveResultPersistence";
 
 import AdaptiveEngineV2 from "@/components/assessment/aptitude/AdaptiveEngineV2";
 import type { AdaptiveFinalReport } from "@/lib/adaptiveApi";
@@ -82,48 +79,16 @@ function AdaptiveMNCContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // empty deps — intentionally runs once on mount only
 
-  const handleComplete = (r: AdaptiveFinalReport) => {
+  const handleComplete = async (r: AdaptiveFinalReport) => {
     try {
-      localStorage.setItem("adaptiveV2Report", JSON.stringify(r));
-      localStorage.setItem("adaptiveMNCResults", JSON.stringify({
-        totalScore:           r.obtainedMarks,
-        overallScorePercent:  r.marksPercentage,
-        maxScore:             r.totalMarks,
-        correctCount:         r.correctAnswers,
-        wrongCount:           r.wrongAnswers,
-        skippedCount:         r.skippedQuestions,
-        totalQuestions:       r.totalQuestions,
-        timeTakenSeconds:     r.timeTakenSeconds,
-        finalEvaluationScore: r.finalEvaluationScore,
-        performanceLevel:     r.performanceLevel,
-        reliabilityScore:     r.reliabilityScore,
-        reliabilityLevel:     r.reliabilityLevel,
-      }));
-      const sections = Object.entries(r.categoryPerformance || {}).map(([name, cat]: [string, any]) => ({
-        name,
-        score: cat.marksScore ?? cat.accuracy ?? 0,
-        weight: `${cat.obtainedMarks ?? 0}/${cat.totalMarks ?? 0}`,
-        totalCount: cat.totalQuestions,
-        correctCount: cat.correctCount,
-        wrongCount: cat.wrongCount,
-        skippedCount: cat.skippedCount,
-      }));
-      const assessmentResult = mapSubmissionToAssessmentResult({
-        assessmentId: "mnc",
-        submission: {
-          overallScorePercent:  r.marksPercentage,
-          totalScore:           r.obtainedMarks,
-          maxScore:             r.totalMarks,
-          correctCount:         r.correctAnswers,
-          wrongCount:           r.wrongAnswers,
-          skippedCount:         r.skippedQuestions,
-          totalQuestions:       r.totalQuestions,
-          timeTakenSeconds:     r.timeTakenSeconds,
-          sections,
-        },
+      await persistAdaptiveResult({
+        assessmentKey: "mnc",
+        moduleSlug: "mnc",
         detail: EXAM_DETAILS.mnc,
+        report: r,
+        userId: userId ?? 1,
+        resultStorageKey: "adaptiveMNCResults",
       });
-      saveAssessmentResultToStorage(assessmentResult);
     } catch (err) {
       console.error("[AdaptiveMNC] handleComplete error:", err);
     }
@@ -155,6 +120,7 @@ function AdaptiveMNCContent() {
       assessmentId={assessmentId}
       userId={userId}
       attemptToken={attemptToken}
+      moduleSlug="mnc"
       mode={mode}
       onComplete={handleComplete}
     />

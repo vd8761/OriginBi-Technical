@@ -47,6 +47,7 @@ export interface AdaptiveV2Props {
   assessmentId: number;
   userId: number;
   attemptToken: string;
+  moduleSlug?: string;
   mode?: "trial" | "main";
   onComplete: (report: AdaptiveFinalReport) => void;
 }
@@ -79,7 +80,7 @@ const labelForIndex = (i: number) => String.fromCharCode(65 + i);
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
-  assessmentId, userId, attemptToken, mode = "main", onComplete,
+  assessmentId, userId, attemptToken, moduleSlug = "aptitude", mode = "main", onComplete,
 }) => {
   const { theme } = useTheme();
 
@@ -111,13 +112,16 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   const [isGeneratingNext, setIsGeneratingNext] = useState(false);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showBackWarningModal, setShowBackWarningModal] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const totalsInitializedRef = useRef(false);
   const [proctoringSettings, setProctoringSettings] =
     useState<ProctoringSettings>(DEFAULT_PROCTORING);
-  const [packageSlug, setPackageSlug] = useState("aptitude");
+  const [packageSlug, setPackageSlug] = useState(
+    moduleSlug === "communication" ? "grammar" : moduleSlug,
+  );
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const viewingBlockState = blocks.get(viewingBlockNum);
@@ -140,25 +144,55 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     totalsInitializedRef.current = true;
   }, [questionsPerBlock, totalBlocks]);
 
+  useEffect(() => {
+    if (isLoading || isSubmitting || viewingQuestions.length === 0) return;
+
+    window.history.pushState(null, "", window.location.href);
+
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+      setShowBackWarningModal(true);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isLoading, isSubmitting, viewingQuestions.length]);
+
   // ── Proctoring settings (tab switch, copy/paste, etc.) ─────────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        const normalizedModuleSlug =
+          moduleSlug === "communication" ? "grammar" : moduleSlug;
+        setPackageSlug(normalizedModuleSlug);
+
         const res = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled) return;
-        const found = json?.data?.find(
-          (a: { assessment_id?: number; module_type?: string; assessment_code?: string }) =>
-            a.assessment_id === assessmentId || a.module_type === "aptitude" || a.assessment_code === "aptitude",
-        );
+        const assessments = Array.isArray(json?.data) ? json.data : [];
+        const normalizeSlug = (value: unknown) => {
+          const slug = String(value ?? "").trim().toLowerCase();
+          return slug === "communication" ? "grammar" : slug;
+        };
+        const found =
+          assessments.find((a: { assessment_id?: number }) => a.assessment_id === assessmentId) ??
+          assessments.find((a: { module_type?: string; assessment_code?: string }) =>
+            normalizeSlug(a.module_type) === normalizedModuleSlug ||
+            normalizeSlug(a.assessment_code) === normalizedModuleSlug,
+          );
         if (found) {
-          const moduleSlug = found.module_type === "communication" ? "grammar" : (found.module_type || "aptitude");
-          setPackageSlug(moduleSlug);
+          const resolvedPackageSlug =
+            normalizeSlug(found.module_type) ||
+            normalizeSlug(found.assessment_code) ||
+            normalizedModuleSlug;
+          setPackageSlug(resolvedPackageSlug);
           const effective = await fetchEffectiveAssessmentSettings(
             API_BASE,
-            found.assessment_code ?? moduleSlug,
+            found.assessment_code ?? resolvedPackageSlug,
             readCandidateEmail(),
           );
           const merged = effective ? { ...found, ...effective } : found;
@@ -171,7 +205,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [assessmentId]);
+  }, [assessmentId, moduleSlug]);
 
   // ── Question timing ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1062,6 +1096,54 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {showBackWarningModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-[2px]"
+            onClick={() => setShowBackWarningModal(false)}
+          />
+
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="relative w-full max-w-md transform overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl transition-all dark:border-white/[0.08] dark:bg-[#19211C]"
+          >
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500 text-white">
+                <AlertCircle size={28} />
+              </div>
+
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Leave Assessment?</h2>
+              <p className="mt-2.5 text-xs font-medium leading-relaxed text-slate-500 dark:text-gray-400">
+                Your progress has been securely saved. You can return and continue your assessment exactly where you left off, as long as the timer does not run out.
+              </p>
+
+              <div className="mt-6 flex w-full flex-col gap-2.5 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBackWarningModal(false);
+                    window.location.href = "/assessment";
+                  }}
+                  className="flex-1 cursor-pointer rounded-xl border border-slate-200 px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 transition-all hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-white/[0.04]"
+                >
+                  Yes, Exit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBackWarningModal(false)}
+                  className="flex-1 cursor-pointer rounded-xl bg-brand-green px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-white transition-all hover:bg-[#1bb85c] active:scale-95"
+                >
+                  Resume Test
+                </button>
+              </div>
+            </div>
+          </motion.div>
         </div>
       )}
       </div>

@@ -1328,9 +1328,15 @@ export async function getPurchasedAssessments(email: string): Promise<{ purchase
   });
 }
 
-export async function getLatestSubmittedResult(module: string, userId: string): Promise<any> {
+export async function getLatestSubmittedResult(
+  module: string,
+  userId: string,
+  attemptToken?: string,
+): Promise<any> {
+  const params = new URLSearchParams({ userId });
+  if (attemptToken) params.set("attemptToken", attemptToken);
   return apiFetch<any>(
-    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}`,
+    `/api/assessment/${module}/latest-result?${params.toString()}`,
     {
       baseOverride: TECH_API_BASE,
       auth: false,

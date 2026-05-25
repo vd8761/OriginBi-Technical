@@ -7,6 +7,7 @@ import {
   mapSubmissionToAssessmentResult,
   saveAssessmentResultToStorage,
 } from "@/lib/assessmentResultMapper";
+import { persistAdaptiveResult } from "@/lib/adaptiveResultPersistence";
 
 import AdaptiveAptitudeEngine, {
   type AttemptSubmitResult,
@@ -78,48 +79,16 @@ function AdaptiveV2Content() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleComplete = (r: AdaptiveFinalReport) => {
+  const handleComplete = async (r: AdaptiveFinalReport) => {
     try {
-      localStorage.setItem("adaptiveV2Report", JSON.stringify(r));
-      localStorage.setItem("adaptiveAptitudeResults", JSON.stringify({
-        totalScore:           r.obtainedMarks,
-        overallScorePercent:  r.marksPercentage,
-        maxScore:             r.totalMarks,
-        correctCount:         r.correctAnswers,
-        wrongCount:           r.wrongAnswers,
-        skippedCount:         r.skippedQuestions,
-        totalQuestions:       r.totalQuestions,
-        timeTakenSeconds:     r.timeTakenSeconds,
-        finalEvaluationScore: r.finalEvaluationScore,
-        performanceLevel:     r.performanceLevel,
-        reliabilityScore:     r.reliabilityScore,
-        reliabilityLevel:     r.reliabilityLevel,
-      }));
-      const sections = Object.entries(r.categoryPerformance || {}).map(([name, cat]: [string, any]) => ({
-        name,
-        score: cat.marksScore ?? cat.accuracy ?? 0,
-        weight: `${cat.obtainedMarks ?? 0}/${cat.totalMarks ?? 0}`,
-        totalCount: cat.totalQuestions,
-        correctCount: cat.correctCount,
-        wrongCount: cat.wrongCount,
-        skippedCount: cat.skippedCount,
-      }));
-      const assessmentResult = mapSubmissionToAssessmentResult({
-        assessmentId: "aptitude",
-        submission: {
-          overallScorePercent:  r.marksPercentage,
-          totalScore:           r.obtainedMarks,
-          maxScore:             r.totalMarks,
-          correctCount:         r.correctAnswers,
-          wrongCount:           r.wrongAnswers,
-          skippedCount:         r.skippedQuestions,
-          totalQuestions:       r.totalQuestions,
-          timeTakenSeconds:     r.timeTakenSeconds,
-          sections,
-        },
+      await persistAdaptiveResult({
+        assessmentKey: "aptitude",
+        moduleSlug: "aptitude",
         detail: EXAM_DETAILS.aptitude,
+        report: r,
+        userId: userId ?? 1,
+        resultStorageKey: "adaptiveAptitudeResults",
       });
-      saveAssessmentResultToStorage(assessmentResult);
     } catch (err) {
       console.error("[AdaptiveV2] handleComplete error:", err);
     }
@@ -149,6 +118,7 @@ function AdaptiveV2Content() {
       assessmentId={assessmentId}
       userId={userId}
       attemptToken={attemptToken}
+      moduleSlug="aptitude"
       mode={mode}
       onComplete={handleComplete}
     />
