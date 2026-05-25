@@ -1337,9 +1337,15 @@ export async function getPurchasedAssessments(email: string): Promise<{ purchase
   });
 }
 
-export async function getLatestSubmittedResult(module: string, userId: string): Promise<unknown> {
-  return apiFetch<unknown>(
-    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}`,
+export async function getLatestSubmittedResult(
+  module: string,
+  userId: string,
+  attemptToken?: string,
+): Promise<any> {
+  const params = new URLSearchParams({ userId });
+  if (attemptToken) params.set("attemptToken", attemptToken);
+  return apiFetch<any>(
+    `/api/assessment/${module}/latest-result?${params.toString()}`,
     {
       baseOverride: TECH_API_BASE,
       auth: false,
@@ -1476,41 +1482,74 @@ export async function listAdminUsers(
   );
 }
 
-export async function bulkAdminUsersPreview(file: File): Promise<unknown> {
+export interface BulkAdminUsersRow {
+  rowIndex: number;
+  status: "READY" | "INVALID" | "SUCCESS" | "FAILED";
+  errorMessage?: string | null;
+  rawData: Record<string, unknown>;
+  normalizedData: Record<string, unknown>;
+}
+
+export interface BulkAdminUsersPreviewResponse {
+  importId: string;
+  summary: {
+    total: number;
+    valid: number;
+    invalid: number;
+  };
+  rows: BulkAdminUsersRow[];
+}
+
+export interface BulkAdminUsersExecuteResponse {
+  jobId: string;
+  status: string;
+}
+
+export interface BulkAdminUsersJobStatusResponse {
+  status: string;
+  total: number;
+  processed: number;
+  success: number;
+  failed: number;
+  progress: number;
+  lastError?: string | null;
+}
+
+export async function bulkAdminUsersPreview(file: File): Promise<BulkAdminUsersPreviewResponse> {
   const formData = new FormData();
   formData.append("file", file);
-  return apiFetch<unknown>("/api/admin/users/bulk/preview", {
+  return apiFetch<BulkAdminUsersPreviewResponse>("/api/admin/users/bulk/preview", {
     method: "POST",
     body: formData,
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function bulkAdminUsersExecute(importId: string, overrides?: unknown[]): Promise<unknown> {
-  return apiFetch<unknown>("/api/admin/users/bulk/execute", {
+export async function bulkAdminUsersExecute(importId: string, overrides?: unknown[]): Promise<BulkAdminUsersExecuteResponse> {
+  return apiFetch<BulkAdminUsersExecuteResponse>("/api/admin/users/bulk/execute", {
     method: "POST",
     body: JSON.stringify({ import_id: importId, overrides }),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getBulkAdminUsersJobStatus(importId: string): Promise<unknown> {
-  return apiFetch<unknown>(`/api/admin/users/bulk-jobs/${importId}`, {
+export async function getBulkAdminUsersJobStatus(importId: string): Promise<BulkAdminUsersJobStatusResponse> {
+  return apiFetch<BulkAdminUsersJobStatusResponse>(`/api/admin/users/bulk-jobs/${importId}`, {
     method: "GET",
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getBulkAdminUsersJobRows(importId: string): Promise<unknown> {
-  return apiFetch<unknown>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
+export async function getBulkAdminUsersJobRows(importId: string): Promise<BulkAdminUsersRow[]> {
+  return apiFetch<BulkAdminUsersRow[]>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
     method: "GET",
     baseOverride: TECH_API_BASE,
   });
 }
 
 // ── Admin Groups & Cohorts Database-backed CRUD ─────────────────────────────
-export async function getAdminGroups(): Promise<unknown[]> {
-  return apiFetch<unknown[]>("/api/admin/groups", {
+export async function getAdminGroups(): Promise<Record<string, unknown>[]> {
+  return apiFetch<Record<string, unknown>[]>("/api/admin/groups", {
     baseOverride: TECH_API_BASE,
   });
 }
@@ -1523,8 +1562,8 @@ export async function createAdminGroup(body: Record<string, unknown>): Promise<u
   });
 }
 
-export async function updateAdminGroup(id: number | string, body: Record<string, unknown>): Promise<unknown> {
-  return apiFetch<unknown>(`/api/admin/groups/${id}`, {
+export async function updateAdminGroup(id: number | string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>(`/api/admin/groups/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
     baseOverride: TECH_API_BASE,
@@ -1538,8 +1577,8 @@ export async function deleteAdminGroup(id: number | string): Promise<unknown> {
   });
 }
 
-export async function getAdminAssessments(): Promise<unknown> {
-  return apiFetch<unknown>("/api/assessment/admin/assessments", {
+export async function getAdminAssessments(): Promise<{ data?: Array<Record<string, unknown> & { assessment_name?: string }> } | null> {
+  return apiFetch<{ data?: Array<Record<string, unknown> & { assessment_name?: string }> } | null>("/api/assessment/admin/assessments", {
     baseOverride: TECH_API_BASE,
   });
 }

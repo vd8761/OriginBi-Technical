@@ -3,7 +3,8 @@ import {
     bulkAdminUsersPreview,
     bulkAdminUsersExecute,
     getBulkAdminUsersJobStatus,
-    getBulkAdminUsersJobRows
+    getBulkAdminUsersJobRows,
+    type BulkAdminUsersRow,
 } from '../../lib/api';
 import { BulkUploadDropzone } from "./bulk/BulkUploadDropzone";
 import { BulkReviewTable } from "./bulk/BulkReviewTable";
@@ -26,8 +27,8 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
     const [error, setError] = useState<string | null>(null);
 
     // Review State
-    const [validRows, setValidRows] = useState<any[]>([]);
-    const [invalidRows, setInvalidRows] = useState<any[]>([]);
+    const [validRows, setValidRows] = useState<BulkAdminUsersRow[]>([]);
+    const [invalidRows, setInvalidRows] = useState<BulkAdminUsersRow[]>([]);
     const [isConfirming, setIsConfirming] = useState(false);
 
     // Success State

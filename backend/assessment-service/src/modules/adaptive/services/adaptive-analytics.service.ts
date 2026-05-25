@@ -252,6 +252,9 @@ export class AdaptiveAnalyticsService {
       // 15. Persist to adaptive_performance_analytics
       await this.persistReport(report);
 
+      // 16. Mark the attempt as submitted (prevents dashboard resume cards)
+      await this.markAttemptSubmitted(attemptToken, assessmentId, report);
+
       return report;
     } catch (e) {
       this.logger.error('computeAndPersistFinalReport error:', e);
@@ -449,5 +452,44 @@ export class AdaptiveAnalyticsService {
       [attemptToken],
     );
     return rows[0] ?? null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Mark the underlying attempt as submitted
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private async markAttemptSubmitted(
+    attemptToken: string,
+    assessmentId: number,
+    report: AdaptiveFinalReport,
+  ): Promise<void> {
+    const asmRows = await this.dataSource.query(
+      `SELECT module_type FROM tech_assessments WHERE assessment_id=$1`,
+      [assessmentId],
+    );
+    const moduleType = asmRows[0]?.module_type ?? 'aptitude';
+
+    const attemptTableMap: Record<string, string> = {
+      aptitude: 'tech_aptitude_attempts',
+      grammar: 'tech_grammar_attempts',
+      communication: 'tech_grammar_attempts',
+      mnc: 'tech_mnc_attempts',
+      role: 'tech_role_attempts',
+    };
+
+    const attemptsTable = attemptTableMap[moduleType];
+    if (!attemptsTable) return;
+
+    await this.dataSource.query(
+      `UPDATE ${attemptsTable}
+       SET status='submitted', submitted_at=NOW(),
+           time_taken_seconds=$2,
+           total_score=$3,
+           positive_score=$3,
+           negative_score=$4,
+           updated_at=NOW()
+       WHERE attempt_token=$1`,
+      [attemptToken, report.timeTakenSeconds, report.obtainedMarks, 0],
+    );
   }
 }

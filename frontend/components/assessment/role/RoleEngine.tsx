@@ -115,6 +115,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     const [questions, setQuestions] = useState<RoleQuestion[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [isRedirecting, setIsRedirecting] = useState(false);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showRestoredBanner, setShowRestoredBanner] = useState(false);
@@ -351,6 +352,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
 
                 // If backend returned block-based adaptive mode, redirect to adaptive engine
                 if (data.isBlockBased) {
+                    setIsRedirecting(true);
                     const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
                     const assessmentsJson = await assessmentsRes.json();
                     const found = assessmentsJson?.data?.find((a: any) => a.module_type === 'role');
@@ -581,6 +583,17 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
             <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
                 <Logo className="h-12 w-auto mb-8" />
                 <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (isRedirecting) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+                <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Redirecting to adaptive assessment...</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please keep this tab open.</p>
             </div>
         );
     }
