@@ -70,7 +70,7 @@ type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
     section?: string;
     prompt?: string;
     options?: Array<string | { label?: string; text?: string; value?: string }>;
-    testCases?: { input?: string; stdin?: string; expected?: string }[];
+    testCases?: { input?: string; stdin?: string; expected?: string; comparator?: string; comparatorConfig?: unknown }[];
 };
 
 const difficultyLabel = (value: unknown): Question["difficulty"] => {
@@ -121,6 +121,8 @@ const mapSnapshotQuestion = (question: SnapshotQuestion): Question => {
             input: tc.input ?? tc.stdin ?? "",
             stdin: tc.stdin,
             expected: tc.expected ?? "",
+            comparator: tc.comparator,
+            comparatorConfig: tc.comparatorConfig,
         })),
         limits: body.limits,
         allowedLanguages: Array.isArray(body.allowedLanguages)

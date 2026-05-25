@@ -5,6 +5,8 @@ export interface TestCase {
     input: string;
     expected: string;
     stdin?: string;
+    comparator?: string;
+    comparatorConfig?: unknown;
 }
 
 export interface ExecutionLimits {

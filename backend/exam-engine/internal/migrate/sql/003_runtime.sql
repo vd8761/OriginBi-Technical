@@ -25,6 +25,8 @@ CREATE TYPE q_state AS ENUM (
     'skipped'
 );
 
+-- 'sample' is reserved but not used by any code path; left in place because
+-- Postgres cannot drop enum values without recreating the type.
 CREATE TYPE code_run_mode AS ENUM ('custom', 'sample', 'tests', 'final');
 
 -- ---------------- attempts ----------------

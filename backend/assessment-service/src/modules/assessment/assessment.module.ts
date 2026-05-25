@@ -12,7 +12,6 @@ import { AdminUsersService } from './services/admin-users.service';
 import { AssessmentService } from './services/assessment.service';
 import { AdaptiveBlockService } from './services/adaptive-block.service';
 import { AdaptiveFallbackService } from './services/adaptive-fallback.service';
-import { CodeExecutionService } from './services/code-execution.service';
 import { EvaluationService } from './services/evaluation.service';
 import { PurchaseService } from './services/purchase.service';
 import { BulkAdminUsersService } from './services/bulk-admin-users.service';
@@ -51,7 +50,6 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     AssessmentService,
     AdaptiveBlockService,
     AdaptiveFallbackService,
-    CodeExecutionService,
     EvaluationService,
     PurchaseService,
     BulkAdminUsersService,
@@ -64,7 +62,6 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     AssessmentService,
     AdaptiveBlockService,
     AdaptiveFallbackService,
-    CodeExecutionService,
     EvaluationService,
     PurchaseService,
     BulkAdminUsersService,

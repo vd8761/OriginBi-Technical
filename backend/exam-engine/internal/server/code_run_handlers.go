@@ -103,7 +103,7 @@ func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	required, err := runnerjudge0.Health(ctx, s.plugins, s.judgeHTTPClient, judge0BaseURL())
+	required, available, err := runnerjudge0.Health(ctx, s.plugins, s.judgeHTTPClient, judge0BaseURL())
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"status": "unreachable",
@@ -122,6 +122,7 @@ func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
 		"status":    status,
 		"judge0Url": judge0BaseURL(),
 		"required":  required,
+		"available": available,
 	})
 }
 
@@ -267,7 +268,7 @@ func (s *Server) executeCodeRunAction(
 
 	runCtx, runCancel := context.WithTimeout(ctx, 90*time.Second)
 	defer runCancel()
-	resp, err := s.executeJudge0(runCtx, runID, req, payload, tests)
+	resp, err := s.executeJudge0(runCtx, attemptID, runID, req, payload, tests)
 	if err != nil {
 		_ = s.finishRunWithError(ctx, runID, err.Error())
 		return codeRunResponse{}, fmt.Errorf("Judge0 execution failed: %w", err)
@@ -540,6 +541,7 @@ func (s *Server) persistRunStart(
 
 func (s *Server) executeJudge0(
 	ctx context.Context,
+	attemptID uuid.UUID,
 	runID uuid.UUID,
 	req codeRunRequest,
 	payload map[string]any,
@@ -557,42 +559,46 @@ func (s *Server) executeJudge0(
 		return resp, nil
 	}
 
-	results := make([]judge0Result, 0, len(tests))
+	s.sendRunCommand(attemptID, "coding.run_started", map[string]any{
+		"runId":     runID.String(),
+		"mode":      req.Mode,
+		"totalTests": len(tests),
+	})
+
+	stdins := make([]string, len(tests))
+	for i, tc := range tests {
+		stdins[i] = tc.Stdin
+	}
+	results, err := s.postJudge0Batch(ctx, payload, stdins, runID, tests, func(idx int, r judge0Result) {
+		if idx < 0 || idx >= len(tests) {
+			return
+		}
+		dto := buildTestResultDTO(tests[idx], r)
+		s.sendRunCommand(attemptID, "coding.test_finished", map[string]any{
+			"runId":   runID.String(),
+			"ordinal": tests[idx].Ordinal,
+			"passed":  dto.Passed,
+			"actual":  dto.Actual,
+			"time":    dto.Time,
+		})
+	})
+	if err != nil {
+		return codeRunResponse{}, err
+	}
+
 	testDTOs := make([]codeTestResultDTO, 0, len(tests))
 	passCount := 0
 	var firstFail *judge0Result
-	for _, tc := range tests {
-		r, err := s.postJudge0(ctx, payload, tc.Stdin)
-		if err != nil {
-			return codeRunResponse{}, err
-		}
-		results = append(results, r)
-		actual := strings.TrimSpace(r.Stdout)
-		if actual == "" {
-			actual = strings.TrimSpace(stderrForJudge0(r))
-		}
-		if actual == "" {
-			actual = r.Status.Description
-		}
-		passed := false
-		if r.Status.ID == 3 {
-			if ok, err := evaluationtestcase.Compare(tc.Comparator, tc.Expected, r.Stdout, tc.ComparatorConfig); err == nil {
-				passed = ok
-			}
-		}
-		if passed {
+	for i, tc := range tests {
+		r := results[i]
+		dto := buildTestResultDTO(tc, r)
+		if dto.Passed {
 			passCount++
 		} else if firstFail == nil {
 			fail := r
 			firstFail = &fail
 		}
-		testDTOs = append(testDTOs, codeTestResultDTO{
-			Input:    tc.Stdin,
-			Expected: tc.Expected,
-			Passed:   passed,
-			Actual:   actual,
-			Time:     formatJudge0Time(r.Time),
-		})
+		testDTOs = append(testDTOs, dto)
 	}
 
 	runType := "success"
@@ -778,6 +784,63 @@ func (s *Server) postJudge0(ctx context.Context, payload map[string]any, stdin s
 	}.Post(ctx, payload, stdin)
 }
 
+// postJudge0Batch dispatches every test case in a single Judge0 batch and polls
+// for results. onResult, when non-nil, fires once per submission as it first
+// transitions to a terminal status — used by executeJudge0 to stream per-test
+// progress over the per-attempt SSE channel.
+func (s *Server) postJudge0Batch(ctx context.Context, payload map[string]any, stdins []string, _ uuid.UUID, _ []dbTestCase, onResult func(int, judge0Result)) ([]judge0Result, error) {
+	client := runnerjudge0.Client{
+		BaseURL:    judge0BaseURL(),
+		HTTPClient: s.judgeHTTPClient,
+	}
+	opts := runnerjudge0.BatchOptions{
+		MaxChunk:     envInt("JUDGE0_BATCH_MAX_CHUNK", 20),
+		PollInterval: time.Duration(envInt("JUDGE0_BATCH_POLL_INTERVAL_MS", 200)) * time.Millisecond,
+		OnResult:     onResult,
+	}
+	return client.PostBatch(ctx, payload, stdins, opts)
+}
+
+// sendRunCommand emits a per-attempt SSE command, swallowing marshal errors so a
+// best-effort progress signal can never tank the run that produced it.
+func (s *Server) sendRunCommand(attemptID uuid.UUID, kind string, payload map[string]any) {
+	if s.plugins == nil {
+		return
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Warn("run command marshal failed", "kind", kind, "err", err)
+		return
+	}
+	s.plugins.Commands().Send(attemptID, pluginhost.Command{
+		Kind:    kind,
+		Payload: body,
+	})
+}
+
+func buildTestResultDTO(tc dbTestCase, r judge0Result) codeTestResultDTO {
+	actual := strings.TrimSpace(r.Stdout)
+	if actual == "" {
+		actual = strings.TrimSpace(stderrForJudge0(r))
+	}
+	if actual == "" {
+		actual = r.Status.Description
+	}
+	passed := false
+	if r.Status.ID == 3 {
+		if ok, err := evaluationtestcase.Compare(tc.Comparator, tc.Expected, r.Stdout, tc.ComparatorConfig); err == nil {
+			passed = ok
+		}
+	}
+	return codeTestResultDTO{
+		Input:    tc.Stdin,
+		Expected: tc.Expected,
+		Passed:   passed,
+		Actual:   actual,
+		Time:     formatJudge0Time(r.Time),
+	}
+}
+
 func (s *Server) buildJudge0Payload(req codeRunRequest) (map[string]any, error) {
 	files := make([]runnerjudge0.File, 0, len(req.Files))
 	for _, f := range req.Files {
@@ -825,13 +888,16 @@ func mapJudge0Type(statusID int, hasFailingTests bool) string {
 		return "success"
 	}
 	if statusID == 4 {
-		return "partial"
+		return "wrong-answer"
 	}
 	if statusID == 5 {
 		return "timeout"
 	}
 	if statusID == 6 {
 		return "compile-error"
+	}
+	if statusID >= 7 && statusID <= 12 {
+		return "runtime-error"
 	}
 	return "error"
 }

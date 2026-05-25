@@ -85,6 +85,8 @@ func run() error {
 		return err
 	}
 
+	go srv.RunBackgroundJobs(rootCtx)
+
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           srv.Handler(),

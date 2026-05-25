@@ -20,8 +20,6 @@ func Compare(comparator string, expected string, actual string, config json.RawM
 		return compareJSON(expected, actual)
 	case "regex":
 		return regexp.MatchString(expected, actual)
-	case "custom_checker":
-		return false, fmt.Errorf("custom_checker comparator is not implemented")
 	default:
 		return false, fmt.Errorf("unknown comparator %q", comparator)
 	}
