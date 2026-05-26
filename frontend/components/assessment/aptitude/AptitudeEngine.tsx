@@ -613,7 +613,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
     const handleOptionSelect = (optionId: string) => {
         const question = currentQuestion;
-        const kind = question.metadata?.kind || 'mcq';
+        const kind = question.kind || question.metadata?.kind || 'mcq';
 
         let newAnswer: string | string[];
 
@@ -922,7 +922,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                             )}
                         </div>
 
-                        {currentQuestion.metadata?.kind === 'numerical' && (
+                        {(currentQuestion.kind === 'numerical' || currentQuestion.metadata?.kind === 'numerical') && (
                             <div className="mt-4 px-1">
                                 <p className="text-[10px] font-bold italic text-[#17201b] dark:text-white">
                                     * Note: Only exact numerical matches will be considered correct. Space is not allowed.
@@ -931,7 +931,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                         )}
 
                         {(() => {
-                            const kind = currentQuestion.metadata?.kind || 'mcq';
+                            const kind = currentQuestion.kind || currentQuestion.metadata?.kind || 'mcq';
                             const currentAnswer = answers[currentQuestion.id];
 
                             switch (kind) {
