@@ -1995,7 +1995,7 @@ export class AssessmentService {
           }
           questionReviews.push(review);
           continue;
-        // Scoring Logic: Support MCQ, MSQ, TF, Numerical
+        }
 
         // Scoring Logic: Support MCQ, MSQ, TF, Numerical
         if (aq.mode !== 'trial' && !isCoding && (!isGrammar || taskType === 'listening_mcq' || taskType === 'reading_mcq')) {
