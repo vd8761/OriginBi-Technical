@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.local/plugins/evaluation-llm/config.schema.json",
+  "title": "LLM Evaluation Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "provider": {
+      "type": "string",
+      "description": "Provider plugin slug, for example evaluator.openai or evaluator.anthropic.",
+      "pattern": "^evaluator\\.[a-z][a-z0-9-]*$"
+    },
+    "rubric": {
+      "type": "string",
+      "description": "Human-readable scoring rubric used by future provider calls.",
+      "maxLength": 20000
+    },
+    "finalScorePolicy": {
+      "type": "string",
+      "enum": ["suggest_only", "replace_auto", "blend_with_auto"],
+      "default": "suggest_only"
+    },
+    "holdResultUntilManualReview": {
+      "type": "boolean",
+      "default": true
+    },
+    "maxScore": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

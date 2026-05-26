@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { SessionProvider } from "@/lib/contexts/SessionContext";
+import { PaymentProvider } from "@/lib/payments";
+import { CachePruner } from "@/components/CachePruner";
 
 const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -24,20 +25,33 @@ export const metadata: Metadata = {
   description: "Technical assessment platform for candidates.",
 };
 
+import { DataHydrationProvider } from "@/lib/contexts/DataHydrationContext";
+import { ThemeScript } from "@/components/ThemeScript";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
+      <head />
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} antialiased min-h-full flex flex-col`}
+        className="antialiased min-h-full flex flex-col"
       >
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <ThemeScript />
+        <SessionProvider>
+          <PaymentProvider>
+            <DataHydrationProvider>
+              <ThemeProvider>
+                <CachePruner />
+                {children}
+              </ThemeProvider>
+            </DataHydrationProvider>
+          </PaymentProvider>
+        </SessionProvider>
       </body>
     </html>
   );
 }
+

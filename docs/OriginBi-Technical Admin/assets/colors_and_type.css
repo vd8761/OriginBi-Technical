@@ -1,0 +1,401 @@
+/* ================================================================
+   ORIGIN BI — DESIGN TOKENS
+   colors_and_type.css
+   Generated from Figma + codebase analysis
+   ================================================================ */
+
+/* ----------------------------------------------------------------
+   FONT DECLARATIONS
+   Custom font: Haskoy (all 8 weights)
+   NOTE: .otf files not included — see fonts/ dir or substitute
+         with Plus Jakarta Sans from Google Fonts (closest match).
+   ---------------------------------------------------------------- */
+
+/* Google Fonts fallback (Plus Jakarta Sans) — remove if Haskoy is loaded */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+/* Haskoy @font-face declarations (uncomment when font files are present) */
+/*
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-Thin.otf'); font-weight: 100; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-ExtraLight.otf'); font-weight: 200; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-Light.otf'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-Regular.otf'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-Medium.otf'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-SemiBold.otf'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-Bold.otf'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Haskoy'; src: url('./fonts/Haskoy-ExtraBold.otf'); font-weight: 800; font-style: normal; font-display: swap; }
+*/
+
+:root {
+  /* ----------------------------------------------------------------
+     COLOR PRIMITIVES
+     Raw brand palette values
+     ---------------------------------------------------------------- */
+
+  /* Brand Green — primary accent */
+  --color-green-500: #1ED36A;
+  --color-green-400: #5EEE9B;        /* rgba(94,238,155) — green glow */
+  --color-green-600: #1A8A47;
+  --color-green-100: #D7FFE8;        /* rgb(215,255,232) — very light green */
+  --color-green-200: #4A8F67;        /* rgb(74,143,103) */
+  --color-green-alpha-40: rgba(30, 211, 106, 0.4);
+  --color-green-alpha-10: rgba(30, 211, 106, 0.1);
+
+  /* Dark palette */
+  --color-dark-900: #19211C;         /* rgb(25,33,28) — primary dark bg */
+  --color-dark-800: #24272B;         /* brand-dark-secondary */
+  --color-dark-700: #303438;         /* brand-dark-tertiary */
+  --color-dark-600: #1B1F23;         /* rgb(27,31,35) */
+  --color-dark-500: #111814;         /* dark glass bg */
+  --color-dark-400: #0F1712;         /* assessment dark bg */
+
+  /* Light palette */
+  --color-light-0: #FFFFFF;
+  --color-light-50: #F7FAFC;
+  --color-light-100: #E2E8F0;
+  --color-light-200: #CBD5E0;
+
+  /* Text */
+  --color-text-dark-primary: #FFFFFF;
+  --color-text-dark-secondary: #A0AEC0;   /* rgb(160,174,192) */
+  --color-text-dark-muted: #D2D2D2;       /* rgb(210,210,210) */
+  --color-text-light-primary: #2D3748;
+  --color-text-light-secondary: #718096;
+  --color-text-muted: #838383;            /* rgb(131,131,131) */
+
+  /* Status colors */
+  --color-red-500: #ED2F34;          /* rgb(237,47,52) — error / danger */
+  --color-red-600: #B71D21;          /* rgb(183,29,33) */
+  --color-red-700: #C63232;          /* brand-red */
+  --color-red-400: #F17074;          /* rgb(241,112,116) */
+  --color-red-300: #FF97A0;          /* rgb(255,151,157) */
+  --color-red-200: #FFB4B6;          /* rgb(255,180,182) */
+
+  --color-yellow-500: #FEF000;       /* rgb(254,240,0) */
+  --color-yellow-400: #FFB703;       /* rgb(255,183,3) */
+  --color-yellow-300: #FCD227;       /* rgb(252,210,39) */
+  --color-yellow-200: #FECF27;       /* rgb(253,192,12) — gradient stop */
+
+  --color-blue-500: #007BBB;         /* rgb(0,126,187) */
+  --color-blue-200: #AAC6FF;         /* rgb(170,196,255) */
+  --color-blue-100: #94CEFD;         /* rgb(148,206,253) */
+  --color-teal-400: #4AC6EA;         /* rgb(74,198,234) */
+
+  /* Personality type card colors */
+  --color-personality-purple-dark: #150089;    /* Analytical Leader (dark) */
+  --color-personality-purple-mid: #5337BC;     /* Analytical Leader (mid) */
+  --color-personality-purple-light: #AC96FF;   /* rgb(172,150,255) */
+  --color-personality-blue: #246CAC;           /* Reliable Executor */
+  --color-personality-red: #8B1C1C;            /* Charismatic Leader */
+  --color-personality-green-card: #4A8F67;     /* Supportive Energizer */
+  --color-personality-pink: #D84C74;           /* rgb(216,76,116) */
+
+  /* ----------------------------------------------------------------
+     SEMANTIC COLOR TOKENS
+     Use these in components
+     ---------------------------------------------------------------- */
+
+  /* Backgrounds */
+  --bg-primary:             var(--color-light-0);
+  --bg-secondary:           var(--color-light-50);
+  --bg-tertiary:            var(--color-light-100);
+  --bg-primary-dark:        var(--color-dark-900);
+  --bg-secondary-dark:      var(--color-dark-800);
+  --bg-tertiary-dark:       var(--color-dark-700);
+
+  /* Surfaces */
+  --surface-card:           var(--color-light-0);
+  --surface-card-dark:      rgba(255,255,255, 0.08);
+  --surface-overlay:        rgba(255,255,255, 0.12);
+  --surface-overlay-dark:   rgba(255,255,255, 0.05);
+
+  /* Brand accent */
+  --accent:                 var(--color-green-500);
+  --accent-glow:            var(--color-green-alpha-40);
+  --accent-hover:           color-mix(in srgb, var(--color-green-500) 90%, black);
+
+  /* Foreground */
+  --fg-primary:             var(--color-text-light-primary);
+  --fg-secondary:           var(--color-text-light-secondary);
+  --fg-primary-dark:        var(--color-text-dark-primary);
+  --fg-secondary-dark:      var(--color-text-dark-secondary);
+  --fg-muted-dark:          var(--color-text-dark-muted);
+
+  /* Borders */
+  --border-light:           var(--color-light-100);
+  --border-dark:            rgba(255,255,255, 0.08);
+  --border-dark-strong:     rgba(255,255,255, 0.12);
+  --border-accent:          var(--color-green-500);
+
+  /* Status */
+  --color-success:          var(--color-green-500);
+  --color-error:            var(--color-red-500);
+  --color-warning:          var(--color-yellow-400);
+  --color-info:             var(--color-blue-500);
+
+  /* ----------------------------------------------------------------
+     SPACING & RADIUS TOKENS
+     ---------------------------------------------------------------- */
+  --radius-sm:   6px;       /* small chips/tags */
+  --radius-md:   8px;       /* small cards */
+  --radius-lg:   10px;      /* base radius */
+  --radius-xl:   14px;      /* medium cards */
+  --radius-2xl:  18px;      /* large cards (rounded-2xl = 16px in Tailwind) */
+  --radius-3xl:  22px;      /* extra large containers */
+  --radius-4xl:  24px;      /* dashboard panels */
+  --radius-pill: 100px;     /* buttons, inputs, tags */
+
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ----------------------------------------------------------------
+     TYPOGRAPHY TOKENS
+     Primary font: Haskoy (fallback: Plus Jakarta Sans)
+     ---------------------------------------------------------------- */
+  --font-sans:    'Haskoy', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sans);   /* same face, heavier weight */
+  --font-mono:    ui-monospace, 'Cascadia Code', monospace;
+
+  /* Font weights */
+  --fw-extralight: 200;
+  --fw-light:      300;
+  --fw-regular:    400;
+  --fw-medium:     500;
+  --fw-semibold:   600;
+  --fw-bold:       700;
+  --fw-extrabold:  800;
+
+  /* Font sizes — fixed pixel scale */
+  --text-xs:    10px;   /* timestamps, tiny meta */
+  --text-sm:    12px;   /* captions, mini labels */
+  --text-base:  13px;   /* secondary body */
+  --text-md:    14px;   /* labels, secondary text */
+  --text-body:  16px;   /* primary body copy */
+  --text-lg:    18px;   /* card titles */
+  --text-xl:    20px;   /* section subtitles */
+  --text-2xl:   24px;   /* section headers */
+  --text-3xl:   32px;   /* page headers / quotes */
+  --text-4xl:   44px;   /* large headers */
+  --text-5xl:   48px;   /* h1 / login headline */
+  --text-hero:  120px;  /* hero numbers */
+
+  /* Line heights */
+  --lh-tight:  100%;    /* used throughout — Haskoy is compact */
+  --lh-snug:   120%;
+  --lh-normal: 140%;
+  --lh-loose:  160%;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.02em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.05em;
+
+  /* ----------------------------------------------------------------
+     ELEVATION / SHADOW TOKENS
+     ---------------------------------------------------------------- */
+  --shadow-sm:    0 4px 12px rgba(0,0,0,0.08);
+  --shadow-md:    0 10px 30px rgba(0,0,0,0.15);
+  --shadow-lg:    0 20px 60px rgba(14,23,42,0.14);
+  --shadow-green: 0 4px 6.2px rgba(25,33,28,0.88);
+  --shadow-glow:  0 0 20px rgba(30,211,106,0.3);
+  --shadow-card:  0px 9px 7.8px rgba(0,0,0,0.36);
+
+  /* ----------------------------------------------------------------
+     ANIMATION TOKENS
+     ---------------------------------------------------------------- */
+  --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:    cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  --ease-out:       cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out:    cubic-bezier(0.4, 0, 0.6, 1);
+
+  --duration-fast:    200ms;
+  --duration-normal:  300ms;
+  --duration-slow:    500ms;
+  --duration-float:   14000ms;   /* float-slow animation */
+}
+
+/* ----------------------------------------------------------------
+   BASE TYPE STYLES
+   ---------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Semantic type classes */
+.display-hero {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-hero);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.h1 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-5xl);
+  line-height: var(--lh-tight);
+}
+
+.h2 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-3xl);
+  line-height: var(--lh-tight);
+}
+
+.h3 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-2xl);
+  line-height: var(--lh-tight);
+}
+
+.h4 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-xl);
+  line-height: var(--lh-snug);
+}
+
+.h5 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-lg);
+  line-height: var(--lh-snug);
+}
+
+.section-label {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-xl);
+  line-height: var(--lh-tight);
+}
+
+.card-title {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--text-body);
+  line-height: var(--lh-tight);
+}
+
+.body {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+  font-size: var(--text-body);
+  line-height: var(--lh-normal);
+}
+
+.body-sm {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+  font-size: var(--text-md);
+  line-height: var(--lh-normal);
+}
+
+.label {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-md);
+  line-height: var(--lh-tight);
+}
+
+.label-sm {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--text-sm);
+  line-height: var(--lh-tight);
+}
+
+.caption {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+  font-size: var(--text-sm);
+  line-height: var(--lh-snug);
+}
+
+.caption-xs {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+  font-size: var(--text-xs);
+  line-height: var(--lh-tight);
+}
+
+/* ----------------------------------------------------------------
+   UTILITY CLASSES
+   ---------------------------------------------------------------- */
+.glass-card {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-4xl);
+}
+
+.glass-card-light {
+  background: rgba(255,255,255,0.80);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.20);
+  border-radius: var(--radius-4xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-body);
+  border-radius: var(--radius-pill);
+  padding: 18px 32px;
+  border: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 90%, black);
+}
+
+.btn-ghost {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--text-body);
+  border-radius: var(--radius-pill);
+  padding: 18px 32px;
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.btn-ghost:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+/* Scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(30, 211, 106, 0.3) transparent;
+}
+*::-webkit-scrollbar { width: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(30, 211, 106, 0.3); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(30, 211, 106, 0.5); }

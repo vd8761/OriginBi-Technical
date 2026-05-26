@@ -28,15 +28,25 @@ const Clock = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
 );
 
+const Lightbulb = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+);
+
 const INSIGHT_CONFIG = {
   strength: { icon: CheckCircle, bg: "bg-brand-green/[0.06]", border: "border-brand-green/20", accent: "text-brand-green" },
   improvement: { icon: ArrowUp, bg: "bg-amber-500/[0.06]", border: "border-amber-500/20", accent: "text-amber-500" },
   time: { icon: Clock, bg: "bg-blue-500/[0.06]", border: "border-blue-500/20", accent: "text-blue-500" },
+  pattern: { icon: Lightbulb, bg: "bg-purple-500/[0.06]", border: "border-purple-500/20", accent: "text-purple-500" },
 };
 
 const AssessmentResultCard: React.FC<AssessmentResultCardProps> = ({ exam, result, detail }) => {
   const fallbackSections = detail?.sections.map((s, i) => ({ name: s.name, score: 70 + ((i * 13) % 25), weight: s.weight })) ?? [];
   const sections = result.sections.length ? result.sections : fallbackSections;
+  const correctCount = result.correctCount ?? 0;
+  const wrongCount = result.wrongCount ?? 0;
+  const answeredCount = result.answeredCount ?? (correctCount + wrongCount);
+  const totalQuestions = result.totalQuestions ?? (detail as any)?.questions ?? exam.questions ?? answeredCount;
+  const skippedCount = result.skippedCount ?? Math.max(0, totalQuestions - answeredCount);
   const fallbackInsights: typeof result.insights = [
     { type: "strength", text: `Excellent performance in ${sections[0]?.name || "core concepts"}. Strong foundational understanding demonstrated.` },
     { type: "improvement", text: `Focus on ${sections[sections.length - 1]?.name || "advanced topics"} to reach the next proficiency tier.` },
@@ -77,12 +87,14 @@ const AssessmentResultCard: React.FC<AssessmentResultCardProps> = ({ exam, resul
             <p className="text-sm text-brand-text-light-secondary dark:text-white/50 max-w-xl mb-5 leading-relaxed">
               Completed on {new Date(result.completedAt).toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}. Scored {result.overallScore}% with {result.accuracy}% accuracy over {result.timeTaken}.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
-                { label: "Accuracy", value: `${result.accuracy}%`, accent: true },
+                { label: "Answered", value: `${answeredCount}` },
+                { label: "Correct", value: `${correctCount}`, accent: true },
+                { label: "Wrong", value: `${wrongCount}` },
+                { label: "Skipped", value: `${skippedCount}` },
                 { label: "Time Taken", value: result.timeTaken },
-                { label: "Sections", value: `${sections.length}` },
-                { label: "Status", value: "Certified", accent: true },
+                { label: "Total Qs", value: `${totalQuestions}`, accent: true },
               ].map((stat) => (
                 <div key={stat.label} className="bg-brand-light-secondary/40 dark:bg-white/[0.04] p-3.5 rounded-2xl border border-brand-light-tertiary/50 dark:border-white/[0.08]">
                   <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-brand-text-light-secondary dark:text-white/40 mb-1">{stat.label}</p>

@@ -1,0 +1,13 @@
+{
+  "id": "evaluation.testcase",
+  "slug": "evaluation.testcase",
+  "name": "Test Case Evaluator",
+  "version": "1.0.0",
+  "type": "addon",
+  "category": "evaluation",
+  "enabledByDefault": true,
+  "requiresLicense": false,
+  "requires": ["assessment.coding", "code.runner"],
+  "extends": ["assessment.coding"],
+  "provides": ["evaluator.testcase"]
+}

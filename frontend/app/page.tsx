@@ -1,10 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Login from "@/components/student/Login";
 import AssessmentPortal from "@/components/student/AssessmentPortal";
+import Header from "@/components/student/Header";
 import { motion, AnimatePresence } from "framer-motion";
+import { getSession } from "@/lib/api";
+import { useSession } from "@/lib/contexts/SessionContext";
+import { useCompletedAssessments, type PaymentKey } from "@/lib/payments";
+
+type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 
 // Completion Toast Component
 const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose: () => void }) => {
@@ -48,25 +54,73 @@ const CompletionToast = ({ assessment, onClose }: { assessment: string; onClose:
 
 // Inner component that uses search params
 function HomeContent() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string>("Student");
+  const { isLoggedIn, user, isLoading: bootstrapping } = useSession();
+  const { isCompleted } = useCompletedAssessments();
   const [showCompletionToast, setShowCompletionToast] = useState<string | null>(null);
+  const [initialView, setInitialView] = useState<AssessmentView | undefined>(undefined);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const next = searchParams.get("next");
+  const nextPath = next?.startsWith("/") ? next : null;
+
+  const userName = user?.name || "Student";
 
   useEffect(() => {
+    if (isLoggedIn && !bootstrapping) {
+      // If already logged in and at root, redirect to destination
+      if (nextPath) {
+        router.replace(nextPath);
+      } else {
+        // Check if user has completed any assessments
+        // If they have completed any assessment, redirect to dashboard instead of explore
+        const hasCompletedAny = (["aptitude", "communication", "coding", "mnc", "role"] as PaymentKey[]).some(id => isCompleted(id));
+        if (hasCompletedAny) {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/explore");
+        }
+      }
+    }
+  }, [isLoggedIn, bootstrapping, nextPath, router, isCompleted]);
+
+  useEffect(() => {
+    // Check for view parameter
+    const viewParam = searchParams.get("view");
+    const validViews: AssessmentView[] = ["dashboard", "assessment", "profile", "details", "explore"];
+    if (viewParam && validViews.includes(viewParam as AssessmentView)) {
+      setInitialView(viewParam as AssessmentView);
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    
     // Check for completion parameter
     const completed = searchParams.get("completed");
     if (completed) {
-      setShowCompletionToast(completed);
+      const id = window.setTimeout(() => setShowCompletionToast(completed), 0);
       // Clean up URL
       window.history.replaceState({}, "", window.location.pathname);
+      return () => window.clearTimeout(id);
     }
   }, [searchParams]);
 
   const handleLoginSuccess = (name?: string) => {
-    if (name) setUserName(name);
-    setIsLoggedIn(true);
+    // SessionContext handles the state via its login() method called in LoginForm
+    router.replace("/explore");
   };
+
+  const { logout } = useSession();
+  const handleLogout = () => {
+    logout();
+    router.replace("/");
+  };
+
+  if (bootstrapping) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -82,7 +136,9 @@ function HomeContent() {
       {!isLoggedIn ? (
         <Login onLoginSuccess={handleLoginSuccess} />
       ) : (
-        <AssessmentPortal userName={userName} />
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+        </div>
       )}
     </>
   );

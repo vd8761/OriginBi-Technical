@@ -1,0 +1,67 @@
+x-logging:
+  &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 100M
+
+services:
+  server:
+    image: mrkushalsm/judge0:cgv2
+    volumes:
+      # FIX 1: Changed mount path to /etc/judge0.conf
+      - ./judge0.conf:/etc/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    privileged: true
+    # FIX 2: Added env_file so it picks up your passwords/settings
+    env_file: judge0.conf
+    environment:
+      - JUDGE0_ALLOW_UNSAFE_EXECUTION=true
+    <<: *default-logging
+    restart: always
+
+  workers:
+    image: mrkushalsm/judge0:cgv2
+    command: ["./scripts/workers"]
+    volumes:
+      # FIX 1: Changed mount path to /etc/judge0.conf
+      - ./judge0.conf:/etc/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    # FIX 3: Run in the host cgroup namespace. isolate v2 (the sandbox in the
+    # cgv2 image) creates per-run cgroups at /sys/fs/cgroup/box-N and moves the
+    # judged process into them. With the default private cgroup namespace the
+    # bind-mounted host /sys/fs/cgroup and the container's namespace root
+    # disagree, so isolate fails with "Cannot set /sys/fs/cgroup/box-N/
+    # cgroup.procs ... No such file or directory" and every run returns status
+    # 13 (Internal Error). Sharing the host cgroup namespace keeps the paths
+    # consistent. Requires the host on cgroup v2 (the default on modern Linux).
+    cgroup: host
+    # FIX 2: Added env_file
+    env_file: judge0.conf
+    environment:
+      - JUDGE0_ALLOW_UNSAFE_EXECUTION=true
+    <<: *default-logging
+    restart: always
+
+  db:
+    image: postgres:16.2
+    env_file: judge0.conf
+    volumes:
+      - data:/var/lib/postgresql/data/
+    <<: *default-logging
+    restart: always
+
+  redis:
+    image: redis:7.2.4
+    command: [
+      "bash", "-c",
+      'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"'
+    ]
+    env_file: judge0.conf
+    <<: *default-logging
+    restart: always
+
+volumes:
+  data:

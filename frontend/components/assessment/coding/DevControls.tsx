@@ -20,6 +20,10 @@ interface DevControlsProps {
     saved: boolean;
     proctoringSettings: ProctoringSettings;
     proctoringCounters: ProctoringCounters;
+    /** Editor feature toggles, surfaced for dev-mode override. */
+    editorFindEnabled: boolean;
+    editorSuggestionsEnabled: boolean;
+    editorLintsEnabled: boolean;
     onJumpTo: (idx: number) => void;
     onSetStatus: (qId: number, status: QStatus) => void;
     onMarkAllSolved: () => void;
@@ -39,6 +43,9 @@ interface DevControlsProps {
     onResetCounters: () => void;
     onRequestFullscreen: () => void;
     onExitFullscreen: () => void;
+    onEditorFindToggle: (v: boolean) => void;
+    onEditorSuggestionsToggle: (v: boolean) => void;
+    onEditorLintsToggle: (v: boolean) => void;
 }
 
 const formatRemaining = (secs: number) => {
@@ -177,6 +184,12 @@ const DevControls: React.FC<DevControlsProps> = (props) => {
         saved,
         proctoringSettings,
         proctoringCounters,
+        editorFindEnabled,
+        editorSuggestionsEnabled,
+        editorLintsEnabled,
+        onEditorFindToggle,
+        onEditorSuggestionsToggle,
+        onEditorLintsToggle,
         onJumpTo,
         onSetStatus,
         onMarkAllSolved,
@@ -404,6 +417,29 @@ const DevControls: React.FC<DevControlsProps> = (props) => {
                             count={proctoringCounters.fullscreenExit}
                             onChange={(v) => onProctorSettingChange("detectFullscreenExit", v)}
                         />
+                        <Toggle
+                            label="Camera / mic prompt"
+                            value={proctoringSettings.requireCameraMic}
+                            onChange={(v) => onProctorSettingChange("requireCameraMic", v)}
+                        />
+                        <Toggle
+                            label="Detect focus loss"
+                            value={proctoringSettings.detectFocusLoss}
+                            count={proctoringCounters.focusLost}
+                            onChange={(v) => onProctorSettingChange("detectFocusLoss", v)}
+                        />
+                        <Toggle
+                            label="Detect devtools"
+                            value={proctoringSettings.detectDevtools}
+                            count={proctoringCounters.devtoolsOpen}
+                            onChange={(v) => onProctorSettingChange("detectDevtools", v)}
+                        />
+                        <Toggle
+                            label="Log keypress"
+                            value={proctoringSettings.logKeypress}
+                            count={proctoringCounters.keypress}
+                            onChange={(v) => onProctorSettingChange("logKeypress", v)}
+                        />
                     </div>
                     <div className="flex flex-wrap gap-1">
                         <Btn onClick={onRequestFullscreen}>request fullscreen</Btn>
@@ -415,6 +451,27 @@ const DevControls: React.FC<DevControlsProps> = (props) => {
                         <Btn onClick={onProctorReset} tone="warn">
                             reset settings
                         </Btn>
+                    </div>
+                </Section>
+
+                {/* Editor — Monaco-feature toggles surfaced for dev override. */}
+                <Section label="Editor">
+                    <div className="flex flex-col gap-1">
+                        <Toggle
+                            label="Find & Replace"
+                            value={editorFindEnabled}
+                            onChange={onEditorFindToggle}
+                        />
+                        <Toggle
+                            label="Suggestions / IntelliSense"
+                            value={editorSuggestionsEnabled}
+                            onChange={onEditorSuggestionsToggle}
+                        />
+                        <Toggle
+                            label="Lints / squiggles"
+                            value={editorLintsEnabled}
+                            onChange={onEditorLintsToggle}
+                        />
                     </div>
                 </Section>
 

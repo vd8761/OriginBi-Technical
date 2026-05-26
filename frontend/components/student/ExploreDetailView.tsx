@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Header from "./Header";
@@ -24,7 +24,16 @@ import {
     useCompletedAssessments,
     type PaymentKey,
 } from "@/lib/payments";
+import { ApiError, listAssignments, logoutUser, type Assignment } from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
+import { Loader2 } from "lucide-react";
+import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
+import { useDataHydration } from "@/lib/contexts/DataHydrationContext";
+
+const TECH_API_BASE =
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "";
 
 interface ExploreDetailViewProps {
     exam: ExtendedExam;
@@ -41,25 +50,59 @@ const codingStatusRank: Record<CodingLangStatus, number> = {
 
 const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) => {
     const router = useRouter();
-    const { isPaid, markPaid } = usePaidAssessments();
+    const { user } = useSession();
+    const { isInitialized: isEntitlementsReady } = useDataHydration();
+    const isAdminFree = isAdminRegisteredProfile(user);
+    const { isPaid, markPaid, refreshPurchases } = usePaidAssessments();
     const { isCompleted } = useCompletedAssessments();
+    const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
+    const [assignmentError, setAssignmentError] = useState("");
+    const [isConnecting, setIsConnecting] = useState(false);
+
+    const refreshAssignments = useCallback(async () => {
+        if (exam.id !== "coding") return;
+        try {
+            const data = await listAssignments();
+            setServerAssignments(data.assignments);
+            setAssignmentError("");
+        } catch (err) {
+            setAssignmentError(
+                err instanceof ApiError
+                    ? err.message
+                    : "Unable to load backend assignments.",
+            );
+        }
+    }, [exam.id]);
+
+    useEffect(() => {
+        const id = window.setTimeout(() => {
+            void refreshAssignments();
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, [refreshAssignments]);
 
     const codingEntries = useMemo(() => {
         if (exam.id !== "coding") return [];
         return CODING_LANGUAGES
             .map((lang) => {
                 const key = codingPaymentKey(lang.id);
-                const paid = isPaid(key);
-                const completed = isCompleted(key);
+                const assignment = serverAssignments.find((a) => a.assignmentRef === key);
+                const paid =
+                    isPaid(key) ||
+                    (!!assignment &&
+                        (assignment.status === "active" ||
+                            assignment.status === "completed" ||
+                            assignment.completed));
+                const completed = !!assignment?.completed;
                 const status: CodingLangStatus = completed
                     ? "completed"
                     : paid
                         ? "ready"
                         : "locked";
-                return { lang, paid, completed, status };
+                return { lang, paid, completed, status, assignment };
             })
             .sort((a, b) => codingStatusRank[a.status] - codingStatusRank[b.status]);
-    }, [exam.id, isPaid, isCompleted]);
+    }, [exam.id, serverAssignments, isAdminFree, isPaid]);
 
     const codingSummary = useMemo(() => {
         const completed = codingEntries.filter((e) => e.status === "completed").length;
@@ -73,20 +116,74 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [showMncModal, setShowMncModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [assessmentMode, setAssessmentMode] = useState<"trial" | "main">("main");
     const [pendingCodingLang, setPendingCodingLang] = useState<CodingLanguage | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<
-        | { kind: "exam"; key: PaymentKey; title: string; subtitle: string }
-        | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string }
+        | { kind: "exam"; key: PaymentKey; title: string; subtitle: string; assessmentId?: number | string; assessmentCode?: string }
+        | { kind: "coding"; key: PaymentKey; language: CodingLanguage; title: string; subtitle: string; assessmentId?: number | string; assessmentCode?: string }
         | null
     >(null);
+
+    const [attemptsStats, setAttemptsStats] = useState<Record<string, { trial: number; main: number }>>({});
+
+    useEffect(() => {
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = user?.email || "";
+                if (!activeEmail) {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                if (TECH_API_BASE === undefined) return;
+                const response = await fetch(`${TECH_API_BASE}/api/assessment/stats${emailParam}`);
+                if (!response.ok) return;
+                const json = await response.json();
+                const data = json.data || json;
+                if (json && data && active) {
+                    setAttemptsStats(data);
+                }
+            } catch (err) {
+                if (active) {
+                    setAttemptsStats({});
+                }
+            }
+        };
+
+        fetchStats();
+        return () => {
+            active = false;
+        };
+    }, [user?.email]);
 
     const isReady = exam.available;
     const accent = exam.accentColor;
     const gradient = exam.gradient;
 
     const isCoding = exam.id === "coding";
-    const examPaid = !isCoding && isPaid(exam.id as PaymentKey);
-    const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey);
+    const examPaid = !isCoding && (isAdminFree || isPaid(exam.id as PaymentKey));
+    
+    const dbModule = exam.id === "communication" ? "grammar" : exam.id;
+    const stats = attemptsStats[dbModule] || { trial: 0, main: 0 };
+    const mainLimit = exam.mainAttemptsLimit ?? 2;
+    const examCompleted = !isCoding && isCompleted(exam.id as PaymentKey) && stats.main >= mainLimit;
+    const hasCodingEntitlement = codingEntries.some((entry) => entry.paid || entry.completed);
 
     const startNonCodingAssessment = () => {
         if (exam.id === "aptitude") setShowAptitudeModal(true);
@@ -95,102 +192,267 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         else if (exam.id === "mnc") setShowMncModal(true);
     };
 
-    const handlePrimaryClick = () => {
-        if (!isReady) return;
+    const handlePrimaryClick = async () => {
+        if (!isReady || isConnecting || (!isAdminFree && !isEntitlementsReady)) return;
 
         if (isCoding) {
             setShowLanguageModal(true);
             return;
         }
 
+        // If already completed, redirect to dashboard to view results
+        if (examCompleted) {
+            router.push("/dashboard");
+            return;
+        }
+
+        // examPaid is already true for admin-registered users (see definition),
+        // so they will fall through to startNonCodingAssessment without ever
+        // hitting the payment modal.
         if (examPaid) {
+            setAssessmentMode("main");
             startNonCodingAssessment();
             return;
         }
 
+        if (exam.price === 0 || !exam.price) {
+            setIsConnecting(true);
+            try {
+                const email = user?.email || "candidate@originbi.com";
+                const assessmentId = (exam as any).assessmentId || 1;
+                const assessmentCode = exam.id;
+
+                const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode,
+                        amount: 0,
+                    }),
+                });
+                if (!orderRes.ok) throw new Error("Failed to initialize free unlock.");
+
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode,
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+                if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
+
+                markPaid(exam.id as PaymentKey);
+                refreshPurchases?.();
+                setIsConnecting(false);
+
+                setAssessmentMode("main");
+                startNonCodingAssessment();
+                return;
+            } catch (err: any) {
+                console.error("Free unlock failed:", err);
+                setIsConnecting(false);
+                alert(err?.message || "Failed to unlock free assessment.");
+                return;
+            }
+        }
+
+        setIsConnecting(true);
         setPaymentTarget({
             kind: "exam",
             key: exam.id as PaymentKey,
             title: `Pay for ${exam.title}`,
             subtitle: `One-time access. Unlocks the full ${exam.shortTitle} assessment for you.`,
+            assessmentId: (exam as any).assessmentId,
+            assessmentCode: exam.id,
         });
     };
 
-    const handleLanguagePick = (language: CodingLanguage) => {
+    const handleLanguagePick = async (language: CodingLanguage) => {
         const key = codingPaymentKey(language.id);
-        if (isPaid(key)) {
+        const assignment = serverAssignments.find((a) => a.assignmentRef === key);
+        if (assignment?.completed) {
             setShowLanguageModal(false);
-            setPendingCodingLang(language);
             return;
         }
+        const isUnlocked =
+            isPaid(key) ||
+            assignment?.status === "active" ||
+            assignment?.status === "completed" ||
+            assignment?.completed;
+        if (isUnlocked) {
+            setShowLanguageModal(false);
+            setPendingCodingLang(language);
+            setAssignmentError("");
+            return;
+        }
+
+        if (exam.price === 0 || !exam.price) {
+            setIsConnecting(true);
+            try {
+                const email = user?.email || "candidate@originbi.com";
+                const assessmentId = (exam as any).assessmentId || 1;
+
+                const orderRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode: key,
+                        amount: 0,
+                    }),
+                });
+                if (!orderRes.ok) throw new Error("Failed to initialize free unlock.");
+
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId,
+                        assessmentCode: key,
+                        razorpay_order_id: "free_bypass",
+                        razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_free",
+                        amount: 0,
+                    }),
+                });
+                if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
+
+                await refreshAssignments();
+                setShowLanguageModal(false);
+                setIsConnecting(false);
+
+                setAssessmentMode("main");
+                setPendingCodingLang(language);
+                return;
+            } catch (err: any) {
+                console.error("Free coding unlock failed:", err);
+                setIsConnecting(false);
+                alert(err?.message || "Failed to unlock free coding language.");
+                return;
+            }
+        }
+        setIsConnecting(true);
         setPaymentTarget({
             kind: "coding",
             key,
             language,
             title: `Pay for Coding (${language.name})`,
             subtitle: `Unlocks the coding assessment in ${language.name}. Each language is paid separately.`,
+            assessmentId: (exam as any).assessmentId,
+            assessmentCode: key,
         });
     };
 
-    const handlePaymentSuccess = () => {
+    const handlePaymentSuccess = async () => {
         if (!paymentTarget) return;
-        markPaid(paymentTarget.key);
+        setIsConnecting(false);
+        if (paymentTarget.kind === "coding") {
+            try {
+                await refreshAssignments();
+                setShowLanguageModal(false);
+                // After successful payment, take user to the assessment library
+                router.push("/assessment?view=assessment");
+                setAssignmentError("");
+            } catch (err) {
+                const message =
+                    err instanceof ApiError
+                        ? err.message
+                        : "Payment recorded locally, but backend scheduling failed.";
+                setAssignmentError(message);
+                throw new Error(message);
+            }
+        } else {
+            markPaid(paymentTarget.key);
+            refreshPurchases?.();
+            // After successful payment, take user to the assessment library
+            router.push("/assessment?view=assessment");
+        }
         setPaymentTarget(null);
     };
 
     const handleTrial = () => {
         if (!isReady) return;
-        alert("Trial assessment coming soon.");
+        if (examCompleted) {
+            router.push("/dashboard");
+            return;
+        }
+        if (isCoding) {
+            setAssessmentMode("trial");
+            setShowLanguageModal(true);
+            return;
+        }
+        setAssessmentMode("trial");
+        startNonCodingAssessment();
     };
 
+    const isCodingPaid = useCallback(
+        (key: PaymentKey) =>
+            isAdminFree ||
+            isPaid(key) ||
+            serverAssignments.some((a) => a.assignmentRef === key && (a.status === "active" || a.status === "completed" || a.completed)),
+        [serverAssignments, isAdminFree, isPaid],
+    );
+
+    const isCodingCompleted = useCallback(
+        (key: PaymentKey) => serverAssignments.some((a) => a.assignmentRef === key && a.completed),
+        [serverAssignments],
+    );
+
     const primaryLabel = (() => {
+        if (isConnecting) return "Connecting...";
         if (!isReady) return "Coming Soon";
-        if (isCoding) return `Pick Language & Pay`;
+        if (!isAdminFree && !isEntitlementsReady) return "Checking Access...";
+        if (isCoding) {
+            if (hasCodingEntitlement) return "Pick Language & Start";
+            return exam.price === 0 || !exam.price ? "Pick Language & Start" : "Pick Language & Pay";
+        }
+        if (examCompleted) return "View Results";
         if (examPaid) return "Start Assessment";
-        return `Pay ₹${exam.price}`;
+        return exam.price === 0 || !exam.price ? "Unlock for Free" : `Pay ₹${exam.price}`;
     })();
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f5fbf7] dark:bg-[#0f1712] font-sans transition-colors duration-500">
             <div className="fixed inset-0 pointer-events-none">
-                <div
-                    className="absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full blur-[100px] opacity-70"
-                    style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
-                />
                 <div className="absolute inset-0 opacity-[0.10] dark:opacity-[0.06] assessment-grid" />
             </div>
 
             <Header
                 currentView="explore"
                 onNavigate={(view) => {
-                    if (view === "explore") {
-                        router.push("/");
-                    } else {
-                        router.push(`/?view=${view}`);
-                    }
+                    router.push(`/${view}`);
                 }}
-                onLogout={() => console.log("Logging out...")}
+                onLogout={() => {
+                    void logoutUser().finally(() => router.push("/"));
+                }}
             />
 
             <main className="relative z-10 mx-auto flex max-w-[1200px] flex-col gap-10 px-4 pb-32 pt-24 sm:px-6 lg:px-10">
                 {/* Back to explore */}
                 <button
                     type="button"
-                    onClick={() => router.push("/")}
-                    className="inline-flex items-center gap-2 self-start rounded-full bg-white/70 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-gray-300 transition-all hover:border-[#1ED36A]/40 hover:text-slate-900 dark:hover:text-white"
+                    onClick={() => router.push("/explore")}
+                    className="inline-flex items-center gap-2 self-start rounded-full bg-white/70 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 px-4 py-2 text-[12px] font-semibold text-black dark:text-white transition-all hover:border-[#1ED36A]/40 hover:text-black dark:hover:text-white"
                 >
                     <ArrowLeftIcon className="w-3.5 h-3.5" />
                     Back to Explore
                 </button>
 
                 {/* Hero */}
-                <section className="relative overflow-hidden rounded-3xl border border-slate-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04] backdrop-blur-xl p-8 sm:p-10 lg:p-12">
+                <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#212824] p-8 sm:p-10 lg:p-12 shadow-sm">
                     <div
                         className="absolute top-0 left-0 right-0 h-1.5"
                         style={{ background: gradient }}
-                    />
-                    <div className="absolute -top-16 right-0 w-64 h-64 rounded-full blur-[80px] opacity-30 pointer-events-none"
-                        style={{ background: accent }}
                     />
 
                     <div className="relative flex flex-col lg:flex-row lg:items-center gap-8">
@@ -209,32 +471,36 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         Ready
                                     </span>
                                 ) : (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                         <LockIcon className="w-3 h-3" />
                                         Coming Soon
                                     </span>
                                 )}
-                                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
                                     {exam.difficulty}
                                 </span>
                                 {!isCoding && examCompleted && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                         Completed
                                     </span>
                                 )}
                                 {!isCoding && examPaid && !examCompleted && (
                                     <span
-                                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
-                                        style={{ background: `${accent}1f`, color: accent }}
+                                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border"
+                                        style={{
+                                            background: `${accent}15`,
+                                            color: accent,
+                                            borderColor: `${accent}33`,
+                                        }}
                                     >
-                                        Paid &middot; Unlocked
+                                        Unlocked
                                     </span>
                                 )}
                             </div>
-                            <h1 className="text-[clamp(28px,3.4vw,42px)] font-bold text-slate-900 dark:text-white tracking-tight leading-[1.05]">
+                            <h1 className="text-[clamp(28px,3.4vw,42px)] font-bold text-black dark:text-white tracking-tight leading-[1.05]">
                                 {exam.title}
                             </h1>
-                            <p className="text-[15px] leading-relaxed text-slate-600 dark:text-gray-300 max-w-2xl">
+                            <p className="text-[15px] leading-relaxed text-black dark:text-white max-w-2xl">
                                 {detail.focus}
                             </p>
                         </div>
@@ -247,7 +513,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         <Stat label="Difficulty" value={exam.difficulty} />
                         <Stat
                             label={isCoding ? "Per language" : "Price"}
-                            value={`₹${exam.price}`}
+                            value={exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
                             accent={accent}
                         />
                     </div>
@@ -262,9 +528,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             }}
                         >
                             <span className="font-bold uppercase tracking-wider">Note:</span>{" "}
-                            <span className="text-slate-600 dark:text-gray-300">
+                            <span className="text-black dark:text-white">
                                 Coding is paid per language. Each language unlocks separately &mdash; you can come back and pay for another language any time.
                             </span>
+                        </div>
+                    )}
+                    {isCoding && assignmentError && (
+                        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] font-semibold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                            {assignmentError}
                         </div>
                     )}
                 </section>
@@ -276,7 +547,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                                 {codingSummary.ready} ready
                             </span>
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                                 {codingSummary.completed} completed
                             </span>
                             <span
@@ -295,7 +566,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                     status={status}
                                     price={exam.price}
                                     onAction={() => {
-                                        if (status === "ready" || status === "completed") {
+                                        if (status === "completed") return;
+                                        if (status === "ready") {
                                             setPendingCodingLang(lang);
                                         } else {
                                             handleLanguagePick(lang);
@@ -309,14 +581,14 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
                 {/* What this exam is about */}
                 <Section eyebrow="About" title="What this assessment is about">
-                    <p className="text-[14px] leading-relaxed text-slate-600 dark:text-gray-300 max-w-3xl">
+                    <p className="text-[14px] leading-relaxed text-black dark:text-white max-w-3xl">
                         {exam.description}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-5">
                         {exam.tags.map((tag) => (
                             <span
                                 key={tag}
-                                className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-gray-300"
+                                className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-black dark:text-white"
                             >
                                 {tag}
                             </span>
@@ -330,12 +602,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         {detail.skills.map((skill) => (
                             <div
                                 key={skill.title}
-                                className="rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-5 transition-all hover:border-[#1ED36A]/30"
+                                className="rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-5 transition-all hover:border-[#1ED36A]/30 shadow-xs"
                             >
-                                <h4 className="text-[14px] font-bold text-slate-900 dark:text-white mb-1.5">
+                                <h4 className="text-[14px] font-bold text-black dark:text-white mb-1.5">
                                     {skill.title}
                                 </h4>
-                                <p className="text-[13px] leading-relaxed text-slate-500 dark:text-gray-400">
+                                <p className="text-[13px] leading-relaxed text-black dark:text-white">
                                     {skill.description}
                                 </p>
                             </div>
@@ -349,7 +621,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         {detail.sections.map((section, index) => (
                             <div
                                 key={section.name}
-                                className="flex items-center gap-4 rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4"
+                                className="flex items-center gap-4 rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-4 shadow-xs"
                             >
                                 <div
                                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold"
@@ -358,10 +630,10 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                     {index + 1}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h4 className="text-[14px] font-bold text-slate-900 dark:text-white">
+                                    <h4 className="text-[14px] font-bold text-black dark:text-white">
                                         {section.name}
                                     </h4>
-                                    <p className="text-[12.5px] text-slate-500 dark:text-gray-400 leading-relaxed">
+                                    <p className="text-[12.5px] text-black dark:text-white leading-relaxed">
                                         {section.detail}
                                     </p>
                                 </div>
@@ -395,7 +667,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
                                 </div>
-                                <span className="text-[13.5px] text-slate-600 dark:text-gray-300 leading-relaxed">
+                                <span className="text-[13.5px] text-black dark:text-white leading-relaxed">
                                     {outcome}
                                 </span>
                             </div>
@@ -407,7 +679,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <Section eyebrow="Before You Start" title="What you'll need">
                     <ul className="flex flex-col gap-2.5">
                         {detail.requirements.map((req) => (
-                            <li key={req} className="flex items-start gap-3 text-[13.5px] text-slate-600 dark:text-gray-300 leading-relaxed">
+                            <li key={req} className="flex items-start gap-3 text-[13.5px] text-black dark:text-white leading-relaxed">
                                 <span
                                     className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full"
                                     style={{ background: accent }}
@@ -429,39 +701,40 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                             {exam.icon}
                         </div>
                         <div>
-                            <p className="text-[12px] font-medium text-slate-500 dark:text-gray-400">
+                            <p className="text-[12px] font-medium text-black dark:text-white">
                                 {exam.shortTitle} &middot; {exam.duration} &middot; {exam.questions} Questions
                             </p>
-                            <p className="text-[18px] font-bold text-slate-900 dark:text-white">
-                                ₹{exam.price}
-                                <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-gray-500">
-                                    {isCoding ? "per language" : examPaid ? "paid" : "fixed price"}
+                            <p className="text-[18px] font-bold text-black dark:text-white">
+                                {exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
+                                <span className="ml-2 text-[11px] font-medium uppercase tracking-wider text-black dark:text-white">
+                                    {isCoding ? (hasCodingEntitlement || exam.price === 0 || !exam.price ? "available now" : "per language") : examPaid ? "available now" : (exam.price === 0 || !exam.price ? "free assessment" : "fixed price")}
                                 </span>
                             </p>
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <button
-                            type="button"
-                            onClick={handleTrial}
-                            disabled={!isReady}
-                            className={`inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady
-                                    ? "border-[#1ED36A]/40 text-[#1ED36A] hover:bg-[#1ED36A]/10 cursor-pointer"
-                                    : "border-slate-200 dark:border-white/10 text-slate-400 dark:text-gray-500 cursor-not-allowed"
-                                }`}
-                        >
-                            Trial Assessment
-                        </button>
+                        {/* Trial only available after purchase */}
+                        {isReady && (isCoding ? codingSummary.ready > 0 || codingSummary.completed > 0 : examPaid) && (
+                            <button
+                                type="button"
+                                onClick={handleTrial}
+                                className="inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-all border-[#1ED36A]/40 text-[#1ED36A] hover:bg-[#1ED36A]/10 cursor-pointer"
+                            >
+                                Trial Assessment
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handlePrimaryClick}
-                            disabled={!isReady}
-                            className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady
+                            disabled={!isReady || isConnecting || (!isAdminFree && !isEntitlementsReady)}
+                            className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${isReady && !isConnecting
+                                    && (isAdminFree || isEntitlementsReady)
                                     ? "bg-[#1ED36A] hover:bg-[#1bb85c] text-white active:scale-95 cursor-pointer shadow-md shadow-[#1ED36A]/30"
-                                    : "bg-slate-100 dark:bg-white/[0.04] text-slate-400 dark:text-gray-500 cursor-not-allowed"
+                                    : "bg-slate-100 dark:bg-white/[0.04] text-black dark:text-white cursor-not-allowed"
                                 }`}
                         >
+                            {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
                             {primaryLabel}
                         </button>
                     </div>
@@ -471,26 +744,39 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             {/* Pre-test gates */}
             {showAptitudeModal && (
                 <AptitudePreTest
-                    onStart={() => router.push("/assessment/aptitude")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowAptitudeModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
+                    requireCameraMic={Boolean((exam as any).requireCameraMic)}
                 />
             )}
             {showCommunicationModal && (
                 <CommunicationPreTest
-                    onStart={() => router.push("/assessment/communication")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowCommunicationModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                 />
             )}
             {showRoleModal && (
                 <RolePreTest
-                    onStart={() => router.push("/assessment/role")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowRoleModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                 />
             )}
             {showMncModal && (
                 <MNCPreTest
-                    onStart={() => router.push("/assessment/mnc")}
+                    mode={assessmentMode}
+                    onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowMncModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                 />
             )}
 
@@ -498,9 +784,12 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 <LanguageSelectModal
                     accent={accent}
                     price={exam.price}
-                    isPaid={isPaid}
-                    isCompleted={isCompleted}
-                    onClose={() => setShowLanguageModal(false)}
+                    isPaid={isCodingPaid}
+                    isCompleted={isCodingCompleted}
+                    onClose={() => {
+                        setShowLanguageModal(false);
+                        setAssessmentMode("main");
+                    }}
                     onPick={handleLanguagePick}
                 />
             )}
@@ -508,12 +797,17 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
             {pendingCodingLang && (
                 <CodingPreTest
                     language={pendingCodingLang}
-                    onStart={() => {
+                    mode={assessmentMode}
+                    onStart={(mode: 'trial' | 'main') => {
                         const langId = pendingCodingLang.id;
                         setPendingCodingLang(null);
-                        router.push(`/assessment/coding?lang=${langId}`);
+                        setAssessmentMode("main");
+                        router.push(`/assessment/coding?lang=${langId}&mode=${mode}`);
                     }}
-                    onClose={() => setPendingCodingLang(null)}
+                    onClose={() => {
+                        setPendingCodingLang(null);
+                        setAssessmentMode("main");
+                    }}
                 />
             )}
 
@@ -523,8 +817,16 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     subtitle={paymentTarget.subtitle}
                     amount={exam.price}
                     accent={accent}
-                    onCancel={() => setPaymentTarget(null)}
-                    onSuccess={handlePaymentSuccess}
+                    assessmentId={paymentTarget.assessmentId}
+                    assessmentCode={paymentTarget.assessmentCode}
+                    onCancel={() => {
+                        setPaymentTarget(null);
+                        setIsConnecting(false);
+                    }}
+                    onSuccess={() => {
+                        setIsConnecting(false);
+                        return handlePaymentSuccess();
+                    }}
                 />
             )}
         </div>
@@ -541,11 +843,11 @@ interface CodingLanguageRowProps {
 const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, price, onAction }) => {
     const statusBadge =
         status === "completed" ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                 Completed
             </span>
         ) : status === "ready" ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                 Ready to start
             </span>
         ) : (
@@ -558,10 +860,10 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
         );
 
     const ctaLabel =
-        status === "completed" ? "Retake" : status === "ready" ? "Start" : "Pay & Unlock";
+        status === "completed" ? "Completed" : status === "ready" ? "Start" : "Pay & Unlock";
 
     return (
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-4 shadow-xs">
             <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
                 style={{ background: `${lang.accent}1a` }}
@@ -576,17 +878,18 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
             </div>
             <div className="flex flex-1 flex-col min-w-0">
                 <div className="flex items-center gap-2">
-                    <p className="text-[14px] font-bold text-slate-900 dark:text-white">{lang.name}</p>
+                    <p className="text-[14px] font-bold text-black dark:text-white">{lang.name}</p>
                     {statusBadge}
                 </div>
-                <p className="text-[11.5px] text-slate-500 dark:text-gray-400 truncate">
+                <p className="text-[11.5px] text-black dark:text-white truncate">
                     {lang.description}
                 </p>
             </div>
             <button
                 type="button"
                 onClick={onAction}
-                className="shrink-0 rounded-full px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-all active:scale-95 hover:opacity-95"
+                disabled={status === "completed"}
+                className="shrink-0 rounded-full px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-all active:scale-95 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
                 style={{
                     background: status === "locked" ? `${lang.accent}18` : lang.accent,
                     color: status === "locked" ? lang.accent : readableTextOn(lang.accent),
@@ -599,12 +902,12 @@ const CodingLanguageRow: React.FC<CodingLanguageRowProps> = ({ lang, status, pri
 };
 
 const Stat: React.FC<{ label: string; value: string; accent?: string }> = ({ label, value, accent }) => (
-    <div className="rounded-2xl border border-slate-200/70 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.03] p-4">
-        <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-gray-500 mb-1.5">
+    <div className="rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-[#212824] p-4 shadow-xs">
+        <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-black dark:text-white mb-1.5">
             {label}
         </p>
         <p
-            className="text-[18px] font-bold text-slate-900 dark:text-white"
+            className="text-[18px] font-bold text-black dark:text-white"
             style={accent ? { color: accent } : undefined}
         >
             {value}
@@ -618,7 +921,7 @@ const Section: React.FC<{ eyebrow: string; title: string; children: React.ReactN
             <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">
                 {eyebrow}
             </span>
-            <h2 className="text-[22px] font-bold text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-[22px] font-bold text-black dark:text-white tracking-tight">
                 {title}
             </h2>
         </div>

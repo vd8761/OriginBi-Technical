@@ -9,6 +9,183 @@ type MonacoModel = ReturnType<MonacoModule["editor"]["createModel"]>;
 const MONACO_VERSION = "0.55.1";
 const MONACO_CDN_BASE = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min/vs`;
 
+/** Inject Monaco's main CSS (includes codicon icon-font for Find/Replace widget, suggest widget, etc). */
+const ensureMonacoCss = () => {
+    if (typeof document === "undefined") return;
+    const MONACO_CSS_ID = "monaco-editor-css";
+    if (document.getElementById(MONACO_CSS_ID)) return;
+    const link = document.createElement("link");
+    link.id = MONACO_CSS_ID;
+    link.rel = "stylesheet";
+    link.href = `${MONACO_CDN_BASE}/editor/editor.main.css`;
+    document.head.appendChild(link);
+};
+
+/** Inject a style override so Monaco's fixed-position widgets (Find, Suggest, etc.)
+ *  aren't clipped by the editor host's `overflow: hidden` ancestors. */
+const ensureWidgetOverflowFix = () => {
+    if (typeof document === "undefined") return;
+    const STYLE_ID = "monaco-widget-overflow-fix";
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+        .monaco-editor .overflow-guard { overflow: visible !important; }
+        .monaco-editor .find-widget { z-index: 50; }
+        /* Tooltips for find-widget action buttons: render below the trigger. */
+        .monaco-hover.find-widget-tooltip-below {
+            transition: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+};
+
+/** Track the most recently mouse-entered button inside any visible find widget.
+ *  Monaco renders its hover overlay asynchronously and into a DOM subtree far
+ *  from the trigger, so we cannot rely on `:hover` to find it after the fact —
+ *  capture the trigger up-front via a delegated mouseover listener. */
+let lastFindWidgetTrigger: HTMLElement | null = null;
+let lastFindWidgetTriggerAt = 0;
+
+const HOVER_CLASS_MATCHERS = [
+    "monaco-hover",
+    "workbench-hover",
+    "monaco-hover-content",
+];
+
+const isHoverNode = (el: HTMLElement): boolean =>
+    HOVER_CLASS_MATCHERS.some((c) => el.classList.contains(c));
+
+// Walk up from the hover content to the `.context-view` Monaco uses to position
+// the overlay (or any absolutely-positioned ancestor). The hover itself is
+// position: relative, so editing its top/left does nothing.
+const findPositionedAncestor = (hover: HTMLElement): HTMLElement => {
+    let el: HTMLElement | null = hover;
+    while (el) {
+        if (el.classList?.contains("context-view")) return el;
+        const pos = window.getComputedStyle(el).position;
+        if (pos === "absolute" || pos === "fixed") return el;
+        el = el.parentElement;
+    }
+    return hover;
+};
+
+const flipHoverBelow = (hover: HTMLElement) => {
+    const trigger = lastFindWidgetTrigger;
+    if (!trigger) return;
+    if (Date.now() - lastFindWidgetTriggerAt > 1500) return;
+    if (!trigger.isConnected) return;
+    const rect = trigger.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const positioned = findPositionedAncestor(hover);
+    // Target may be inside a parent whose own bounding rect is the one we need
+    // to align with — measure positioned element itself for width.
+    const offsetParent = (positioned.offsetParent as HTMLElement | null) ?? document.body;
+    const parentRect = offsetParent.getBoundingClientRect();
+
+    const top = rect.bottom - parentRect.top + 6;
+    positioned.style.setProperty("top", `${top}px`, "important");
+    positioned.style.setProperty("bottom", "auto", "important");
+
+    const pRect = positioned.getBoundingClientRect();
+    const desiredLeftViewport = Math.max(
+        8,
+        rect.left + rect.width / 2 - pRect.width / 2,
+    );
+    const left = desiredLeftViewport - parentRect.left;
+    positioned.style.setProperty("left", `${left}px`, "important");
+
+    // Strip Monaco's "bottom"/"top" anchor classes that would re-pull it above.
+    positioned.classList.remove("bottom");
+    positioned.classList.add("find-widget-tooltip-below");
+    hover.classList.add("find-widget-tooltip-below");
+};
+
+const installFindTooltipObserver = (): (() => void) => {
+    if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
+        return () => {};
+    }
+
+    // Capture which find-widget button the cursor is currently over.
+    const onMouseOver = (e: MouseEvent) => {
+        const t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+        const widget = t.closest(".find-widget");
+        if (!widget) return;
+        const btn = t.closest<HTMLElement>(
+            ".monaco-custom-toggle, .button, .action-item, .action-label, .codicon",
+        );
+        if (btn) {
+            lastFindWidgetTrigger = btn;
+            lastFindWidgetTriggerAt = Date.now();
+            // Schedule several flip attempts since Monaco lazily toggles the
+            // tooltip visibility (no DOM insertion event to react to).
+            scheduleFlipAttempts();
+        }
+    };
+    document.addEventListener("mouseover", onMouseOver, true);
+
+    const findVisibleHovers = (): HTMLElement[] => {
+        const candidates = Array.from(
+            document.querySelectorAll<HTMLElement>(
+                HOVER_CLASS_MATCHERS.map((c) => `.${c}`).join(","),
+            ),
+        );
+        return candidates.filter((h) => {
+            const r = h.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && !h.classList.contains("hidden");
+        });
+    };
+
+    const tryFlipNow = () => {
+        if (!lastFindWidgetTrigger) return;
+        const visible = findVisibleHovers();
+        for (const h of visible) {
+            // Only flip if this hover's text matches the trigger's aria-label —
+            // avoids accidentally flipping editor hovers (parameter hints etc.).
+            const label = lastFindWidgetTrigger.getAttribute("aria-label") || "";
+            if (label && !(h.textContent || "").includes(label.split(" (")[0])) continue;
+            flipHoverBelow(h);
+        }
+    };
+
+    let scheduledFrames = 0;
+    const scheduleFlipAttempts = () => {
+        if (scheduledFrames > 0) return;
+        scheduledFrames = 12; // ~200ms of attempts
+        const tick = () => {
+            tryFlipNow();
+            scheduledFrames -= 1;
+            if (scheduledFrames > 0) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    };
+
+    // Also catch insertions (initial render of .context-view) so we flip
+    // immediately for buttons that get hovered before the hover element exists.
+    const treeObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            for (const added of Array.from(m.addedNodes)) {
+                if (!(added instanceof HTMLElement)) continue;
+                if (
+                    isHoverNode(added) ||
+                    added.querySelector?.(HOVER_CLASS_MATCHERS.map((c) => `.${c}`).join(","))
+                ) {
+                    scheduleFlipAttempts();
+                    return;
+                }
+            }
+        }
+    });
+    treeObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+        document.removeEventListener("mouseover", onMouseOver, true);
+        treeObserver.disconnect();
+    };
+};
+
 let monacoLoader: Promise<MonacoModule> | null = null;
 
 const loadMonaco = (): Promise<MonacoModule> => {
@@ -26,9 +203,11 @@ const loadMonaco = (): Promise<MonacoModule> => {
             };
         };
 
-        // Workers are loaded from the same CDN via a tiny inline proxy script.
+        // baseUrl tells Monaco where to resolve asset paths (codicon font for the
+        // find widget icons, etc). Workers come from the same CDN via a proxy script.
         if (!w.MonacoEnvironment) {
             w.MonacoEnvironment = {
+                baseUrl: `${MONACO_CDN_BASE}/`,
                 getWorkerUrl: () => {
                     const proxy =
                         `self.MonacoEnvironment = { baseUrl: '${MONACO_CDN_BASE}/' };\n` +
@@ -197,6 +376,12 @@ export const detectLanguageForPath = (path: string, fallbackLang: string): strin
     return EXT_TO_MONACO[ext] ?? LANG_TO_MONACO[fallbackLang] ?? "plaintext";
 };
 
+interface MonacoLockedRegion {
+    startLine: number;
+    endLine: number;
+    reason?: string;
+}
+
 interface MonacoEditorProps {
     /** Stable identifier for the open file. Used as the model URI so undo history is preserved per file. */
     path: string;
@@ -204,19 +389,78 @@ interface MonacoEditorProps {
     /** Question language ("python", "javascript", …). Used as fallback when the path has no extension. */
     language: string;
     fontSize: number;
+    /** Spaces per indent. Default 4. */
+    tabSize?: number;
     theme: "dark" | "light";
     readOnly?: boolean;
+    /** Line ranges the candidate cannot edit (1-indexed inclusive). The editor
+     * renders them with a locked-region decoration AND reverts any edit that
+     * touches them. The backend is the authority — this is UX only. */
+    lockedRegions?: MonacoLockedRegion[];
+    /** When true (default), edits inside `lockedRegions` are reverted in-place.
+     * Set to false for the admin authoring panel, where the admin is *defining*
+     * the locked regions and must be able to edit them while seeing the
+     * highlight overlay. */
+    enforceLockedRegions?: boolean;
     onChange?: (value: string) => void;
+    /** Optional Shift+Alt+F handler — re-indent / format the active file. */
+    onFormat?: () => void;
+    /** When false, Ctrl+F find widget is disabled. Default true. */
+    findEnabled?: boolean;
+    /** When false, autocomplete / quick suggestions are disabled. Default true. */
+    suggestionsEnabled?: boolean;
+    /** When false, language-service diagnostics (squiggles) are hidden. Default true. */
+    lintsEnabled?: boolean;
+    /** Called once after the editor instance is created, handing back an
+     * imperative API. Used by the admin authoring panel to insert media
+     * snippets at the caret from outside the editor's React tree. */
+    onReady?: (api: MonacoEditorApi) => void;
 }
+
+/** Imperative handle exposed via the onReady callback. */
+export interface MonacoEditorApi {
+    /** Inserts `text` at the current caret position (replacing any selection),
+     * then focuses the editor. */
+    insertAtCursor: (text: string) => void;
+}
+
+/** Injects CSS for locked-region line decorations. Idempotent. */
+const ensureLockedRegionCss = () => {
+    if (typeof document === "undefined") return;
+    const STYLE_ID = "monaco-locked-region-css";
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+        .monaco-editor .obi-locked-line {
+            background-color: rgba(255, 183, 3, 0.10) !important;
+        }
+        .monaco-editor .obi-locked-glyph::before {
+            content: '\\1F512';
+            font-size: 11px;
+            opacity: 0.6;
+        }
+    `;
+    document.head.appendChild(style);
+};
+
 
 const MonacoEditor: React.FC<MonacoEditorProps> = ({
     path,
     value,
     language,
     fontSize,
+    tabSize = 4,
     theme,
     readOnly,
+    lockedRegions,
+    enforceLockedRegions = true,
     onChange,
+    onFormat,
+    findEnabled = true,
+    suggestionsEnabled = true,
+    lintsEnabled = true,
+    onReady,
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<EditorInstance | null>(null);
@@ -224,14 +468,41 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const modelsRef = useRef<Map<string, MonacoModel>>(new Map());
     const themesDefined = useRef(false);
     const onChangeRef = useRef(onChange);
+    const onFormatRef = useRef(onFormat);
     const valueRef = useRef(value);
     const pathRef = useRef(path);
     const suppressOnChange = useRef(false);
     const changeListenerRef = useRef<{ dispose: () => void } | null>(null);
+    const tooltipTeardownRef = useRef<(() => void) | null>(null);
+    const onReadyRef = useRef(onReady);
+    useEffect(() => {
+        onReadyRef.current = onReady;
+    }, [onReady]);
+    // Snapshot of locked-line content keyed by line number. Captured the first
+    // time we see content for that file, and used to revert any edit that
+    // changes those lines.
+    const lockedSnapshotRef = useRef<Map<number, string>>(new Map());
+    const lockedRegionsRef = useRef<MonacoLockedRegion[] | undefined>(lockedRegions);
+    const enforceLockedRef = useRef<boolean>(enforceLockedRegions);
+    const decorationIdsRef = useRef<string[]>([]);
 
-    onChangeRef.current = onChange;
-    valueRef.current = value;
-    pathRef.current = path;
+    useEffect(() => {
+        lockedRegionsRef.current = lockedRegions;
+    }, [lockedRegions]);
+
+    useEffect(() => {
+        enforceLockedRef.current = enforceLockedRegions;
+    }, [enforceLockedRegions]);
+
+    useEffect(() => {
+        onChangeRef.current = onChange;
+        valueRef.current = value;
+        pathRef.current = path;
+    }, [onChange, path, value]);
+
+    useEffect(() => {
+        onFormatRef.current = onFormat;
+    }, [onFormat]);
 
     const ensureModel = (
         monaco: MonacoModule,
@@ -240,10 +511,16 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
         fallbackLang: string,
     ): MonacoModel => {
         const existing = modelsRef.current.get(modelPath);
-        if (existing && !existing.isDisposed()) return existing;
+        if (existing && !existing.isDisposed()) {
+            existing.updateOptions({ tabSize, insertSpaces: true });
+            return existing;
+        }
         const uri = monaco.Uri.parse(`originbi://workspace/${modelPath}`);
         const monacoLang = detectLanguageForPath(modelPath, fallbackLang);
         const model = monaco.editor.createModel(modelValue, monacoLang, uri);
+        // Per-model indent overrides Monaco's auto-detection — needed because each
+        // model otherwise re-detects from its content and ignores editor options.
+        model.updateOptions({ tabSize, insertSpaces: true });
         modelsRef.current.set(modelPath, model);
         return model;
     };
@@ -252,14 +529,122 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
         changeListenerRef.current?.dispose();
         const subscription = editor.onDidChangeModelContent(() => {
             if (suppressOnChange.current) return;
+            // Locked-region enforcement: if any line in a locked range now
+            // differs from its snapshot content, revert that single line. We
+            // do this synchronously inside the same change event so the user
+            // sees zero flicker. The backend re-validates on every run/submit.
+            const regions = lockedRegionsRef.current;
+            const model = editor.getModel();
+            // Skip the revert pass when locks are visual-only (admin authoring).
+            if (regions && regions.length > 0 && model && enforceLockedRef.current) {
+                const monaco = monacoRef.current;
+                const snapshot = lockedSnapshotRef.current;
+                const edits: Array<{
+                    range: ReturnType<NonNullable<typeof monaco>["Range"]["lift"]> | null;
+                    text: string;
+                    forceMoveMarkers: boolean;
+                }> = [];
+                if (monaco) {
+                    for (const region of regions) {
+                        for (let line = region.startLine; line <= region.endLine; line++) {
+                            const expected = snapshot.get(line);
+                            if (expected === undefined) continue;
+                            const lineCount = model.getLineCount();
+                            if (line > lineCount) {
+                                // Locked line was deleted entirely — re-insert
+                                // it at the end of the file. (Rare; happens
+                                // when candidate selects across the boundary.)
+                                edits.push({
+                                    range: monaco.Range.lift({
+                                        startLineNumber: lineCount,
+                                        startColumn: model.getLineMaxColumn(lineCount),
+                                        endLineNumber: lineCount,
+                                        endColumn: model.getLineMaxColumn(lineCount),
+                                    }),
+                                    text: "\n" + expected,
+                                    forceMoveMarkers: false,
+                                });
+                                continue;
+                            }
+                            const actual = model.getLineContent(line);
+                            if (actual !== expected) {
+                                edits.push({
+                                    range: monaco.Range.lift({
+                                        startLineNumber: line,
+                                        startColumn: 1,
+                                        endLineNumber: line,
+                                        endColumn: model.getLineMaxColumn(line),
+                                    }),
+                                    text: expected,
+                                    forceMoveMarkers: false,
+                                });
+                            }
+                        }
+                    }
+                }
+                if (edits.length > 0) {
+                    suppressOnChange.current = true;
+                    model.pushEditOperations(
+                        editor.getSelections() ?? null,
+                        edits.filter((e) => e.range !== null) as Parameters<typeof model.pushEditOperations>[1],
+                        () => null,
+                    );
+                    suppressOnChange.current = false;
+                }
+            }
             const v = editor.getValue();
             onChangeRef.current?.(v);
         });
         changeListenerRef.current = subscription;
     };
 
+    // Capture the snapshot of locked-line content the first time we mount or
+    // when the file path changes. This is the "frozen" content we compare
+    // against on every edit.
+    const captureLockedSnapshot = (model: MonacoModel, regions: MonacoLockedRegion[] | undefined) => {
+        lockedSnapshotRef.current.clear();
+        if (!regions || regions.length === 0) return;
+        const lineCount = model.getLineCount();
+        for (const region of regions) {
+            for (let line = region.startLine; line <= region.endLine; line++) {
+                if (line < 1 || line > lineCount) continue;
+                lockedSnapshotRef.current.set(line, model.getLineContent(line));
+            }
+        }
+    };
+
+    // Render line-level decorations for locked regions. Called whenever the
+    // active file's locked regions change.
+    const applyLockedDecorations = () => {
+        const editor = editorRef.current;
+        const monaco = monacoRef.current;
+        if (!editor || !monaco) return;
+        const regions = lockedRegionsRef.current;
+        const decorations: Parameters<typeof editor.deltaDecorations>[1] = [];
+        if (regions) {
+            for (const region of regions) {
+                decorations.push({
+                    range: new monaco.Range(region.startLine, 1, region.endLine, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: "obi-locked-line",
+                        glyphMarginClassName: "obi-locked-glyph",
+                        hoverMessage: region.reason
+                            ? { value: `Locked: ${region.reason}` }
+                            : { value: "This region is locked." },
+                    },
+                });
+            }
+        }
+        decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations);
+    };
+
     useEffect(() => {
         let disposed = false;
+
+        ensureMonacoCss();
+        ensureWidgetOverflowFix();
+        ensureLockedRegionCss();
 
         loadMonaco().then((monaco) => {
             if (disposed || !containerRef.current) return;
@@ -267,6 +652,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
             monacoRef.current = monaco;
 
             const initialModel = ensureModel(monaco, pathRef.current, valueRef.current, language);
+            captureLockedSnapshot(initialModel, lockedRegionsRef.current);
 
             const editor = monaco.editor.create(containerRef.current, {
                 model: initialModel,
@@ -277,7 +663,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
                 fontLigatures: true,
                 minimap: { enabled: false },
                 automaticLayout: true,
-                tabSize: 4,
+                tabSize,
                 insertSpaces: true,
                 detectIndentation: false,
                 scrollBeyondLastLine: false,
@@ -296,7 +682,17 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
                 wordWrap: "off",
                 readOnly: !!readOnly,
                 fixedOverflowWidgets: true,
-                quickSuggestions: { other: true, comments: false, strings: false },
+                quickSuggestions: suggestionsEnabled
+                    ? { other: true, comments: false, strings: false }
+                    : false,
+                suggestOnTriggerCharacters: suggestionsEnabled,
+                wordBasedSuggestions: suggestionsEnabled ? "currentDocument" : "off",
+                parameterHints: { enabled: suggestionsEnabled },
+                find: {
+                    addExtraSpaceOnTop: false,
+                    seedSearchStringFromSelection: findEnabled ? "always" : "never",
+                },
+                renderValidationDecorations: lintsEnabled ? "on" : "off",
                 scrollbar: {
                     verticalScrollbarSize: 8,
                     horizontalScrollbarSize: 8,
@@ -306,12 +702,46 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
             attachChangeListener(editor);
             editorRef.current = editor;
+            // Need glyph margin on for the lock icon to render; we keep it off
+            // by default but flip it on when locked regions are present.
+            if (lockedRegionsRef.current && lockedRegionsRef.current.length > 0) {
+                editor.updateOptions({ glyphMargin: true });
+            }
+            applyLockedDecorations();
+
+            editor.addAction({
+                id: "originbi.formatActiveFile",
+                label: "Format / Re-indent Active File",
+                keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
+                contextMenuGroupId: "1_modification",
+                contextMenuOrder: 1,
+                run: () => {
+                    onFormatRef.current?.();
+                },
+            });
+
+            tooltipTeardownRef.current = installFindTooltipObserver();
+
+            onReadyRef.current?.({
+                insertAtCursor: (text: string) => {
+                    const ed = editorRef.current;
+                    if (!ed) return;
+                    const selection = ed.getSelection();
+                    if (!selection) return;
+                    ed.executeEdits("originbi.insertAtCursor", [
+                        { range: selection, text, forceMoveMarkers: true },
+                    ]);
+                    ed.focus();
+                },
+            });
         });
 
         return () => {
             disposed = true;
             changeListenerRef.current?.dispose();
             changeListenerRef.current = null;
+            tooltipTeardownRef.current?.();
+            tooltipTeardownRef.current = null;
             editorRef.current?.dispose();
             editorRef.current = null;
             modelsRef.current.forEach((m) => {
@@ -338,9 +768,25 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
                 next.setValue(value);
                 suppressOnChange.current = false;
             }
+            // Re-capture lock snapshot for the new file and re-render decorations.
+            captureLockedSnapshot(next, lockedRegionsRef.current);
+            applyLockedDecorations();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [path]);
+
+    // React to locked-region changes (e.g., when admin updates the spec on a
+    // version published mid-attempt — rare but possible).
+    useEffect(() => {
+        const editor = editorRef.current;
+        const model = editor?.getModel();
+        if (!editor || !model) return;
+        captureLockedSnapshot(model, lockedRegions);
+        applyLockedDecorations();
+        const showGlyph = !!(lockedRegions && lockedRegions.length > 0);
+        editor.updateOptions({ glyphMargin: showGlyph });
+         
+    }, [lockedRegions]);
 
     // Sync incoming value into the active model without thrashing the undo stack.
     useEffect(() => {
@@ -370,6 +816,54 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     useEffect(() => {
         editorRef.current?.updateOptions({ readOnly: !!readOnly });
     }, [readOnly]);
+
+    useEffect(() => {
+        editorRef.current?.updateOptions({ tabSize, insertSpaces: true });
+        modelsRef.current.forEach((m) => {
+            if (!m.isDisposed()) m.updateOptions({ tabSize, insertSpaces: true });
+        });
+    }, [tabSize]);
+
+    useEffect(() => {
+        editorRef.current?.updateOptions({
+            quickSuggestions: suggestionsEnabled
+                ? { other: true, comments: false, strings: false }
+                : false,
+            suggestOnTriggerCharacters: suggestionsEnabled,
+            wordBasedSuggestions: suggestionsEnabled ? "currentDocument" : "off",
+            parameterHints: { enabled: suggestionsEnabled },
+        });
+    }, [suggestionsEnabled]);
+
+    useEffect(() => {
+        editorRef.current?.updateOptions({
+            renderValidationDecorations: lintsEnabled ? "on" : "off",
+        });
+    }, [lintsEnabled]);
+
+    // Disable the find widget by closing it whenever it's opened, and stop
+    // Ctrl+F at the keydown phase so the widget never shows.
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        if (findEnabled) return;
+        const monaco = monacoRef.current;
+        const dom = editor.getDomNode();
+        const handler = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F" || e.key === "h" || e.key === "H")) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        };
+        dom?.addEventListener("keydown", handler, true);
+        // Close any already-visible find widget.
+        if (monaco) {
+            editor.trigger("dev-controls", "closeFindWidget", null);
+        }
+        return () => {
+            dom?.removeEventListener("keydown", handler, true);
+        };
+    }, [findEnabled]);
 
     return (
         <div

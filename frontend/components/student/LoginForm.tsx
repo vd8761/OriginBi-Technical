@@ -2,8 +2,9 @@
 
 import React, { useState, FormEvent, FocusEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { EyeIcon, EyeOffIcon } from '../icons';
+import { ApiError, loginUser } from '@/lib/api';
+import { useSession } from '@/lib/contexts/SessionContext';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
 
@@ -17,10 +18,8 @@ interface LoginFormProps {
 
 const LoginForm: React.FC<LoginFormProps> = ({
   onLoginSuccess,
-  buttonClass: _buttonClass,
-  portalMode: _portalMode,
 }) => {
-  const router = useRouter();
+  const { login } = useSession();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [values, setValues] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -76,11 +75,50 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const emailPart = values.email.split('@')[0];
-    const formattedName = emailPart
-      .replace(/[._-]/g, ' ')
-      .replace(/\b\w/g, (l) => l.toUpperCase());
-    onLoginSuccess(formattedName);
+    const nextErrors = {
+      email: validateEmail(values.email),
+      password: validatePassword(values.password),
+    };
+    setErrors(nextErrors);
+    setTouched({ email: true, password: true });
+    if (nextErrors.email || nextErrors.password) return;
+
+    setIsSubmitting(true);
+    setGeneralError('');
+    try {
+      const session = await loginUser(values.email, values.password);
+      
+      const role = String(session.user?.role || '').toUpperCase();
+      const isAdmin = session.user?.isAdmin === true || ['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(role);
+      
+      if (isAdmin) {
+        setGeneralError('Administrative accounts are not permitted on the student portal.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Update SessionContext
+      if (session.tokens) {
+        login(
+          session.tokens.accessToken,
+          session.tokens.idToken,
+          {
+            name: session.registration?.fullName || session.user.email,
+            email: session.user.email,
+          }
+        );
+      }
+      
+      onLoginSuccess(session.registration?.fullName || session.user.email);
+    } catch (err) {
+      setGeneralError(
+        err instanceof ApiError
+          ? err.message
+          : 'Unable to login. Please try again.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isEmailInvalid = touched.email && !!errors.email;
@@ -101,7 +139,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
       <div>
         <label
           htmlFor="email"
-          className="block font-sans text-[clamp(14px,0.9vw,18px)] font-semibold text-slate-500 dark:text-white mb-2 leading-none tracking-[0px]"
+          className="block font-sans text-[clamp(14px,0.9vw,18px)] font-semibold text-black dark:text-white mb-2 leading-none tracking-[0px]"
         >
           Email ID
         </label>
@@ -113,7 +151,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           onChange={handleChange}
           onBlur={handleBlur}
           autoFocus
-          className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-slate-800 dark:text-brand-text-primary placeholder:text-slate-400 dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full transition-colors duration-300 ${isEmailInvalid
+          className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-black dark:text-white placeholder:text-black dark:placeholder:text-white font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full transition-colors duration-300 ${isEmailInvalid
             ? "border-red-500 focus:ring-red-500 focus:border-red-500"
             : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
             }`}
@@ -135,7 +173,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
       <div>
         <label
           htmlFor="password"
-          className="block font-sans text-[14px] font-semibold text-slate-500 dark:text-white mb-2 leading-none tracking-[0px]"
+          className="block font-sans text-[14px] font-semibold text-black dark:text-white mb-2 leading-none tracking-[0px]"
         >
           Password
         </label>
@@ -148,7 +186,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="Enter your password"
-            className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-slate-800 dark:text-brand-text-primary placeholder:text-slate-400 dark:placeholder:text-brand-text-secondary font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full pr-16 transition-colors duration-300 ${isPasswordInvalid
+            className={`bg-brand-light-secondary dark:bg-brand-dark-tertiary border text-black dark:text-white placeholder:text-black dark:placeholder:text-white font-sans text-[clamp(14px,0.83vw,16px)] font-normal leading-none tracking-[0px] rounded-full block w-full pr-16 transition-colors duration-300 ${isPasswordInvalid
               ? "border-red-500 focus:ring-red-500 focus:border-red-500"
               : "border-brand-light-tertiary dark:border-brand-dark-tertiary focus:ring-brand-green focus:border-brand-green"
               }`}
@@ -159,7 +197,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           <button
             type="button"
             onClick={togglePasswordVisibility}
-            className="absolute inset-y-0 right-0 cursor-pointer flex items-center pr-4 text-brand-text-light-secondary hover:text-brand-text-light-primary dark:text-brand-text-secondary dark:hover:text-white transition-colors duration-300"
+            className="absolute inset-y-0 right-0 cursor-pointer flex items-center pr-4 text-black hover:text-brand-green dark:text-white dark:hover:text-brand-green transition-colors duration-300"
             aria-label={passwordVisible ? "Hide password" : "Show password"}
           >
             {passwordVisible ? (
@@ -181,7 +219,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         <div className="flex justify-end mt-3">
           <Link
             href="/student/forgot-password"
-            className="text-sm text-slate-500 dark:text-brand-text-secondary hover:text-brand-green transition-colors font-semibold"
+            className="text-sm text-black dark:text-white hover:text-brand-green transition-colors font-semibold"
           >
             Forgot Password?
           </Link>

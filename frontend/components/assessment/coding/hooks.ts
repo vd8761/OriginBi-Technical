@@ -4,48 +4,61 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const TIME_KEY = "ob_exam_time";
 
-export function useTimer(initial: number) {
+export function useTimer(initial: number, options: { persist?: boolean } = {}) {
+    const persist = options.persist ?? true;
     const [time, setTime] = useState(initial);
     const [running, setRunning] = useState(true);
     const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => {
+        if (!persist) {
+            const id = window.setTimeout(() => setHydrated(true), 0);
+            return () => window.clearTimeout(id);
+        }
+        let savedTime: number | null = null;
         try {
             const saved = window.localStorage.getItem(TIME_KEY);
             if (saved) {
                 const parsed = parseInt(saved, 10);
-                if (!Number.isNaN(parsed)) setTime(parsed);
+                if (!Number.isNaN(parsed)) savedTime = parsed;
             }
         } catch {
             // ignore
         }
-        setHydrated(true);
-    }, []);
+        const id = window.setTimeout(() => {
+            if (savedTime != null) setTime(savedTime);
+            setHydrated(true);
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, [persist]);
 
     useEffect(() => {
         if (!running || !hydrated || time <= 0) return;
         const id = window.setInterval(() => {
             setTime((t) => {
                 const next = t - 1;
-                try {
-                    window.localStorage.setItem(TIME_KEY, String(next));
-                } catch {
-                    // ignore
+                if (persist) {
+                    try {
+                        window.localStorage.setItem(TIME_KEY, String(next));
+                    } catch {
+                        // ignore
+                    }
                 }
                 return next;
             });
         }, 1000);
         return () => window.clearInterval(id);
-    }, [running, time, hydrated]);
+    }, [running, time, hydrated, persist]);
 
     const reset = useCallback((to: number) => {
         setTime(to);
+        if (!persist) return;
         try {
             window.localStorage.setItem(TIME_KEY, String(to));
         } catch {
             // ignore
         }
-    }, []);
+    }, [persist]);
 
     const clear = useCallback(() => {
         try {
@@ -59,13 +72,35 @@ export function useTimer(initial: number) {
 }
 
 const TAB_SWITCH_KEY = "ob_tab_switches";
+const TAB_SWITCH_GRACE_KEY = "ob_tab_switch_grace_start";
 
 export interface TabSwitchEvent {
     at: number;
     duration: number;
 }
 
-export function useTabSwitchMonitor(active: boolean) {
+interface TabSwitchOptions {
+    graceMs?: number;
+    /**
+     * Scopes the persisted tab-switch state to a single attempt. Without it
+     * the localStorage keys are global and a previous attempt's switch count
+     * (and consumed grace deadline) leak into the next attempt — which
+     * surfaced as a phantom "1 tab switch" the moment a fresh exam loaded.
+     */
+    scopeKey?: string;
+}
+
+/**
+ * Monitors tab/visibility changes once the candidate has had `graceMs`
+ * to settle in. The grace deadline is persisted to localStorage so a
+ * page reload can't reset the timer — once consumed, it's consumed for
+ * the rest of the attempt. State is namespaced per attempt via `scopeKey`.
+ */
+export function useTabSwitchMonitor(active: boolean, opts: TabSwitchOptions = {}) {
+    const graceMs = opts.graceMs ?? 10_000;
+    const scope = opts.scopeKey ? `:${opts.scopeKey}` : "";
+    const switchKey = `${TAB_SWITCH_KEY}${scope}`;
+    const graceKey = `${TAB_SWITCH_GRACE_KEY}${scope}`;
     const [count, setCount] = useState(0);
     const [events, setEvents] = useState<TabSwitchEvent[]>([]);
     const [hidden, setHidden] = useState(false);
@@ -73,24 +108,53 @@ export function useTabSwitchMonitor(active: boolean) {
     const hiddenAt = useRef<number | null>(null);
 
     useEffect(() => {
+        // Reset in-memory state when the attempt scope changes so a new exam
+        // never starts with a stale count.
+        setCount(0);
+        setEvents([]);
+        let savedEvents: TabSwitchEvent[] | null = null;
         try {
-            const raw = window.localStorage.getItem(TAB_SWITCH_KEY);
+            const raw = window.localStorage.getItem(switchKey);
             if (raw) {
                 const parsed: TabSwitchEvent[] = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    setEvents(parsed);
-                    setCount(parsed.length);
+                    savedEvents = parsed;
                 }
             }
         } catch {
             // ignore
         }
-    }, []);
+        const id = window.setTimeout(() => {
+            if (!savedEvents) return;
+            setEvents(savedEvents);
+            setCount(savedEvents.length);
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, [switchKey]);
 
     useEffect(() => {
         if (!active) return;
 
+        // One-time grace period. Persisted so a reload doesn't reset it —
+        // we set the start timestamp on first activation and never bump it.
+        let graceStart: number;
+        try {
+            const raw = window.localStorage.getItem(graceKey);
+            const parsed = raw ? parseInt(raw, 10) : NaN;
+            if (Number.isFinite(parsed)) {
+                graceStart = parsed;
+            } else {
+                graceStart = Date.now();
+                window.localStorage.setItem(graceKey, String(graceStart));
+            }
+        } catch {
+            graceStart = Date.now();
+        }
+        const graceUntil = graceStart + graceMs;
+        const inGrace = () => Date.now() < graceUntil;
+
         const recordSwitch = (reason: string) => {
+            if (inGrace()) return; // ignored — settling-in window
             const at = Date.now();
             hiddenAt.current = at;
             setHidden(true);
@@ -107,7 +171,7 @@ export function useTabSwitchMonitor(active: boolean) {
             setEvents((prev) => {
                 const next = [...prev, evt];
                 try {
-                    window.localStorage.setItem(TAB_SWITCH_KEY, JSON.stringify(next));
+                    window.localStorage.setItem(switchKey, JSON.stringify(next));
                 } catch {
                     // ignore
                 }
@@ -138,17 +202,18 @@ export function useTabSwitchMonitor(active: boolean) {
             window.removeEventListener("blur", onBlur);
             window.removeEventListener("focus", onFocus);
         };
-    }, [active]);
+    }, [active, graceMs, graceKey, switchKey]);
 
     const clear = useCallback(() => {
         setCount(0);
         setEvents([]);
         try {
-            window.localStorage.removeItem(TAB_SWITCH_KEY);
+            window.localStorage.removeItem(switchKey);
+            window.localStorage.removeItem(graceKey);
         } catch {
             // ignore
         }
-    }, []);
+    }, [switchKey, graceKey]);
 
     return { count, events, hidden, lastReason, clear };
 }

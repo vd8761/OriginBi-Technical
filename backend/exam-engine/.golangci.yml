@@ -1,0 +1,22 @@
+# Per-service golangci-lint config for exam-engine.
+#
+# Note on tx.Rollback exclusions: pgx's Tx.Rollback is conventionally
+# called from a defer at the top of a handler, and any error it returns
+# is ignored because the transaction was already committed (in which
+# case Rollback is a no-op) or the surrounding handler is already
+# returning an error to the caller. errcheck flagging this pattern adds
+# noise without catching real bugs, so suppress the check for that
+# specific receiver method.
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (github.com/jackc/pgx/v5.Tx).Rollback
+      - (github.com/jackc/pgx/v5/pgxpool.Tx).Rollback
+
+# Report every violation rather than truncating after the first 3, so a
+# single CI run shows the whole backlog instead of dripping it out one
+# batch per push.
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0

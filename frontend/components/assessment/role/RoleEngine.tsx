@@ -1,11 +1,25 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Logo from "../../ui/Logo";
 import ThemeToggle from "../../ui/ThemeToggle";
 import ConceptualQuestionComponent from "./QuestionTypes/ConceptualQuestion";
 import ScenarioQuestionComponent from "./QuestionTypes/ScenarioQuestion";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "../aptitude/QuestionNavigator";
-import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Flag, ArrowRight, LayoutGrid, X, RotateCcw, PanelRightClose, PanelRightOpen, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import TimerDisplay from "../shared/TimerDisplay";
+import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
+import { useAssessmentCache } from "@/lib/useAssessmentCache";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import {
+    DEFAULT_PROCTORING,
+    fetchEffectiveAssessmentSettings,
+    resolveProctoringForPackage,
+    type ProctoringSettings,
+} from "@/lib/proctoring";
+
+const ROLE_TOTAL_TIME = 30 * 60;
 
 export type RoleQuestionType = "conceptual" | "scenario";
 
@@ -19,6 +33,10 @@ export interface BaseRoleQuestion {
     type: RoleQuestionType;
     text: string;
     options: Option[];
+    metadata?: {
+        kind?: 'mcq' | 'msq' | 'tf';
+        [key: string]: any;
+    };
 }
 
 export interface ConceptualQuestion extends BaseRoleQuestion {
@@ -38,100 +56,369 @@ export interface ScenarioQuestion extends BaseRoleQuestion {
 
 export type RoleQuestion = ConceptualQuestion | ScenarioQuestion;
 
-const MOCK_ROLE_QUESTIONS: RoleQuestion[] = [
-    {
-        id: "rq1",
-        type: "conceptual",
-        category: "API Design",
-        subCategory: "REST Fundamentals",
-        text: "Which of the following is NOT a valid HTTP method used in RESTful APIs?",
-        options: [
-            { id: "o1", text: "PATCH" },
-            { id: "o2", text: "FETCH" },
-            { id: "o3", text: "OPTIONS" },
-            { id: "o4", text: "DELETE" },
-        ],
-    },
-    {
-        id: "rq2",
-        type: "scenario",
-        title: "Frontend Optimization",
-        scenarioContext: "The UI freezes for 3-5 seconds when rendering a table containing 10,000 user records at once.",
-        ticketId: "INC-8942",
-        priority: "High",
-        reportedBy: "QA Team",
-        text: "What is the most optimal frontend architecture solution to resolve this performance bottleneck?",
-        options: [
-            { id: "o1", text: "Increase the memory limit of the user's browser via settings." },
-            { id: "o2", text: "Implement virtualization/windowing to only render visible rows." },
-            { id: "o3", text: "Move the rendering logic to a Web Worker." },
-            { id: "o4", text: "Debounce the API call that fetches the 10,000 records." },
-        ],
-    },
-    {
-        id: "rq3",
-        type: "conceptual",
-        category: "Frontend Core",
-        subCategory: "React State Management",
-        text: "In React, what happens when you call setState() multiple times synchronously in the same event handler?",
-        options: [
-            { id: "o1", text: "React immediately re-renders after every call." },
-            { id: "o2", text: "React throws an infinite loop error." },
-            { id: "o3", text: "React batches the updates and performs a single re-render." },
-            { id: "o4", text: "Only the first setState() call is executed." },
-        ],
-    },
-    {
-        id: "rq4",
-        type: "scenario",
-        title: "API Reliability",
-        scenarioContext: "A critical e-commerce checkout API is returning a 502 Bad Gateway error intermittently during peak traffic hours.",
-        ticketId: "INC-9011",
-        priority: "Critical",
-        reportedBy: "Automated Alerts",
-        text: "As a Backend Engineer investigating the issue, what is the most likely root cause?",
-        options: [
-            { id: "o1", text: "The database connection string is permanently incorrect." },
-            { id: "o2", text: "A reverse proxy, like Nginx, is timing out or failing to communicate with the upstream application servers." },
-            { id: "o3", text: "The client-side JavaScript is sending malformed JSON payloads." },
-            { id: "o4", text: "A recent CSS deployment broke the checkout button." },
-        ],
-    },
-];
+const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
 
 interface RoleEngineProps {
-    onComplete: (answers: Record<string, string>) => void;
+    onComplete: (result: AttemptSubmitResult) => void;
+    assessmentCode?: string;
+    userId?: number;
     roleName?: string;
+    mode?: 'trial' | 'main';
+}
+
+export interface AttemptSubmitResult {
+    totalScore: number;
+    overallScorePercent?: number;
+    maxScore?: number;
+    positiveScore?: number;
+    negativeScore?: number;
+    correctCount: number;
+    wrongCount: number;
+    answeredCount?: number;
+    objectiveAnsweredCount?: number;
+    subjectiveAnsweredCount?: number;
+    skippedCount?: number;
+    totalQuestions?: number;
+    timeTakenSeconds: number;
+    accuracy?: number;
+    accuracyPct?: number;
+    sections?: Array<Record<string, unknown>>;
+    questionReviews?: Array<Record<string, unknown>>;
+    status?: string;
 }
 
 const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${remainingSeconds}`;
+    const safe = Math.max(0, seconds);
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor((safe % 3600) / 60);
+    const s = safe % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full Stack Engineer" }) => {
+const RoleEngine: React.FC<RoleEngineProps> = ({ 
+    onComplete, 
+    roleName = "Full Stack Engineer",
+    assessmentCode = "ROLE_DEFAULT",
+    userId,
+    mode = 'main'
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
     const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(30 * 60);
+    const [timeLeft, setTimeLeft] = useState(ROLE_TOTAL_TIME);
+    const [totalTime, setTotalTime] = useState(ROLE_TOTAL_TIME);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+    const { theme } = useTheme();
+    const [questions, setQuestions] = useState<RoleQuestion[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [isRedirecting, setIsRedirecting] = useState(false);
+    const [attemptToken, setAttemptToken] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+    // Prevent double-fetch when cache restoration already set questions
+    const cacheRestoredRef = useRef(false);
 
+    const [attemptsCount, setAttemptsCount] = useState<number | null>(null);
+    const [attemptsLimit, setAttemptsLimit] = useState<number | null>(null);
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [proctoringSettings, setProctoringSettings] =
+        useState<ProctoringSettings>(DEFAULT_PROCTORING);
 
-    const currentQuestion = MOCK_ROLE_QUESTIONS[currentIndex];
-    const totalQuestions = MOCK_ROLE_QUESTIONS.length;
+    useEffect(() => {
+        const fetchEngineStats = async () => {
+            try {
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const [statsRes, assessmentsRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
+                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                ]);
+                const statsJson = await statsRes.json();
+                if (statsJson?.data) {
+                    const cnt = statsJson.data['role']?.[mode] ?? 0;
+                    setAttemptsCount(cnt > 0 ? cnt : 1);
+                }
+                const assessmentsJson = await assessmentsRes.json();
+                if (assessmentsJson?.data) {
+                    const found = assessmentsJson.data.find(
+                        (a: any) => a.module_type === 'role' || a.assessment_code === 'role'
+                    );
+                    if (found) {
+                        // Prefer the config frozen at the candidate's purchase
+                        // time over the live admin row, so a later admin edit
+                        // never changes an already-scheduled exam.
+                        const effective = await fetchEffectiveAssessmentSettings(
+                            API_BASE,
+                            'role',
+                            activeEmail,
+                        );
+                        if (effective) Object.assign(found, effective);
+                        const lim = mode === 'trial' ? found.trial_attempts_limit : found.main_attempts_limit;
+                        setAttemptsLimit(Number(lim));
+                        setProctoringSettings(resolveProctoringForPackage(found));
+
+                        let eqt = found.enabled_question_types;
+                        if (eqt) {
+                            if (typeof eqt === "string") {
+                                try {
+                                    eqt = JSON.parse(eqt);
+                                } catch {
+                                    eqt = null;
+                                }
+                            }
+                            if (eqt && typeof eqt === "object") {
+                                const keys = Object.keys(eqt);
+                                if (keys.length > 0) {
+                                    const hasAnyTrue = Object.values(eqt).some((val) => val === true || val === "true");
+                                    if (!hasAnyTrue) {
+                                        setIsBlocked(true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load engine attempts stats:", err);
+            }
+        };
+        fetchEngineStats();
+    }, [mode]);
+
+    // ── Cache hook ──────────────────────────────────────────────
+    const {
+        cachedSession,
+        isCacheRestored,
+        isRestoredFromCache,
+        saveAnswer: cacheSaveAnswer,
+        saveNavigation: cacheSaveNavigation,
+        clearSession,
+    } = useAssessmentCache({
+        token:           attemptToken,
+        module:          'role',
+        assessmentCode:  `${assessmentCode}_main`,
+        questions,
+        expiresAt:       undefined,
+        answers:         Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { optionId: v }])),
+        markedForReview: [...markedForReview],
+        currentIndex,
+        timeLeftSeconds: timeLeft,
+    });
+
+    // ── Restore session from cache on mount ──────────────────────
+    useEffect(() => {
+        if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
+        cacheRestoredRef.current = true;
+        if (cachedSession.questions?.length) {
+            setQuestions(normalizeQuestions(cachedSession.questions as any[]));
+        }
+        if (cachedSession.answers) {
+            const restored: Record<string, string | string[]> = {};
+            for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
+                    restored[qId] = val.optionId as string | string[];
+                } else if (typeof val === 'string' || Array.isArray(val)) {
+                    restored[qId] = val as any;
+                }
+            }
+            setAnswers(restored);
+        }
+        if (cachedSession.markedForReview?.length) {
+            setMarkedForReview(new Set(cachedSession.markedForReview));
+        }
+        if (cachedSession.currentIndex !== undefined) {
+            setCurrentIndex(cachedSession.currentIndex);
+        }
+        if (cachedSession.timeLeftSeconds) {
+            setTimeLeft(cachedSession.timeLeftSeconds);
+        }
+        if (cachedSession.token) {
+            setAttemptToken(cachedSession.token);
+        }
+        setShowRestoredBanner(true);
+        setTimeout(() => setShowRestoredBanner(false), 5000);
+    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
+
+    const normalizeQuestions = (items: any[]): RoleQuestion[] => items.map((q: any, idx: number) => {
+        const id = String(q.id ?? q.questionId ?? q.question_id);
+        const rawType = String(q.type ?? q.questionType ?? q.question_type ?? "mcq").toLowerCase();
+        const isScenario = rawType === "scenario";
+        const options = Array.isArray(q.options)
+            ? q.options.map((opt: any) => ({
+                id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+            }))
+            : [];
+
+        if (isScenario) {
+            return {
+                id,
+                type: "scenario",
+                title: q.title ?? `${q.category ?? q.domain ?? "Scenario"} Case ${idx + 1}`,
+                scenarioContext: q.scenarioContext ?? q.scenario_context ?? "Scenario details will appear here.",
+                ticketId: q.ticketId ?? q.ticket_id,
+                priority: q.priority ?? q.priority_level,
+                reportedBy: q.reportedBy ?? q.reported_by,
+                text: q.text ?? q.questionText ?? q.question_text ?? "",
+                options,
+                metadata: q.metadata ?? {},
+            } as ScenarioQuestion;
+        }
+
+        return {
+            id,
+            type: "conceptual",
+            category: q.category ?? q.domain ?? "General",
+            subCategory: q.subCategory ?? q.sub_category,
+            text: q.text ?? q.questionText ?? q.question_text ?? "",
+            options,
+            metadata: q.metadata ?? {},
+        } as ConceptualQuestion;
+    });
+
+    useEffect(() => {
+        if (!isCacheRestored) return; // Wait until cache resolution finishes
+
+        // If we already restored from cache, skip the fetch — preserves question order
+        if (isRestoredFromCache || cacheRestoredRef.current) {
+            setIsLoading(false);
+            return;
+        }
+
+        const fetchAttempt = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+
+                let activeEmail: string | undefined = undefined;
+                try {
+                    const storedProfile = localStorage.getItem("originbi:user-profile");
+                    if (storedProfile) {
+                        const parsed = JSON.parse(storedProfile);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                    if (!activeEmail) {
+                        const storedUser = localStorage.getItem("user");
+                        if (storedUser) {
+                            const parsed = JSON.parse(storedUser);
+                            if (parsed && parsed.email) {
+                                activeEmail = parsed.email;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error reading profile email:", err);
+                }
+
+                const response = await fetch(`${API_BASE}/api/assessment/role/attempts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assessmentCode, userId: activeEmail || userId, mode }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || "Failed to load Role questions.");
+                }
+
+                const data = await response.json();
+
+                // If backend returned block-based adaptive mode, redirect to adaptive engine
+                if (data.isBlockBased) {
+                    setIsRedirecting(true);
+                    const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+                    const assessmentsJson = await assessmentsRes.json();
+                    const found = assessmentsJson?.data?.find((a: any) => a.module_type === 'role');
+                    const assessmentId = found?.assessment_id || 1;
+                    window.location.href = `/assessment/role/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${data.attemptToken}`;
+                    return;
+                }
+
+                const token = data.attemptToken || data.token;
+                setAttemptToken(token || null);
+                setQuestions(Array.isArray(data.questions) ? normalizeQuestions(data.questions) : []);
+                const duration = Number(data.durationSeconds || ROLE_TOTAL_TIME);
+                const timeLeftSeconds = Number(data.timeLeftSeconds ?? duration);
+                setTimeLeft(timeLeftSeconds);
+                setTotalTime(duration);
+
+                if (data.answers && typeof data.answers === "object") {
+                    const restored: Record<string, string> = {};
+                    for (const [qId, val] of Object.entries(data.answers)) {
+                        if (val && typeof val === "object" && "optionId" in val && (val as any).optionId) {
+                            restored[qId] = String((val as any).optionId);
+                        } else if (typeof val === "string" || typeof val === "number") {
+                            restored[qId] = String(val);
+                        }
+                    }
+                    if (Object.keys(restored).length > 0) {
+                        setAnswers(restored);
+                        Object.entries(restored).forEach(([qId, optId]) => {
+                            cacheSaveAnswer(qId, { optionId: optId });
+                        });
+                        setShowRestoredBanner(true);
+                        setTimeout(() => setShowRestoredBanner(false), 5000);
+                    }
+                }
+            } catch (error) {
+                setLoadError((error as Error).message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAttempt();
+    }, [assessmentCode, userId, mode, isCacheRestored, isRestoredFromCache, cacheSaveAnswer]);
+
+    const persistAnswer = useCallback((questionId: string, payload: any) => {
+        if (!attemptToken) return;
+        void fetch(`${API_BASE}/api/assessment/role/attempts/${attemptToken}/answers`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: { [questionId]: payload } }),
+        }).catch(() => {});
+    }, [attemptToken]);
+
+    const currentQuestion = questions[currentIndex];
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(answers).length;
     const markedCount = markedForReview.size;
     const remainingCount = totalQuestions - answeredCount;
-    const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+    const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const safeProgress = Math.min(100, Math.max(0, progressPercent));
     const isLastQuestion = currentIndex === totalQuestions - 1;
-    const isQuestionAnswered = !!answers[currentQuestion.id];
-    const isQuestionMarked = markedForReview.has(currentQuestion.id);
-    const scenarioCount = MOCK_ROLE_QUESTIONS.filter((question) => question.type === "scenario").length;
+    const isQuestionAnswered = currentQuestion ? !!answers[currentQuestion.id] : false;
+    const isQuestionMarked = currentQuestion ? markedForReview.has(currentQuestion.id) : false;
+    const scenarioCount = questions.filter((question) => question.type === "scenario").length;
 
-    const navigatorQuestions: NavigatorQuestion[] = MOCK_ROLE_QUESTIONS.map((question, index) => {
+    const navigatorQuestions: NavigatorQuestion[] = questions.map((question, index) => {
         const isAnswered = !!answers[question.id];
         const isMarked = markedForReview.has(question.id);
 
@@ -149,11 +436,32 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
         };
     });
 
-    const completeAssessment = useCallback(() => {
-        onComplete(answers);
-    }, [answers, onComplete]);
+    const completeAssessment = useCallback(async () => {
+        if (!attemptToken || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/assessment/role/attempts/${attemptToken}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to submit assessment.");
+            }
+
+            const result = await response.json();
+            onComplete(result);
+            await clearSession();
+        } catch (error) {
+            setLoadError((error as Error).message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [answers, attemptToken, clearSession, isSubmitting, onComplete]);
 
     useEffect(() => {
+        if (isLoading || !attemptToken) return;
         if (timeLeft <= 0) {
             completeAssessment();
             return;
@@ -164,25 +472,51 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [completeAssessment, timeLeft]);
+    }, [completeAssessment, timeLeft, isLoading, attemptToken]);
 
     const handleOptionSelect = (optionId: string) => {
-        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
+        if (!currentQuestion) return;
+        const kind = (currentQuestion as any).metadata?.kind || 'mcq';
+
+        let newAnswer: string | string[];
+
+        if (kind === 'msq') {
+            const currentVal = answers[currentQuestion.id];
+            let selectedIds: string[] = Array.isArray(currentVal) ? currentVal : (currentVal ? [currentVal as string] : []);
+            
+            if (selectedIds.includes(optionId)) {
+                selectedIds = selectedIds.filter(id => id !== optionId);
+            } else {
+                selectedIds = [...selectedIds, optionId];
+            }
+            newAnswer = selectedIds;
+        } else {
+            newAnswer = optionId;
+        }
+
+        setAnswers((prev) => ({ ...prev, [currentQuestion.id]: newAnswer }));
+        cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
+        persistAnswer(currentQuestion.id, { optionId });
 
         if (markedForReview.has(currentQuestion.id)) {
             const newMarked = new Set(markedForReview);
             newMarked.delete(currentQuestion.id);
             setMarkedForReview(newMarked);
+            cacheSaveNavigation(currentIndex, [...newMarked], timeLeft);
         }
     };
 
     const handleClear = () => {
+        if (!currentQuestion) return;
         const newAnswers = { ...answers };
         delete newAnswers[currentQuestion.id];
         setAnswers(newAnswers);
+        cacheSaveAnswer(currentQuestion.id, {});
+        persistAnswer(currentQuestion.id, null);
     };
 
     const handleMarkReview = () => {
+        if (!currentQuestion) return;
         const newMarked = new Set(markedForReview);
         if (newMarked.has(currentQuestion.id)) {
             newMarked.delete(currentQuestion.id);
@@ -190,17 +524,22 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
             newMarked.add(currentQuestion.id);
         }
         setMarkedForReview(newMarked);
+        cacheSaveNavigation(currentIndex, [...newMarked], timeLeft);
     };
 
     const handleNext = () => {
         if (!isLastQuestion) {
-            setCurrentIndex((prev) => prev + 1);
+            const nextIndex = currentIndex + 1;
+            setCurrentIndex(nextIndex);
+            cacheSaveNavigation(nextIndex, [...markedForReview], timeLeft);
         }
     };
 
     const handlePrev = () => {
         if (currentIndex > 0) {
-            setCurrentIndex((prev) => prev - 1);
+            const prevIndex = currentIndex - 1;
+            setCurrentIndex(prevIndex);
+            cacheSaveNavigation(prevIndex, [...markedForReview], timeLeft);
         }
     };
 
@@ -213,13 +552,14 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
     };
 
     const renderQuestionContent = () => {
+        if (!currentQuestion) return null;
         const selectedOption = answers[currentQuestion.id];
 
         if (currentQuestion.type === "conceptual") {
             return (
                 <ConceptualQuestionComponent
-                    question={currentQuestion}
-                    selectedOptionId={selectedOption}
+                    question={currentQuestion as ConceptualQuestion}
+                    selectedOptionId={selectedOption as any}
                     onSelectOption={handleOptionSelect}
                 />
             );
@@ -227,17 +567,75 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
 
         return (
             <ScenarioQuestionComponent
-                question={currentQuestion}
-                selectedOptionId={selectedOption}
+                question={currentQuestion as ScenarioQuestion}
+                selectedOptionId={selectedOption as any}
                 onSelectOption={handleOptionSelect}
             />
         );
     };
 
+    if (isBlocked) {
+        return null;
+    }
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+            </div>
+        );
+    }
+
+    if (isRedirecting) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+                <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Redirecting to adaptive assessment...</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please keep this tab open.</p>
+            </div>
+        );
+    }
+
+    if (loadError || questions.length === 0) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] px-4 dark:bg-[#0f1712] transition-colors duration-500">
+                <p className="text-lg text-slate-500 dark:text-slate-400">
+                    No Questions Found
+                </p>
+            </div>
+        );
+    }
+
     return (
+        <AssessmentPluginHost packageSlug="role" tabSwitchLimit={proctoringSettings.tabSwitchLimit}>
         <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
             <div className="absolute inset-0 assessment-role-bg" aria-hidden="true" />
             <div className="absolute inset-0 assessment-scan opacity-25" aria-hidden="true" />
+
+            {/* Hand-rolled proctoring rules (right-click, copy-paste, etc.).
+                Tab-switch is plugin-driven via AssessmentPluginHost. */}
+            <ProctoringHost
+                settings={proctoringSettings}
+                active={!isLoading && !isSubmitting && !isBlocked}
+            />
+
+            {/* ── Cache Restored Banner ──────────────────────────────── */}
+            <AnimatePresence>
+                {showRestoredBanner && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        transition={{ type: 'spring', damping: 20 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-emerald-500/30"
+                    >
+                        <RotateCw className="h-4 w-4" />
+                        Progress restored — you can continue from where you left off
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
                 <div className="flex min-w-0 items-center">
@@ -246,22 +644,30 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     </div>
                     <div className="mx-4 hidden h-8 w-px bg-slate-300 dark:bg-white/10 sm:block" />
                     <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Role-Based Assessment</p>
-                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white">
-                            {roleName} decision workspace
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[10px] font-bold text-brand-green uppercase tracking-wider">Role-Based Assessment</p>
+                            {mode === 'trial' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    Trial Test
+                                </span>
+                            )}
+                        </div>
+                        <h1 className="truncate text-sm font-bold text-[#17201b] dark:text-white flex items-center gap-1.5">
+                            <span>{roleName} decision workspace</span>
+                            <span className="text-slate-900 dark:text-white font-normal">&middot;</span>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                                Attempt {attemptsCount ?? 1} of {attemptsLimit ?? (mode === 'trial' ? 5 : 2)}
+                            </span>
                         </h1>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border border-brand-green/10 bg-white px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#17201b] dark:text-white">
-                            Time left
-                        </p>
-                        <p className={`font-mono text-sm font-bold ${timeLeft < 300 ? "text-red-500" : "text-[#17201b] dark:text-white"}`}>
-                            {formatTime(timeLeft)}
-                        </p>
-                    </div>
+                    <TimerDisplay 
+                        time={timeLeft} 
+                        total={totalTime} 
+                        theme={theme} 
+                    />
                     <div className="hidden scale-90 lg:block">
                         <ThemeToggle />
                     </div>
@@ -270,14 +676,25 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-green/20 bg-white shadow-sm transition hover:border-brand-green dark:border-white/10 dark:bg-white/5 lg:hidden"
                         title="Question Map"
                     >
-                        <LayoutGrid size={20} className="text-brand-green" />
+                        <SidebarMobileIcon className="text-brand-green" />
+                    </button>
+                    <button 
+                        onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+                        className={`hidden lg:flex h-10 w-10 items-center justify-center rounded-lg border transition shadow-sm ${
+                            isDesktopSidebarOpen 
+                            ? 'border-brand-green/50 bg-brand-green/10 text-brand-green dark:border-brand-green/30 dark:bg-brand-green/10' 
+                            : 'border-brand-green/20 bg-white hover:border-brand-green dark:border-white/10 dark:bg-white/5 text-brand-green'
+                        }`}
+                        title="Toggle Question Map"
+                    >
+                        {isDesktopSidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
                     </button>
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto grid max-w-[1440px] gap-5 px-4 py-6 lg:h-[calc(100dvh-72px)] lg:grid-cols-[minmax(0,1fr)_300px] lg:overflow-hidden lg:px-6">
+            <main className="relative z-10 mx-auto flex max-w-[1440px] gap-4 lg:gap-5 px-4 py-4 lg:py-5 lg:h-[calc(100dvh-72px)] lg:overflow-hidden lg:px-6">
 
-                <section className="flex min-h-[600px] flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden">
+                <section className="flex-1 flex min-h-[600px] min-w-0 flex-col rounded-xl border border-brand-green/15 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:min-h-0 lg:overflow-hidden transition-all duration-300">
                     <div className="border-b border-brand-green/5 p-3 sm:px-5 sm:py-2.5 dark:border-white/10">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
@@ -285,7 +702,17 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                     <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
                                         Question {currentIndex + 1}
                                     </h2>
-                                    <div className="mt-0.5 flex items-center gap-2">
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                        {'category' in currentQuestion && currentQuestion.category && (
+                                            <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-white/5 dark:text-slate-400 border border-slate-200 dark:border-white/10 uppercase tracking-tight">
+                                                {currentQuestion.category}
+                                            </span>
+                                        )}
+                                        {'subCategory' in currentQuestion && currentQuestion.subCategory && (
+                                            <span className="inline-flex items-center rounded bg-brand-green/5 px-2 py-0.5 text-[9px] font-bold text-brand-green border border-brand-green/10 uppercase tracking-tight">
+                                                {currentQuestion.subCategory}
+                                            </span>
+                                        )}
                                         {isQuestionMarked && (
                                             <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
                                                 <div className="h-1 w-1 rounded-full bg-current" />
@@ -366,17 +793,24 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                     </div>
                 </section>
 
-                <aside className="hidden rounded-xl border border-brand-green/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111a15] lg:block lg:min-h-0 lg:overflow-y-auto">
-                    <QuestionNavigator
-                        questions={navigatorQuestions}
-                        currentIndex={currentIndex}
-                        onSelect={(idx) => {
-                            setCurrentIndex(idx);
-                            setIsSidebarOpen(false);
-                        }}
-                        progressPercent={safeProgress}
-                    />
-                </aside>
+                <motion.aside 
+                    initial={false}
+                    animate={{ width: isDesktopSidebarOpen ? 300 : 80 }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                    className="hidden shrink-0 relative lg:block lg:min-h-0 rounded-xl border border-brand-green/10 bg-white shadow-sm dark:border-white/10 dark:bg-[#111a15] overflow-hidden"
+                >
+                    <div className={`h-full overflow-y-auto custom-scrollbar transition-all duration-300 ${isDesktopSidebarOpen ? 'w-[300px] p-5' : 'w-full py-5 px-2'}`}>
+                        <QuestionNavigator
+                            questions={navigatorQuestions}
+                            currentIndex={currentIndex}
+                            onSelect={(idx) => {
+                                setCurrentIndex(idx);
+                            }}
+                            progressPercent={safeProgress}
+                            isCollapsed={!isDesktopSidebarOpen}
+                        />
+                    </div>
+                </motion.aside>
             </main>
 
             <AnimatePresence>
@@ -459,33 +893,49 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
                                 </div>
                             </div>
 
-                            {navigatorQuestions.some(q => !q.isAnswered) && (
-                                <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-left">
-                                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-                                    <div>
-                                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Unanswered Questions Detected</p>
-                                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
-                                            You have {navigatorQuestions.filter(q => !q.isAnswered).length} questions left. We recommend reviewing them before final submission.
+                            {navigatorQuestions.some(q => !q.isAnswered) && (() => {
+                                const missed = navigatorQuestions
+                                    .filter(q => !q.isAnswered)
+                                    .map(q => q.number);
+                                return (
+                                    <div className="mt-6 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4 text-left">
+                                        <p className="text-sm font-black text-[#17201b] dark:text-white leading-relaxed">
+                                            You have not answered {missed.length === 1 ? 'question' : 'questions'}{' '}
+                                            <span className="font-black text-red-600 dark:text-red-400">
+                                                {missed.join(', ')}
+                                            </span>
+                                            . Please complete {missed.length === 1 ? 'it' : 'all of them'} before submitting.
                                         </p>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
                                 <button
                                     type="button"
                                     onClick={() => setShowSubmitModal(false)}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5"
+                                    disabled={isSubmitting}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#17201b]/10 bg-white py-3.5 text-sm font-bold text-[#17201b] transition hover:bg-slate-50 dark:border-white/10 dark:bg-transparent dark:text-white dark:hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Review Answers
                                 </button>
                                 <button
                                     type="button"
                                     onClick={confirmSubmit}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e]"
+                                    disabled={isSubmitting}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-green py-3.5 text-sm font-bold text-white transition hover:bg-[#19be5e] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Yes, Submit Test
-                                    <ArrowRight size={18} />
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Yes, Submit Test
+                                            <ArrowRight size={18} />
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -494,6 +944,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({ onComplete, roleName = "Full St
             )}
 
         </div>
+        </AssessmentPluginHost>
     );
 };
 

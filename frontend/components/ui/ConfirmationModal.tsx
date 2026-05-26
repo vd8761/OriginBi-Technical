@@ -67,14 +67,14 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         {title}
                     </h3>
                     
-                    <p className="text-sm font-medium text-black dark:text-white/80 leading-relaxed mb-6">
+                    <p className="text-sm font-medium text-black dark:text-white leading-relaxed mb-6">
                         {message}
                     </p>
                     
                     <div className="flex gap-3 w-full">
                         <button
                             onClick={onClose}
-                            className="flex-1 py-3 rounded-full border border-gray-200 dark:border-white/10 text-black dark:text-white/80 font-medium text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
+                            className="flex-1 py-3 rounded-full border border-gray-200 dark:border-white/10 text-black dark:text-white font-medium text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
                         >
                             {cancelText}
                         </button>

@@ -16,7 +16,10 @@ interface AssessmentCardProps {
     accentColor?: string;
     gradient?: string;
     onDetailsClick: () => void;
-    onStartClick: () => void;
+    onTrialClick: () => void;
+    onMainClick: () => void;
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
 }
 
 const AssessmentCard: React.FC<AssessmentCardProps> = ({
@@ -35,7 +38,10 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
     accentColor = '#1ED36A',
     gradient,
     onDetailsClick,
-    onStartClick,
+    onTrialClick,
+    onMainClick,
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
 }) => {
     return (
         <div 
@@ -83,7 +89,9 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[9px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-widest leading-none mb-1">Attempts</span>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-white">2 Main / 5 Trial</span>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-white">
+                            {mainAttemptsLimit} Main / {trialAttemptsLimit} Trial
+                        </span>
                     </div>
                 </div>
 
@@ -104,13 +112,13 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             <div className="flex items-center justify-end">
                 <div className="flex gap-2">
                     <button
-                        onClick={onStartClick}
+                        onClick={onTrialClick}
                         className="px-5 py-2 text-xs font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
                     >
                         Trial
                     </button>
                     <button 
-                        onClick={onStartClick}
+                        onClick={onMainClick}
                         className={`px-6 py-2 text-xs font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
                             available 
                                 ? 'bg-brand-green text-white hover:bg-[#1bb85c] shadow-brand-green/20' 

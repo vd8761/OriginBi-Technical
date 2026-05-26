@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# …but always commit the *example* templates so other devs know which keys
+# to set.
+!.env.example
+!.env.*.example
+!.env.local.example
 
 # vercel
 .vercel
@@ -41,5 +46,13 @@ yarn-error.log*
 next-env.d.ts
 
 /tmp
+.gocache/
+backend/exam-engine/.gocache/
 
+# build output
+dist/
+**/dist/
+
+.logs/
 .claude/
+.vscode/

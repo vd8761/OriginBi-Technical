@@ -1,17 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
+import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle2, AlertCircle, Copy, Check } from "lucide-react";
+import { TECH_API_BASE } from "@/lib/api";
 
 interface PaymentModalProps {
     title: string;
     subtitle?: string;
     amount: number;
     accent?: string;
+    assessmentId?: number | string;
+    assessmentCode?: string;
     onCancel: () => void;
-    onSuccess: () => void;
+    onSuccess: () => void | Promise<void>;
 }
 
-type Stage = "review" | "processing" | "success";
+type Stage = "processing" | "success" | "error";
 
 const generateRef = () => {
     const segment = () =>
@@ -24,205 +30,367 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     subtitle,
     amount,
     accent = "#1ED36A",
+    assessmentId,
+    assessmentCode,
     onCancel,
     onSuccess,
 }) => {
-    const [stage, setStage] = useState<Stage>("review");
-    const [refId] = useState(generateRef);
+    const { user } = useSession();
+    const [stage, setStage] = useState<Stage>("processing");
+    const [refId, setRefId] = useState(generateRef);
     const [paidAt, setPaidAt] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const mountedRef = useRef(true);
+    const successHandledRef = useRef(false);
+    const paymentInitiatedRef = useRef(false);
 
-    const handlePay = () => {
+    useEffect(() => {
+        mountedRef.current = true;
+        // Pre-load Razorpay script
+        const scriptId = "razorpay-checkout-js";
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement("script");
+            script.id = scriptId;
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.async = true;
+            document.body.appendChild(script);
+        }
+
+        // Trigger payment automatically on mount
+        if (!paymentInitiatedRef.current) {
+            paymentInitiatedRef.current = true;
+            handlePay();
+        }
+
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
+
+    const handlePay = async () => {
+        if (successHandledRef.current) return;
         setStage("processing");
-        window.setTimeout(() => {
-            setPaidAt(new Date());
-            setStage("success");
-        }, 1200);
+        setErrorMessage(null);
+
+        const email = user?.email || "candidate@originbi.com";
+        const isRazorpayDisabled = process.env.NEXT_PUBLIC_RAZORPAY === "false";
+        const isAdminFree = isAdminRegisteredProfile(user);
+
+        try {
+            // Frontend-only sandbox mode: bypass backend order creation entirely.
+            if (isRazorpayDisabled) {
+                await onSuccess();
+                successHandledRef.current = true;
+                if (mountedRef.current) {
+                    setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                    setPaidAt(new Date());
+                    setStage("success");
+                }
+                return;
+            }
+
+            const orderPromise = fetch(`${TECH_API_BASE}/api/assessment/purchase/create-order`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    assessmentId: assessmentId || 1,
+                    assessmentCode: assessmentCode || "general",
+                    amount,
+                }),
+            });
+
+            const orderRes = await orderPromise;
+            if (!orderRes.ok) throw new Error("Gateway failed to issue order.");
+            const order = await orderRes.json();
+
+            if (order?.free || order?.isFree || order?.amount === 0 || isAdminFree) {
+                if (order?.orderId === "free_bypass") {
+                    const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            email,
+                            assessmentId: assessmentId || 1,
+                            assessmentCode: assessmentCode || "general",
+                            razorpay_order_id: "free_bypass",
+                            razorpay_payment_id: `pay_free_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                            razorpay_signature: "signature_free",
+                            amount: 0,
+                        }),
+                    });
+
+                    if (!verifyRes.ok) {
+                        throw new Error("Free entitlement activation failed on server.");
+                    }
+
+                    await onSuccess();
+                    successHandledRef.current = true;
+                    if (mountedRef.current) {
+                        setRefId(`FREE-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                        setPaidAt(new Date());
+                        setStage("success");
+                    }
+                } else {
+                    await onSuccess();
+                    successHandledRef.current = true;
+                    if (mountedRef.current) {
+                        setRefId(`FREE-ADMIN-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                        setPaidAt(new Date());
+                        setStage("success");
+                    }
+                }
+                return;
+            }
+
+            // Check if Razorpay is explicitly disabled in client environment (already declared above)
+
+            if (isRazorpayDisabled) {
+                // Directly call backend to verify and record mock sandbox payment
+                const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        assessmentId: assessmentId || 1,
+                        assessmentCode: assessmentCode || "general",
+                        razorpay_order_id: order.orderId,
+                        razorpay_payment_id: `pay_sandbox_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                        razorpay_signature: "signature_mock",
+                        amount,
+                    }),
+                });
+
+                if (!verifyRes.ok) {
+                    throw new Error("Sandbox payment recording failed on backend.");
+                }
+
+                await onSuccess();
+                successHandledRef.current = true;
+                if (mountedRef.current) {
+                    setRefId(`SANDBOX-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+                    setPaidAt(new Date());
+                    setStage("success");
+                }
+                return;
+            }
+
+            const openGateway = () => {
+                const options = {
+                    key: order.keyId,
+                    amount: order.amount,
+                    currency: order.currency,
+                    name: "OriginBI",
+                    description: `Technical Assessment - ${title}`,
+                    order_id: order.orderId,
+                    handler: async (response: any) => {
+                        setStage("processing");
+                        try {
+                            // 3. Verify payment signature on backend
+                            const verifyRes = await fetch(`${TECH_API_BASE}/api/assessment/purchase/verify-payment`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    email,
+                                    assessmentId: assessmentId || 1,
+                                    assessmentCode: assessmentCode || "general",
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_signature: response.razorpay_signature,
+                                    amount,
+                                }),
+                             });
+
+                            if (!verifyRes.ok) throw new Error("Signature mismatch.");
+
+                            await onSuccess();
+                            successHandledRef.current = true;
+                            if (mountedRef.current) {
+                                setRefId(response.razorpay_payment_id || generateRef());
+                                setPaidAt(new Date());
+                                setStage("success");
+                            }
+                        } catch (err: any) {
+                            if (mountedRef.current) {
+                                setErrorMessage(err.message || "Verification failed.");
+                                setStage("error");
+                            }
+                        }
+                    },
+                    modal: {
+                        onDismiss: () => {
+                            if (mountedRef.current && !successHandledRef.current) {
+                                // If they cancel the Razorpay modal, close our modal too
+                                onCancel();
+                            }
+                        },
+                    },
+                    prefill: {
+                        name: user?.name || "Candidate",
+                        email: email,
+                    },
+                    theme: { color: accent },
+                };
+
+                const rzp = new (window as any).Razorpay(options);
+                rzp.open();
+            };
+
+            // 2. Load Razorpay script dynamically
+            const scriptId = "razorpay-checkout-js";
+            if (!document.getElementById(scriptId)) {
+                const script = document.createElement("script");
+                script.id = scriptId;
+                script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                script.async = true;
+                script.onload = openGateway;
+                document.body.appendChild(script);
+            } else if ((window as any).Razorpay) {
+                openGateway();
+            } else {
+                const checkInterval = setInterval(() => {
+                    if ((window as any).Razorpay) {
+                        clearInterval(checkInterval);
+                        openGateway();
+                    }
+                }, 100);
+                setTimeout(() => clearInterval(checkInterval), 10000);
+            }
+        } catch (err: any) {
+            const message = err?.message || "";
+            const isNetworkFailure =
+                err instanceof TypeError ||
+                /failed to fetch|networkerror|err_connection_refused/i.test(message);
+            if (isNetworkFailure) {
+                if (mountedRef.current) {
+                    setErrorMessage("Payment service is unavailable right now. Start the assessment backend or use sandbox mode.");
+                    setStage("error");
+                }
+                return;
+            }
+            if (mountedRef.current) {
+                setErrorMessage(err.message || "Failed to start payment.");
+                setStage("error");
+            }
+        }
     };
 
     const handleCopyRef = () => {
         if (typeof navigator !== "undefined") {
-            navigator.clipboard?.writeText(refId).catch(() => { /* noop */ });
+            navigator.clipboard?.writeText(refId);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
         }
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
     };
 
+    // During processing, render nothing — Razorpay opens directly over the page
+    if (stage === "processing") return null;
+
     return (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6 sm:px-6">
-            <button
-                type="button"
-                aria-label="Close payment dialog"
-                className="absolute inset-0 bg-[#0f1712]/70 backdrop-blur-sm"
-                onClick={stage === "review" ? onCancel : undefined}
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-[#0a0f0d]/80 backdrop-blur-xl"
             />
 
-            <section
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="payment-modal-title"
-                className="relative flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[#111a15]"
+            <motion.section
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-[#111a15]/90 shadow-[0_32px_128px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
             >
-                <div
-                    className="absolute top-0 left-0 right-0 h-1.5"
-                    style={{ background: accent }}
-                />
+                <div className="absolute top-0 left-0 right-0 h-1.5 opacity-50" style={{ background: accent }} />
 
-                <div className="flex flex-col gap-6 p-7 sm:p-8">
-                    {stage === "review" && (
-                        <>
-                            <header className="flex flex-col gap-2">
-                                <span
-                                    className="inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
-                                    style={{ background: `${accent}20`, color: accent }}
-                                >
-                                    Demo Payment
-                                </span>
-                                <h2
-                                    id="payment-modal-title"
-                                    className="text-[20px] font-bold text-slate-900 dark:text-white tracking-tight"
-                                >
-                                    {title}
-                                </h2>
-                                {subtitle && (
-                                    <p className="text-[13px] text-slate-500 dark:text-gray-400 leading-relaxed">
-                                        {subtitle}
-                                    </p>
-                                )}
-                            </header>
-
-                            <div className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-white/[0.03] p-5">
-                                <div className="flex items-baseline justify-between">
-                                    <span className="text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-400">
-                                        Total payable
-                                    </span>
-                                    <span className="text-[26px] font-bold text-slate-900 dark:text-white">
-                                        ₹{amount}
-                                    </span>
+                <div className="relative p-8">
+                    <AnimatePresence mode="wait">
+                        {stage === "error" && (
+                            <motion.div
+                                key="error"
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="flex flex-col items-center justify-center py-8 text-center"
+                            >
+                                <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-red-500/10 text-red-500">
+                                    <AlertCircle size={40} />
                                 </div>
-                                <p className="mt-2 text-[11px] text-slate-400 dark:text-gray-500">
-                                    Demo only &middot; no real charge will be made.
+                                <h3 className="text-xl font-bold text-white mb-2">Something went wrong</h3>
+                                <p className="text-red-400/80 text-sm mb-8 px-4">
+                                    {errorMessage || "The transaction could not be initialized at this moment."}
                                 </p>
-                            </div>
-
-                            <div className="flex flex-col gap-2 text-[12.5px] text-slate-500 dark:text-gray-400">
-                                <p className="flex items-center gap-2">
-                                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
-                                    Click "Pay Now" to simulate a successful payment.
-                                </p>
-                                <p className="flex items-center gap-2">
-                                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
-                                    After payment, the assessment unlocks for you.
-                                </p>
-                            </div>
-
-                            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                                <button
-                                    type="button"
-                                    onClick={onCancel}
-                                    className="rounded-full border border-slate-200/70 dark:border-white/10 px-5 py-2.5 text-[12px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handlePay}
-                                    className="rounded-full px-6 py-2.5 text-[12px] font-bold uppercase tracking-wider text-white shadow-md transition-all hover:opacity-95 active:scale-95"
-                                    style={{ background: accent, boxShadow: `0 8px 18px ${accent}40` }}
-                                >
-                                    Pay ₹{amount}
-                                </button>
-                            </div>
-                        </>
-                    )}
-
-                    {stage === "processing" && (
-                        <div className="flex flex-col items-center gap-4 py-8">
-                            <div
-                                className="h-12 w-12 rounded-full border-[3px] border-slate-200 dark:border-white/10 animate-spin"
-                                style={{ borderTopColor: accent }}
-                            />
-                            <p className="text-[14px] font-semibold text-slate-700 dark:text-white">
-                                Processing payment...
-                            </p>
-                            <p className="text-[12px] text-slate-500 dark:text-gray-400">
-                                Verifying transaction (demo)
-                            </p>
-                        </div>
-                    )}
-
-                    {stage === "success" && (
-                        <div className="flex flex-col gap-5">
-                            <div className="flex flex-col items-center gap-3 text-center">
-                                <div
-                                    className="flex h-14 w-14 items-center justify-center rounded-full"
-                                    style={{ background: `${accent}20`, color: accent }}
-                                >
-                                    <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="text-[18px] font-bold text-slate-900 dark:text-white">
-                                        Payment confirmed
-                                    </p>
-                                    <p className="mt-1 text-[12.5px] text-slate-500 dark:text-gray-400">
-                                        ₹{amount} received &middot; this assessment is now ready to be taken whenever you choose to start.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-white/[0.03] p-4">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-gray-500">
-                                            Reference number
-                                        </span>
-                                        <span className="font-mono text-[14px] font-bold text-slate-900 dark:text-white truncate">
-                                            {refId}
-                                        </span>
-                                    </div>
+                                <div className="flex w-full gap-3">
                                     <button
-                                        type="button"
-                                        onClick={handleCopyRef}
-                                        className="rounded-full border border-slate-200/70 dark:border-white/10 px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-600 dark:text-gray-300 hover:bg-white dark:hover:bg-white/[0.06] transition-all"
-                                        style={copied ? { color: accent, borderColor: `${accent}55` } : undefined}
+                                        onClick={onCancel}
+                                        className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-bold text-gray-400 transition-colors hover:bg-white/10"
                                     >
-                                        {copied ? "Copied" : "Copy"}
+                                        Dismiss
+                                    </button>
+                                    <button
+                                        onClick={handlePay}
+                                        className="flex-1 rounded-xl py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                                        style={{ background: accent }}
+                                    >
+                                        Try Again
                                     </button>
                                 </div>
-                                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 dark:text-gray-400">
-                                    <span>
-                                        <span className="text-slate-400 dark:text-gray-500">Amount: </span>
-                                        ₹{amount}
-                                    </span>
-                                    <span>
-                                        <span className="text-slate-400 dark:text-gray-500">Paid at: </span>
-                                        {paidAt ? paidAt.toLocaleString() : "—"}
-                                    </span>
-                                    <span>
-                                        <span className="text-slate-400 dark:text-gray-500">Status: </span>
-                                        <span style={{ color: accent }}>Confirmed</span>
-                                    </span>
-                                </div>
-                            </div>
+                            </motion.div>
+                        )}
 
-                            <p className="text-[12px] text-slate-500 dark:text-gray-400 leading-relaxed">
-                                Save this reference number for your records. You can start the assessment from this page any time &mdash; we won&apos;t auto-launch it for you.
-                            </p>
-
-                            <button
-                                type="button"
-                                onClick={onSuccess}
-                                className="self-stretch rounded-full px-6 py-2.5 text-[12px] font-bold uppercase tracking-wider text-white shadow-md transition-all hover:opacity-95 active:scale-95"
-                                style={{ background: accent, boxShadow: `0 8px 18px ${accent}40` }}
+                        {stage === "success" && (
+                            <motion.div
+                                key="success"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex flex-col"
                             >
-                                Done
-                            </button>
-                        </div>
-                    )}
+                                <div className="mb-8 flex items-center justify-center">
+                                    <div 
+                                        className="flex h-20 w-20 items-center justify-center rounded-full shadow-[0_0_40px_rgba(30,211,106,0.2)]"
+                                        style={{ background: `${accent}15`, color: accent }}
+                                    >
+                                        <CheckCircle2 size={44} />
+                                    </div>
+                                </div>
+                                
+                                <div className="text-center mb-8">
+                                    <h3 className="text-2xl font-bold text-white mb-2">Purchase Successful</h3>
+                                    <p className="text-gray-400 text-sm px-4">
+                                        Assessment unlocked. You can now start the test from your dashboard.
+                                    </p>
+                                </div>
+
+                                <div className="mb-8 rounded-2xl bg-white/[0.03] p-5 border border-white/5">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                            Receipt Reference
+                                        </span>
+                                        <button 
+                                            onClick={handleCopyRef}
+                                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-500 hover:text-emerald-400"
+                                        >
+                                            {copied ? <Check size={12} /> : <Copy size={12} />}
+                                            {copied ? "Copied" : "Copy ID"}
+                                        </button>
+                                    </div>
+                                    <div className="font-mono text-lg font-bold text-white/90 break-all">
+                                        {refId}
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={onCancel}
+                                    className="w-full rounded-2xl py-4 text-sm font-bold uppercase tracking-wider text-white shadow-xl transition-transform active:scale-[0.98]"
+                                    style={{ background: accent }}
+                                >
+                                    Proceed to Library
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
-            </section>
+            </motion.section>
         </div>
     );
 };

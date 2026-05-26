@@ -29,6 +29,10 @@ export const CODING_LANGUAGES: CodingLanguage[] = [
 
 export interface ExtendedExam extends Exam {
   track: AssessmentTrack;
+  trialAttemptsLimit?: number;
+  mainAttemptsLimit?: number;
+  assessmentId?: number | string;
+  assessmentCode?: string;
 }
 
 export interface PricingTier {
@@ -97,7 +101,7 @@ export const EXAMS: ExtendedExam[] = [
     duration: "90 min",
     questions: 30,
     difficulty: "Intermediate",
-    price: 199,
+    price: 99,
     tags: ["Logic", "Strings", "Arrays", "Simulation"],
     icon: <CodingIcon className="w-7 h-7" />,
     available: true,

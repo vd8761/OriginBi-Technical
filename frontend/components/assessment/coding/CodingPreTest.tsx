@@ -1,21 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Image from "next/image";
 import type { CodingLanguage } from "@/lib/exams";
 
 interface CodingPreTestProps {
     language: CodingLanguage;
-    onStart: () => void;
+    onStart: (mode: 'trial' | 'main') => void;
     onClose: () => void;
+    mode?: 'trial' | 'main';
+    trialAttemptsLimit?: number;
+    mainAttemptsLimit?: number;
+    attemptsCount?: number;
 }
-
-const metrics = [
-    { label: "Questions", value: "5" },
-    { label: "Duration", value: "90 min" },
-    { label: "Sections", value: "5" },
-    { label: "Attempts", value: "1 of 1" },
-];
 
 const covers = [
     "Number logic & arrays",
@@ -33,14 +30,81 @@ const checklist = [
     "If the timer runs out, the assessment auto-submits with the answers you have.",
 ];
 
-const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClose }) => {
+const CodingPreTest: React.FC<CodingPreTestProps> = ({ 
+    language, 
+    onStart, 
+    onClose, 
+    mode = 'main',
+    trialAttemptsLimit = 5,
+    mainAttemptsLimit = 2,
+    attemptsCount: initialAttemptsCount
+}) => {
+    const [attemptsCount, setAttemptsCount] = React.useState<number>(initialAttemptsCount ?? 0);
+
+    React.useEffect(() => {
+        if (initialAttemptsCount !== undefined) {
+            setAttemptsCount(initialAttemptsCount);
+            return;
+        }
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                let activeEmail = "";
+                const storedProfile = localStorage.getItem("originbi:user-profile");
+                if (storedProfile) {
+                    const parsed = JSON.parse(storedProfile);
+                    if (parsed && parsed.email) {
+                        activeEmail = parsed.email;
+                    }
+                }
+                if (!activeEmail) {
+                    const storedUser = localStorage.getItem("user");
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed && parsed.email) {
+                            activeEmail = parsed.email;
+                        }
+                    }
+                }
+                const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+                const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
+                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const json = await response.json();
+                const data = json.data || json;
+                if (active && data) {
+                    const stats = data['coding'] || { trial: 0, main: 0 };
+                    setAttemptsCount(mode === 'trial' ? stats.trial : stats.main);
+                }
+            } catch (err) {
+                console.error("Failed to load attempt stats in pretest:", err);
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, [mode, initialAttemptsCount]);
+
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
+
+    const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
+    const currentAttempt = attemptsCount + 1;
+
+    const metrics = [
+        { label: "Questions", value: "5" },
+        { label: "Duration", value: "90 min" },
+        { label: "Sections", value: "5" },
+        { label: "Attempts", value: `${currentAttempt}/${limit}` },
+    ];
+
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 py-6 sm:px-6">
-            <button
-                type="button"
-                aria-label="Close coding pre-test"
-                className="absolute inset-0 bg-[#0f1712]/70 backdrop-blur-sm"
-                onClick={onClose}
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+                aria-hidden="true"
             />
 
             <section
@@ -68,17 +132,24 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                 className="h-8 w-8 object-contain"
                             />
                         </div>
-                        <div>
+                        <div className="flex flex-col">
                             <p className="text-sm font-bold" style={{ color: language.accent }}>
                                 Ready to begin
                             </p>
-                            <h2
-                                id="coding-pretest-title"
-                                className="text-xl font-bold leading-tight text-[#17201b] dark:text-white sm:text-2xl"
-                            >
-                                Coding Assessment &middot; {language.name}
-                            </h2>
-                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b]/60 dark:text-white/60 sm:text-sm">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h2
+                                    id="coding-pretest-title"
+                                    className="text-xl font-bold leading-tight text-[#17201b] dark:text-white sm:text-2xl"
+                                >
+                                    Coding Assessment &middot; {language.name}
+                                </h2>
+                                {mode === 'trial' && (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 whitespace-nowrap">
+                                        Trial Assessment
+                                    </span>
+                                )}
+                            </div>
+                            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b] dark:text-white sm:text-sm">
                                 Five problems covering core programming, data structures, algorithms, complexity, and dynamic programming — all evaluated in {language.name}.
                             </p>
                         </div>
@@ -86,7 +157,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b]/40 transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white/40"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-green/10 text-[#17201b] transition hover:border-brand-green hover:text-brand-green focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 dark:border-white/10 dark:text-white"
                         aria-label="Close"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -101,7 +172,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
 
                 <div className="overflow-y-auto p-4 sm:p-5">
                     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
-                        <div>
+                        <div className="order-2 lg:order-1">
                             <h3 className="text-base font-bold text-[#17201b] dark:text-white">
                                 What this test covers
                             </h3>
@@ -130,7 +201,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                             className="mt-2 h-1.5 w-1.5 shrink-0 rounded-sm"
                                             style={{ background: language.accent }}
                                         />
-                                        <p className="text-[13px] font-medium leading-5 text-[#17201b]/80 dark:text-white/80 sm:text-sm">
+                                        <p className="text-[13px] font-medium leading-5 text-[#17201b] dark:text-white sm:text-sm">
                                             {point}
                                         </p>
                                     </div>
@@ -139,14 +210,14 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                         </div>
 
                         <aside
-                            className="rounded-lg border p-4 dark:bg-white/5"
+                            className="rounded-lg border p-4 dark:bg-white/5 order-1 lg:order-2"
                             style={{
                                 borderColor: `${language.accent}33`,
                                 background: `${language.accent}0a`,
                             }}
                         >
                             <h3 className="text-sm font-bold text-[#17201b] dark:text-white">
-                                Session snapshot
+                                Session Stats
                             </h3>
                             <div className="mt-3 divide-y divide-brand-green/10 dark:divide-white/10">
                                 {metrics.map((metric) => (
@@ -154,7 +225,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                         key={metric.label}
                                         className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
                                     >
-                                        <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">
+                                        <span className="text-sm font-medium text-[#17201b] dark:text-white">
                                             {metric.label}
                                         </span>
                                         <strong className="text-sm font-bold text-[#17201b] dark:text-white">
@@ -163,7 +234,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                                     </div>
                                 ))}
                                 <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
-                                    <span className="text-sm font-medium text-[#17201b]/50 dark:text-white/50">
+                                    <span className="text-sm font-medium text-[#17201b] dark:text-white">
                                         Language
                                     </span>
                                     <strong
@@ -188,7 +259,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({ language, onStart, onClos
                     </button>
                     <button
                         type="button"
-                        onClick={onStart}
+                        onClick={() => onStart(mode)}
                         className="inline-flex min-h-10 items-center justify-center rounded-lg px-6 text-sm font-bold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40"
                         style={{
                             background: language.accent,
