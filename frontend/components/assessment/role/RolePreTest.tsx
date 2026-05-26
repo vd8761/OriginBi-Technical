@@ -6,6 +6,8 @@ interface RolePreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    questions?: number | string;
+    duration?: string;
     trialAttemptsLimit?: number;
     mainAttemptsLimit?: number;
     attemptsCount?: number;
@@ -30,6 +32,8 @@ const RolePreTest: React.FC<RolePreTestProps> = ({
     accentColor = '#84cc16',
     gradient = 'linear-gradient(135deg, #84cc16 0%, #65a30d 100%)',
     mode = 'main',
+    questions = 30,
+    duration = '45 min',
     trialAttemptsLimit = 5,
     mainAttemptsLimit = 2,
     attemptsCount: initialAttemptsCount
@@ -89,8 +93,8 @@ const RolePreTest: React.FC<RolePreTestProps> = ({
     const currentAttempt = attemptsCount + 1;
 
     const metrics = [
-        { label: "Questions", value: "30" },
-        { label: "Duration", value: "45 min" },
+        { label: "Questions", value: String(questions) },
+        { label: "Duration", value: duration },
         { label: "Role", value: "Software Eng." },
         { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];

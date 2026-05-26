@@ -6,6 +6,8 @@ interface MNCPreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    questions?: number | string;
+    duration?: string;
     trialAttemptsLimit?: number;
     mainAttemptsLimit?: number;
     attemptsCount?: number;
@@ -30,6 +32,8 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
     accentColor = '#6366f1',
     gradient = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
     mode = 'main',
+    questions = 40,
+    duration = '50 min',
     trialAttemptsLimit = 5,
     mainAttemptsLimit = 2,
     attemptsCount: initialAttemptsCount
@@ -89,8 +93,8 @@ const MNCPreTest: React.FC<MNCPreTestProps> = ({
     const currentAttempt = attemptsCount + 1;
 
     const metrics = [
-        { label: "Questions", value: "40" },
-        { label: "Duration", value: "50 min" },
+        { label: "Questions", value: String(questions) },
+        { label: "Duration", value: duration },
         { label: "Format", value: "Multiple Choice" },
         { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];

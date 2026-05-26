@@ -33,6 +33,7 @@ import {
   getUserId,
   type AssessmentModule,
 } from "@/lib/assessmentSecurity";
+import { getDisplayedQuestionCount } from "@/lib/assessmentQuestionCount";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -271,10 +272,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           assessmentCode: dbExam.assessment_code || exam.id,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.main_questions_count > 0 ? dbExam.main_questions_count : dbExam.total_questions)) || exam.questions,
+          questions: getDisplayedQuestionCount(dbExam, exam.questions),
           trialQuestionsCount: dbExam.trial_questions_count || 0,
           mainQuestionsCount: dbExam.main_questions_count || 0,
-          questionLimit: dbExam.question_limit || 0,
+          questionLimit: getDisplayedQuestionCount(dbExam, exam.questions),
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -949,6 +950,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             onClose={() => setShowCommunicationModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
@@ -972,6 +975,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             onClose={() => setShowRoleModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
@@ -995,6 +1000,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             onClose={() => setShowMncModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}

@@ -6,6 +6,8 @@ interface CommunicationPreTestProps {
     accentColor?: string;
     gradient?: string;
     mode?: 'trial' | 'main';
+    questions?: number | string;
+    duration?: string;
     trialAttemptsLimit?: number;
     mainAttemptsLimit?: number;
     attemptsCount?: number;
@@ -30,6 +32,8 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
     accentColor = '#06b6d4',
     gradient = 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
     mode = 'main',
+    questions = 20,
+    duration = '20 min',
     trialAttemptsLimit = 5,
     mainAttemptsLimit = 2,
     attemptsCount: initialAttemptsCount
@@ -89,8 +93,8 @@ const CommunicationPreTest: React.FC<CommunicationPreTestProps> = ({
     const currentAttempt = attemptsCount + 1;
 
     const metrics = [
-        { label: "Sections", value: "3 Tasks" },
-        { label: "Duration", value: "20 min" },
+        { label: "Questions", value: String(questions) },
+        { label: "Duration", value: duration },
         { label: "Format", value: "Audio/Text" },
         { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];
