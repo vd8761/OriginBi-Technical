@@ -182,13 +182,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
     return [...items].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   }, [result?.questionReviews]);
 
-  const previewReviews = useMemo(() => {
-    return reviews.filter((review) => {
-      const selectedOption = Boolean(review.selectedOptionId && review.selectedOptionId.length > 0);
-      const selectedAnswer = Boolean(review.selectedAnswerText && review.selectedAnswerText.length > 0);
-      return selectedOption || selectedAnswer;
-    });
-  }, [reviews]);
+  const previewReviews = useMemo(() => reviews, [reviews]);
 
   // Guard after all hooks
   if (!isOpen || !exam || !result) return null;

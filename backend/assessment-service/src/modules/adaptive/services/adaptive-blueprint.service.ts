@@ -376,7 +376,7 @@ export class AdaptiveBlueprintService {
            COALESCE(difficulty::text, 'medium') AS difficulty
          FROM ${t.table}
          WHERE assessment_id=$1 AND status='active'
-         GROUP BY category, difficulty`,
+         GROUP BY COALESCE(${t.catCol}::text, 'General'), COALESCE(difficulty::text, 'medium')`,
         [assessmentId],
       );
     } else {
@@ -387,7 +387,7 @@ export class AdaptiveBlueprintService {
            'medium' AS difficulty
          FROM ${t.table}
          WHERE assessment_id=$1 AND status='active'
-         GROUP BY category`,
+         GROUP BY COALESCE(${t.catCol}::text, 'General')`,
         [assessmentId],
       );
     }

@@ -27,6 +27,13 @@ import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
 import { listAssignments, type Assignment } from "@/lib/api";
 import { type InProgressAttempt } from "@/lib/assessmentResume";
+import {
+  securityCheckBeforeStart,
+  getAssessmentCode,
+  getUserId,
+  type AssessmentModule,
+} from "@/lib/assessmentSecurity";
+import { getDisplayedQuestionCount } from "@/lib/assessmentQuestionCount";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
@@ -265,10 +272,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           assessmentCode: dbExam.assessment_code || exam.id,
           title: dbExam.assessment_name || exam.title,
           duration: `${dbExam.total_time_minutes || 60} min`,
-          questions: (dbExam.question_limit > 0 ? dbExam.question_limit : (dbExam.main_questions_count > 0 ? dbExam.main_questions_count : dbExam.total_questions)) || exam.questions,
+          questions: getDisplayedQuestionCount(dbExam, exam.questions),
           trialQuestionsCount: dbExam.trial_questions_count || 0,
           mainQuestionsCount: dbExam.main_questions_count || 0,
-          questionLimit: dbExam.question_limit || 0,
+          questionLimit: getDisplayedQuestionCount(dbExam, exam.questions),
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -487,6 +494,64 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     launchAssessment(exam as ExtendedExam, mode);
   };
 
+  const resolveAssessmentForModule = (module: string, assessmentCode?: string) => {
+    const dbModule = module === "communication" ? "grammar" : module;
+    return (
+      (assessmentCode
+        ? assessmentsList.find((a) => a.assessment_code === assessmentCode)
+        : null) ||
+      assessmentsList.find((a) => a.module_type === dbModule)
+    );
+  };
+
+  const startAdaptiveV2Attempt = async (
+    module: "communication" | "mnc" | "role",
+    mode: AssessmentMode,
+    assessmentCode?: string,
+  ): Promise<boolean> => {
+    const dbModule = module === "communication" ? "grammar" : module;
+    const dbExam = resolveAssessmentForModule(module, assessmentCode);
+    if (!dbExam?.adaptive_enabled) return false;
+
+    const apiBase = TECH_API_BASE || "";
+    const security = await securityCheckBeforeStart(dbModule as AssessmentModule, mode, apiBase);
+    if (!security.canProceed) {
+      console.error("Adaptive start blocked:", security.error);
+      return false;
+    }
+
+    const assessmentId = dbExam.assessment_id;
+    if (!assessmentId) return false;
+
+    const payload = {
+      assessmentId,
+      assessmentCode: dbExam.assessment_code ?? assessmentCode ?? getAssessmentCode(dbModule as AssessmentModule),
+      userId: getUserId(),
+      mode: security.sanitizedMode,
+    };
+
+    const res = await fetch(`${apiBase}/api/assessment/${module}/attempts/block-based`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "Unknown error");
+      console.error(`Adaptive start failed (${module}):`, res.status, errText);
+      return false;
+    }
+
+    const data = await res.json();
+    const token = data?.attemptToken;
+    if (!token) return false;
+
+    router.push(
+      `/assessment/${module}/adaptive?v2=true&mode=${security.sanitizedMode}&assessmentId=${assessmentId}&attemptToken=${token}`
+    );
+    return true;
+  };
+
   const handleResumeAttempt = (attempt: InProgressAttempt) => {
     // SECURITY: Validate attempt token and prevent manipulation
     if (!attempt.attemptToken || !attempt.module) {
@@ -500,8 +565,8 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     
     // Prevent infinite loops by checking if we're already on the target page
     const currentPath = window.location.pathname;
-    const targetPath = resumeModule === "aptitude" && attempt.isBlockBased 
-      ? `/assessment/aptitude/adaptive`
+    const targetPath = attempt.isBlockBased
+      ? `/assessment/${resumeModule}/adaptive`
       : `/assessment/${resumeModule}`;
       
     if (currentPath === targetPath) {
@@ -509,22 +574,20 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       return;
     }
     
-    if (resumeModule === "aptitude" && attempt.isBlockBased) {
-      const matchingAssessment = assessmentsList.find(
-        (a) => a.assessment_code === attempt.assessmentCode
-      );
-      const assessmentId = matchingAssessment?.assessment_id || 1;
-      const isV2 = matchingAssessment?.block_config?.enabled ?? true;
+    if (attempt.isBlockBased) {
+      const matchingAssessment =
+        assessmentsList.find((a) => a.assessment_code === attempt.assessmentCode) ||
+        assessmentsList.find((a) => a.module_type === (resumeModule === "communication" ? "grammar" : resumeModule));
+      const assessmentId = matchingAssessment?.assessment_id;
 
-      if (isV2) {
+      if (assessmentId) {
         router.push(
-          `/assessment/aptitude/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${attempt.attemptToken}`
+          `/assessment/${resumeModule}/adaptive?v2=true&mode=${mode}&assessmentId=${assessmentId}&attemptToken=${attempt.attemptToken}`
         );
-      } else {
-        router.push(`/assessment/aptitude/adaptive?mode=${mode}`);
+        return;
       }
-      return;
     }
+
     router.push(`/assessment/${resumeModule}?mode=${mode}`);
   };
 
@@ -878,18 +941,17 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <CommunicationPreTest
             mode={assessmentMode}
-            onStart={(mode) => {
-              const dbExam = assessmentsList.find((a: any) => a.module_type === 'grammar');
-              if (dbExam?.adaptive_enabled) {
-                // Adaptive mode: go through standard engine which will detect isBlockBased and redirect
-                router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
-              } else {
+            onStart={async (mode) => {
+              const startedAdaptive = await startAdaptiveV2Attempt("communication", mode, exam?.assessmentCode);
+              if (!startedAdaptive) {
                 router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
               }
             }}
             onClose={() => setShowCommunicationModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
@@ -904,17 +966,17 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <RolePreTest
             mode={assessmentMode}
-            onStart={(mode) => {
-              const dbExam = assessmentsList.find((a: any) => a.module_type === 'role');
-              if (dbExam?.adaptive_enabled) {
-                router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
-              } else {
+            onStart={async (mode) => {
+              const startedAdaptive = await startAdaptiveV2Attempt("role", mode, exam?.assessmentCode);
+              if (!startedAdaptive) {
                 router.push(`/assessment/role?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
               }
             }}
             onClose={() => setShowRoleModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
@@ -929,17 +991,17 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         return (
           <MNCPreTest
             mode={assessmentMode}
-            onStart={(mode) => {
-              const dbExam = assessmentsList.find((a: any) => a.module_type === 'mnc');
-              if (dbExam?.adaptive_enabled) {
-                router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
-              } else {
+            onStart={async (mode) => {
+              const startedAdaptive = await startAdaptiveV2Attempt("mnc", mode, exam?.assessmentCode);
+              if (!startedAdaptive) {
                 router.push(`/assessment/mnc?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
               }
             }}
             onClose={() => setShowMncModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}
+            questions={exam?.questions}
+            duration={exam?.duration}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}

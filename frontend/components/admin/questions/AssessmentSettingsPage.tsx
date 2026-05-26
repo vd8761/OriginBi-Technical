@@ -455,6 +455,26 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
 
   const markDirty = () => setHasModifications(true);
   const visibleQuestionKinds = getSupportedQuestionKinds(activeModule);
+  const normalizedQuestionLimit = questionLimit === "" ? 0 : Number(questionLimit);
+  const normalizedAdaptiveTotalQuestions = adaptiveTotalQuestions === "" ? 20 : Number(adaptiveTotalQuestions);
+  const fullQuestionBankCount = questionsList.length;
+  const effectiveQuestionCount = adaptiveEnabled
+    ? normalizedAdaptiveTotalQuestions
+    : (normalizedQuestionLimit > 0 ? normalizedQuestionLimit : fullQuestionBankCount);
+  const effectiveQuestionCountSource = adaptiveEnabled
+    ? "Adaptive Total Questions"
+    : (normalizedQuestionLimit > 0 ? "Question Limit" : "Full question bank");
+
+  const showQuestionLimitLockNotice = () => {
+    if (!adaptiveEnabled) return;
+    void confirm({
+      title: "Question Limit Locked",
+      message: `Disable Adaptive Mode to change Question Limit. The active UI count is currently ${normalizedAdaptiveTotalQuestions} question(s) from Adaptive Total Questions.`,
+      confirmLabel: "OK",
+      cancelLabel: "Close",
+      variant: "warning",
+    });
+  };
 
   const toggleQuestionKind = (kind: QuestionKind, enabled: boolean) => {
     setEnabledQuestionKinds(prev => ({ ...prev, [kind]: enabled }));
@@ -507,6 +527,9 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     matchesQuery(["Adaptive Mode", "Enable adaptive block-based assessment", "adaptive", "blueprint", "blocks", "marks", "seconds per mark", "auto"]);
 
   const inputCls = "block w-full max-w-lg rounded-xl border-0 py-3 px-4 bg-slate-50 dark:bg-white/5 text-black dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-black/30 dark:placeholder:text-white/30 focus:ring-2 focus:ring-inset focus:ring-brand-green sm:text-sm transition-all hover:ring-slate-300 dark:hover:ring-white/20";
+  const lockedInputCls = adaptiveEnabled
+    ? `${inputCls} cursor-not-allowed ring-amber-200 dark:ring-amber-500/30 bg-amber-50 dark:bg-amber-500/10`
+    : inputCls;
   const labelCls = "block text-[15px] font-bold leading-tight text-slate-900 dark:text-white";
   const descCls = "mt-2 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 font-medium";
 
@@ -741,8 +764,44 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                       )}
                       {matchesQuery(["Question Limit", "Serve a random subset of this size. Set to 0 to deliver the entire question pool.", "limit", "pool", "questions count"]) && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
-                          <div className="sm:max-w-md"><label className={labelCls}>Question Limit</label><p className={descCls}>Serve a random subset of this size. Set to 0 to deliver the entire question pool.</p></div>
-                          <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={questionLimit} onChange={e => { const val = e.target.value; setQuestionLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
+                          <div className="sm:max-w-md">
+                            <label className={labelCls}>Question Limit</label>
+                            <p className={descCls}>
+                              {adaptiveEnabled
+                                ? `Adaptive Mode is controlling the live question count. Disable Adaptive Mode to edit this field.`
+                                : "Serve a random subset of this size. Set to 0 to deliver the entire question pool."}
+                            </p>
+                          </div>
+                          <div className="sm:max-w-[400px] w-full space-y-3">
+                            <input
+                              type="number"
+                              min={0}
+                              value={questionLimit}
+                              readOnly={adaptiveEnabled}
+                              onClick={showQuestionLimitLockNotice}
+                              onChange={e => {
+                                if (adaptiveEnabled) {
+                                  showQuestionLimitLockNotice();
+                                  return;
+                                }
+                                const val = e.target.value;
+                                setQuestionLimit(val === "" ? "" : Number(val));
+                                markDirty();
+                              }}
+                              className={lockedInputCls}
+                            />
+                            <div className={`rounded-xl border px-4 py-3 text-xs leading-relaxed ${
+                              adaptiveEnabled
+                                ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                                : "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
+                            }`}>
+                              {adaptiveEnabled
+                                ? `Adaptive Mode is enabled. The active UI question count is ${normalizedAdaptiveTotalQuestions} from Adaptive Total Questions.`
+                                : normalizedQuestionLimit > 0
+                                  ? `The current UI question count is ${effectiveQuestionCount} from Question Limit.`
+                                  : `Question Limit is 0, so the full question bank will be used. Current bank size: ${fullQuestionBankCount} question(s).`}
+                            </div>
+                          </div>
                         </div>
                       )}
                       {matchesQuery(["Tab-Switch Warning Limit", "Auto-submit after this many tab switches. Set to 0 to disable.", "tab", "switch", "warning", "proctoring", "cheat"]) && (
@@ -1136,6 +1195,15 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                             onCheckedChange={val => { setAdaptiveEnabled(val); markDirty(); }}
                           />
                         </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-brand-green/20 bg-brand-green/10 p-5">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">Active question count in UI</p>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                          {adaptiveEnabled
+                            ? `Adaptive Mode is enabled, so Rules & Limits > Question Limit is locked and the UI will show ${normalizedAdaptiveTotalQuestions} question(s) from Adaptive Total Questions.`
+                            : `Adaptive Mode is disabled, so the UI question count follows ${effectiveQuestionCountSource} and is currently ${effectiveQuestionCount}.`}
+                        </p>
                       </div>
 
                       {/* Settings grid — always visible so admin can configure before enabling */}

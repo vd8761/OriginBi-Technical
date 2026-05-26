@@ -13,12 +13,26 @@ import TimerDisplay from "../shared/TimerDisplay";
 import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/AssessmentIcons";
 import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionNavigator";
 import { NumericalQuestion } from "./question-types/NumericalQuestion";
+import ProctoringHost from "@/lib/proctoring/ProctoringHost";
+import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import {
+  DEFAULT_PROCTORING,
+  fetchEffectiveAssessmentSettings,
+  readCandidateEmail,
+  resolveProctoringForPackage,
+  type ProctoringSettings,
+} from "@/lib/proctoring";
 import {
   generateBlock, completeBlock, saveBlockAnswers, getBlockQuestions,
   submitAssessment, getAttemptStatus,
   type BlockResponse, type BlockMetrics,
   type Difficulty, type AdaptiveFinalReport,
 } from "@/lib/adaptiveApi";
+
+const API_BASE =
+  typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+    ? ""
+    : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +47,7 @@ export interface AdaptiveV2Props {
   assessmentId: number;
   userId: number;
   attemptToken: string;
+  moduleSlug?: string;
   mode?: "trial" | "main";
   onComplete: (report: AdaptiveFinalReport) => void;
 }
@@ -65,7 +80,7 @@ const labelForIndex = (i: number) => String.fromCharCode(65 + i);
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
-  assessmentId, userId, attemptToken, mode = "main", onComplete,
+  assessmentId, userId, attemptToken, moduleSlug = "aptitude", mode = "main", onComplete,
 }) => {
   const { theme } = useTheme();
 
@@ -97,9 +112,16 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   const [isGeneratingNext, setIsGeneratingNext] = useState(false);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showBackWarningModal, setShowBackWarningModal] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  const totalsInitializedRef = useRef(false);
+  const [proctoringSettings, setProctoringSettings] =
+    useState<ProctoringSettings>(DEFAULT_PROCTORING);
+  const [packageSlug, setPackageSlug] = useState(
+    moduleSlug === "communication" ? "grammar" : moduleSlug,
+  );
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const viewingBlockState = blocks.get(viewingBlockNum);
@@ -116,10 +138,74 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     const perBlock = Math.max(1, Number(block.questionsPerBlock ?? block.questions.length ?? questionsPerBlock));
     const total = Math.max(block.questions.length, Number(block.totalQuestions ?? blockCount * perBlock));
 
-    setTotalBlocks(blockCount);
-    setQuestionsPerBlock(perBlock);
-    setTotalQuestionCount(total);
+    setTotalBlocks(prev => totalsInitializedRef.current ? Math.max(prev, blockCount) : blockCount);
+    setQuestionsPerBlock(prev => totalsInitializedRef.current ? Math.max(prev, perBlock) : perBlock);
+    setTotalQuestionCount(prev => totalsInitializedRef.current ? Math.max(prev, total) : total);
+    totalsInitializedRef.current = true;
   }, [questionsPerBlock, totalBlocks]);
+
+  useEffect(() => {
+    if (isLoading || isSubmitting || viewingQuestions.length === 0) return;
+
+    window.history.pushState(null, "", window.location.href);
+
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+      setShowBackWarningModal(true);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isLoading, isSubmitting, viewingQuestions.length]);
+
+  // ── Proctoring settings (tab switch, copy/paste, etc.) ─────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const normalizedModuleSlug =
+          moduleSlug === "communication" ? "grammar" : moduleSlug;
+        setPackageSlug(normalizedModuleSlug);
+
+        const res = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const assessments = Array.isArray(json?.data) ? json.data : [];
+        const normalizeSlug = (value: unknown) => {
+          const slug = String(value ?? "").trim().toLowerCase();
+          return slug === "communication" ? "grammar" : slug;
+        };
+        const found =
+          assessments.find((a: { assessment_id?: number }) => a.assessment_id === assessmentId) ??
+          assessments.find((a: { module_type?: string; assessment_code?: string }) =>
+            normalizeSlug(a.module_type) === normalizedModuleSlug ||
+            normalizeSlug(a.assessment_code) === normalizedModuleSlug,
+          );
+        if (found) {
+          const resolvedPackageSlug =
+            normalizeSlug(found.module_type) ||
+            normalizeSlug(found.assessment_code) ||
+            normalizedModuleSlug;
+          setPackageSlug(resolvedPackageSlug);
+          const effective = await fetchEffectiveAssessmentSettings(
+            API_BASE,
+            found.assessment_code ?? resolvedPackageSlug,
+            readCandidateEmail(),
+          );
+          const merged = effective ? { ...found, ...effective } : found;
+          setProctoringSettings(resolveProctoringForPackage(merged));
+        }
+      } catch {
+        /* keep defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assessmentId, moduleSlug]);
 
   // ── Question timing ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -155,7 +241,13 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         if (existingBlock1 && existingBlock1.status !== "not_started") {
           // Resume: load existing block 1 questions
           const data = await getBlockQuestions(attemptToken, 1);
-          const totalBlockCount = data.totalBlocks ?? status?.blocks.length ?? 4;
+          const totalBlockCount =
+            Number(data.totalBlocks ?? 0) ||
+            ((data.totalQuestions && data.questionsPerBlock)
+              ? Math.max(1, Math.round(Number(data.totalQuestions) / Math.max(1, Number(data.questionsPerBlock))))
+              : 0) ||
+            Math.max(1, Number(status?.blocks?.length ?? 0)) ||
+            4;
           block1 = {
             blockId: 0,
             blockNumber: 1,
@@ -186,27 +278,53 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
           if (resumeBlock > 1) {
             try {
-              const resumeData = await getBlockQuestions(attemptToken, resumeBlock);
-              const resumeBlockResp: BlockResponse = {
-                blockId: 0,
-                blockNumber: resumeBlock,
-                totalBlocks: resumeData.totalBlocks ?? totalBlockCount,
-                totalQuestions: resumeData.totalQuestions ?? data.totalQuestions,
-                questionsPerBlock: resumeData.questionsPerBlock ?? data.questionsPerBlock,
-                difficulty: resumeData.difficulty,
-                questions: resumeData.questions,
-                totalBlockMarks: resumeData.questions.reduce((s, q) => s + q.marks, 0),
-                timeLimitSeconds: resumeData.questions.reduce((s, q) => s + q.expectedTimeSecs, 0),
-                isLastBlock: resumeBlock === totalBlockCount,
-                coverageMap: {},
-              };
-              resumeData.questions.forEach(q => {
-                if (q.selectedOptionId) finalAnswers[q.id] = q.selectedOptionId;
-              });
-              finalBlocksMap = new Map([
+              const blockNums = Array.from({ length: resumeBlock - 1 }, (_, i) => i + 2);
+              const settled = await Promise.allSettled(
+                blockNums.map(async (bn) => ({
+                  blockNumber: bn,
+                  data: await getBlockQuestions(attemptToken, bn),
+                })),
+              );
+
+              const entries: Array<[number, BlockState]> = [
                 [1, { block: block1, snapshotTaken: true, metrics: null, nextDifficulty: null }],
-                [resumeBlock, { block: resumeBlockResp, snapshotTaken: resumeData.snapshotTaken, metrics: null, nextDifficulty: resumeData.nextBlockDifficulty }],
-              ]);
+              ];
+
+              for (const r of settled) {
+                if (r.status !== "fulfilled") continue;
+                const { blockNumber, data: blockData } = r.value;
+                const blockResp: BlockResponse = {
+                  blockId: 0,
+                  blockNumber,
+                  totalBlocks: blockData.totalBlocks ?? totalBlockCount,
+                  totalQuestions: blockData.totalQuestions ?? data.totalQuestions,
+                  questionsPerBlock: blockData.questionsPerBlock ?? data.questionsPerBlock,
+                  difficulty: blockData.difficulty,
+                  questions: blockData.questions,
+                  totalBlockMarks: blockData.questions.reduce((s, q) => s + q.marks, 0),
+                  timeLimitSeconds: blockData.questions.reduce((s, q) => s + q.expectedTimeSecs, 0),
+                  isLastBlock: blockNumber === totalBlockCount,
+                  coverageMap: {},
+                };
+                blockData.questions.forEach(q => {
+                  if (q.selectedOptionId) finalAnswers[q.id] = q.selectedOptionId;
+                });
+                entries.push([
+                  blockNumber,
+                  {
+                    block: blockResp,
+                    snapshotTaken: blockData.snapshotTaken,
+                    metrics: null,
+                    nextDifficulty: blockData.nextBlockDifficulty,
+                  },
+                ]);
+              }
+
+              // Ensure the resume block is present; otherwise fall back to block 1
+              const hasResumeBlock = entries.some(([bn]) => bn === resumeBlock);
+              finalBlocksMap = hasResumeBlock
+                ? new Map(entries)
+                : new Map([[1, { block: block1, snapshotTaken: true, metrics: null, nextDifficulty: null }]]);
             } catch {
               // Non-fatal — resume block will load on demand; fall back to block 1 view
               finalBlocksMap = new Map([[1, { block: block1, snapshotTaken: true, metrics: null, nextDifficulty: null }]]);
@@ -383,16 +501,23 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         data.questions.forEach(q => { if (q.selectedOptionId) restored[q.id] = q.selectedOptionId; });
         setAnswers(prev => ({ ...prev, ...restored }));
 
+        const resolvedTotalBlocks =
+          Number(data.totalBlocks ?? 0) ||
+          ((data.totalQuestions && data.questionsPerBlock)
+            ? Math.max(1, Math.round(Number(data.totalQuestions) / Math.max(1, Number(data.questionsPerBlock))))
+            : 0) ||
+          totalBlocks;
+
         const blockResp: BlockResponse = {
           blockId: 0, blockNumber: data.blockNumber,
-          totalBlocks: data.totalBlocks ?? totalBlocks,
+          totalBlocks: resolvedTotalBlocks,
           totalQuestions: data.totalQuestions ?? totalQuestionCount,
           questionsPerBlock: data.questionsPerBlock ?? questionsPerBlock,
           difficulty: data.difficulty,
           questions: data.questions,
           totalBlockMarks: data.questions.reduce((s, q) => s + q.marks, 0),
           timeLimitSeconds: data.questions.reduce((s, q) => s + q.expectedTimeSecs, 0),
-          isLastBlock: data.blockNumber === (data.totalBlocks ?? totalBlocks),
+          isLastBlock: data.blockNumber === resolvedTotalBlocks,
           coverageMap: {},
         };
         applyAssessmentTotals(blockResp);
@@ -606,10 +731,16 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
-      <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
-      <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
-      <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
+    <AssessmentPluginHost packageSlug={packageSlug} tabSwitchLimit={proctoringSettings.tabSwitchLimit}>
+      <div className="relative min-h-screen w-full overflow-hidden bg-[#f6f8f5] font-sans text-[#17201b] transition-colors duration-500 dark:bg-[#0f1712] dark:text-white">
+        <div className="absolute inset-0 assessment-aptitude-bg" aria-hidden="true" />
+        <div className="absolute inset-0 assessment-grid opacity-35" aria-hidden="true" />
+        <div className="absolute inset-0 assessment-scan opacity-[0.05]" aria-hidden="true" />
+
+        <ProctoringHost
+          settings={proctoringSettings}
+          active={!isLoading && !isSubmitting && Boolean(viewingBlockState)}
+        />
 
       {/* Header */}
       <header className="assessment-header sticky top-0 z-50 flex min-h-[72px] items-center justify-between gap-4 px-4 py-4 backdrop-blur-md dark:border-b dark:border-white/5 md:px-6">
@@ -967,7 +1098,56 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
           </div>
         </div>
       )}
-    </div>
+
+      {showBackWarningModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 bg-[#0f1712]/60 backdrop-blur-[2px]"
+            onClick={() => setShowBackWarningModal(false)}
+          />
+
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="relative w-full max-w-md transform overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl transition-all dark:border-white/[0.08] dark:bg-[#19211C]"
+          >
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500 text-white">
+                <AlertCircle size={28} />
+              </div>
+
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Leave Assessment?</h2>
+              <p className="mt-2.5 text-xs font-medium leading-relaxed text-slate-500 dark:text-gray-400">
+                Your progress has been securely saved. You can return and continue your assessment exactly where you left off, as long as the timer does not run out.
+              </p>
+
+              <div className="mt-6 flex w-full flex-col gap-2.5 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBackWarningModal(false);
+                    window.location.href = "/assessment";
+                  }}
+                  className="flex-1 cursor-pointer rounded-xl border border-slate-200 px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 transition-all hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-white/[0.04]"
+                >
+                  Yes, Exit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBackWarningModal(false)}
+                  className="flex-1 cursor-pointer rounded-xl bg-brand-green px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-white transition-all hover:bg-[#1bb85c] active:scale-95"
+                >
+                  Resume Test
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      </div>
+    </AssessmentPluginHost>
   );
 };
 

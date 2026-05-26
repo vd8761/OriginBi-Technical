@@ -35,6 +35,7 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [blockConfig, setBlockConfig] = useState<{ blocksPerAssessment: number; questionsPerBlock: number } | null>(null);
+  const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
   const [assessmentId, setAssessmentId] = useState<number | null>(null);
   const [isV2, setIsV2] = useState(false);
   const [attemptsCount, setAttemptsCount] = useState<number>(0);
@@ -92,16 +93,21 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
           const isV2Adaptive = aptitudeAssessment?.adaptive_enabled === true;
           const isV1Adaptive = aptitudeAssessment?.block_config?.enabled === true;
           if (isV2Adaptive || isV1Adaptive) {
+            const blocksPerAssessment = aptitudeAssessment.adaptive_total_blocks ?? aptitudeAssessment.block_config?.blocksPerAssessment ?? 5;
+            const questionsPerBlock = aptitudeAssessment.block_config?.questionsPerBlock ?? Math.ceil(
+              (aptitudeAssessment.adaptive_total_marks ?? 45) /
+                (aptitudeAssessment.adaptive_total_blocks ?? 5)
+            );
             setIsV2(isV2Adaptive);
             setAssessmentId(aptitudeAssessment.assessment_id ?? null);
             setBlockConfig(
               aptitudeAssessment.block_config ?? {
-                blocksPerAssessment: aptitudeAssessment.adaptive_total_blocks ?? 5,
-                questionsPerBlock: Math.ceil(
-                  (aptitudeAssessment.adaptive_total_marks ?? 45) /
-                    (aptitudeAssessment.adaptive_total_blocks ?? 5)
-                ),
+                blocksPerAssessment,
+                questionsPerBlock,
               }
+            );
+            setTotalQuestions(
+              Number(aptitudeAssessment.adaptive_total_questions ?? (blocksPerAssessment * questionsPerBlock)),
             );
           }
 
@@ -180,12 +186,13 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
 
   const blocks = blockConfig?.blocksPerAssessment ?? 5;
   const qPerBlock = blockConfig?.questionsPerBlock ?? 9;
+  const effectiveTotalQuestions = totalQuestions ?? (blocks * qPerBlock);
   const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
   const currentAttempt = attemptsCount + 1;
 
   const metrics = [
+    { label: "Questions", value: `${effectiveTotalQuestions}` },
     { label: "Blocks", value: `${blocks}` },
-    { label: "Questions/Block", value: `${qPerBlock}` },
     { label: "Format", value: "Adaptive MCQ" },
     { label: "Attempts", value: `${currentAttempt}/${limit}` },
   ];

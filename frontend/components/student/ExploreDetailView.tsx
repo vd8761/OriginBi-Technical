@@ -747,6 +747,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowAptitudeModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                     requireCameraMic={Boolean((exam as any).requireCameraMic)}
                 />
             )}
@@ -755,6 +757,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowCommunicationModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                 />
             )}
             {showRoleModal && (
@@ -762,6 +766,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowRoleModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                 />
             )}
             {showMncModal && (
@@ -769,6 +775,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowMncModal(false)}
+                    questions={exam.questions}
+                    duration={exam.duration}
                 />
             )}
 

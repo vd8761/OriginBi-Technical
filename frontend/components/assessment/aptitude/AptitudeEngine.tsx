@@ -110,6 +110,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     const [questions, setQuestions] = useState<Question[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [isRedirecting, setIsRedirecting] = useState(false);
     const [attemptToken, setAttemptToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const submittingRef = useRef(false); // Ref-based guard to prevent double submit across renders
@@ -384,6 +385,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
                 // If backend returned block-based adaptive mode, redirect to adaptive engine
                 if (data.isBlockBased) {
+                    setIsRedirecting(true);
                     const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
                     const assessmentsJson = await assessmentsRes.json();
                     const found = assessmentsJson?.data?.find((a: any) => a.module_type === "aptitude");
@@ -718,6 +720,17 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
                 <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Submitting your assessment...</p>
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please do not close this window or refresh the page.</p>
+            </div>
+        );
+    }
+
+    if (isRedirecting) {
+        return (
+            <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f6f8f5] dark:bg-[#0f1712] transition-colors duration-500">
+                <Logo className="h-12 w-auto mb-8" />
+                <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
+                <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">Redirecting to adaptive assessment...</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Please keep this tab open.</p>
             </div>
         );
     }
