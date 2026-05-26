@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { redirect } from "next/navigation";
 import ExploreDetailView from "@/components/student/ExploreDetailView";
 import { EXAMS, EXAM_DETAILS, type AssessmentId } from "@/lib/exams";
+import { getDisplayedQuestionCount } from "@/lib/assessmentQuestionCount";
 
 const VALID_IDS: AssessmentId[] = ["aptitude", "communication", "coding", "mnc", "role"];
 const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, ""));
@@ -76,13 +77,7 @@ export default function ExploreDetailClient({ id }: { id: string }) {
                 assessmentCode: dbExam.assessment_code || exam.id,
                 title: dbExam.assessment_name || exam.title,
                 duration: `${dbExam.total_time_minutes || 60} min`,
-                questions: dbExam.question_limit !== undefined && dbExam.question_limit !== null && dbExam.question_limit > 0
-                    ? dbExam.question_limit
-                    : (dbExam.total_questions !== undefined && dbExam.total_questions !== null
-                        ? dbExam.total_questions
-                        : (dbExam.main_questions_count !== undefined && dbExam.main_questions_count !== null
-                            ? dbExam.main_questions_count
-                            : exam.questions)),
+                questions: getDisplayedQuestionCount(dbExam, exam.questions),
                 price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
                 trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
                 mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
