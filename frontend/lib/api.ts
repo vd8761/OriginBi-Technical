@@ -1582,3 +1582,27 @@ export async function getAdminAssessments(): Promise<{ data?: Array<Record<strin
     baseOverride: TECH_API_BASE,
   });
 }
+
+export interface LoginStatusResponse {
+  redirectUrl?: string;
+  isAssessmentMode?: boolean;
+  status?: string;
+}
+
+export async function checkLoginStatus(email: string): Promise<LoginStatusResponse> {
+  return apiFetch<LoginStatusResponse>("/student/login-status", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    baseOverride: STUDENT_API_BASE,
+    auth: false,
+  });
+}
+
+export async function completeFirstLogin(email: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>("/student/complete-first-login", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    baseOverride: STUDENT_API_BASE,
+    auth: false,
+  });
+}
