@@ -1844,6 +1844,13 @@ export class AssessmentService {
           }
         }
 
+        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+          const kind = String(rawKind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        };
+
         const qMetadataForType = aq.question_metadata || {};
         const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType.kind) : null;
         const review: any = {
@@ -1988,14 +1995,7 @@ export class AssessmentService {
           }
           questionReviews.push(review);
           continue;
-        }
-
-        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-          const kind = String(rawKind || 'mcq').toLowerCase();
-          if (kind === 'true_false') return 'tf';
-          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
-          return 'mcq';
-        };
+        // Scoring Logic: Support MCQ, MSQ, TF, Numerical
 
         // Scoring Logic: Support MCQ, MSQ, TF, Numerical
         if (aq.mode !== 'trial' && !isCoding && (!isGrammar || taskType === 'listening_mcq' || taskType === 'reading_mcq')) {
@@ -2026,11 +2026,11 @@ export class AssessmentService {
               // Populate review with MSQ selections
               review.selectedOptionId = studentChoices;
               review.selectedAnswerText = studentChoices
-                .map((id) => optionTextById.get(id) ?? id)
+                .map((id: string) => optionTextById.get(id) ?? id)
                 .join(', ');
               // Populate correct answer text for MSQ
               review.correctAnswerText = correctChoices
-                .map((id) => optionTextById.get(id) ?? id)
+                .map((id: string) => optionTextById.get(id) ?? id)
                 .join(', ');
               
               // All-or-nothing check for MSQ

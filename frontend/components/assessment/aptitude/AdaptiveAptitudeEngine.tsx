@@ -566,7 +566,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   // Navigation handlers
   const handleOptionSelect = (optionId: string) => {
     if (!currentQuestion) return;
-    const kind = currentQuestion.kind || currentQuestion.metadata?.kind || 'mcq';
+    const kind = (currentQuestion as any).kind || currentQuestion.metadata?.kind || 'mcq';
 
     let newAnswer: string | string[];
 
@@ -1046,7 +1046,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
 
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {currentQuestion?.options?.map((option, index) => {
-                const kind = currentQuestion.kind || currentQuestion.metadata?.kind || 'mcq';
+                const kind = (currentQuestion as any).kind || currentQuestion.metadata?.kind || 'mcq';
                 const isSelected = kind === 'msq'
                     ? (Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).includes(option.id))
                     : allAnswers[currentQuestion.id] === option.id;

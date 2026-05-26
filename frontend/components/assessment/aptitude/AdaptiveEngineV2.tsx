@@ -381,7 +381,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
   // ── Answer selection ───────────────────────────────────────────────────────
   const handleOptionSelect = (optionId: string) => {
     if (!currentQuestion) return;
-    const kind = currentQuestion.kind || currentQuestion.metadata?.kind || "mcq";
+    const kind = currentQuestion.kind || (currentQuestion as any).metadata?.kind || "mcq";
     let newAnswer: string | string[];
 
     if (kind === "msq") {
@@ -869,7 +869,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
                   )}
                 </div>
 
-                {(currentQuestion.kind === "numerical" || currentQuestion.metadata?.kind === "numerical") && (
+                {(currentQuestion.kind === "numerical" || (currentQuestion as any).metadata?.kind === "numerical") && (
                   <div className="mt-4 px-1">
                     <p className="text-[10px] font-bold italic text-[#17201b] dark:text-white">
                       * Note: Only exact numerical matches will be considered correct. Space is not allowed.
@@ -877,7 +877,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
                   </div>
                 )}
 
-                {(currentQuestion.kind === "numerical" || currentQuestion.metadata?.kind === "numerical") ? (
+                {(currentQuestion.kind === "numerical" || (currentQuestion as any).metadata?.kind === "numerical") ? (
                   <NumericalQuestion
                     questionId={currentQuestion.id}
                     value={(answers[currentQuestion.id] as string) || ""}
@@ -886,7 +886,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
                 ) : (
                   <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     {currentQuestion.options.map((option, idx) => {
-                      const kind = currentQuestion.kind || currentQuestion.metadata?.kind || "mcq";
+                      const kind = currentQuestion.kind || (currentQuestion as any).metadata?.kind || "mcq";
                       const curAns = answers[currentQuestion.id];
                       const isSelected = Array.isArray(curAns)
                         ? curAns.includes(option.id)
