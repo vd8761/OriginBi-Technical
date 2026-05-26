@@ -551,14 +551,34 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                         </div>
                       ) : (
                         previewReviews.map((review, index) => {
-                          const selectedOptionText = review.selectedOptionId
-                            ? review.options?.find((opt) => opt.id === review.selectedOptionId)?.text
-                            : undefined;
-                          const correctOptionText = review.correctOptionId
-                            ? review.options?.find((opt) => opt.id === review.correctOptionId)?.text
-                            : undefined;
+                          const isMsq = Array.isArray(review.selectedOptionId) || Array.isArray(review.correctOptionId) || review.type === 'msq';
+                          const isNumerical = review.type === 'numerical';
+
+                          const getSelectedOptionText = () => {
+                            if (isMsq && Array.isArray(review.selectedOptionId)) {
+                              return review.selectedOptionId
+                                .map((id) => review.options?.find((opt) => opt.id === id)?.text)
+                                .filter(Boolean)
+                                .join(', ');
+                            }
+                            return review.options?.find((opt) => opt.id === review.selectedOptionId)?.text;
+                          };
+
+                          const getCorrectOptionText = () => {
+                            if (isMsq && Array.isArray(review.correctOptionId)) {
+                              return review.correctOptionId
+                                .map((id) => review.options?.find((opt) => opt.id === id)?.text)
+                                .filter(Boolean)
+                                .join(', ');
+                            }
+                            return review.options?.find((opt) => opt.id === review.correctOptionId)?.text;
+                          };
+
+                          const selectedOptionText = getSelectedOptionText();
+                          const correctOptionText = getCorrectOptionText();
+
                           const selectedAnswer =
-                            review.selectedAnswerText || selectedOptionText || "Not answered";
+                            review.selectedAnswerText || selectedOptionText || (review.status === "unanswered" ? "Not answered" : String(review.selectedOptionId || "Not answered"));
                           const correctAnswer =
                             review.correctAnswerText ||
                             correctOptionText ||
@@ -605,13 +625,22 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                               {review.options && review.options.length > 0 && (
                                 <div className="mt-4 space-y-2">
                                   {review.options
-                                    .filter(option => 
-                                      (review.selectedOptionId && option.id === review.selectedOptionId) || 
-                                      (review.correctOptionId && option.id === review.correctOptionId)
-                                    )
+                                    .filter(option => {
+                                      const isSel = Array.isArray(review.selectedOptionId)
+                                        ? review.selectedOptionId.includes(option.id)
+                                        : (review.selectedOptionId && option.id === review.selectedOptionId);
+                                      const isCorr = Array.isArray(review.correctOptionId)
+                                        ? review.correctOptionId.includes(option.id)
+                                        : (review.correctOptionId && option.id === review.correctOptionId);
+                                      return isSel || isCorr;
+                                    })
                                     .map((option) => {
-                                      const isSelected = Boolean(review.selectedOptionId && option.id === review.selectedOptionId);
-                                      const isCorrect = Boolean(review.correctOptionId && option.id === review.correctOptionId);
+                                      const isSelected = Array.isArray(review.selectedOptionId)
+                                        ? review.selectedOptionId.includes(option.id)
+                                        : Boolean(review.selectedOptionId && option.id === review.selectedOptionId);
+                                      const isCorrect = Array.isArray(review.correctOptionId)
+                                        ? review.correctOptionId.includes(option.id)
+                                        : Boolean(review.correctOptionId && option.id === review.correctOptionId);
                                       return (
                                         <div
                                           key={`${review.questionId}-${option.id}`}
