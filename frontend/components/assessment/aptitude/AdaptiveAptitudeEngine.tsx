@@ -35,8 +35,9 @@ interface Question {
   marks?: number;
   negativeMarks?: number;
   explanation?: string;
+  kind?: 'mcq' | 'msq' | 'tf' | 'numerical';
   metadata?: {
-      kind?: 'mcq' | 'msq' | 'tf';
+      kind?: 'mcq' | 'msq' | 'tf' | 'numerical';
       [key: string]: any;
   };
 }
