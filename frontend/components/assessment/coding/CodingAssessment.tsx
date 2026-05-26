@@ -11,7 +11,7 @@ import SubmittingModal, { type SubmitPhase } from "./SubmittingModal";
 import CompletionScreen from "./CompletionScreen";
 import DevControls from "./DevControls";
 import GuidelinesModal from "./GuidelinesModal";
-import { QUESTIONS, TOTAL_TIME_SECONDS, type Question } from "./data";
+import { TOTAL_TIME_SECONDS, type Question } from "./data";
 import type { RunResult } from "./runWithJudge0";
 import { useTabPanic, useTabSwitchMonitor, useTimer } from "./hooks";
 import {
@@ -27,6 +27,7 @@ import {
 } from "./proctoring";
 import { requestDummyMedia } from "@/lib/proctoring/dummyMedia";
 import {
+    getLastCodeRun,
     runAttemptCode,
     saveAttemptAnswer,
     sendAttemptEvents,
@@ -37,6 +38,7 @@ import {
     type AttemptSnapshot,
     type CodeRunRequest,
     type CodeRunResponse,
+    type LastCodeRun,
     type SnapshotQuestion,
 } from "@/lib/api";
 import { useTheme } from "@/lib/contexts/ThemeContext";
@@ -71,6 +73,28 @@ type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
     prompt?: string;
     options?: Array<string | { label?: string; text?: string; value?: string }>;
     testCases?: { input?: string; stdin?: string; expected?: string; comparator?: string; comparatorConfig?: unknown }[];
+};
+
+// Coerce the server's formatted time/memory strings ("12ms", "1.20s", "256 KB",
+// "1.5 MB") back into raw ms / kb for cache parity with LastCodeRun.
+const parseTimeStringToMs = (v: string | undefined): number => {
+    if (!v) return 0;
+    const m = v.trim().match(/^([\d.]+)\s*(ms|s)$/i);
+    if (!m) return 0;
+    const n = parseFloat(m[1]);
+    return m[2].toLowerCase() === "s" ? Math.round(n * 1000) : Math.round(n);
+};
+
+const parseMemoryStringToKb = (v: string | undefined): number => {
+    if (!v) return 0;
+    const m = v.trim().match(/^([\d.]+)\s*(KB|MB|GB)$/i);
+    if (!m) return 0;
+    const n = parseFloat(m[1]);
+    switch (m[2].toUpperCase()) {
+        case "GB": return Math.round(n * 1024 * 1024);
+        case "MB": return Math.round(n * 1024);
+        default:   return Math.round(n);
+    }
 };
 
 const difficultyLabel = (value: unknown): Question["difficulty"] => {
@@ -632,10 +656,12 @@ function proctorEventKind(type: ProctoringCounter, meta?: Record<string, unknown
 const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mode = "main", enabledPlugins = [] }) => {
     const router = useRouter();
     const languageLabel = LANG_META[lang]?.label ?? lang;
+    // Questions come strictly from the server-issued attempt snapshot. We no
+    // longer ship a hardcoded fallback — without a snapshot the assessment
+    // cannot meaningfully start, so we render an error card below instead of
+    // silently showing dummy questions.
     const questions = useMemo(
-        () => snapshot?.questions?.length
-            ? snapshot.questions.map(mapSnapshotQuestion)
-            : QUESTIONS,
+        () => (snapshot?.questions?.length ? snapshot.questions.map(mapSnapshotQuestion) : []),
         [snapshot],
     );
     const backendAttemptId = snapshot?.attempt.id;
@@ -653,6 +679,10 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     const [statuses, setStatuses] = useState<Record<number, QStatus>>({});
     const [mcqAnswers, setMcqAnswers] = useState<Record<number, number>>({});
     const [answerPayloads, setAnswerPayloads] = useState<Record<number, AnswerPayload>>({});
+    // Last finished code_run per local question id, fetched on question change.
+    // Used to rehydrate the editor's output panel (test results, time, memory)
+    // when the candidate navigates back to a question they have already run.
+    const [lastRuns, setLastRuns] = useState<Record<number, LastCodeRun | null>>({});
     const [showSubmit, setShowSubmit] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState("");
@@ -1110,6 +1140,31 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         }
     }, [currentQ, questions.length]);
 
+    // Fetch the prior run for the active question on entry. We only do it
+    // once per (attempt, question) and skip when a fresh result is already
+    // cached in lastRuns from this session. The fetch silently swallows
+    // 404 (no run yet) and any error — the editor's output panel just shows
+    // the empty state in those cases.
+    useEffect(() => {
+        if (!backendAttemptId || !q?.id) return;
+        if (lastRuns[q.id] !== undefined) return;
+        const examQuestionId = examQuestionByLocalId[q.id];
+        if (!examQuestionId) return;
+        let cancelled = false;
+        void getLastCodeRun(backendAttemptId, examQuestionId)
+            .then((run) => {
+                if (cancelled) return;
+                setLastRuns((prev) => ({ ...prev, [q.id]: run }));
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setLastRuns((prev) => ({ ...prev, [q.id]: null }));
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [backendAttemptId, examQuestionByLocalId, lastRuns, q?.id]);
+
     const buildPayloadForQuestion = useCallback(
         (qId: number): AnswerPayload => ({
             ...(answerPayloads[qId] ?? {}),
@@ -1291,6 +1346,63 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 lastRunSummary: response.summary,
             };
             setAnswerPayloads((payloads) => ({ ...payloads, [qId]: payload }));
+
+            // Cache the fresh run so navigation away and back re-uses it
+            // without re-hitting the server. Mirrors the LastCodeRun shape so
+            // the editor reads it identically to the on-mount fetch.
+            setLastRuns((prev) => ({
+                ...prev,
+                [qId]: {
+                    runId: response.runId,
+                    mode: input.mode,
+                    language: input.language,
+                    entryFile: input.entryFile,
+                    summary: response.summary,
+                    timeMs: parseTimeStringToMs(response.time),
+                    memoryKb: parseMemoryStringToKb(response.memory),
+                    startedAt: new Date().toISOString(),
+                    finishedAt: new Date().toISOString(),
+                    testResults: (response.testResults ?? []).map((tr, i) => ({
+                        ordinal: i + 1,
+                        passed: tr.passed,
+                        actualStdout: tr.actual,
+                        expectedStdout: tr.expected,
+                        timeMs: parseTimeStringToMs(tr.time),
+                        memoryKb: 0,
+                    })),
+                },
+            }));
+
+            // Auto-mark the question as solved when a "Run tests" pass produces
+            // a green result. Persist the answer payload + state in the same
+            // call so a candidate who closes the tab right after a green run
+            // still has their solved status durable on the server. Skip if the
+            // candidate already manually flagged it solved (no-op) or flagged
+            // it (preserve their explicit choice).
+            const allPassed =
+                input.mode === "tests"
+                && response.type === "success"
+                && (response.testResults?.length ?? 0) > 0
+                && response.testResults!.every((t) => t.passed);
+            if (allPassed && statuses[qId] !== "solved" && statuses[qId] !== "flagged") {
+                setQuestionStatus(qId, "solved");
+                traceEvent("question.status_changed", 0, {
+                    state: "solved",
+                    action: "auto_solved_on_pass",
+                    runId: response.runId,
+                }, qId);
+                void persistQuestion(qId, "solved", payload).catch(() => setSaved(false));
+            } else if (statuses[qId] !== "solved" && statuses[qId] !== "flagged") {
+                // Non-green run still counts as an attempt — bump from
+                // unattempted/viewed to attempted so the SubmitModal reflects
+                // engagement.
+                setStatuses((s) => ({
+                    ...s,
+                    [qId]: s[qId] === "solved" || s[qId] === "flagged" ? s[qId] : "attempted",
+                }));
+                dirtyAnswersRef.current.add(qId);
+            }
+
             return {
                 type: response.type,
                 stdout: response.stdout,
@@ -1301,7 +1413,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 summary: response.summary,
             };
         },
-        [backendAttemptId, examQuestionByLocalId, mcqAnswers, traceEvent],
+        [backendAttemptId, examQuestionByLocalId, mcqAnswers, traceEvent, statuses, setQuestionStatus, persistQuestion],
     );
 
     const clearStorage = useCallback(() => {
@@ -1710,6 +1822,34 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         [q, runCodeOnServer],
     );
 
+    // Hard stop: no fallback questions. If the attempt snapshot didn't carry
+    // any (e.g. an assignment with zero coding questions, or a network failure
+    // during snapshot load), show a clear error rather than rendering dummy
+    // data. The candidate's "Back to Explore" goes through the same handler as
+    // the completion path.
+    if (questions.length === 0) {
+        return (
+            <div className="flex min-h-screen items-center justify-center px-6">
+                <div className="max-w-md rounded-2xl border border-red-300/30 bg-red-50/40 p-6 text-center dark:bg-red-950/20">
+                    <h2 className="mb-2 text-lg font-semibold text-red-700 dark:text-red-300">
+                        Assessment not available
+                    </h2>
+                    <p className="text-sm text-red-700/80 dark:text-red-200/80">
+                        No coding questions are loaded for this attempt. This usually means the
+                        attempt snapshot failed to load. Refresh the page or contact your admin.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleBackToExplore}
+                        className="mt-4 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                    >
+                        Back to Explore
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (submitted) {
         return (
             <CompletionScreen
@@ -1818,6 +1958,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                         initialEntryFile={answerPayloads[q.id]?.entryFile}
                         onWorkspaceChange={handleCurrentWorkspaceChange}
                         serverRun={runCurrentCodeOnServer}
+                        initialLastRun={lastRuns[q.id] ?? null}
                         findEnabled={editorFindEnabled}
                         suggestionsEnabled={editorSuggestionsEnabled}
                         lintsEnabled={editorLintsEnabled}

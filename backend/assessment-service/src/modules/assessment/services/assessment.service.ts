@@ -252,17 +252,11 @@ export class AssessmentService {
         hasDifficulty: false,  // tech_role_questions has NO difficulty column
         hasMode: false,        // tech_role_questions has NO mode column
       },
-      coding: {
-        attempts: 'tech_coding_attempts',
-        questions: 'tech_coding_questions',
-        junction: 'tech_coding_attempt_questions',
-        idCol: 'coding_question_id',
-        options: null,
-        attemptIdCol: 'coding_attempt_id',
-        catCol: 'difficulty',
-        hasDifficulty: true,
-        hasMode: false,
-      },
+      // Coding is intentionally absent. The tech_coding_* tables are retired;
+      // coding questions live in exam-engine (`questions` with plugin_slug
+      // 'assessment.coding') and are served from /admin/coding + a dedicated
+      // attempt flow. Anything calling into this service with module='coding'
+      // will fall through to the BadRequestException below.
     } as Record<string, any>;
   }
 

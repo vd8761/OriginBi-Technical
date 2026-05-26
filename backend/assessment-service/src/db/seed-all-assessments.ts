@@ -48,18 +48,9 @@ const aptitudeQuestions = [
     { subcategory: "Data Interpretation", difficulty: "hard", question_text: "Trains 300km apart, 60km/hr and 40km/hr. Meet time?", marks: 4, negative_marks: 1, explanation: "3 hours", options: [{ text: "2h", isCorrect: false }, { text: "3h", isCorrect: true }, { text: "4h", isCorrect: false }, { text: "5h", isCorrect: false }] },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CODING PROBLEMS (6)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const codingProblems = [
-    { title: "Two Sum", difficulty: "easy", marks: 10, time_limit_ms: 1000, memory_limit_kb: 256000, description: "Given array nums and target, return indices of two numbers that add up to target.", test_cases: 5 },
-    { title: "Reverse String", difficulty: "easy", marks: 10, time_limit_ms: 1000, memory_limit_kb: 256000, description: "Reverse a string given as array of characters.", test_cases: 4 },
-    { title: "Valid Parentheses", difficulty: "medium", marks: 15, time_limit_ms: 2000, memory_limit_kb: 256000, description: "Determine if input string with brackets is valid.", test_cases: 6 },
-    { title: "Merge Intervals", difficulty: "medium", marks: 15, time_limit_ms: 2000, memory_limit_kb: 256000, description: "Merge all overlapping intervals.", test_cases: 5 },
-    { title: "Longest Increasing Path", difficulty: "hard", marks: 20, time_limit_ms: 3000, memory_limit_kb: 256000, description: "Find length of longest increasing path in matrix.", test_cases: 5 },
-    { title: "Minimum Window Substring", difficulty: "hard", marks: 20, time_limit_ms: 3000, memory_limit_kb: 256000, description: "Find minimum window containing all characters from t.", test_cases: 5 },
-];
+// Coding seeding moved out of this service. Coding questions live in
+// exam-engine (`questions` with plugin_slug='assessment.coding'); seed those
+// via backend/exam-engine/scripts/reseed_coding.sql.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMMUNICATION (GRAMMAR) QUESTIONS (12)
@@ -183,27 +174,6 @@ async function seedAptitude(client: any, adminUserId: number) {
     console.log(`Seeded ${aptitudeQuestions.length} aptitude questions`);
 }
 
-async function seedCoding(client: any, adminUserId: number) {
-    const assessmentResult = await client.query(
-        `INSERT INTO tech_assessments (assessment_code, assessment_name, module_type, total_time_minutes, total_questions, shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value, status, created_by, created_at, updated_at)
-         VALUES ($1, $2, 'coding', $3, $4, $5, $6, $7, $8, 'active', $9, NOW(), NOW())
-         ON CONFLICT (assessment_code) DO UPDATE SET assessment_name = EXCLUDED.assessment_name, total_time_minutes = EXCLUDED.total_time_minutes, total_questions = EXCLUDED.total_questions, updated_at = NOW()
-         RETURNING assessment_id`,
-        ["TECH_CODE_001", "Coding Assessment", 90, codingProblems.length, false, false, false, null, adminUserId]
-    );
-    const assessmentId = assessmentResult.rows[0].assessment_id;
-
-    for (const problem of codingProblems) {
-        await client.query(
-            `INSERT INTO tech_coding_questions (assessment_id, problem_title, problem_statement, difficulty, marks, negative_marks, limits_json, allowed_languages_json, status, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, 0, $6, $7, 'active', NOW(), NOW())
-             ON CONFLICT DO NOTHING`,
-            [assessmentId, problem.title, problem.description, problem.difficulty, problem.marks, JSON.stringify({ time_limit_ms: problem.time_limit_ms, memory_limit_kb: problem.memory_limit_kb }), JSON.stringify(["python", "javascript", "java", "cpp"])]
-        );
-    }
-    console.log(`Seeded ${codingProblems.length} coding problems`);
-}
-
 async function seedCommunication(client: any, adminUserId: number) {
     await client.query("TRUNCATE tech_grammar_questions, tech_grammar_options CASCADE");
 
@@ -316,14 +286,13 @@ const run = async () => {
 
         console.log("\nSeeding all assessment data...\n");
         await seedAptitude(client, adminUserId);
-        await seedCoding(client, adminUserId);
         await seedCommunication(client, adminUserId);
         await seedMNC(client, adminUserId);
         await seedRole(client, adminUserId);
 
         await client.query("COMMIT");
         console.log("\nAll assessment data seeded successfully!");
-        console.log(`\nSummary: ${aptitudeQuestions.length} Aptitude, ${codingProblems.length} Coding, ${communicationQuestions.length} Communication, ${mncQuestions.length} MNC, ${roleQuestions.length} Role`);
+        console.log(`\nSummary: ${aptitudeQuestions.length} Aptitude, ${communicationQuestions.length} Communication, ${mncQuestions.length} MNC, ${roleQuestions.length} Role`);
     } catch (error) {
         await client.query("ROLLBACK");
         console.error("\nFailed to seed data:", (error as Error).message);

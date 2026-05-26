@@ -108,7 +108,6 @@ async function main() {
     { module: 'grammar',  table: 'tech_grammar_attempts',  idCol: 'grammar_attempt_id'  },
     { module: 'mnc',      table: 'tech_mnc_attempts',      idCol: 'mnc_attempt_id'      },
     { module: 'role',     table: 'tech_role_attempts',     idCol: 'role_attempt_id'     },
-    { module: 'coding',   table: 'tech_coding_attempts',   idCol: 'coding_attempt_id'   },
   ];
 
   interface CompletedAttempt {

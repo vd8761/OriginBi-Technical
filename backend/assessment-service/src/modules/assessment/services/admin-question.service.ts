@@ -1,7 +1,10 @@
 import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
-export type ModuleType = 'aptitude' | 'grammar' | 'communication' | 'coding' | 'mnc' | 'role';
+// Coding lives in a separate schema (exam-engine `questions` with plugin_slug
+// 'assessment.coding') and has its own admin surface at /admin/coding. The
+// MCQ-style modules here cover every other assessment type.
+export type ModuleType = 'aptitude' | 'grammar' | 'communication' | 'mnc' | 'role';
 
 interface ModuleConfig {
   readonly questionTable: string;
@@ -61,11 +64,6 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     optionsFk: 'grammar_question_id',
     categoryColumn: 'category',
     subcategoryColumn: 'subcategory',
-  },
-  coding: {
-    questionTable: 'tech_coding_questions',
-    idColumn: 'coding_question_id',
-    categoryColumn: 'category',
   },
   mnc: {
     questionTable: 'tech_mnc_questions',
@@ -144,19 +142,17 @@ export class AdminQuestionService {
     const response: any = {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: module === 'coding'
-        ? 'Coding'
-        : (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
-          ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
-             : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
-             : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
-             : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
-             : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
-             : row[config.categoryColumn])
-          : row[config.categoryColumn],
+      category: (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
+        ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
+           : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
+           : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
+           : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
+           : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
+           : row[config.categoryColumn])
+        : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
-      questionText: module === 'coding' ? (row.problem_title || row.problem_statement || '') : row.question_text,
+      questionText: row.question_text,
       explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
@@ -194,7 +190,7 @@ export class AdminQuestionService {
       conditions.push(`q.assessment_id = $${paramIdx++}`);
       params.push(assessmentId);
     }
-    if (category && module !== 'coding') {
+    if (category) {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
     }
@@ -206,17 +202,12 @@ export class AdminQuestionService {
       conditions.push(`q.status = $${paramIdx++}`);
       params.push(status);
     }
-    if (mode && module !== 'coding') {
+    if (mode) {
       conditions.push(`q.mode = $${paramIdx++}`);
       params.push(mode);
     }
     if (search) {
-      if (module === 'coding') {
-        conditions.push(`(LOWER(q.problem_title) LIKE $${paramIdx} OR LOWER(q.problem_statement) LIKE $${paramIdx})`);
-        paramIdx++;
-      } else {
-        conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
-      }
+      conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
       params.push(`%${search.toLowerCase()}%`);
     }
 
@@ -773,7 +764,6 @@ export class AdminQuestionService {
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
-                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM tech_coding_questions WHERE assessment_id = a.assessment_id AND status='active')
                   ELSE 0
                 END) as trial_questions_count,
                 (CASE 
@@ -781,7 +771,6 @@ export class AdminQuestionService {
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
                   WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
                   WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
-                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM tech_coding_questions WHERE assessment_id = a.assessment_id AND status='active')
                   ELSE 0
                 END) as main_questions_count
          FROM tech_assessments a ${where} ORDER BY a.assessment_id DESC`,
@@ -977,21 +966,9 @@ export class AdminQuestionService {
       );
 
       const updatedAssessment = rows[0];
-      if (updatedAssessment?.module_type === 'coding' && amount !== undefined) {
-        const pricingTable = await queryRunner.query(
-          `SELECT to_regclass('public.pricing_items') AS table_name`,
-        );
-        if (pricingTable?.[0]?.table_name) {
-          await queryRunner.query(
-            `UPDATE pricing_items
-             SET price_cents = $1,
-                 currency = COALESCE(currency, 'INR')
-             WHERE item_kind = 'coding_language'
-               AND item_ref LIKE 'coding:%'`,
-            [Math.round(Number(amount) * 100)],
-          );
-        }
-      }
+      // Coding assessments live in a separate service and table family; their
+      // pricing is managed there, not here.
+      void updatedAssessment;
 
       await queryRunner.commitTransaction();
       return rows[0];

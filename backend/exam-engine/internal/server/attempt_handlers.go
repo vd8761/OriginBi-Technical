@@ -238,14 +238,51 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	frozen, ok := frozenSnapshotFromAssignmentMetadata(assignmentMetadataBytes, examVersionID)
-	if !ok {
+	// For coding flows we need the attemptID before snapshot construction
+	// because per-attempt exam_questions rows FK back to attempts(id). Insert
+	// a stub attempts row first, run the builder (which inserts the
+	// exam_questions rows in the same tx), then UPDATE the fingerprint.
+	now := time.Now().UTC()
+	attemptID := uuid.New()
+
+	frozen, snapOk := frozenSnapshotFromAssignmentMetadata(assignmentMetadataBytes, examVersionID)
+	codingLanguageSlug := codingLanguageSlugFromRef(assignmentRef)
+	var spill spilloverReport
+	var spillBuilt bool
+
+	if !snapOk && codingLanguageSlug != "" {
+		// Coding path: stub the attempt first so the builder's per-attempt
+		// exam_questions inserts satisfy their FK.
+		deadlinePlaceholder := now.Add(time.Duration(totalSeconds) * time.Second)
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO attempts (
+			    id, assignment_id, candidate_user_id, exam_version_id,
+			    status, started_at, deadline_at, time_remaining_ms, last_seen_at,
+			    fingerprint
+			)
+			VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, $5, '{}'::jsonb)
+		`, attemptID, assignmentID, principal.UserID, examVersionID, now, deadlinePlaceholder, totalSeconds*1000); err != nil {
+			writeError(w, http.StatusInternalServerError, "attempt create failed")
+			return
+		}
+		frozen, spill, err = s.buildCodingFrozenSnapshot(ctx, tx, examVersionID, attemptID, codingLanguageSlug, totalSeconds)
+		if err != nil {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":    "coding bank under-stocked",
+				"detail":   err.Error(),
+				"language": codingLanguageSlug,
+			})
+			return
+		}
+		spillBuilt = true
+	} else if !snapOk {
 		frozen, err = s.buildFrozenSnapshot(ctx, tx, examVersionID, assignmentRef, totalSeconds)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "snapshot build failed")
 			return
 		}
 	}
+
 	if frozen.TotalTimeSeconds > 0 {
 		totalSeconds = frozen.TotalTimeSeconds
 	}
@@ -255,27 +292,49 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now().UTC()
 	deadline := now.Add(time.Duration(totalSeconds) * time.Second)
-	attemptID := uuid.New()
-	_, err = tx.Exec(ctx, `
-		INSERT INTO attempts (
-		    id, assignment_id, candidate_user_id, exam_version_id,
-		    status, started_at, deadline_at, time_remaining_ms, last_seen_at,
-		    fingerprint
-		)
-		VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, $5, $8::jsonb)
-	`, attemptID, assignmentID, principal.UserID, examVersionID, now, deadline, totalSeconds*1000, fingerprint)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "attempt create failed")
-		return
+	if codingLanguageSlug != "" && !snapOk {
+		// Coding path: row already exists, just fill in the snapshot and
+		// final deadline. The time may have shifted if the language config
+		// has a time_seconds_override.
+		if _, err := tx.Exec(ctx, `
+			UPDATE attempts
+			SET fingerprint = $1::jsonb,
+			    deadline_at = $2,
+			    time_remaining_ms = $3
+			WHERE id = $4
+		`, fingerprint, deadline, totalSeconds*1000, attemptID); err != nil {
+			writeError(w, http.StatusInternalServerError, "attempt update failed")
+			return
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO attempts (
+			    id, assignment_id, candidate_user_id, exam_version_id,
+			    status, started_at, deadline_at, time_remaining_ms, last_seen_at,
+			    fingerprint
+			)
+			VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7, $5, $8::jsonb)
+		`, attemptID, assignmentID, principal.UserID, examVersionID, now, deadline, totalSeconds*1000, fingerprint); err != nil {
+			writeError(w, http.StatusInternalServerError, "attempt create failed")
+			return
+		}
 	}
-	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "attempt_started", 0, nil, map[string]any{
+
+	startedEvent := map[string]any{
 		"assignmentRef": assignmentRef,
 		"language":      frozen.Language,
 		"questionCount": len(frozen.Questions),
 		"deadlineAt":    deadline,
-	}); err != nil {
+	}
+	if spillBuilt {
+		startedEvent["bucketTargets"] = spill.Targets
+		startedEvent["bucketDelivered"] = spill.Delivered
+		if len(spill.Borrows) > 0 {
+			startedEvent["spillover"] = spill.Borrows
+		}
+	}
+	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "attempt_started", 0, nil, startedEvent); err != nil {
 		writeError(w, http.StatusInternalServerError, "trace write failed")
 		return
 	}
@@ -1460,6 +1519,12 @@ func (s *Server) gradeCodingAnswerTx(ctx context.Context, tx pgx.Tx, ans answerF
 		return 0, nil, err
 	}
 
+	// Each test case carries a weight (default 1 from migration 001 schema).
+	// With default weights, PartialCredit gives every test an equal share of
+	// max_score: e.g. an Easy question worth 10 pts with 2 tests = 5 pts per
+	// test; a Hard question worth 30 pts with 6 tests = 5 pts per test. To
+	// weight some tests more (e.g. edge cases worth 2× others), admins set
+	// question_test_cases.weight via the test-case API.
 	rows, err := tx.Query(ctx, `
 		SELECT r.passed, COALESCE(tc.weight, 1)::float8
 		FROM code_run_test_results r

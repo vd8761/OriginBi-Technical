@@ -4,7 +4,6 @@ export * from "./UserEntity";
 export * from "./assessment";
 export * from "./aptitude";
 export * from "./grammar";
-export * from "./coding";
 export * from "./mnc";
 export * from "./role";
 export * from "./TechAssessmentPurchase";

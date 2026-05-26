@@ -45,7 +45,10 @@ export class AdaptiveBlueprintService {
     // fall back to domain. The block generator also uses 'domain' as its categoryCol
     // which is consistent — both resolve to the same value when category IS NULL.
     role:          { table: 'tech_role_questions',     catCol: 'domain',      subCol: 'domain' },
-    coding:        { table: 'tech_coding_questions',   catCol: 'category',    subCol: 'category' },
+    // coding is intentionally absent — coding questions live in exam-engine
+    // (`questions` with plugin_slug='assessment.coding') and have their own
+    // dedicated bank UI; the adaptive blueprint engine here covers MCQ modules
+    // only.
   };
 
   constructor(

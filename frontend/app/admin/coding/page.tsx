@@ -9,20 +9,25 @@ import {
   Download,
   Plus,
   Search,
+  Trash2,
   Upload,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
+import BulkImportModal from "@/components/admin/coding/BulkImportModal";
 import {
   Badge,
   Card,
   EmptyState,
   ErrorState,
   SegmentedToggle,
+  useConfirm,
 } from "@/components/admin/ui";
 import CustomSelect from "@/components/ui/CustomSelect";
 import { Switch } from "@/components/ui/Switch";
 import {
+  archiveAdminQuestion,
+  deleteAdminQuestion,
   listAdminQuestions,
   setAdminQuestionArchived,
   updateAdminQuestion,
@@ -31,13 +36,19 @@ import {
 
 const PAGE_SIZE = 25;
 
-function difficultyLabel(n: number) {
-  return ["—", "Easy", "Easy+", "Medium", "Hard", "Hard+"][n] ?? "?";
+// The schema allows difficulty 1..5 but the product surface is three buckets:
+// 1–2 = Easy, 3–4 = Medium, 5 = Hard. 0 / negative shows as "—" so unset
+// legacy rows still render without crashing the table.
+function difficultyLabel(n: number): string {
+  if (n <= 0) return "—";
+  if (n <= 2) return "Easy";
+  if (n <= 4) return "Medium";
+  return "Hard";
 }
 
 function difficultyTone(n: number): "green" | "amber" | "red" {
   if (n <= 2) return "green";
-  if (n === 3) return "amber";
+  if (n <= 4) return "amber";
   return "red";
 }
 
@@ -53,6 +64,20 @@ function getBodyArray(q: AdminQuestion, key: string): string[] {
 
 function getQuestionMode(q: AdminQuestion): "trial" | "main" {
   return getBodyText(q, "mode", "main") === "trial" ? "trial" : "main";
+}
+
+// FilterField wraps a control in the same eyebrow-label rhythm CustomSelect
+// uses so unlabeled controls (segmented toggle, search input) line up with
+// labeled ones in the filter row.
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="w-full">
+      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-white/40 ml-1 block mb-1.5">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
 }
 
 function downloadBlob(filename: string, contents: string, mime: string) {
@@ -92,6 +117,8 @@ function CodingListInner() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [pendingToggle, setPendingToggle] = useState<Record<string, boolean>>({});
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const confirm = useConfirm();
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -200,6 +227,55 @@ function CodingListInner() {
     }
   };
 
+  const onDelete = async (q: AdminQuestion) => {
+    // Try a hard delete first. If the question has been pulled into an exam
+    // or attempted, the server returns in_use and we fall back to a confirm-
+    // to-archive flow so the admin still has a way to hide the row.
+    const confirmed = await confirm({
+      title: "Delete this question?",
+      message: `“${q.title}” and its test cases will be permanently removed. This can't be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    setPendingToggle((p) => ({ ...p, [q.id + ":del"]: true }));
+    try {
+      const result = await deleteAdminQuestion(q.id);
+      if (result.status === "deleted") {
+        setQuestions((curr) => curr.filter((x) => x.id !== q.id));
+        return;
+      }
+      if (result.status === "in_use") {
+        const parts: string[] = [];
+        if (result.examCount > 0) parts.push(`${result.examCount} exam${result.examCount === 1 ? "" : "s"}`);
+        if (result.attemptCount > 0) parts.push(`${result.attemptCount} attempt${result.attemptCount === 1 ? "" : "s"}`);
+        const usage = parts.join(" and ") || "active exams or attempts";
+        const archiveOk = await confirm({
+          title: "Question is in use",
+          message: `This problem is referenced by ${usage}, so it can't be hard-deleted. Archive it instead — candidates won't see it on new exams.`,
+          confirmLabel: "Archive",
+          cancelLabel: "Cancel",
+          variant: "warning",
+        });
+        if (!archiveOk) return;
+        await archiveAdminQuestion(q.id);
+        setQuestions((curr) =>
+          curr.map((x) => (x.id === q.id ? { ...x, isArchived: true } : x)),
+        );
+      }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setPendingToggle((p) => {
+        const next = { ...p };
+        delete next[q.id + ":del"];
+        return next;
+      });
+    }
+  };
+
   const onExport = () => {
     const exportSet = filtered.map((q) => ({
       title: q.title,
@@ -226,9 +302,13 @@ function CodingListInner() {
           </p>
         </div>
         <div className="admin-row">
-          <Link href="/admin/coding/bulk-import" className="admin-btn admin-btn-secondary">
+          <button
+            type="button"
+            onClick={() => setBulkImportOpen(true)}
+            className="admin-btn admin-btn-secondary"
+          >
             <Upload size={14} /> Bulk Import
-          </Link>
+          </button>
           <button type="button" onClick={onExport} className="admin-btn admin-btn-secondary" disabled={filtered.length === 0}>
             <Download size={14} /> Export
           </button>
@@ -244,70 +324,82 @@ function CodingListInner() {
             e.preventDefault();
             reload();
           }}
-          className="admin-control-row"
-          style={{ flexWrap: "wrap", gap: 12 }}
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
-          <div className="admin-row" style={{ flexWrap: "wrap", gap: 12, alignItems: "flex-end", flex: 1 }}>
-            <SegmentedToggle
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: "trial", label: "Trial / Sample" },
-                { value: "main", label: "Main" },
-              ]}
-            />
-            <div style={{ width: 180 }}>
-              <CustomSelect
-                label="Language"
-                value={language}
-                onChange={setLanguage}
-                options={[{ value: "all", label: "All languages" }, ...allLanguages.map((l) => ({ value: l, label: l }))]}
-              />
-            </div>
-            <div style={{ width: 180 }}>
-              <CustomSelect
-                label="Topic"
-                value={topic}
-                onChange={setTopic}
-                options={[{ value: "all", label: "All topics" }, ...allTopics.map((t) => ({ value: t, label: t }))]}
-              />
-            </div>
-            <div style={{ width: 160 }}>
-              <CustomSelect
-                label="Difficulty"
-                value={difficulty}
-                onChange={setDifficulty}
+          {/* Every filter sits in a labeled column so the controls share a
+              common baseline; the segmented toggle and search input each get
+              an explicit eyebrow label to match the CustomSelect rhythm. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "auto repeat(3, minmax(160px, 1fr)) minmax(220px, 1.5fr) auto",
+              alignItems: "end",
+              gap: 12,
+            }}
+          >
+            <FilterField label="Pool">
+              <SegmentedToggle
+                value={mode}
+                onChange={setMode}
                 options={[
-                  { value: "0", label: "Any difficulty" },
-                  { value: "1", label: "Easy" },
-                  { value: "2", label: "Easy+" },
-                  { value: "3", label: "Medium" },
-                  { value: "4", label: "Hard" },
-                  { value: "5", label: "Hard+" },
+                  { value: "trial", label: "Trial / Sample" },
+                  { value: "main", label: "Main" },
                 ]}
               />
-            </div>
-            <label className="admin-search" style={{ width: 280 }}>
-              <Search size={14} />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search problems…"
-              />
-            </label>
-            <label className="admin-row" style={{ fontSize: 12, color: "var(--admin-fg-3)", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={includeArchived}
-                onChange={(e) => setIncludeArchived(e.target.checked)}
-                style={{ accentColor: "var(--admin-green)" }}
-              />
-              Show archived
-            </label>
+            </FilterField>
+            <CustomSelect
+              label="Language"
+              value={language}
+              onChange={setLanguage}
+              options={[{ value: "all", label: "All languages" }, ...allLanguages.map((l) => ({ value: l, label: l }))]}
+            />
+            <CustomSelect
+              label="Topic"
+              value={topic}
+              onChange={setTopic}
+              options={[{ value: "all", label: "All topics" }, ...allTopics.map((t) => ({ value: t, label: t }))]}
+            />
+            <CustomSelect
+              label="Difficulty"
+              value={difficulty}
+              onChange={setDifficulty}
+              options={[
+                { value: "0", label: "Any difficulty" },
+                { value: "1", label: "Easy" },
+                { value: "3", label: "Medium" },
+                { value: "5", label: "Hard" },
+              ]}
+            />
+            <FilterField label="Search">
+              <label className="admin-search" style={{ height: 44, width: "100%" }}>
+                <Search size={14} />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search problems…"
+                />
+              </label>
+            </FilterField>
+            <button
+              type="submit"
+              className="admin-btn admin-btn-secondary"
+              style={{ minHeight: 44, alignSelf: "end" }}
+            >
+              <Search size={14} /> Search
+            </button>
           </div>
-          <button type="submit" className="admin-btn admin-btn-secondary">
-            <Search size={14} /> Search
-          </button>
+          <label
+            className="admin-row"
+            style={{ fontSize: 12, color: "var(--admin-fg-3)", cursor: "pointer", gap: 8 }}
+          >
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(e) => setIncludeArchived(e.target.checked)}
+              style={{ accentColor: "var(--admin-green)" }}
+            />
+            Show archived
+          </label>
         </form>
       </Card>
 
@@ -385,8 +477,20 @@ function CodingListInner() {
                             onClick={() => toggleArchived(q, !active)}
                             disabled={pendingToggle[q.id]}
                             title={active ? "Archive" : "Restore"}
+                            aria-label={active ? "Archive" : "Restore"}
                           >
-                            {active ? <Archive size={13} /> : <ArchiveRestore size={13} />}
+                            {active ? <Archive size={14} /> : <ArchiveRestore size={14} />}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-ghost"
+                            onClick={() => void onDelete(q)}
+                            disabled={pendingToggle[q.id + ":del"]}
+                            title="Delete"
+                            aria-label="Delete"
+                            style={{ color: "var(--admin-red, #ed2f34)" }}
+                          >
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -447,6 +551,16 @@ function CodingListInner() {
           ))}
         </div>
       )}
+
+      <BulkImportModal
+        open={bulkImportOpen}
+        onClose={() => setBulkImportOpen(false)}
+        onImported={() => {
+          // Refresh the list whenever the modal reports a successful import
+          // so the new questions show up immediately without a manual reload.
+          reload();
+        }}
+      />
     </div>
   );
 }

@@ -66,8 +66,6 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
       };
       return roleQ as any;
     }
-    case "coding":
-      return { ...common, category: q.category } as any;
     default:
       return common as any;
   }

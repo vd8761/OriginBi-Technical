@@ -33,42 +33,30 @@ const STORAGE_KEY = "completed_assessments";
 const NOTIFICATIONS_KEY = "assessment_notifications";
 const PROGRESS_KEY = "assessment_progress";
 
+function readStoredJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+
+  const saved = localStorage.getItem(key);
+  if (!saved) return fallback;
+
+  try {
+    return JSON.parse(saved) as T;
+  } catch (e) {
+    console.error(`Failed to parse ${key}`, e);
+    return fallback;
+  }
+}
+
 export function useAssessmentTracker() {
-  const [completed, setCompleted] = useState<CompletedAssessment[]>([]);
-  const [notifications, setNotifications] = useState<AssessmentNotification[]>([]);
-  const [inProgress, setInProgress] = useState<Record<string, { token: string; startedAt: string }>>({});
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setCompleted(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse completed assessments", e);
-      }
-    }
-
-    const notifs = localStorage.getItem(NOTIFICATIONS_KEY);
-    if (notifs) {
-      try {
-        setNotifications(JSON.parse(notifs));
-      } catch (e) {
-        console.error("Failed to parse notifications", e);
-      }
-    }
-
-    const prog = localStorage.getItem(PROGRESS_KEY);
-    if (prog) {
-      try {
-        setInProgress(JSON.parse(prog));
-      } catch (e) {
-        console.error("Failed to parse progress", e);
-      }
-    }
-  }, []);
+  const [completed, setCompleted] = useState<CompletedAssessment[]>(() =>
+    readStoredJson<CompletedAssessment[]>(STORAGE_KEY, [])
+  );
+  const [notifications, setNotifications] = useState<AssessmentNotification[]>(() =>
+    readStoredJson<AssessmentNotification[]>(NOTIFICATIONS_KEY, [])
+  );
+  const [inProgress, setInProgress] = useState<Record<string, { token: string; startedAt: string }>>(() =>
+    readStoredJson<Record<string, { token: string; startedAt: string }>>(PROGRESS_KEY, {})
+  );
 
   // Save to localStorage when changed
   useEffect(() => {
@@ -85,63 +73,6 @@ export function useAssessmentTracker() {
     if (typeof window === "undefined") return;
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(inProgress));
   }, [inProgress]);
-
-  const markAssessmentComplete = useCallback((
-    assessmentCode: string, 
-    result: { 
-      totalScore: number; 
-      correctCount: number; 
-      wrongCount: number;
-      timeTakenSeconds: number;
-    }
-  ) => {
-    const exam = EXAMS.find(e => e.id === assessmentCode);
-    if (!exam) return;
-
-    const completedItem: CompletedAssessment = {
-      assessmentCode,
-      assessmentName: exam.title,
-      completedAt: new Date().toISOString(),
-      score: result.totalScore,
-      correctCount: result.correctCount,
-      wrongCount: result.wrongCount,
-      totalQuestions: result.correctCount + result.wrongCount,
-      timeTakenSeconds: result.timeTakenSeconds,
-      status: "completed",
-    };
-
-    setCompleted(prev => {
-      // Remove any existing entry for this assessment
-      const filtered = prev.filter(p => p.assessmentCode !== assessmentCode);
-      return [...filtered, completedItem];
-    });
-
-    // Remove from in-progress
-    setInProgress(prev => {
-      const { [assessmentCode]: _, ...rest } = prev;
-      return rest;
-    });
-
-    // Add completion notification
-    const notification: AssessmentNotification = {
-      id: `complete-${assessmentCode}-${Date.now()}`,
-      type: "completed",
-      title: "Assessment Completed!",
-      message: `You scored ${result.totalScore}% on ${exam.title}`,
-      assessmentCode,
-      timestamp: new Date().toISOString(),
-      read: false,
-      action: {
-        label: "View Results",
-        href: "/dashboard",
-      },
-    };
-
-    setNotifications(prev => [notification, ...prev]);
-
-    // Generate suggestion for next assessment
-    generateNextSuggestion(assessmentCode);
-  }, []);
 
   const generateNextSuggestion = useCallback((justCompletedCode: string) => {
     const completedCodes = new Set(completed.map(c => c.assessmentCode));
@@ -198,6 +129,64 @@ export function useAssessmentTracker() {
       }
     }
   }, [completed]);
+
+  const markAssessmentComplete = useCallback((
+    assessmentCode: string,
+    result: {
+      totalScore: number;
+      correctCount: number;
+      wrongCount: number;
+      timeTakenSeconds: number;
+    }
+  ) => {
+    const exam = EXAMS.find(e => e.id === assessmentCode);
+    if (!exam) return;
+
+    const completedItem: CompletedAssessment = {
+      assessmentCode,
+      assessmentName: exam.title,
+      completedAt: new Date().toISOString(),
+      score: result.totalScore,
+      correctCount: result.correctCount,
+      wrongCount: result.wrongCount,
+      totalQuestions: result.correctCount + result.wrongCount,
+      timeTakenSeconds: result.timeTakenSeconds,
+      status: "completed",
+    };
+
+    setCompleted(prev => {
+      // Remove any existing entry for this assessment
+      const filtered = prev.filter(p => p.assessmentCode !== assessmentCode);
+      return [...filtered, completedItem];
+    });
+
+    // Remove from in-progress
+    setInProgress(prev => {
+      const next = { ...prev };
+      delete next[assessmentCode];
+      return next;
+    });
+
+    // Add completion notification
+    const notification: AssessmentNotification = {
+      id: `complete-${assessmentCode}-${Date.now()}`,
+      type: "completed",
+      title: "Assessment Completed!",
+      message: `You scored ${result.totalScore}% on ${exam.title}`,
+      assessmentCode,
+      timestamp: new Date().toISOString(),
+      read: false,
+      action: {
+        label: "View Results",
+        href: "/dashboard",
+      },
+    };
+
+    setNotifications(prev => [notification, ...prev]);
+
+    // Generate suggestion for next assessment
+    generateNextSuggestion(assessmentCode);
+  }, [generateNextSuggestion]);
 
   const startAssessment = useCallback((assessmentCode: string, token: string) => {
     setInProgress(prev => ({
