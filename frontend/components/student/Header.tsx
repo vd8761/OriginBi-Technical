@@ -154,12 +154,25 @@ const Header: React.FC<HeaderProps> = ({
         };
 
         const checkCompleted = async () => {
-            // Check localStorage
+            // Check completed-assessments in localStorage
             const completedSet = readSet("originbi:completed-assessments");
             if (completedSet.size > 0) {
                 if (active) setHasCompletedAny(true);
                 return;
             }
+
+            // Check assessment-results in localStorage
+            try {
+                const resultsRaw = window.localStorage.getItem("originbi:assessment-results");
+                if (resultsRaw) {
+                    const results = JSON.parse(resultsRaw);
+                    if (results && typeof results === "object" && Object.keys(results).length > 0) {
+                        if (active) setHasCompletedAny(true);
+                        return;
+                    }
+                }
+            } catch {}
+
             // Check assignments (specifically for coding or others)
             try {
                 const data = await listAssignments();
@@ -179,10 +192,12 @@ const Header: React.FC<HeaderProps> = ({
         checkCompleted();
         window.addEventListener("storage", checkCompleted);
         window.addEventListener("originbi:completed-changed", checkCompleted);
+        window.addEventListener("originbi:results-changed", checkCompleted);
         return () => {
             active = false;
             window.removeEventListener("storage", checkCompleted);
             window.removeEventListener("originbi:completed-changed", checkCompleted);
+            window.removeEventListener("originbi:results-changed", checkCompleted);
         };
     }, []);
     

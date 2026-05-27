@@ -2,7 +2,7 @@
 
 import React, { useState, FormEvent, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { updatePassword } from 'aws-amplify/auth';
+import { updatePassword, signIn, confirmSignIn } from 'aws-amplify/auth';
 import { useRouter } from 'next/navigation';
 import { EyeIcon, EyeOffIcon } from '../icons';
 import Logo from '../ui/Logo';
@@ -54,6 +54,11 @@ const FirstTimeResetForm: React.FC = () => {
         setError('');
         setSuccessMessage('');
 
+        if (!email) {
+            setError('Email address is missing. Please log in again.');
+            return;
+        }
+
         if (!oldPassword) {
             setError('Current password is required.');
             return;
@@ -78,15 +83,32 @@ const FirstTimeResetForm: React.FC = () => {
         try {
             setIsSubmitting(true);
 
-            // 1. Update Password in Cognito
-            await updatePassword({ oldPassword, newPassword });
+            // 1. Sign in client-side using Amplify with the current (temporary) password.
+            // This establishes an active Cognito session in client-side Amplify.
+            const signInResult = await signIn({
+                username: email,
+                password: oldPassword,
+            });
 
-            // 2. Call Backend to update hasChangedPassword flag via our API helper
-            if (email) {
-                await completeFirstLogin(email).catch((err) => {
-                    console.error('Failed to update first login status on backend', err);
+            const nextStep = signInResult.nextStep;
+
+            if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+                // 2a. User is in FORCE_CHANGE_PASSWORD state; complete the challenge with the new password.
+                await confirmSignIn({
+                    challengeResponse: newPassword,
                 });
+            } else if (nextStep.signInStep === 'DONE') {
+                // 2b. If they are already fully signed in (no challenge), we can update
+                // the password securely using updatePassword since they are now client-side authenticated.
+                await updatePassword({ oldPassword, newPassword });
+            } else {
+                throw new Error(`Unexpected authentication step: ${nextStep.signInStep}`);
             }
+
+            // 3. Call Backend to update hasChangedPassword flag via our API helper
+            await completeFirstLogin(email).catch((err) => {
+                console.error('Failed to update first login status on backend', err);
+            });
 
             setSuccessMessage('Your password has been changed successfully.');
 

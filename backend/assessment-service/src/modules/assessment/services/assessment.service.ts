@@ -956,6 +956,7 @@ export class AssessmentService {
     const isRole = moduleType === 'role';
     const attemptId = attempt[config.attemptIdCol];
     const correctOptCol = isCoding ? `NULL as correct_option_id` : `q.correct_option_id`;
+    const selectedOptionIdCol = isCoding ? `NULL::bigint as selected_option_id` : `aq.selected_option_id`;
     const taskTypeCol = isGrammar ? `q.task_type` : `NULL as task_type`;
     const roleTypeCol = isRole ? `q.question_type` : `NULL as question_type`;
     const questionMetadataCol = (!isCoding && !isGrammar)
@@ -979,7 +980,7 @@ export class AssessmentService {
               aq.display_order,
               ${blockNumberCol},
               aq.${config.idCol} AS question_id,
-              aq.selected_option_id,
+              ${selectedOptionIdCol},
               ${answerTextCol},
               ${answerAudioCol},
               ${submittedCodeCol},
@@ -1181,7 +1182,7 @@ export class AssessmentService {
       if (questionKind === 'msq') {
         const correctChoices = Array.isArray(review.correctOptionId) ? review.correctOptionId : [];
         review.correctAnswerText = correctChoices
-          .map((id) => optionTextById.get(id) ?? id)
+          .map((id: string) => optionTextById.get(id) ?? id)
           .join(', ');
       } else if (questionKind === 'numerical') {
         review.correctAnswerText = String((questionMetadata as any).correctAnswer ?? '');

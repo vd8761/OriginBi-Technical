@@ -242,9 +242,10 @@ export class AdaptiveBlockService {
       const totalBlocks = Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 1);
       const qLimit = Number(row.question_limit ?? 0);
 
-      // 2. Resolve attempt + used IDs
+      // 2. Resolve attempt + used IDs and texts
       let attemptId: number | null = null;
       let usedIds: number[] = [];
+      let usedTexts: string[] = [];
       if (req.attemptToken) {
         const ar = await qr.query(
           `SELECT ${cfg.attemptIdCol} AS aid FROM ${cfg.attempts} WHERE attempt_token=$1`,
@@ -253,10 +254,14 @@ export class AdaptiveBlockService {
         if (ar.length) {
           attemptId = Number(ar[0].aid);
           const ur = await qr.query(
-            `SELECT ${cfg.idCol} AS qid FROM ${cfg.junction} WHERE ${cfg.attemptIdCol}=$1`,
+            `SELECT aq.${cfg.idCol} AS qid, q.question_text
+             FROM ${cfg.junction} aq
+             JOIN ${cfg.questions} q ON q.${cfg.idCol} = aq.${cfg.idCol}
+             WHERE aq.${cfg.attemptIdCol}=$1`,
             [attemptId],
           );
           usedIds = ur.map((r: any) => Number(r.qid));
+          usedTexts = ur.map((r: any) => String(r.question_text || '').trim());
         }
       }
 
@@ -288,7 +293,7 @@ export class AdaptiveBlockService {
         : 'easy';
 
       // 6. Fetch questions (with fallback)
-      const questions = await this.fetchQuestions(qr, cfg, req.assessmentId, targetDiff, desiredCount, req.mode, usedIds, modeExists);
+      const questions = await this.fetchQuestions(qr, cfg, req.assessmentId, targetDiff, desiredCount, req.mode, usedIds, usedTexts, modeExists);
       if (!questions.length) throw new BadRequestException(`No questions available for block ${req.blockNumber}`);
 
       // 7. Insert into junction table (only current block — previous blocks already locked)
@@ -868,6 +873,7 @@ export class AdaptiveBlockService {
     count: number,
     mode: string,
     excludeIds: number[],
+    excludeTexts: string[],
     modeExists: boolean,
   ): Promise<BlockQuestion[]> {
     if (count <= 0) return [];
@@ -896,6 +902,8 @@ export class AdaptiveBlockService {
         params.push(exclude);
         w += ` AND NOT (q.${cfg.idCol}=ANY($${params.length}::bigint[]))`;
       }
+      params.push(excludeTexts);
+      w += ` AND NOT (TRIM(q.question_text)=ANY($${params.length}::text[]))`;
       return w;
     };
 
@@ -915,8 +923,8 @@ export class AdaptiveBlockService {
         `SELECT q.${cfg.idCol}, q.question_text, q.difficulty,
                 q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
                 json_agg(
-                  json_build_object('option_id', o.option_id, 'option_text', o.option_text)
-                  ORDER BY o.option_id
+                   json_build_object('option_id', o.option_id, 'option_text', o.option_text)
+                   ORDER BY o.option_id
                 ) FILTER (WHERE o.option_id IS NOT NULL) AS options
          FROM ${cfg.questions} q
          LEFT JOIN ${cfg.options} o ON o.${cfg.idCol} = q.${cfg.idCol}
@@ -962,6 +970,7 @@ export class AdaptiveBlockService {
         if (picked.length) {
           results.push(...picked);
           usedIds.push(Number(picked[0].id));
+          excludeTexts.push(String(picked[0].text || '').trim());
         }
       }
     }
@@ -971,7 +980,10 @@ export class AdaptiveBlockService {
     if (remaining > 0) {
       const fill = await fetchBatch(targetDiff, remaining, usedIds);
       results.push(...fill);
-      fill.forEach(q => usedIds.push(Number(q.id)));
+      fill.forEach(q => {
+        usedIds.push(Number(q.id));
+        excludeTexts.push(String(q.text || '').trim());
+      });
     }
 
     // ── Phase 3: fallback difficulties if still short ──────────────────────
@@ -980,7 +992,10 @@ export class AdaptiveBlockService {
         if (results.length >= count) break;
         const fill = await fetchBatch(fd, count - results.length, usedIds);
         results.push(...fill);
-        fill.forEach(q => usedIds.push(Number(q.id)));
+        fill.forEach(q => {
+          usedIds.push(Number(q.id));
+          excludeTexts.push(String(q.text || '').trim());
+        });
       }
     }
 

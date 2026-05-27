@@ -432,8 +432,28 @@ export const saveAssessmentResultToStorage = (result: AssessmentResult) => {
   const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
   existingResults[result.assessmentId] = result;
   localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
+  
+  try {
+    const rawCompletions = localStorage.getItem("originbi:completed-assessments");
+    let completions: string[] = [];
+    if (rawCompletions) {
+      const parsed = JSON.parse(rawCompletions);
+      if (Array.isArray(parsed)) {
+        completions = parsed;
+      }
+    }
+    if (!completions.includes(result.assessmentId)) {
+      completions.push(result.assessmentId);
+      localStorage.setItem("originbi:completed-assessments", JSON.stringify(completions));
+      window.dispatchEvent(new CustomEvent("originbi:completed-changed"));
+    }
+  } catch (e) {
+    console.error("[saveAssessmentResultToStorage] Failed to update completed-assessments:", e);
+  }
+
   window.dispatchEvent(new CustomEvent("originbi:results-changed"));
 };
+
 
 export const unlockAssessmentForDashboard = (assessmentId: AssessmentId) => {
   if (typeof window === "undefined") return;
