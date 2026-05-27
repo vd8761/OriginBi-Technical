@@ -52,7 +52,30 @@ backend/exam-engine/.gocache/
 # build output
 dist/
 **/dist/
+**/.next/
+**/build/
+**/coverage/
 
-.logs/
-.claude/
+# IDEs and local assistant state
+.idea/
 .vscode/
+.claude/
+**/.claude/
+
+# Local logs and generated reports
+.logs/
+logs/
+*.log
+eslint-report*.txt
+backend/assessment-service/detailed-audit*.json
+
+# Service build binaries
+backend/exam-engine/server
+backend/tech-assessment-engine/tech-engine
+
+# Local office/archive artifacts
+*.doc
+*.docx
+*.zip
+*.7z
+*.rar
