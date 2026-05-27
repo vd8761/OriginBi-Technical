@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ["framer-motion", "lucide-react"],
-    turbopack: {},
+    // turbopack: {},
   },
   async rewrites() {
     return [
