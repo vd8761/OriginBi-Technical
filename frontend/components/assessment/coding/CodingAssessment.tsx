@@ -1344,6 +1344,25 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 try {
                     await submitAttempt(attemptId, answers);
                     setSubmitPhase("succeeded");
+                    
+                    try {
+                        const rawCompletions = window.localStorage.getItem("originbi:completed-assessments");
+                        let completions: string[] = [];
+                        if (rawCompletions) {
+                            const parsed = JSON.parse(rawCompletions);
+                            if (Array.isArray(parsed)) {
+                                completions = parsed;
+                            }
+                        }
+                        if (!completions.includes("coding")) {
+                            completions.push("coding");
+                            window.localStorage.setItem("originbi:completed-assessments", JSON.stringify(completions));
+                            window.dispatchEvent(new CustomEvent("originbi:completed-changed"));
+                        }
+                    } catch (e) {
+                        console.error("[CodingAssessment] Failed to update completed-assessments:", e);
+                    }
+
                     traceEvent("attempt.submit_succeeded", 0, {
                         answerCount: answers.length,
                         attemptNumber: i,

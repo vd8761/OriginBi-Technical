@@ -34,11 +34,7 @@ export default function MNCClient() {
             timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
         });
 
-        if (mode === 'trial') {
-            router.push('/assessment');
-        } else {
-            router.push('/dashboard?completed=mnc');
-        }
+        router.push('/dashboard?completed=mnc');
     };
 
     return (

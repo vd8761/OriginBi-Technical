@@ -34,11 +34,7 @@ export default function RoleClient() {
             timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
         });
 
-        if (mode === 'trial') {
-            router.push('/assessment');
-        } else {
-            router.push('/dashboard?completed=role');
-        }
+        router.push('/dashboard?completed=role');
     };
 
     return (

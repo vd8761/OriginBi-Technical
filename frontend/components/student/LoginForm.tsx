@@ -3,7 +3,8 @@
 import React, { useState, FormEvent, FocusEvent } from 'react';
 import Link from 'next/link';
 import { EyeIcon, EyeOffIcon } from '../icons';
-import { ApiError, loginUser } from '@/lib/api';
+import { ApiError, loginUser, checkLoginStatus } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/contexts/SessionContext';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
@@ -20,6 +21,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   onLoginSuccess,
 }) => {
   const { login } = useSession();
+  const router = useRouter();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [values, setValues] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -107,6 +109,19 @@ const LoginForm: React.FC<LoginFormProps> = ({
             email: session.user.email,
           }
         );
+      }
+
+      sessionStorage.setItem('userEmail', values.email);
+
+      // Check first login status for redirect
+      try {
+        const loginStatus = await checkLoginStatus(values.email);
+        if (loginStatus.status === 'FIRST_LOGIN' && loginStatus.redirectUrl) {
+          router.push(loginStatus.redirectUrl);
+          return;
+        }
+      } catch (statusError) {
+        console.error('Failed to check login status redirection:', statusError);
       }
       
       onLoginSuccess(session.registration?.fullName || session.user.email);

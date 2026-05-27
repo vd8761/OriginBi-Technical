@@ -351,9 +351,6 @@ export function useCompletedAssessments() {
 
             await Promise.all(
                 modules.map(async (module) => {
-                    // Optimization: Skip if not purchased to avoid 404 noise
-                    if (!paid.has(module)) return;
-
                     try {
                         const submission = await getLatestSubmittedResult(module, email);
                         if (submission && !current.has(module)) {
