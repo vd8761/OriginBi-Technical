@@ -400,11 +400,7 @@ type langConfigsByType struct {
 }
 
 func (l langConfigsByType) toPublic() configsByType {
-	return configsByType{
-		Coding:    l.Coding,
-		MCQ:       l.MCQ,
-		FillBlank: l.FillBlank,
-	}
+	return configsByType(l)
 }
 
 func (l langConfigsByType) byType(qt string) *codingLanguageConfig {
@@ -607,18 +603,6 @@ func (s *Server) bankCountsForLanguageByPlugin(ctx context.Context, slug, plugin
 		return bankCounts{}, err
 	}
 	return counts, nil
-}
-
-// bankCountsForLanguage is the legacy single-flavor helper kept so older
-// callers (coding_exam_builder.go) keep compiling. Coding-only.
-func (s *Server) bankCountsForLanguage(ctx context.Context, slug string, cfg *codingLanguageConfig) (bankCounts, error) {
-	return s.bankCountsForLanguageByPlugin(ctx, slug, "assessment.coding", cfg)
-}
-
-// fetchCodingConfig is a back-compat helper that returns the coding-type row
-// for a language. Used by coding_exam_builder.go.
-func (s *Server) fetchCodingConfig(ctx context.Context, slug string) (codingLanguageConfig, error) {
-	return s.fetchLanguageConfigOne(ctx, slug, QuestionTypeCoding)
 }
 
 func validateConfigRequest(req codingConfigUpsertRequest) string {

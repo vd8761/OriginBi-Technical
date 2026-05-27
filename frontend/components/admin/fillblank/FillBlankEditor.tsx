@@ -430,6 +430,7 @@ export default function FillBlankEditor({ mode, questionId }: FillBlankEditorPro
                         setBody("prompt", next.content);
                     }}
                     height={200}
+                    monacoPathKey="fillblank.prompt"
                 />
 
                 {/* Placeholder ↔ blank reconciliation indicator. Non-blocking;

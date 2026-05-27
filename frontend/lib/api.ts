@@ -1542,9 +1542,16 @@ export async function getPurchasedAssessments(email: string): Promise<{ purchase
   });
 }
 
-export async function getLatestSubmittedResult(module: string, userId: string): Promise<any> {
+export async function getLatestSubmittedResult(
+  module: string,
+  userId: string,
+  attemptToken?: string,
+): Promise<any> {
+  const tokenParam = attemptToken
+    ? `&attemptToken=${encodeURIComponent(attemptToken)}`
+    : "";
   return apiFetch<any>(
-    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}`,
+    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}${tokenParam}`,
     {
       baseOverride: TECH_API_BASE,
       auth: false,
@@ -1679,6 +1686,11 @@ export async function listAdminUsers(
     `/api/admin/users${suffix ? `?${suffix}` : ""}`,
     { baseOverride: TECH_API_BASE },
   );
+}
+
+export interface BulkAdminUsersRow {
+  status: string;
+  [key: string]: any;
 }
 
 export async function bulkAdminUsersPreview(file: File) {

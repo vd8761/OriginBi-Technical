@@ -418,19 +418,19 @@ function normalizeJsonRow(raw: unknown, rowNum: number): AdminQuestionInput {
                 plugin_slug: "assessment.coding",
                 body: { ...body, type: "coding" },
                 test_cases: item.test_cases as AdminQuestionInput["test_cases"],
-            } as AdminQuestionInput;
+            } as unknown as AdminQuestionInput;
         case "mcq":
             return {
                 ...item,
                 plugin_slug: "assessment.mcq",
                 body: { ...body, type: "mcq" },
-            } as AdminQuestionInput;
+            } as unknown as AdminQuestionInput;
         case "fillblank":
             return {
                 ...item,
                 plugin_slug: "assessment.fillblank",
                 body: { ...body, type: "fillblank" },
-            } as AdminQuestionInput;
+            } as unknown as AdminQuestionInput;
         default:
             throw new Error(`Row ${rowNum}: unknown type "${inferred}" — expected coding|mcq|fillblank`);
     }

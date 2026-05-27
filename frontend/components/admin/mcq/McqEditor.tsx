@@ -411,6 +411,7 @@ export default function McqEditor({ mode, questionId }: McqEditorProps) {
                         setBody("prompt", next.content);
                     }}
                     height={220}
+                    monacoPathKey="mcq.prompt"
                 />
             </Card>
 
