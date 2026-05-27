@@ -878,134 +878,128 @@ export class AdaptiveBlockService {
   ): Promise<BlockQuestion[]> {
     if (count <= 0) return [];
 
-    // ── Helper: build WHERE clause ─────────────────────────────────────────
-    const buildWhere = (
-      params: any[],
-      diff: string | null,
-      exclude: number[],
-      topic?: string | null,
-    ): string => {
-      let w = `WHERE q.assessment_id=$1 AND q.status='active'`;
-      if (modeExists && cfg.hasMode) {
-        params.push(mode === 'trial' ? 'trial' : 'main');
-        w += ` AND (q.mode=$${params.length} OR q.mode IS NULL)`;
-      }
-      if (diff) {
-        params.push(diff);
-        w += ` AND q.difficulty=$${params.length}`;
-      }
-      if (topic) {
-        params.push(topic);
-        w += ` AND q.${cfg.categoryCol}=$${params.length}`;
-      }
-      if (exclude.length) {
-        params.push(exclude);
-        w += ` AND NOT (q.${cfg.idCol}=ANY($${params.length}::bigint[]))`;
-      }
-      params.push(excludeTexts);
-      w += ` AND NOT (TRIM(q.question_text)=ANY($${params.length}::text[]))`;
-      return w;
-    };
+    const imgSelect = cfg.hasImageUrl ? ', q.image_url' : '';
+    const params: any[] = [assessmentId];
+    let modeCondition = '';
+    if (modeExists && cfg.hasMode) {
+      params.push(mode === 'trial' ? 'trial' : 'main');
+      modeCondition = ` AND (q.mode = $2 OR q.mode IS NULL)`;
+    }
 
-    // ── Helper: fetch N questions with optional topic + difficulty filter ──
-    const fetchBatch = async (
-      diff: string | null,
-      need: number,
-      excl: number[],
-      topic?: string | null,
-    ): Promise<BlockQuestion[]> => {
-      if (need <= 0) return [];
-      const params: any[] = [assessmentId];
-      const where = buildWhere(params, diff, excl, topic);
-      params.push(need);
-      const imgSelect = cfg.hasImageUrl ? ', q.image_url' : '';
-      const rows = await qr.query(
-        `SELECT q.${cfg.idCol}, q.question_text, q.difficulty,
-                q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
-                json_agg(
-                   json_build_object('option_id', o.option_id, 'option_text', o.option_text)
-                   ORDER BY o.option_id
-                ) FILTER (WHERE o.option_id IS NOT NULL) AS options
-         FROM ${cfg.questions} q
-         LEFT JOIN ${cfg.options} o ON o.${cfg.idCol} = q.${cfg.idCol}
-         ${where}
-         GROUP BY q.${cfg.idCol}
-         ORDER BY RANDOM()
-         LIMIT $${params.length}`,
-        params,
-      );
-      return rows.map((q: any) => ({
-        id: String(q[cfg.idCol]),
-        text: q.question_text,
-        options: (q.options ?? []).map((o: any) => ({
-          id: String(o.option_id),
-          text: o.option_text,
-        })),
-        difficulty: q.difficulty,
-        category: q.category ?? '',
-        marks: Number(q.marks) || 1,
-        negativeMarks: Number(q.negative_marks) || 0,
-        imageUrl: cfg.hasImageUrl ? (q.image_url ?? undefined) : undefined,
-      }));
-    };
+    // Single high-performance database query to fetch all candidates for this assessment.
+    // This avoids up to 12 sequential queries with ORDER BY RANDOM() and LEFT JOIN loops.
+    const allRows = await qr.query(
+      `SELECT q.${cfg.idCol} AS question_id, q.question_text, q.difficulty,
+              q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
+              json_agg(
+                 json_build_object('option_id', o.option_id, 'option_text', o.option_text)
+                 ORDER BY o.option_id
+              ) FILTER (WHERE o.option_id IS NOT NULL) AS options
+       FROM ${cfg.questions} q
+       LEFT JOIN ${cfg.options} o ON o.${cfg.idCol} = q.${cfg.idCol}
+       WHERE q.assessment_id = $1 AND q.status = 'active'${modeCondition}
+       GROUP BY q.${cfg.idCol}`,
+      params,
+    );
 
-    // ── Phase 1: 1 question per topic at target difficulty ─────────────────
-    // Only applies to aptitude (4 known topics). For grammar/mnc we skip this.
+    const candidates = allRows.map((q: any) => ({
+      id: String(q.question_id),
+      text: q.question_text,
+      options: (q.options ?? []).map((o: any) => ({
+        id: String(o.option_id),
+        text: o.option_text,
+      })),
+      difficulty: String(q.difficulty || 'medium').toLowerCase(),
+      category: q.category ?? '',
+      marks: Number(q.marks) || 1,
+      negativeMarks: Number(q.negative_marks) || 0,
+      imageUrl: cfg.hasImageUrl ? (q.image_url ?? undefined) : undefined,
+    }));
+
+    const excludeIdSet = new Set(excludeIds.map(id => String(id)));
+    const excludeTextSet = new Set(excludeTexts.map(t => t.trim().toLowerCase()));
+
+    // Filter out already used questions
+    const pool = candidates.filter((q: any) => {
+      const isIdExcluded = excludeIdSet.has(q.id);
+      const isTextExcluded = excludeTextSet.has(q.text.trim().toLowerCase());
+      return !isIdExcluded && !isTextExcluded;
+    });
+
+    // Fisher-Yates Shuffle candidates pool in-memory for fast randomness
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
     const isAptitude = cfg.questions === 'tech_aptitude_questions';
     const results: BlockQuestion[] = [];
-    const usedIds = [...excludeIds];
+    const usedIds = new Set<string>();
 
+    // ── Phase 1: 1 question per topic at target difficulty (Aptitude Only) ──
     if (isAptitude && count >= this.APTITUDE_TOPICS.length) {
       for (const topic of this.APTITUDE_TOPICS) {
         if (results.length >= count) break;
-        // Try target difficulty first, then fallback to any difficulty
-        let picked = await fetchBatch(targetDiff, 1, usedIds, topic);
-        if (!picked.length) {
-          // Fallback: any difficulty for this topic
-          for (const fd of ['easy', 'medium', 'hard'].filter(d => d !== targetDiff)) {
-            picked = await fetchBatch(fd, 1, usedIds, topic);
-            if (picked.length) break;
-          }
+        
+        // Try target difficulty first
+        let picked = pool.find((q: any) => 
+          q.category.trim().toLowerCase() === topic.trim().toLowerCase() && 
+          q.difficulty === targetDiff &&
+          !usedIds.has(q.id)
+        );
+
+        // Fallback: any other difficulty for this topic
+        if (!picked) {
+          picked = pool.find((q: any) => 
+            q.category.trim().toLowerCase() === topic.trim().toLowerCase() && 
+            !usedIds.has(q.id)
+          );
         }
-        if (picked.length) {
-          results.push(...picked);
-          usedIds.push(Number(picked[0].id));
-          excludeTexts.push(String(picked[0].text || '').trim());
+
+        if (picked) {
+          results.push(picked);
+          usedIds.add(picked.id);
         }
       }
     }
 
-    // ── Phase 2: fill remaining slots at target difficulty (any topic) ─────
-    const remaining = count - results.length;
+    // ── Phase 2: Fill remaining slots at target difficulty (any topic) ──
+    let remaining = count - results.length;
     if (remaining > 0) {
-      const fill = await fetchBatch(targetDiff, remaining, usedIds);
-      results.push(...fill);
-      fill.forEach(q => {
-        usedIds.push(Number(q.id));
-        excludeTexts.push(String(q.text || '').trim());
-      });
-    }
-
-    // ── Phase 3: fallback difficulties if still short ──────────────────────
-    if (results.length < count) {
-      for (const fd of ['medium', 'easy', 'hard'].filter(d => d !== targetDiff)) {
+      const targetDiffQuestions = pool.filter((q: any) => q.difficulty === targetDiff && !usedIds.has(q.id));
+      for (const q of targetDiffQuestions) {
         if (results.length >= count) break;
-        const fill = await fetchBatch(fd, count - results.length, usedIds);
-        results.push(...fill);
-        fill.forEach(q => {
-          usedIds.push(Number(q.id));
-          excludeTexts.push(String(q.text || '').trim());
-        });
+        results.push(q);
+        usedIds.add(q.id);
       }
     }
 
-    // ── Phase 4: any difficulty, any topic (last resort) ──────────────────
-    if (results.length < count) {
-      const fill = await fetchBatch(null, count - results.length, usedIds);
-      results.push(...fill);
+    // ── Phase 3: Fallback difficulties if still short ──
+    remaining = count - results.length;
+    if (remaining > 0) {
+      const fallbacks = ['medium', 'easy', 'hard'].filter(d => d !== targetDiff);
+      for (const fd of fallbacks) {
+        const fallbackQuestions = pool.filter((q: any) => q.difficulty === fd && !usedIds.has(q.id));
+        for (const q of fallbackQuestions) {
+          if (results.length >= count) break;
+          results.push(q);
+          usedIds.add(q.id);
+        }
+      }
     }
 
-    // Shuffle so topic-1 is not always first
+    // ── Phase 4: Leftover fallback ──
+    remaining = count - results.length;
+    if (remaining > 0) {
+      const leftovers = pool.filter((q: any) => !usedIds.has(q.id));
+      for (const q of leftovers) {
+        if (results.length >= count) break;
+        results.push(q);
+        usedIds.add(q.id);
+      }
+    }
+
+    // Shuffle the final batch so topic-1 is not always first
     for (let i = results.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [results[i], results[j]] = [results[j], results[i]];
