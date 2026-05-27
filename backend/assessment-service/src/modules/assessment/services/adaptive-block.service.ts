@@ -401,6 +401,8 @@ export class AdaptiveBlockService {
       const totalCount = bqs.length;
       const categoryMap: Record<string, { correct: number; total: number }> = {};
 
+      const updatePayloads: Array<{ query: string; params: any[] }> = [];
+
       // 3. Save draft answers + compute accuracy for adaptive engine.
       //    is_correct / score_awarded are preview values and are re-computed at final submit.
       for (const aq of bqs) {
@@ -446,13 +448,13 @@ export class AdaptiveBlockService {
           }
 
           if (isCorrect) { correctCount++; categoryMap[cat].correct++; }
-          // Save draft answer — NOT final, will be re-evaluated at submit
-          await qr.query(
-            `UPDATE ${cfg.junction}
-             SET selected_option_id=$1, metadata=$2, is_correct=$3,
-                 score_awarded=$4, negative_applied=$5, answered_at=NOW()
-             WHERE attempt_question_id=$6`,
-            [
+          
+          updatePayloads.push({
+            query: `UPDATE ${cfg.junction}
+                    SET selected_option_id=$1, metadata=$2, is_correct=$3,
+                        score_awarded=$4, negative_applied=$5, answered_at=NOW()
+                    WHERE attempt_question_id=$6`,
+            params: [
               (kind === 'numerical' || kind === 'msq') ? null : sel,
               JSON.stringify({
                 ...(attemptMetadata || {}),
@@ -463,18 +465,23 @@ export class AdaptiveBlockService {
               isCorrect ? 0 : negMarks,
               aq.attempt_question_id,
             ],
-          );
+          });
         } else {
           // User left this question unanswered — clear any previous draft
-          await qr.query(
-            `UPDATE ${cfg.junction}
-             SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
-                 score_awarded=0, negative_applied=0, answered_at=NULL
-             WHERE attempt_question_id=$1`,
-            [aq.attempt_question_id],
-          );
+          updatePayloads.push({
+            query: `UPDATE ${cfg.junction}
+                    SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
+                        score_awarded=0, negative_applied=0, answered_at=NULL
+                    WHERE attempt_question_id=$1`,
+            params: [aq.attempt_question_id],
+          });
         }
       }
+
+      // Execute all database updates concurrently in parallel to maximize speed
+      await Promise.all(
+        updatePayloads.map(payload => qr.query(payload.query, payload.params))
+      );
 
       const accuracyScore = totalCount > 0 ? correctCount / totalCount : 0;
       const timeTaken = Number(performance.timeTaken ?? 0);
