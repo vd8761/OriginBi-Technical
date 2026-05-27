@@ -1,0 +1,23 @@
+{
+  "id": "assessment.mcq",
+  "slug": "assessment.mcq",
+  "name": "Multiple Choice Questions",
+  "version": "1.0.0",
+  "type": "base",
+  "category": "assessment",
+  "enabledByDefault": true,
+  "requiresLicense": false,
+  "requires": ["runtime.exam-session"],
+  "extends": [],
+  "provides": [
+    "assessment.type.mcq",
+    "question.type.mcq",
+    "runtime.action.mcq.submit"
+  ],
+  "configSchemaRef": "schemas/config.schema.json",
+  "questionBodySchemaRef": "schemas/question-body.schema.json",
+  "answerSchemaRef": "schemas/answer.schema.json",
+  "events": [
+    "mcq.submitted"
+  ]
+}

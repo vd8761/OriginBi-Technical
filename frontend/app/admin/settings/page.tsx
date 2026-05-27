@@ -6,6 +6,7 @@ import {
   Award,
   Bell,
   Camera,
+  Code2,
   Cpu,
   Eye,
   Globe,
@@ -20,11 +21,12 @@ import {
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
-import { Badge, Card, PillTabs, ToggleSwitch } from "@/components/admin/ui";
+import { Badge, Card, PillTabs, ToggleSwitch, UnderDevelopment } from "@/components/admin/ui";
+import CodingSettingsTab from "@/components/admin/settings/CodingSettingsTab";
 import { MountPoint } from "@/plugins";
 import { IntervalSlider, ProctorRow } from "@/plugins/proctoringControls";
 
-type Tab = "proctoring" | "general" | "scoring" | "notifications" | "integrations";
+type Tab = "coding" | "proctoring" | "general" | "scoring" | "notifications" | "integrations";
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
@@ -654,30 +656,21 @@ function SettingsInner() {
     ],
   });
 
-  const [tab, setTab] = useState<Tab>("proctoring");
+  const [tab, setTab] = useState<Tab>("coding");
 
-  return (
-    <div className="admin-page">
-      <div className="admin-control-row">
-        <PillTabs<Tab>
-          value={tab}
-          onChange={setTab}
-          tabs={[
-            { value: "proctoring", label: "Proctoring", icon: <ShieldCheck size={13} /> },
-            { value: "general", label: "General Exam", icon: <SettingsIcon size={13} /> },
-            { value: "scoring", label: "Scoring & Pass", icon: <Award size={13} /> },
-            { value: "notifications", label: "Notifications", icon: <Bell size={13} /> },
-            { value: "integrations", label: "Integrations", icon: <Sparkles size={13} /> },
-          ]}
-        />
-        <div className="admin-row">
-          <button type="button" className="admin-btn admin-btn-ghost">
-            <HelpCircle size={13} /> Docs
-          </button>
-          <button type="button" className="admin-btn admin-btn-primary">
-            <Save size={13} /> Save changes
-          </button>
-        </div>
+  // The Coding tab is live (it persists to the exam-engine builder config).
+  // The other five tabs are still UI-only — they stay under the
+  // UnderDevelopment placeholder so admins can't confuse them with working
+  // settings.
+  const dummyTabsUi = (
+    <>
+      <div className="admin-row" style={{ justifyContent: "flex-end", gap: 8 }}>
+        <button type="button" className="admin-btn admin-btn-ghost">
+          <HelpCircle size={13} /> Docs
+        </button>
+        <button type="button" className="admin-btn admin-btn-primary">
+          <Save size={13} /> Save changes
+        </button>
       </div>
 
       {tab === "proctoring" && <ProctoringTab />}
@@ -689,6 +682,35 @@ function SettingsInner() {
       <p style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--admin-fg-4)", fontSize: 11 }}>
         <Activity size={11} /> Proctoring cards are plugin-mounted; changes persist to platform plugin config.
       </p>
+    </>
+  );
+
+  return (
+    <div className="admin-page">
+      <div className="admin-control-row">
+        <PillTabs<Tab>
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: "coding", label: "Coding", icon: <Code2 size={13} /> },
+            { value: "proctoring", label: "Proctoring", icon: <ShieldCheck size={13} /> },
+            { value: "general", label: "General Exam", icon: <SettingsIcon size={13} /> },
+            { value: "scoring", label: "Scoring & Pass", icon: <Award size={13} /> },
+            { value: "notifications", label: "Notifications", icon: <Bell size={13} /> },
+            { value: "integrations", label: "Integrations", icon: <Sparkles size={13} /> },
+          ]}
+        />
+      </div>
+
+      {tab === "coding" ? (
+        <CodingSettingsTab />
+      ) : (
+        <UnderDevelopment
+          title="Workspace Settings"
+          note="The persistence layer isn't wired up yet — toggles on this page don't save anywhere. You can preview the intended layout below for design feedback."
+          dummy={dummyTabsUi}
+        />
+      )}
     </div>
   );
 }

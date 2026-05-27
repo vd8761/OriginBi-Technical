@@ -1,12 +1,14 @@
 // ── Assessment Type (top-level module selector) ──
-export type AssessmentType = "aptitude" | "mnc" | "communication" | "role" | "coding";
+// Coding has its own dedicated bank at /admin/coding (backed by exam-engine's
+// `questions` table with plugin_slug='assessment.coding') and is intentionally
+// not part of this MCQ-style manager.
+export type AssessmentType = "aptitude" | "mnc" | "communication" | "role";
 
 export const ASSESSMENT_TYPE_LABELS: Record<AssessmentType, string> = {
   aptitude: "Aptitude Assessment",
   mnc: "MNC Career Prep",
   communication: "Communication Skills",
   role: "Role-Based Technical",
-  coding: "Coding & Development",
 };
 
 export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
@@ -14,7 +16,6 @@ export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
   mnc: "Technical MCQs focused on Data Structures, Algorithms, and Core CS.",
   communication: "Multi-skill tasks including Audio, Speaking, Reading, and Writing.",
   role: "Context-aware conceptual and scenario-based technical evaluations.",
-  coding: "In-browser IDE assessments for algorithms and problem solving.",
 };
 
 export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
@@ -22,7 +23,6 @@ export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
   mnc: "🏢",
   communication: "💬",
   role: "🎯",
-  coding: "💻",
 };
 
 // ── Shared ──
@@ -165,21 +165,6 @@ export const ROLE_QUESTION_TYPE_LABELS: Record<RoleQuestionType, string> = {
   scenario: "Scenario",
 };
 
-// ── Coding ──
-export interface CodingQuestion {
-  id: string;
-  category: string;
-  text: string;
-  assessmentId?: number;
-  difficulty?: DifficultyLevel;
-  marks?: number;
-  negativeMarks?: number;
-  status?: QuestionStatus;
-  explanation?: string;
-}
-
-export const CODING_CATEGORIES = ["Algorithms", "Data Structures", "Logic", "Backend", "Frontend"] as const;
-
 // ── Category colors (reused) ──
 export const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   QA: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-500/20" },
@@ -239,7 +224,6 @@ export const ASSESSMENT_SUPPORTED_QUESTION_KINDS: Record<AssessmentType, readonl
   mnc: ["mcq", "msq", "tf"],
   communication: ["mcq", "msq", "tf"],
   role: ["mcq", "msq", "tf"],
-  coding: ["mcq", "msq", "tf"],
 };
 
 export function getSupportedQuestionKinds(assessmentType: AssessmentType): QuestionKind[] {
@@ -291,7 +275,7 @@ export function serializeQuestionKindEnabledMap(enabledMap: Partial<QuestionKind
   }, {});
 }
 // ── Union type for any question ──
-export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion | CodingQuestion) & { kind?: QuestionKind; correctOptionIds?: string[]; correctAnswer?: string };
+export type AnyQuestion = (AptitudeQuestion | MNCQuestion | CommQuestion | RoleQuestion) & { kind?: QuestionKind; correctOptionIds?: string[]; correctAnswer?: string };
 
 // ── Sample JSONs ──
 // ── Sample JSONs ──
@@ -435,7 +419,6 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
     "correctOptionIndex": 1
   }
 ]`,
-  coding: `[]`,
 };
 
 export function matchCategory(qCat: string, filterCat: string): boolean {

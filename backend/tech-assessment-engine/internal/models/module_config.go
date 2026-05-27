@@ -62,16 +62,8 @@ var ModuleConfigs = map[string]ModuleConfig{
 		HasMode:       false,
 		TextColumn:    "question_text",
 	},
-	"coding": {
-		Attempts:      "tech_coding_attempts",
-		Questions:     "tech_coding_questions",
-		Junction:      "tech_coding_attempt_questions",
-		IDCol:         "coding_question_id",
-		Options:       "",
-		AttemptIDCol:  "coding_attempt_id",
-		CatCol:        "difficulty",
-		HasDifficulty: true,
-		HasMode:       false,
-		TextColumn:    "problem_statement",
-	},
+	// "coding" is intentionally absent. Coding questions/attempts live in
+	// exam-engine (`questions` with plugin_slug='assessment.coding') and are
+	// served from its admin + runtime APIs. Anything reaching this service
+	// asking for module="coding" should be routed there instead.
 }

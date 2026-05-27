@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   AssessmentType, AnyQuestion, CATEGORY_COLORS,
-  AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion, CodingQuestion,
+  AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
   COMM_TASK_LABELS, ROLE_QUESTION_TYPE_LABELS, QuestionKind, QuestionOption,
   APTITUDE_CATEGORIES, APTITUDE_CATEGORY_LABELS, MNC_TOPICS,
-  ROLE_QUESTION_TYPE_LABELS as ROLE_LABELS, CODING_CATEGORIES
+  ROLE_QUESTION_TYPE_LABELS as ROLE_LABELS
 } from "./types";
 import { generateId } from "./storage";
 import CustomSelect from "@/components/ui/CustomSelect";
@@ -54,11 +54,6 @@ function getCsvHeaders(assessmentType: AssessmentType): string[] {
         "Correct Option Index", "Difficulty", "Marks", "Negative Marks",
         "Explanation", "Status"
       ];
-    case "coding":
-      return [
-        "Category", "Question Text", "Difficulty", "Marks", "Negative Marks",
-        "Explanation", "Status"
-      ];
     case "communication":
       return [
         "Category", "Subcategory", "Question Type", "Question Text",
@@ -88,11 +83,6 @@ function getCsvSampleRows(assessmentType: AssessmentType): string[][] {
       return [
         ["conceptual", "API Design", "REST Fundamentals", "", "", "", "Medium", "", "mcq", "Which HTTP method is idempotent?", "POST", "GET", "PATCH", "DELETE", "", "", "2", "easy", "1", "0.25", "GET is idempotent.", "active"],
         ["scenario", "Frontend Optimization", "", "Frontend Virtualization", "The UI freezes for 3-5 seconds when rendering 10,000 records.", "INC-8942", "High", "QA Team", "mcq", "What is the most optimal solution to resolve this bottleneck?", "Increase browser memory.", "Implement virtualization/windowing.", "Use a Web Worker.", "Debounce the API call.", "", "", "2", "hard", "5", "0.25", "Virtualization renders only visible DOM rows.", "active"]
-      ];
-    case "coding":
-      return [
-        ["Algorithms", "Write a function that finds the maximum subarray sum in O(n) time.", "medium", "5", "0", "Use Kadane's algorithm to compute in linear time.", "active"],
-        ["Data Structures", "Implement a Priority Queue using a binary heap implementation.", "hard", "10", "0", "Use array-based parent-child node logic.", "active"]
       ];
     case "communication":
       return [
@@ -235,7 +225,7 @@ function validateQuestionRow(q: AnyQuestion, assessmentType: AssessmentType): Va
         errors.push({ field: "correctOptionId", message: "Correct option selection is invalid." });
       }
     }
-  } else if (assessmentType !== "coding" && assessmentType !== "communication") {
+  } else if (assessmentType !== "communication") {
     if (kind === "numerical") {
       if (!common.correctAnswer || !common.correctAnswer.trim()) {
         errors.push({ field: "correctAnswer", message: "Correct Answer is required for numerical questions." });
@@ -463,17 +453,6 @@ function csvToQuestions(rows: string[][], assessmentType: AssessmentType): AnyQu
           priority,
           reportedBy,
         } as RoleQuestion;
-      }
-      case "coding": {
-        const text = getValue("questiontext");
-        const category = getValue("category") || "Algorithms";
-
-        return {
-          ...baseQuestion,
-          category,
-          text,
-          kind: "mcq",
-        } as CodingQuestion;
       }
       case "communication": {
         const rawType = (getValue("questiontype") || getValue("questionkind") || getValue("tasktype") || "mcq").toLowerCase();
@@ -1317,7 +1296,7 @@ export default function CsvImportPanel({
                           </div>
 
                           {/* Question Format */}
-                          {assessmentType !== "coding" && assessmentType !== "communication" && (
+                          {assessmentType !== "communication" && (
                             <div className="md:col-span-2">
                               <CustomSelect
                                 className="w-full"
@@ -1572,7 +1551,7 @@ export default function CsvImportPanel({
                       </div>
 
                       {/* Section: Options & Correctness */}
-                      {assessmentType !== "coding" && (
+                      {(
                         <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/[0.01] border border-slate-200 dark:border-white/5 space-y-4">
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-white/5">
                             <div className="flex items-center gap-1.5">

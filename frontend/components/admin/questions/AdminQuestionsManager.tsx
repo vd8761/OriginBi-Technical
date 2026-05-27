@@ -9,7 +9,6 @@ import {
   MNC_TOPICS, COMM_TASK_LABELS, CommTaskType,
   ROLE_QUESTION_TYPE_LABELS, RoleQuestionType,
   AptitudeQuestion, MNCQuestion, CommQuestion, RoleQuestion,
-  CodingQuestion, CODING_CATEGORIES,
   getSupportedQuestionKinds, parseQuestionKindEnabledMap, QuestionKind,
   matchCategory, matchSubcategory
 } from "./types";
@@ -74,7 +73,6 @@ const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }>
   mnc: { color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" },
   communication: { color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)" },
   role: { color: "#84cc16", gradient: "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)" },
-  coding: { color: "#f59e0b", gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" },
 };
 
 const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
@@ -82,7 +80,6 @@ const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
   mnc: <MNCIcon className="w-7 h-7" />,
   communication: <CommunicationIcon className="w-7 h-7" />,
   role: <RoleIcon className="w-7 h-7" />,
-  coding: <Code className="w-7 h-7" />,
 };
 
 const MODULE_TAGS: Record<AssessmentType, string[]> = {
@@ -90,7 +87,6 @@ const MODULE_TAGS: Record<AssessmentType, string[]> = {
   mnc: ["DSA", "System Design", "Culture", "HR Prep"],
   communication: ["Listening", "Speaking", "Reading", "Writing"],
   role: ["Concepts", "Scenarios", "Judgement", "Role fit"],
-  coding: ["Algorithms", "Data Structures", "In-Browser IDE"],
 };
 
 function getCatKey(q: AnyQuestion, t: AssessmentType): string {
@@ -99,7 +95,6 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
-    case "coding": return (q as CodingQuestion).category;
   }
 }
 
@@ -109,7 +104,6 @@ function getFilterCategories(t: AssessmentType): { key: string; label: string; s
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
-    case "coding": return CODING_CATEGORIES.map(c => ({ key: c, label: c }));
   }
 }
 
@@ -119,7 +113,6 @@ function getSearchText(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": { const m = q as MNCQuestion; return `${m.text} ${m.topic}`.toLowerCase(); }
     case "communication": { const c = q as CommQuestion; return `${c.instructions} ${c.prompt || ""} ${c.questions?.map(sq => sq.text).join(" ") || ""}`.toLowerCase(); }
     case "role": { const r = q as RoleQuestion; return `${r.text} ${r.category || ""} ${r.title || ""} ${r.scenarioContext || ""}`.toLowerCase(); }
-    case "coding": { const c = q as CodingQuestion; return `${c.text} ${c.category}`.toLowerCase(); }
   }
 }
 
@@ -195,8 +188,6 @@ function apiToFrontend(module: AssessmentType, q: ApiQuestion): AnyQuestion {
       };
       return roleQ as RoleQuestion;
     }
-    case "coding":
-      return { ...common, category: q.category } as unknown as CodingQuestion;
     default:
       return common as any;
   }
@@ -234,7 +225,6 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
       break;
     }
     case "role": category = (q as RoleQuestion).questionType; break;
-    case "coding": category = (q as CodingQuestion).category; break;
   }
 
   // Build the complete metadata object containing all assessment-specific fields
@@ -288,8 +278,8 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
 }
 
 // All modules except specialized ones are now DB-backed
-const isDbModule = (m: AssessmentType | null): m is AssessmentType => 
-  m === "aptitude" || m === "mnc" || m === "communication" || m === "role" || m === "coding";
+const isDbModule = (m: AssessmentType | null): m is AssessmentType =>
+  m === "aptitude" || m === "mnc" || m === "communication" || m === "role";
 
 interface AdminQuestionsManagerProps {
   initialModule?: AssessmentType | null;
@@ -323,7 +313,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     mnc: { trial: 0, main: 0 },
     communication: { trial: 0, main: 0 },
     role: { trial: 0, main: 0 },
-    coding: { trial: 0, main: 0 },
   });
   const [view, setView] = useState<"list" | "json-import">("list");
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
@@ -404,7 +393,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   useEffect(() => {
     const loadAllAssessments = async () => {
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
         const results: ApiAssessment[] = [];
         for (const m of modules) {
           const list = await fetchAssessments(m);
@@ -440,7 +429,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const refreshModuleCounts = useCallback(async (module?: AssessmentType) => {
     const modules = module
       ? [module]
-      : (["aptitude", "mnc", "communication", "role", "coding"] as AssessmentType[]);
+      : (["aptitude", "mnc", "communication", "role"] as AssessmentType[]);
 
     await Promise.all(
       modules.map(async (currentModule) => {
@@ -867,24 +856,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         });
         break;
 
-      case "coding":
-        headers = [
-          "Category", "Question Text", "Difficulty", "Marks", "Negative Marks",
-          "Explanation", "Status"
-        ];
-        questions.forEach((q: any) => {
-          rows.push([
-            q.category || "",
-            q.text || "",
-            q.difficulty || "medium",
-            String(q.marks ?? 1),
-            String(q.negativeMarks ?? 0.25),
-            q.explanation || "",
-            q.status || "active"
-          ]);
-        });
-        break;
-
       case "communication":
         headers = [
           "Task Type", "Category", "Subcategory", "Instructions", "Passage", "Audio URL", "Prompt",
@@ -970,7 +941,6 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       mnc: { icon: Banknote, accentClass: "admin-acc-mnc", trial: 12, main: 86, categories: ["Aptitude", "Coding", "HR", "Comm"] },
       communication: { icon: MessageSquare, accentClass: "admin-acc-comm", trial: 8, main: 64, categories: ["Reading", "Writing", "Speaking"] },
       role: { icon: Target, accentClass: "admin-acc-role", trial: 14, main: 96, categories: ["Frontend", "Backend", "Data", "DevOps"] },
-      coding: { icon: Code2, accentClass: "admin-acc-coding", trial: 12, main: 48, categories: ["Arrays", "Graphs", "DP", "Strings"] },
     };
 
     return (

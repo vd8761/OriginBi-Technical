@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-mcq/config.schema.json",
+  "title": "assessment.mcq config",
+  "description": "Per-scope configuration for the MCQ assessment plugin.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "allowedLanguages": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^language\\." },
+      "uniqueItems": true
+    },
+    "partialCreditMultiSelect": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, multi-select MCQs award proportional credit for partially correct picks (with penalties for wrong picks). When false, all-or-nothing."
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxOptions": { "type": "integer", "minimum": 2, "maximum": 10, "default": 10 }
+      }
+    }
+  }
+}

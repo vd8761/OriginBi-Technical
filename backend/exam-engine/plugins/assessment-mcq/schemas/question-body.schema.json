@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-mcq/question-body.schema.json",
+  "title": "MCQ question body",
+  "description": "JSONB shape stored in question_versions.body for multiple-choice questions authored by the assessment.mcq plugin. Always scoped to a single language plugin slug so per-language banks stay clean.",
+  "type": "object",
+  "required": ["type", "title", "prompt", "options", "correctOptionIds", "language"],
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "const": "mcq",
+      "description": "Discriminator. Always 'mcq' for this plugin."
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "section": { "type": "string", "maxLength": 100 },
+    "category": { "type": "string", "maxLength": 100 },
+    "difficulty": {
+      "type": "string",
+      "enum": ["easy", "medium", "hard"]
+    },
+    "promptFormat": {
+      "type": "string",
+      "enum": ["markdown", "html", "plain"],
+      "default": "markdown"
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Body in the format named by promptFormat."
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^language\\.",
+      "description": "Language plugin slug this MCQ is bucketed under (e.g. language.python). MCQs are per-language so per-language banks stay clean."
+    },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 40, "description": "Stable identifier referenced by correctOptionIds. Typically 'a','b','c','d'." },
+          "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "explanation": { "type": "string", "maxLength": 2000 }
+        }
+      }
+    },
+    "correctOptionIds": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "IDs of option(s) that are correct. Multiple entries mean multi-select."
+    },
+    "multiSelect": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true the candidate UI allows multiple checkboxes; when false a single radio. Implied by len(correctOptionIds) > 1 if omitted."
+    },
+    "shuffleOptions": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the candidate sees options in a randomized order. Per-question override; default true."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 32 },
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["trial", "main"],
+      "default": "main"
+    },
+    "explanation": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Optional after-submit explanation shown to the candidate when review is enabled."
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url":      { "type": "string" },
+          "key":      { "type": "string" },
+          "fileName": { "type": "string" },
+          "alt":      { "type": "string" },
+          "mime":     { "type": "string" }
+        }
+      }
+    }
+  }
+}

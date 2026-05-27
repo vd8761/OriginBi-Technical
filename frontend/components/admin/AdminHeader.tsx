@@ -15,7 +15,6 @@ const routeTitles: Record<string, { title: string; section: string }> = {
   "/admin": { title: "Welcome back", section: "Dashboard" },
   "/admin/coding": { title: "Coding Question Bank", section: "Question Banks" },
   "/admin/coding/new": { title: "New Coding Problem", section: "Question Banks" },
-  "/admin/coding/bulk-import": { title: "Bulk Import", section: "Question Banks" },
   "/admin/groups": { title: "Groups Management", section: "Workspace" },
   "/admin/plugins": { title: "Plugin Registry", section: "System" },
   "/admin/plugins/languages": { title: "Language Plugins", section: "System" },

@@ -341,7 +341,6 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 	isGrammar := config.Questions == "tech_grammar_questions"
 	isRole := config.Questions == "tech_role_questions"
 	isMnc := config.Questions == "tech_mnc_questions"
-	isCoding := config.Questions == "tech_coding_questions"
 
 	extraSelect := ""
 	if isAptitude {
@@ -359,10 +358,9 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 		difficultySelect = ", q.difficulty"
 	}
 
+	// Coding questions are served by exam-engine; this service only handles
+	// MCQ-style modules whose primary text column is question_text.
 	textColumn := "q.question_text"
-	if isCoding {
-		textColumn = "q.problem_statement"
-	}
 
 	query := fmt.Sprintf(`
 		SELECT aq.display_order, q.%s as question_id,
@@ -582,7 +580,6 @@ func (s *AssessmentService) SubmitAttempt(module string, token string, answers m
 
 	attemptId := attempt[config.AttemptIDCol].(int64)
 	isGrammar := dbModule == "grammar"
-	isCoding := dbModule == "coding"
 
 	var result map[string]interface{}
 	err = db.Transaction(func(tx *gorm.DB) error {
@@ -590,10 +587,8 @@ func (s *AssessmentService) SubmitAttempt(module string, token string, answers m
 		if !config.HasDifficulty {
 			difficultyCol = "'medium' as difficulty"
 		}
+		// All remaining modules are MCQ-style; coding is served by exam-engine.
 		correctOptCol := "q.correct_option_id"
-		if isCoding {
-			correctOptCol = "NULL as correct_option_id"
-		}
 		taskTypeCol := "q.task_type"
 		if !isGrammar {
 			taskTypeCol = "NULL as task_type"
@@ -693,33 +688,6 @@ func (s *AssessmentService) SubmitAttempt(module string, token string, answers m
 
 			sectionMap[category].TotalCount += 1
 			sectionMap[category].MaxScore += questionMarks
-
-			if isCoding {
-				if selectedVal != nil && selectedVal != "" {
-					var submittedCode, language string
-					switch payload := selectedVal.(type) {
-					case string:
-						submittedCode = payload
-					case map[string]interface{}:
-						if code, ok := payload["code"].(string); ok {
-							submittedCode = code
-						} else if code, ok := payload["submittedCode"].(string); ok {
-							submittedCode = code
-						}
-						if lang, ok := payload["language"].(string); ok {
-							language = lang
-						} else if lang, ok := payload["lang"].(string); ok {
-							language = lang
-						}
-					}
-
-					if submittedCode != "" {
-						updateQuery := fmt.Sprintf("UPDATE %s SET submitted_code = ?, language = COALESCE(?, language), submitted_at = NOW() WHERE attempt_question_id = ?", config.Junction)
-						_ = tx.Exec(updateQuery, submittedCode, language, attemptQId)
-					}
-				}
-				continue
-			}
 
 			if isGrammar {
 				taskType := strings.ToLower(fmt.Sprintf("%v", aq["task_type"]))

@@ -24,7 +24,6 @@ function getTag(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return COMM_TASK_LABELS[(q as CommQuestion).taskType] || (q as CommQuestion).taskType;
     case "role": return ROLE_QUESTION_TYPE_LABELS[(q as RoleQuestion).questionType] || (q as RoleQuestion).questionType;
-    case "coding": return (q as any).category || "Coding";
     default: return "Question";
   }
 }
@@ -35,7 +34,6 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
-    case "coding": return (q as any).category || "coding";
     default: return "general";
   }
 }
@@ -49,7 +47,6 @@ function getText(q: AnyQuestion, t: AssessmentType): string {
       return cq.questions?.[0]?.text || cq.prompt || cq.instructions;
     }
     case "role": return (q as RoleQuestion).text;
-    case "coding": return (q as any).text || "Coding Question";
     default: return "";
   }
 }
@@ -79,7 +76,6 @@ function getSubtext(q: AnyQuestion, t: AssessmentType): string {
       if (rq.questionType === "scenario") return `Scenario · ${format} · ${rq.priority || "—"}`;
       return `${format} · ${rq.options.length} options · ${rq.category || ""}`;
     }
-    case "coding": return "Coding Problem";
     default: return "";
   }
 }
