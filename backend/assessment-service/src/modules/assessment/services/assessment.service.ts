@@ -1126,15 +1126,17 @@ export class AssessmentService {
         }
       }
 
+      const taskType = String(aq.task_type || '').toLowerCase();
       const questionMetadata = asObject(aq.question_metadata);
       const attemptMetadata = asObject(aq.attempt_metadata);
-      const questionKind = (!isCoding && !isGrammar)
+      const isObjectiveGrammar = isGrammar && (taskType === 'listening_mcq' || taskType === 'reading_mcq');
+      const questionKind = (!isCoding && (!isGrammar || isObjectiveGrammar))
         ? normalizeQuestionKind((questionMetadata as any).kind)
         : null;
       const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
       const selectedAnswerValue =
         (!isCoding &&
-          !isGrammar &&
+          (!isGrammar || isObjectiveGrammar) &&
           (questionKind === 'msq' || questionKind === 'numerical') &&
           metadataSubmittedAnswer !== undefined &&
           metadataSubmittedAnswer !== null &&
@@ -1185,7 +1187,7 @@ export class AssessmentService {
         continue;
       }
 
-      if (isGrammar) {
+      if (isGrammar && taskType !== 'listening_mcq' && taskType !== 'reading_mcq') {
         const taskType = String(aq.task_type || '').toLowerCase();
         const selectedOptionId = aq.selected_option_id !== null && aq.selected_option_id !== undefined
           ? String(aq.selected_option_id)
@@ -1836,6 +1838,15 @@ export class AssessmentService {
           }
         }
 
+        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+          const kind = String(rawKind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        };
+
+        const qMetadataForType = aq.question_metadata || {};
+        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType.kind) : null;
         const review: any = {
           questionId: questionIdStr,
           displayOrder: Number(aq.display_order || 0),
@@ -1846,7 +1857,7 @@ export class AssessmentService {
               ? String(aq.task_type || 'mcq').toLowerCase()
               : isRole
                 ? String(aq.question_type || 'conceptual').toLowerCase()
-                : 'mcq',
+                : (reviewKind || 'mcq'),
           questionText: String(aq.question_text || ''),
           options: optionsForReview,
           selectedOptionId: null,
@@ -1900,7 +1911,8 @@ export class AssessmentService {
           continue;
         }
 
-        if (isGrammar) {
+        const taskType = String(aq.task_type || '').toLowerCase();
+        if (isGrammar && taskType !== 'listening_mcq' && taskType !== 'reading_mcq') {
           const taskType  = String(aq.task_type || '').toLowerCase();
           const rawAnswer = rawSubmittedAnswer;
           if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
@@ -1979,15 +1991,8 @@ export class AssessmentService {
           continue;
         }
 
-        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-          const kind = String(rawKind || 'mcq').toLowerCase();
-          if (kind === 'true_false') return 'tf';
-          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
-          return 'mcq';
-        };
-
         // Scoring Logic: Support MCQ, MSQ, TF, Numerical
-        if (aq.mode !== 'trial' && !isCoding && !isGrammar) {
+        if (aq.mode !== 'trial' && !isCoding && (!isGrammar || taskType === 'listening_mcq' || taskType === 'reading_mcq')) {
           const hasObjectiveAnswer = Array.isArray(selectedOptionId)
             ? selectedOptionId.length > 0
             : !(selectedOptionId === undefined || selectedOptionId === null || selectedOptionId === '');
@@ -2000,6 +2005,9 @@ export class AssessmentService {
             const kind = normalizeQuestionKind(qMetadata.kind);
             let isCorrectAnswer = false;
 
+            // Update the review type to reflect the actual question kind
+            review.type = kind;
+
             if (kind === 'msq') {
               const studentChoices: string[] = Array.isArray(selectedOptionId) 
                 ? selectedOptionId.map(String) 
@@ -2009,6 +2017,16 @@ export class AssessmentService {
                 ? qMetadata.correctOptionIds.map(String)
                 : [];
               
+              // Populate review with MSQ selections
+              review.selectedOptionId = studentChoices;
+              review.selectedAnswerText = studentChoices
+                .map((id: string) => optionTextById.get(id) ?? id)
+                .join(', ');
+              // Populate correct answer text for MSQ
+              review.correctAnswerText = correctChoices
+                .map((id: string) => optionTextById.get(id) ?? id)
+                .join(', ');
+              
               // All-or-nothing check for MSQ
               isCorrectAnswer = studentChoices.length > 0 &&
                                studentChoices.length === correctChoices.length &&
@@ -2016,11 +2034,21 @@ export class AssessmentService {
             } else if (kind === 'numerical') {
               const studentAnswer = String(selectedOptionId || '').trim().toLowerCase();
               const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+              // Populate review with numerical answer
+              review.selectedOptionId = studentAnswer;
+              review.selectedAnswerText = studentAnswer;
+              review.correctAnswerText = String(qMetadata.correctAnswer || '');
               isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
             } else {
               // Standard MCQ / TF (single choice)
+              review.selectedOptionId = String(selectedOptionId);
+              review.selectedAnswerText = optionTextById.get(String(selectedOptionId)) ?? String(selectedOptionId);
               isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
             }
+
+            // Write scoring result into review
+            review.isCorrect = isCorrectAnswer;
+            review.status = isCorrectAnswer ? 'correct' : 'incorrect';
 
             const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
             const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;

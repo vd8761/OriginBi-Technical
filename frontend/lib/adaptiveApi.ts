@@ -33,6 +33,10 @@ export interface AdaptiveQuestion {
   marks: number;
   negativeMarks: number;
   kind: QuestionKind;
+  metadata?: {
+    kind?: QuestionKind;
+    [key: string]: any;
+  };
   imageUrl?: string;
   expectedTimeSecs: number;
   // Populated when loading a previously answered block
