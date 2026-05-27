@@ -200,7 +200,11 @@ func (s *Server) buildCodingFrozenSnapshot(
 		if err != nil {
 			return frozenAttemptSnapshot{}, spill, fmt.Errorf("insert per-attempt exam_question: %w", err)
 		}
-		candidateBody, err := s.candidateQuestionBody(ctx, p.questionVersionID, p.title, p.difficulty, p.body)
+		// Pass the in-flight tx through so the per-question test-case lookups
+		// stay on the same connection — prevents pool-side calls from
+		// stalling on the connection the tx is already holding (the root
+		// cause of the "coding bank under-stocked: timeout" symptom).
+		candidateBody, err := s.candidateQuestionBody(ctx, tx, p.questionVersionID, p.title, p.difficulty, p.body)
 		if err != nil {
 			return frozenAttemptSnapshot{}, spill, err
 		}
@@ -243,7 +247,8 @@ func (s *Server) loadCodingConfigForBuilder(ctx context.Context, slug string) (b
 	err := s.pool.QueryRow(ctx, `
 		SELECT total_questions, easy_count, medium_count, hard_count,
 		       allow_spillover, include_tags
-		FROM coding_language_configs WHERE language_slug = $1
+		FROM coding_language_configs
+		WHERE language_slug = $1 AND question_type = 'coding'
 	`, slug).Scan(
 		&cfg.TotalQuestions, &cfg.EasyCount, &cfg.MediumCount, &cfg.HardCount,
 		&cfg.AllowSpillover, &tags,
@@ -263,7 +268,8 @@ func (s *Server) loadCodingConfigForBuilder(ctx context.Context, slug string) (b
 func (s *Server) loadCodingTimeOverride(ctx context.Context, slug string) (*int, error) {
 	var v *int
 	err := s.pool.QueryRow(ctx, `
-		SELECT time_seconds_override FROM coding_language_configs WHERE language_slug = $1
+		SELECT time_seconds_override FROM coding_language_configs
+		WHERE language_slug = $1 AND question_type = 'coding'
 	`, slug).Scan(&v)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

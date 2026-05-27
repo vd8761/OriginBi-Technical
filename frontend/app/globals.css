@@ -2192,6 +2192,10 @@
   border: 1px solid var(--admin-border-strong);
   border-radius: 9px;
   background: var(--admin-card);
+  /* `--seg-h` is the shared height the filter bar uses to line every control
+     up on the same baseline. Default to 38 so existing 2-option toggles keep
+     their look; admin-filter-bar bumps this to 40 to match the dropdowns. */
+  height: var(--seg-h, auto);
 }
 
 .admin-segment button {
@@ -2205,11 +2209,99 @@
   font-weight: 850;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .admin-segment button.is-active {
   background: var(--admin-green);
   color: #07110b;
+}
+
+/* Compact variant for filter-bar use: chips size to content, not 70px. Lets a
+   4+ option type-selector fit on a single row without ALL CAPS labels
+   wrapping. The visual rhythm (uppercase, weight, radius) stays the same. */
+.admin-segment.is-compact button {
+  min-width: 0;
+  padding: 7px 10px;
+}
+
+/* ─── Unified filter bar ─────────────────────────────────────────────────
+   One container that lays out heterogeneous controls (segmented toggle,
+   CustomSelect, search input, submit button) on a shared 40px baseline and
+   wraps them onto multiple rows on narrower viewports without squishing.
+
+   Usage:
+     <form class="admin-filter-bar">
+       <div class="admin-filter-field" data-w="seg">…<SegmentedToggle/>…</div>
+       <div class="admin-filter-field" data-w="md">…<CustomSelect/>…</div>
+       <div class="admin-filter-field" data-w="grow">…<input/>…</div>
+       <button class="admin-btn admin-filter-submit">…</button>
+     </form>
+*/
+.admin-filter-bar {
+  --filter-h: 40px;
+  --seg-h: var(--filter-h);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  width: 100%;
+}
+
+.admin-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  /* Width tier — set via data-w. The grow tier expands to consume any leftover
+     row space so the search input feels at home on wide screens but collapses
+     gracefully on narrow ones. */
+}
+
+.admin-filter-field[data-w="seg"]   { flex: 0 0 auto; }
+.admin-filter-field[data-w="sm"]    { flex: 0 1 140px; min-width: 140px; }
+.admin-filter-field[data-w="md"]    { flex: 0 1 180px; min-width: 160px; }
+.admin-filter-field[data-w="lg"]    { flex: 1 1 240px; min-width: 200px; }
+.admin-filter-field[data-w="grow"]  { flex: 1 1 240px; min-width: 200px; }
+
+.admin-filter-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-fg-4);
+  margin-left: 4px;
+}
+
+/* Force the bar's children to honor the shared 40px height. CustomSelect
+   renders a Tailwind button whose padding overrides ours unless we win on
+   specificity — the descendant selector is intentional. */
+.admin-filter-bar .admin-search,
+.admin-filter-bar .admin-field {
+  height: var(--filter-h);
+  width: 100%;
+}
+
+.admin-filter-bar .admin-filter-field button[type="button"] {
+  min-height: var(--filter-h);
+}
+
+/* CustomSelect renders its own <button type="button"> with Tailwind padding +
+   rounded-xl. Inside the filter bar we want it to share the segmented-toggle
+   / search-input rhythm: 40px tall, 9px corners, font-weight + size matched.
+   Padding overrides defeat the py-[11px] utility cleanly. */
+.admin-filter-bar .admin-filter-field > div > .relative > button[type="button"] {
+  height: var(--filter-h);
+  min-height: var(--filter-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: 9px;
+  font-size: 12.5px;
+}
+
+.admin-filter-submit {
+  min-height: var(--filter-h);
+  align-self: flex-end;
 }
 
 .admin-field,

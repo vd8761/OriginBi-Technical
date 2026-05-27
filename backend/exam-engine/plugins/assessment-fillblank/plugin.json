@@ -1,0 +1,23 @@
+{
+  "id": "assessment.fillblank",
+  "slug": "assessment.fillblank",
+  "name": "Fill in the Blanks",
+  "version": "1.0.0",
+  "type": "base",
+  "category": "assessment",
+  "enabledByDefault": true,
+  "requiresLicense": false,
+  "requires": ["runtime.exam-session"],
+  "extends": [],
+  "provides": [
+    "assessment.type.fillblank",
+    "question.type.fillblank",
+    "runtime.action.fillblank.submit"
+  ],
+  "configSchemaRef": "schemas/config.schema.json",
+  "questionBodySchemaRef": "schemas/question-body.schema.json",
+  "answerSchemaRef": "schemas/answer.schema.json",
+  "events": [
+    "fillblank.submitted"
+  ]
+}

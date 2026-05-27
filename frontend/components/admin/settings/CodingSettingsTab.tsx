@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-    AlertTriangle,
-    CheckCircle2,
     Code2,
+    FileText,
+    HelpCircle,
     Loader2,
     RotateCw,
-    Save,
     Settings as SettingsIcon,
     Sparkles,
     X,
@@ -15,43 +15,30 @@ import {
 import {
     Card,
     Modal,
-    SegmentedToggle,
     useConfirm,
 } from "@/components/admin/ui";
 import {
     listAdminCodingLanguages,
-    updateAdminCodingLanguageConfig,
     deleteAdminCodingLanguageConfig,
     previewAdminCodingLanguageConfig,
     type AdminCodingLanguageEntry,
     type AdminCodingBankCounts,
+    type AdminCodingLanguageConfig,
     type AdminCodingPreviewResponse,
+    type AssessmentQuestionType,
 } from "@/lib/api";
 
-type Mode = "count" | "percent";
-
-interface EditorState {
-    slug: string;
-    name: string;
-    bank: AdminCodingBankCounts;
-    mode: Mode;
-    total: number;
-    easy: number;
-    medium: number;
-    hard: number;
-    allowSpillover: boolean;
-    includeTags: string[];
-    timeSecondsOverride: number | null;
-    saving: boolean;
-    error: string | null;
-}
-
 const CodingSettingsTab: React.FC = () => {
+    const router = useRouter();
     const [languages, setLanguages] = useState<AdminCodingLanguageEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [editor, setEditor] = useState<EditorState | null>(null);
-    const [previewing, setPreviewing] = useState<{ slug: string; data: AdminCodingPreviewResponse | null; loading: boolean; error: string | null } | null>(null);
+    const [previewing, setPreviewing] = useState<{
+        slug: string;
+        data: AdminCodingPreviewResponse | null;
+        loading: boolean;
+        error: string | null;
+    } | null>(null);
     const confirm = useConfirm();
 
     const reload = useCallback(async () => {
@@ -71,79 +58,38 @@ const CodingSettingsTab: React.FC = () => {
         void reload();
     }, [reload]);
 
-    const openEditor = useCallback((entry: AdminCodingLanguageEntry) => {
-        const cfg = entry.config;
-        setEditor({
-            slug: entry.slug,
-            name: entry.name,
-            bank: entry.bank,
-            mode: cfg?.inputMode ?? "count",
-            total: cfg?.totalQuestions ?? Math.min(10, entry.bank.total || 1),
-            easy: cfg?.easyCount ?? 0,
-            medium: cfg?.mediumCount ?? 0,
-            hard: cfg?.hardCount ?? 0,
-            allowSpillover: cfg?.allowSpillover ?? true,
-            includeTags: cfg?.includeTags ?? [],
-            timeSecondsOverride: cfg?.timeSecondsOverride ?? null,
-            saving: false,
-            error: null,
-        });
-    }, []);
+    const openConfigure = useCallback(
+        (slug: string) => {
+            const bare = slug.replace(/^language\./, "");
+            router.push(`/admin/settings/coding/${encodeURIComponent(bare)}`);
+        },
+        [router],
+    );
 
-    const saveEditor = useCallback(async () => {
-        if (!editor) return;
-        // In percent mode we resolve to integer counts so the constraint
-        // (easy+med+hard = total) is preserved. Hard rounds up so the total
-        // bucket is hit exactly.
-        let { easy, medium, hard } = editor;
-        const { total } = editor;
-        if (editor.mode === "percent") {
-            easy = Math.floor((editor.easy / 100) * total);
-            medium = Math.floor((editor.medium / 100) * total);
-            hard = total - easy - medium;
-            if (hard < 0) {
-                setEditor({ ...editor, error: "Percentages exceed 100%." });
-                return;
-            }
-        }
-        if (easy + medium + hard !== total) {
-            setEditor({ ...editor, error: "Counts must sum to total." });
-            return;
-        }
-        setEditor({ ...editor, saving: true, error: null });
-        try {
-            await updateAdminCodingLanguageConfig(editor.slug, {
-                totalQuestions: total,
-                easyCount: easy,
-                mediumCount: medium,
-                hardCount: hard,
-                inputMode: editor.mode,
-                allowSpillover: editor.allowSpillover,
-                includeTags: editor.includeTags,
-                timeSecondsOverride: editor.timeSecondsOverride,
+    const clearAllConfigs = useCallback(
+        async (entry: AdminCodingLanguageEntry) => {
+            const enabledTypes: AssessmentQuestionType[] = (
+                ["coding", "mcq", "fillblank"] as AssessmentQuestionType[]
+            ).filter((t) => entry.configs?.[t]);
+            if (enabledTypes.length === 0) return;
+            const ok = await confirm({
+                title: "Reset all categories?",
+                message: `${entry.name} will revert to the default policy for every assessment type. In-progress attempts keep their snapshot.`,
+                confirmLabel: "Reset",
+                variant: "warning",
             });
-            setEditor(null);
-            await reload();
-        } catch (err) {
-            setEditor((curr) => curr ? { ...curr, saving: false, error: err instanceof Error ? err.message : String(err) } : curr);
-        }
-    }, [editor, reload]);
-
-    const clearConfig = useCallback(async (slug: string, name: string) => {
-        const ok = await confirm({
-            title: "Reset to default?",
-            message: `${name} will revert to the default policy: every active bank question matching this language is eligible, no quota.`,
-            confirmLabel: "Reset",
-            variant: "warning",
-        });
-        if (!ok) return;
-        try {
-            await deleteAdminCodingLanguageConfig(slug);
-            await reload();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-        }
-    }, [confirm, reload]);
+            if (!ok) return;
+            try {
+                for (const t of enabledTypes) {
+                    await deleteAdminCodingLanguageConfig(entry.slug, t);
+                }
+                await reload();
+            } catch (err) {
+                setError(err instanceof Error ? err.message : String(err));
+            }
+        },
+        [confirm, reload],
+    );
 
     const openPreview = useCallback(async (slug: string) => {
         setPreviewing({ slug, data: null, loading: true, error: null });
@@ -151,7 +97,12 @@ const CodingSettingsTab: React.FC = () => {
             const data = await previewAdminCodingLanguageConfig(slug);
             setPreviewing({ slug, data, loading: false, error: null });
         } catch (err) {
-            setPreviewing({ slug, data: null, loading: false, error: err instanceof Error ? err.message : String(err) });
+            setPreviewing({
+                slug,
+                data: null,
+                loading: false,
+                error: err instanceof Error ? err.message : String(err),
+            });
         }
     }, []);
 
@@ -164,16 +115,15 @@ const CodingSettingsTab: React.FC = () => {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="admin-row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                 <div>
-                    <h3 className="admin-card-title" style={{ fontSize: 17 }}>Coding Exam Builder</h3>
+                    <h3 className="admin-card-title" style={{ fontSize: 17 }}>
+                        Assessment Builder
+                    </h3>
                     <p className="admin-card-subtitle" style={{ marginTop: 4 }}>
-                        Per-language question counts, difficulty mix, and topic filters. Snapshots into the candidate&apos;s attempt at Start.
+                        Per-language toggles for Coding, MCQ, and Fill-in-the-Blank pools. Snapshots into the
+                        candidate&apos;s attempt at Start.
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => void reload()}
-                    className="admin-btn admin-btn-secondary"
-                >
+                <button type="button" onClick={() => void reload()} className="admin-btn admin-btn-secondary">
                     <RotateCw size={13} /> Refresh
                 </button>
             </div>
@@ -194,20 +144,31 @@ const CodingSettingsTab: React.FC = () => {
             )}
 
             {loading ? (
-                <div className="admin-row" style={{ justifyContent: "center", padding: 48, color: "var(--admin-fg-3)" }}>
+                <div
+                    className="admin-row"
+                    style={{ justifyContent: "center", padding: 48, color: "var(--admin-fg-3)" }}
+                >
                     <Loader2 size={18} className="admin-animate-spin" /> Loading languages…
                 </div>
             ) : languages.length === 0 ? (
                 <Card>
-                    <p style={{ padding: 24, textAlign: "center", color: "var(--admin-fg-3)", fontSize: 13 }}>
-                        No language plugins installed yet. Add languages under <strong>System → Languages</strong> first.
+                    <p
+                        style={{
+                            padding: 24,
+                            textAlign: "center",
+                            color: "var(--admin-fg-3)",
+                            fontSize: 13,
+                        }}
+                    >
+                        No language plugins installed yet. Add languages under{" "}
+                        <strong>System → Languages</strong> first.
                     </p>
                 </Card>
             ) : (
                 <div
                     style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
                         gap: 14,
                     }}
                 >
@@ -215,21 +176,12 @@ const CodingSettingsTab: React.FC = () => {
                         <LanguageCard
                             key={l.slug}
                             entry={l}
-                            onEdit={() => openEditor(l)}
+                            onConfigure={() => openConfigure(l.slug)}
                             onPreview={() => void openPreview(l.slug)}
-                            onClear={() => void clearConfig(l.slug, l.name)}
+                            onClear={() => void clearAllConfigs(l)}
                         />
                     ))}
                 </div>
-            )}
-
-            {editor && (
-                <EditorModal
-                    editor={editor}
-                    setEditor={setEditor}
-                    onSave={() => void saveEditor()}
-                    onClose={() => setEditor(null)}
-                />
             )}
 
             {previewing && (
@@ -247,31 +199,27 @@ const CodingSettingsTab: React.FC = () => {
 
 function LanguageCard({
     entry,
-    onEdit,
+    onConfigure,
     onPreview,
     onClear,
 }: {
     entry: AdminCodingLanguageEntry;
-    onEdit: () => void;
+    onConfigure: () => void;
     onPreview: () => void;
     onClear: () => void;
 }) {
-    const cfg = entry.config;
-    const bank = entry.bank;
-    const hasConfig = Boolean(cfg);
-
-    // Bank-health: compare configured counts against bank-available counts.
-    const healthFor = (have: number, want: number): "good" | "warn" | "bad" => {
-        if (!hasConfig || want === 0) return "good";
-        if (have >= want) return "good";
-        if (have >= Math.ceil(want * 0.75)) return "warn";
-        return "bad";
+    const configs = entry.configs ?? { coding: null, mcq: null, fillblank: null };
+    const banks = entry.banks ?? {
+        coding: entry.bank ?? { total: 0, easy: 0, medium: 0, hard: 0 },
+        mcq: { total: 0, easy: 0, medium: 0, hard: 0 },
+        fillblank: { total: 0, easy: 0, medium: 0, hard: 0 },
     };
-    const colors: Record<string, string> = {
-        good: "var(--admin-green)",
-        warn: "var(--admin-amber, #ffb703)",
-        bad: "#ff6a6e",
-    };
+    const enabledCount = (
+        ["coding", "mcq", "fillblank"] as AssessmentQuestionType[]
+    ).filter((t) => configs[t]?.enabled).length;
+    const hasAnyConfig = (["coding", "mcq", "fillblank"] as AssessmentQuestionType[]).some(
+        (t) => configs[t],
+    );
 
     return (
         <Card>
@@ -292,7 +240,16 @@ function LanguageCard({
                             <Code2 size={18} />
                         </div>
                         <div>
-                            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--admin-fg)" }}>{entry.name}</h4>
+                            <h4
+                                style={{
+                                    margin: 0,
+                                    fontSize: 14,
+                                    fontWeight: 800,
+                                    color: "var(--admin-fg)",
+                                }}
+                            >
+                                {entry.name}
+                            </h4>
                             <p
                                 className="admin-mono"
                                 style={{ margin: 0, fontSize: 10.5, color: "var(--admin-fg-4)" }}
@@ -309,83 +266,50 @@ function LanguageCard({
                             textTransform: "uppercase",
                             padding: "3px 8px",
                             borderRadius: 999,
-                            background: hasConfig ? "var(--admin-green-soft)" : "rgba(255, 183, 3, 0.12)",
-                            color: hasConfig ? "var(--admin-green)" : "var(--admin-amber, #ffb703)",
+                            background: enabledCount > 0 ? "var(--admin-green-soft)" : "rgba(255, 183, 3, 0.12)",
+                            color: enabledCount > 0 ? "var(--admin-green)" : "var(--admin-amber, #ffb703)",
                         }}
                     >
-                        {hasConfig ? "Configured" : "Default policy"}
+                        {enabledCount > 0
+                            ? `${enabledCount} / 3 enabled`
+                            : "Default policy"}
                     </span>
                 </div>
 
-                {hasConfig ? (
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(4, 1fr)",
-                            gap: 8,
-                            padding: 10,
-                            borderRadius: "var(--admin-r-md)",
-                            background: "var(--admin-card-2)",
-                            border: "1px solid var(--admin-border)",
-                        }}
-                    >
-                        <BucketCell label="Total" want={cfg?.totalQuestions} have={bank.total} tone={healthFor(bank.total, cfg?.totalQuestions ?? 0)} colors={colors} />
-                        <BucketCell label="Easy"  want={cfg?.easyCount}    have={bank.easy}   tone={healthFor(bank.easy, cfg?.easyCount ?? 0)} colors={colors} />
-                        <BucketCell label="Medium" want={cfg?.mediumCount} have={bank.medium} tone={healthFor(bank.medium, cfg?.mediumCount ?? 0)} colors={colors} />
-                        <BucketCell label="Hard"  want={cfg?.hardCount}    have={bank.hard}   tone={healthFor(bank.hard, cfg?.hardCount ?? 0)} colors={colors} />
-                    </div>
-                ) : (
-                    <div
-                        style={{
-                            padding: 12,
-                            borderRadius: "var(--admin-r-md)",
-                            background: "var(--admin-card-2)",
-                            border: "1px solid var(--admin-border)",
-                            fontSize: 13,
-                            lineHeight: 1.5,
-                            color: "var(--admin-fg-2)",
-                        }}
-                    >
-                        <p style={{ margin: 0, fontWeight: 700 }}>
-                            No quota set — every candidate gets every eligible question.
-                        </p>
-                        <p
-                            className="admin-mono"
-                            style={{ margin: "6px 0 0", fontSize: 11.5, color: "var(--admin-fg-3)" }}
-                        >
-                            Bank: {bank.total} total · {bank.easy} easy · {bank.medium} medium · {bank.hard} hard
-                        </p>
-                    </div>
-                )}
-
-                {cfg && cfg.includeTags.length > 0 && (
-                    <div className="admin-row" style={{ flexWrap: "wrap", gap: 6 }}>
-                        {cfg.includeTags.map((t) => (
-                            <span
-                                key={t}
-                                style={{
-                                    fontSize: 10.5,
-                                    fontWeight: 700,
-                                    padding: "3px 8px",
-                                    borderRadius: 999,
-                                    background: "var(--admin-card)",
-                                    border: "1px solid var(--admin-border-strong)",
-                                    color: "var(--admin-fg-2)",
-                                }}
-                            >
-                                #{t}
-                            </span>
-                        ))}
-                    </div>
-                )}
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: 8,
+                    }}
+                >
+                    <TypeSummary
+                        label="Coding"
+                        icon={<Code2 size={13} />}
+                        cfg={configs.coding}
+                        bank={banks.coding}
+                    />
+                    <TypeSummary
+                        label="MCQ"
+                        icon={<HelpCircle size={13} />}
+                        cfg={configs.mcq}
+                        bank={banks.mcq}
+                    />
+                    <TypeSummary
+                        label="Fill"
+                        icon={<FileText size={13} />}
+                        cfg={configs.fillblank}
+                        bank={banks.fillblank}
+                    />
+                </div>
 
                 <div className="admin-row" style={{ justifyContent: "flex-end", gap: 6 }}>
-                    {hasConfig && (
+                    {hasAnyConfig && (
                         <button
                             type="button"
                             onClick={onClear}
                             className="admin-btn admin-btn-ghost"
-                            title="Reset to default policy"
+                            title="Reset all categories to default"
                         >
                             <X size={13} /> Reset
                         </button>
@@ -394,13 +318,17 @@ function LanguageCard({
                         type="button"
                         onClick={onPreview}
                         className="admin-btn admin-btn-secondary"
-                        disabled={bank.total === 0}
-                        title={bank.total === 0 ? "Bank has no eligible questions yet" : "Preview a sample selection"}
+                        disabled={banks.coding.total === 0}
+                        title={
+                            banks.coding.total === 0
+                                ? "Coding bank has no eligible questions yet"
+                                : "Preview a sample coding selection"
+                        }
                     >
                         <Sparkles size={13} /> Preview
                     </button>
-                    <button type="button" onClick={onEdit} className="admin-btn admin-btn-primary">
-                        <SettingsIcon size={13} /> {hasConfig ? "Edit" : "Configure"}
+                    <button type="button" onClick={onConfigure} className="admin-btn admin-btn-primary">
+                        <SettingsIcon size={13} /> Configure
                     </button>
                 </div>
             </div>
@@ -408,307 +336,56 @@ function LanguageCard({
     );
 }
 
-function BucketCell({
+function TypeSummary({
     label,
-    want,
-    have,
-    tone,
-    colors,
+    icon,
+    cfg,
+    bank,
 }: {
     label: string;
-    want: number | undefined;
-    have: number;
-    tone: "good" | "warn" | "bad";
-    colors: Record<string, string>;
+    icon: React.ReactNode;
+    cfg: AdminCodingLanguageConfig | null;
+    bank: AdminCodingBankCounts;
 }) {
+    const enabled = !!cfg?.enabled;
     return (
-        <div style={{ textAlign: "center" }}>
-            <p
+        <div
+            style={{
+                padding: 10,
+                borderRadius: "var(--admin-r-md)",
+                background: "var(--admin-card-2)",
+                border: "1px solid var(--admin-border)",
+            }}
+        >
+            <div
+                className="admin-row"
                 style={{
-                    margin: 0,
-                    fontSize: 9.5,
+                    gap: 6,
+                    fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "var(--admin-fg-4)",
+                    color: enabled ? "var(--admin-green)" : "var(--admin-fg-4)",
                 }}
             >
+                {icon}
                 {label}
-            </p>
+            </div>
             <p
                 style={{
-                    margin: "4px 0 2px",
-                    fontSize: 18,
+                    margin: "4px 0 0",
+                    fontSize: 15,
                     fontWeight: 800,
-                    color: want === undefined ? "var(--admin-fg-3)" : colors[tone],
-                    lineHeight: 1,
+                    color: enabled ? "var(--admin-fg)" : "var(--admin-fg-3)",
+                    lineHeight: 1.1,
                 }}
             >
-                {want ?? "—"}
+                {enabled && cfg ? `${cfg.totalQuestions} qs` : "Off"}
             </p>
-            <p
-                className="admin-mono"
-                style={{ margin: 0, fontSize: 10, color: "var(--admin-fg-4)" }}
-            >
-                bank {have}
+            <p className="admin-mono" style={{ margin: "2px 0 0", fontSize: 10, color: "var(--admin-fg-4)" }}>
+                bank {bank.total}
             </p>
         </div>
-    );
-}
-
-// ─── Editor modal ──────────────────────────────────────────────────────────
-
-function EditorModal({
-    editor,
-    setEditor,
-    onSave,
-    onClose,
-}: {
-    editor: EditorState;
-    setEditor: (e: EditorState | null) => void;
-    onSave: () => void;
-    onClose: () => void;
-}) {
-    const sum = editor.easy + editor.medium + editor.hard;
-    const sumMatches = editor.mode === "percent" ? sum === 100 : sum === editor.total;
-
-    const [tagDraft, setTagDraft] = useState("");
-    const addTag = () => {
-        const t = tagDraft.trim().toLowerCase();
-        if (!t) return;
-        if (editor.includeTags.includes(t)) return;
-        setEditor({ ...editor, includeTags: [...editor.includeTags, t] });
-        setTagDraft("");
-    };
-    const removeTag = (t: string) =>
-        setEditor({ ...editor, includeTags: editor.includeTags.filter((x) => x !== t) });
-
-    return (
-        <Modal
-            open
-            onClose={onClose}
-            eyebrow={`Coding · ${editor.name}`}
-            title="Exam builder configuration"
-            wide
-        >
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: "var(--admin-fg-2)" }}>
-                Saved settings apply to the next candidate who starts the exam. In-progress attempts keep their snapshot.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                <Field label="Mode">
-                    <SegmentedToggle
-                        value={editor.mode}
-                        onChange={(v) => setEditor({ ...editor, mode: v as Mode })}
-                        options={[
-                            { value: "count", label: "Count" },
-                            { value: "percent", label: "Percent" },
-                        ]}
-                    />
-                </Field>
-                <Field label="Total questions">
-                    <NumberInput
-                        value={editor.total}
-                        min={1}
-                        onChange={(v) => setEditor({ ...editor, total: v })}
-                    />
-                </Field>
-
-                <Field label={editor.mode === "percent" ? "Easy (%)" : "Easy (count)"}>
-                    <NumberInput
-                        value={editor.easy}
-                        min={0}
-                        onChange={(v) => setEditor({ ...editor, easy: v })}
-                    />
-                </Field>
-                <Field label={editor.mode === "percent" ? "Medium (%)" : "Medium (count)"}>
-                    <NumberInput
-                        value={editor.medium}
-                        min={0}
-                        onChange={(v) => setEditor({ ...editor, medium: v })}
-                    />
-                </Field>
-                <Field label={editor.mode === "percent" ? "Hard (%)" : "Hard (count)"}>
-                    <NumberInput
-                        value={editor.hard}
-                        min={0}
-                        onChange={(v) => setEditor({ ...editor, hard: v })}
-                    />
-                </Field>
-                <Field label="Time override (seconds, optional)">
-                    <NumberInput
-                        value={editor.timeSecondsOverride ?? 0}
-                        min={0}
-                        placeholder="0 = inherit from exam"
-                        onChange={(v) => setEditor({ ...editor, timeSecondsOverride: v > 0 ? v : null })}
-                    />
-                </Field>
-            </div>
-
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "12px 14px",
-                    borderRadius: "var(--admin-r-md)",
-                    border: `1px solid ${sumMatches ? "rgba(30, 211, 106, 0.32)" : "rgba(237, 47, 52, 0.32)"}`,
-                    background: sumMatches ? "var(--admin-green-soft)" : "var(--admin-red-soft, rgba(237, 47, 52, 0.08))",
-                    color: sumMatches ? "var(--admin-green)" : "#ff8a8d",
-                    fontSize: 13.5,
-                    fontWeight: 600,
-                }}
-            >
-                {sumMatches ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                {editor.mode === "percent"
-                    ? `Easy + Medium + Hard = ${sum}% (need 100%)`
-                    : `Easy + Medium + Hard = ${sum} (need ${editor.total})`}
-            </div>
-
-            <Field label="Tag filter (only pick questions with at least one of these tags)">
-                <div className="admin-row" style={{ flexWrap: "wrap", gap: 8 }}>
-                    {editor.includeTags.map((t) => (
-                        <span
-                            key={t}
-                            className="admin-row"
-                            style={{
-                                gap: 8,
-                                fontSize: 13,
-                                fontWeight: 600,
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                background: "var(--admin-card)",
-                                border: "1px solid var(--admin-border-strong)",
-                                color: "var(--admin-fg-2)",
-                            }}
-                        >
-                            #{t}
-                            <button
-                                type="button"
-                                onClick={() => removeTag(t)}
-                                style={{
-                                    background: "transparent",
-                                    border: 0,
-                                    color: "var(--admin-fg-4)",
-                                    cursor: "pointer",
-                                    padding: 0,
-                                    display: "inline-flex",
-                                }}
-                                aria-label={`Remove ${t}`}
-                            >
-                                <X size={13} />
-                            </button>
-                        </span>
-                    ))}
-                    <input
-                        value={tagDraft}
-                        onChange={(e) => setTagDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                e.preventDefault();
-                                addTag();
-                            }
-                        }}
-                        placeholder="Type a tag, press Enter"
-                        className="admin-field"
-                        style={{ flex: 1, minWidth: 200, fontSize: 14, minHeight: 42 }}
-                    />
-                </div>
-            </Field>
-
-            <label
-                className="admin-row"
-                style={{ gap: 10, fontSize: 14, color: "var(--admin-fg-2)", cursor: "pointer", lineHeight: 1.5 }}
-            >
-                <input
-                    type="checkbox"
-                    checked={editor.allowSpillover}
-                    onChange={(e) => setEditor({ ...editor, allowSpillover: e.target.checked })}
-                    style={{ accentColor: "var(--admin-green)", width: 16, height: 16 }}
-                />
-                Allow spillover from adjacent difficulty buckets when a bucket is short
-            </label>
-
-            {editor.error && (
-                <div
-                    style={{
-                        padding: 12,
-                        borderRadius: "var(--admin-r-md)",
-                        background: "var(--admin-red-soft, rgba(237, 47, 52, 0.08))",
-                        border: "1px solid rgba(237, 47, 52, 0.32)",
-                        color: "#ff8a8d",
-                        fontSize: 13.5,
-                        lineHeight: 1.5,
-                    }}
-                >
-                    {editor.error}
-                </div>
-            )}
-
-            <div className="admin-row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button type="button" onClick={onClose} className="admin-btn admin-btn-secondary">
-                    Cancel
-                </button>
-                <button
-                    type="button"
-                    onClick={onSave}
-                    disabled={editor.saving || !sumMatches}
-                    className="admin-btn admin-btn-primary"
-                    style={{ opacity: editor.saving || !sumMatches ? 0.55 : 1 }}
-                >
-                    {editor.saving ? <Loader2 size={13} className="admin-animate-spin" /> : <Save size={13} />}
-                    Save
-                </button>
-            </div>
-        </Modal>
-    );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-    // Override the cramped admin-form-label defaults (10px uppercase) with a
-    // readable in-modal style: regular case, 13px, normal letter-spacing.
-    return (
-        <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span
-                style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: "var(--admin-fg-2)",
-                    letterSpacing: 0,
-                    textTransform: "none",
-                }}
-            >
-                {label}
-            </span>
-            {children}
-        </label>
-    );
-}
-
-function NumberInput({
-    value,
-    min,
-    placeholder,
-    onChange,
-}: {
-    value: number;
-    min?: number;
-    placeholder?: string;
-    onChange: (v: number) => void;
-}) {
-    return (
-        <input
-            type="number"
-            value={Number.isFinite(value) ? value : ""}
-            min={min}
-            placeholder={placeholder}
-            onChange={(e) => {
-                const n = Number(e.target.value);
-                onChange(Number.isFinite(n) ? n : 0);
-            }}
-            className="admin-field"
-            style={{ fontSize: 14, minHeight: 42 }}
-        />
     );
 }
 
@@ -728,15 +405,19 @@ function PreviewModal({
             open
             onClose={onClose}
             eyebrow={`Preview · ${state.slug.replace(/^language\./, "")}`}
-            title="Sample candidate selection"
+            title="Sample candidate selection (coding bank)"
             wide
         >
             <p className="admin-card-subtitle" style={{ margin: 0, fontSize: 12.5 }}>
-                Dry-run of the builder using the current config. Re-roll to see a different random pick. No DB writes.
+                Dry-run of the coding builder using the current config. Re-roll to see a different random pick. MCQ and
+                Fill-in-the-Blank previews will land after the per-language picker is extended.
             </p>
 
             {state.loading && (
-                <div className="admin-row" style={{ justifyContent: "center", padding: 40, color: "var(--admin-fg-3)", gap: 10 }}>
+                <div
+                    className="admin-row"
+                    style={{ justifyContent: "center", padding: 40, color: "var(--admin-fg-3)", gap: 10 }}
+                >
                     <Loader2 size={18} className="admin-animate-spin" /> Building preview…
                 </div>
             )}
@@ -756,32 +437,23 @@ function PreviewModal({
             )}
             {state.data && (
                 <>
-                    <div
-                        className="admin-row"
-                        style={{ gap: 14, fontSize: 12, color: "var(--admin-fg-2)" }}
-                    >
-                        <span><strong>{state.data.picked.length}</strong> questions</span>
-                        <span>Easy: <strong>{state.data.spillover.delivered.easy}</strong> / {state.data.spillover.targets.easy || "any"}</span>
-                        <span>Medium: <strong>{state.data.spillover.delivered.medium}</strong> / {state.data.spillover.targets.medium || "any"}</span>
-                        <span>Hard: <strong>{state.data.spillover.delivered.hard}</strong> / {state.data.spillover.targets.hard || "any"}</span>
+                    <div className="admin-row" style={{ gap: 14, fontSize: 12, color: "var(--admin-fg-2)" }}>
+                        <span>
+                            <strong>{state.data.picked.length}</strong> questions
+                        </span>
+                        <span>
+                            Easy: <strong>{state.data.spillover.delivered.easy}</strong> /{" "}
+                            {state.data.spillover.targets.easy || "any"}
+                        </span>
+                        <span>
+                            Medium: <strong>{state.data.spillover.delivered.medium}</strong> /{" "}
+                            {state.data.spillover.targets.medium || "any"}
+                        </span>
+                        <span>
+                            Hard: <strong>{state.data.spillover.delivered.hard}</strong> /{" "}
+                            {state.data.spillover.targets.hard || "any"}
+                        </span>
                     </div>
-                    {state.data.spillover.borrows && Object.keys(state.data.spillover.borrows).length > 0 && (
-                        <div
-                            style={{
-                                padding: 10,
-                                borderRadius: "var(--admin-r-md)",
-                                background: "rgba(255, 183, 3, 0.12)",
-                                border: "1px solid rgba(255, 183, 3, 0.32)",
-                                color: "var(--admin-amber, #ffb703)",
-                                fontSize: 12,
-                            }}
-                        >
-                            <strong>Spillover:</strong>{" "}
-                            {Object.entries(state.data.spillover.borrows).map(([k, v]) => (
-                                <span key={k} style={{ marginRight: 10 }}>{k}: {v}</span>
-                            ))}
-                        </div>
-                    )}
                     <div className="admin-table-wrap" style={{ maxHeight: 320, overflowY: "auto" }}>
                         <table className="admin-table" style={{ minWidth: 0 }}>
                             <thead>

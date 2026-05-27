@@ -1238,8 +1238,21 @@ export interface AdminCodingBankCounts {
   hard: number;
 }
 
+// Question-type discriminator for the per-language config + banks. Matches the
+// backend `question_type` column on coding_language_configs (migration 028).
+export type AssessmentQuestionType = "coding" | "mcq" | "fillblank";
+
+// Plugin slug each AssessmentQuestionType maps to in the question bank.
+export const PLUGIN_SLUG_FOR_TYPE: Record<AssessmentQuestionType, string> = {
+  coding: "assessment.coding",
+  mcq: "assessment.mcq",
+  fillblank: "assessment.fillblank",
+};
+
 export interface AdminCodingLanguageConfig {
   languageSlug: string;
+  questionType: AssessmentQuestionType;
+  enabled: boolean;
   totalQuestions: number;
   easyCount: number;
   mediumCount: number;
@@ -1251,9 +1264,27 @@ export interface AdminCodingLanguageConfig {
   updatedAt?: string;
 }
 
+// Per-type configs / banks returned by the language list & get endpoints.
+export interface AdminAssessmentConfigsByType {
+  coding: AdminCodingLanguageConfig | null;
+  mcq: AdminCodingLanguageConfig | null;
+  fillblank: AdminCodingLanguageConfig | null;
+}
+
+export interface AdminAssessmentBanksByType {
+  coding: AdminCodingBankCounts;
+  mcq: AdminCodingBankCounts;
+  fillblank: AdminCodingBankCounts;
+}
+
 export interface AdminCodingLanguageEntry {
   slug: string;
   name: string;
+  // Per-type configs and bank counts (new shape).
+  configs: AdminAssessmentConfigsByType;
+  banks: AdminAssessmentBanksByType;
+  // Legacy single-flavor accessors mirror configs.coding / banks.coding; kept
+  // so the original CodingSettingsTab keeps compiling during the migration.
   config?: AdminCodingLanguageConfig;
   bank: AdminCodingBankCounts;
 }
@@ -1262,25 +1293,50 @@ export async function listAdminCodingLanguages(): Promise<{ languages: AdminCodi
   return apiFetch<{ languages: AdminCodingLanguageEntry[] }>("/v1/admin/coding/languages");
 }
 
+export interface AdminLanguageConfigBundle {
+  slug: string;
+  configs: AdminAssessmentConfigsByType;
+  banks: AdminAssessmentBanksByType;
+  // Legacy single-flavor fields (coding only).
+  config: AdminCodingLanguageConfig | null;
+  bank: AdminCodingBankCounts;
+}
+
+export async function getAdminLanguageConfigBundle(slug: string): Promise<AdminLanguageConfigBundle> {
+  return apiFetch<AdminLanguageConfigBundle>(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config`,
+  );
+}
+
+// Legacy single-flavor lookup, narrowed to one question_type via ?type=.
 export async function getAdminCodingLanguageConfig(
   slug: string,
-): Promise<{ slug: string; config: AdminCodingLanguageConfig | null; bank: AdminCodingBankCounts }> {
-  return apiFetch(`/v1/admin/coding/languages/${encodeURIComponent(slug)}/config`);
+  type: AssessmentQuestionType = "coding",
+): Promise<{ slug: string; questionType: AssessmentQuestionType; config: AdminCodingLanguageConfig | null; bank: AdminCodingBankCounts }> {
+  return apiFetch(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config?type=${encodeURIComponent(type)}`,
+  );
 }
 
 export async function updateAdminCodingLanguageConfig(
   slug: string,
-  config: Omit<AdminCodingLanguageConfig, "languageSlug" | "updatedAt">,
+  config: Omit<AdminCodingLanguageConfig, "languageSlug" | "updatedAt" | "questionType"> & {
+    questionType?: AssessmentQuestionType;
+  },
+  type: AssessmentQuestionType = "coding",
 ): Promise<AdminCodingLanguageConfig> {
   return apiFetch<AdminCodingLanguageConfig>(
-    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config`,
-    { method: "PUT", body: JSON.stringify(config) },
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config?type=${encodeURIComponent(type)}`,
+    { method: "PUT", body: JSON.stringify({ ...config, questionType: type }) },
   );
 }
 
-export async function deleteAdminCodingLanguageConfig(slug: string): Promise<{ status: string }> {
+export async function deleteAdminCodingLanguageConfig(
+  slug: string,
+  type: AssessmentQuestionType = "coding",
+): Promise<{ status: string }> {
   return apiFetch<{ status: string }>(
-    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config`,
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config?type=${encodeURIComponent(type)}`,
     { method: "DELETE" },
   );
 }

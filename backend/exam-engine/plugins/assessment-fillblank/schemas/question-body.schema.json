@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-fillblank/question-body.schema.json",
+  "title": "Fill-in-the-blank question body",
+  "description": "JSONB shape stored in question_versions.body for fill-in-the-blank questions. The prompt embeds placeholders like {{1}}, {{2}} that map by ordinal into the blanks array.",
+  "type": "object",
+  "required": ["type", "title", "prompt", "blanks", "language"],
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "const": "fillblank",
+      "description": "Discriminator. Always 'fillblank' for this plugin."
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "section": { "type": "string", "maxLength": 100 },
+    "category": { "type": "string", "maxLength": 100 },
+    "difficulty": {
+      "type": "string",
+      "enum": ["easy", "medium", "hard"]
+    },
+    "promptFormat": {
+      "type": "string",
+      "enum": ["markdown", "html", "plain"],
+      "default": "markdown"
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Body containing placeholders {{1}}, {{2}}, … that map to the blanks array by ordinal."
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^language\\.",
+      "description": "Language plugin slug this question is bucketed under."
+    },
+    "blanks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "answers"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "Stable identifier for the blank. Typically '1','2','3' to match the {{n}} placeholder index."
+          },
+          "answers": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Accepted answer strings. The candidate's input is matched against this list; any match (mode-dependent) is correct.",
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "uniqueItems": true
+          },
+          "matchMode": {
+            "type": "string",
+            "enum": ["exact", "ci", "trim", "regex"],
+            "default": "ci",
+            "description": "exact = byte-for-byte; ci = case-insensitive; trim = ignore leading/trailing whitespace then ci; regex = each answer is a regex."
+          },
+          "hint": { "type": "string", "maxLength": 500 },
+          "placeholder": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "Optional text shown inside the input box on the candidate UI."
+          }
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 32 },
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["trial", "main"],
+      "default": "main"
+    },
+    "explanation": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url":      { "type": "string" },
+          "key":      { "type": "string" },
+          "fileName": { "type": "string" },
+          "alt":      { "type": "string" },
+          "mime":     { "type": "string" }
+        }
+      }
+    }
+  }
+}

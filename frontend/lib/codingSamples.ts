@@ -22,6 +22,67 @@ const DIFFICULTY_TO_INT: Record<DifficultyWord, number> = { easy: 1, medium: 3, 
 const INT_TO_DIFFICULTY: Record<number, DifficultyWord> = { 1: "easy", 3: "medium", 5: "hard" };
 
 // ── canonical worked examples ──────────────────────────────────────────────
+// The sample set mixes the three supported question types so a fresh template
+// download exercises every code path through the unified importer.
+// Marking convention reflected in the samples below:
+//   coding   : easy=10, medium=20, hard=30
+//   mcq      : easy=1,  medium=3,  hard=5
+//   fillblank: easy=1,  medium=3,  hard=5
+// Coding questions are each scoped to exactly one language; MCQ and
+// fill-in-the-blank already required a single `language` field by design.
+export const SAMPLE_MCQ: AdminQuestionInput = {
+    title: "Python list reversal",
+    plugin_slug: "assessment.mcq",
+    difficulty: 1,
+    max_score: 1,
+    body: {
+        type: "mcq",
+        title: "Python list reversal",
+        section: "Python",
+        category: "Sequences",
+        difficulty: "easy",
+        mode: "main",
+        tags: ["python", "lists"],
+        promptFormat: "markdown",
+        prompt: "Which expression reverses a Python list `xs` *in place*?",
+        language: "language.python",
+        options: [
+            { id: "a", text: "`xs[::-1]`" },
+            { id: "b", text: "`xs.reverse()`" },
+            { id: "c", text: "`reversed(xs)`" },
+            { id: "d", text: "`list(reversed(xs))`" },
+        ],
+        correctOptionIds: ["b"],
+        multiSelect: false,
+        shuffleOptions: true,
+        explanation: "`list.reverse()` mutates in place. The others return a new sequence or iterator.",
+    },
+};
+
+export const SAMPLE_FILLBLANK: AdminQuestionInput = {
+    title: "JavaScript const vs let",
+    plugin_slug: "assessment.fillblank",
+    difficulty: 3,
+    max_score: 3,
+    body: {
+        type: "fillblank",
+        title: "JavaScript const vs let",
+        section: "JavaScript",
+        category: "Bindings",
+        difficulty: "medium",
+        mode: "main",
+        tags: ["javascript", "es6"],
+        promptFormat: "markdown",
+        prompt: "Use {{1}} for values that never get reassigned and {{2}} for values that do.",
+        language: "language.javascript",
+        blanks: [
+            { id: "1", answers: ["const"], matchMode: "ci" },
+            { id: "2", answers: ["let"], matchMode: "ci" },
+        ],
+        explanation: "`const` is for bindings, `let` for mutable references. Neither is about deep immutability.",
+    },
+};
+
 export const SAMPLE_QUESTIONS: AdminQuestionInput[] = [
     {
         title: "Sum Two Integers",
@@ -42,7 +103,7 @@ export const SAMPLE_QUESTIONS: AdminQuestionInput[] = [
             inputFormat: { kind: "markdown", content: "Single line with two integers `a b`." },
             outputFormat: { kind: "markdown", content: "One integer: `a + b`." },
             constraintsFormat: { kind: "markdown", content: "`-10^9 <= a, b <= 10^9`" },
-            allowedLanguages: ["language.python", "language.javascript", "language.cpp"],
+            allowedLanguages: ["language.python"],
             multiFile: false,
             starterCode: {
                 "language.python": "import sys\n\nif __name__ == '__main__':\n    a, b = map(int, sys.stdin.readline().split())\n    print(a + b)\n",
@@ -75,10 +136,9 @@ export const SAMPLE_QUESTIONS: AdminQuestionInput[] = [
             prompt: "## Reverse a String\n\nRead a single line from stdin and print it reversed.",
             inputFormat: { kind: "plain", content: "One line of text." },
             outputFormat: { kind: "plain", content: "Same characters, reverse order." },
-            allowedLanguages: ["language.python", "language.javascript"],
+            allowedLanguages: ["language.javascript"],
             multiFile: false,
             starterCode: {
-                "language.python": "import sys\n\nif __name__ == '__main__':\n    line = sys.stdin.readline().rstrip('\\n')\n    print(line[::-1])\n",
                 "language.javascript": "const data = require('fs').readFileSync(0, 'utf8').trim();\nconsole.log(data.split('').reverse().join(''));\n",
             },
             hintsEnabled: false,
@@ -108,7 +168,7 @@ export const SAMPLE_QUESTIONS: AdminQuestionInput[] = [
             prompt: "## FizzBuzz to N\n\nRead `N` from stdin. For each `i` in `1..N` print `Fizz` if `i % 3 == 0`, `Buzz` if `i % 5 == 0`, `FizzBuzz` if both, else `i`. One per line.",
             inputFormat: { kind: "markdown", content: "Single integer `N` (1 ≤ N ≤ 100)." },
             outputFormat: { kind: "markdown", content: "`N` lines following the FizzBuzz rule." },
-            allowedLanguages: ["language.python", "language.javascript", "language.cpp", "language.java"],
+            allowedLanguages: ["language.python"],
             multiFile: false,
             starterCode: {
                 "language.python": "import sys\n\nif __name__ == '__main__':\n    n = int(sys.stdin.readline().strip())\n    for i in range(1, n + 1):\n        if i % 15 == 0: print('FizzBuzz')\n        elif i % 3 == 0: print('Fizz')\n        elif i % 5 == 0: print('Buzz')\n        else: print(i)\n",
@@ -147,38 +207,61 @@ const triggerDownload = (filename: string, blob: Blob) => {
 };
 
 export function downloadSampleJson() {
-    const payload = JSON.stringify({ questions: SAMPLE_QUESTIONS }, null, 2);
-    triggerDownload("coding-questions-sample.json", new Blob([payload], { type: "application/json" }));
+    // Mixed payload: all three question types in a single envelope so admins
+    // can see how the discriminator works in practice.
+    const payload = JSON.stringify(
+        { questions: [...SAMPLE_QUESTIONS, SAMPLE_MCQ, SAMPLE_FILLBLANK] },
+        null,
+        2,
+    );
+    triggerDownload("assessment-questions-sample.json", new Blob([payload], { type: "application/json" }));
 }
 
 export async function downloadSampleXlsx() {
     const xlsx = await import("xlsx");
     const wb = xlsx.utils.book_new();
 
-    // Questions sheet — one row per question. Nested fields go in as JSON
-    // strings so Excel users can edit them in any cell viewer.
-    const rows = SAMPLE_QUESTIONS.map((q) => ({
-        title: q.title,
-        difficulty: INT_TO_DIFFICULTY[q.difficulty ?? 1] ?? "easy",
-        max_score: q.max_score,
-        mode: bodyField(q, "mode") ?? "main",
-        section: bodyField(q, "section") ?? "",
-        category: bodyField(q, "category") ?? "",
-        tags_csv: ((bodyField(q, "tags") as string[] | undefined) ?? []).join(","),
-        allowed_languages_csv: ((bodyField(q, "allowedLanguages") as string[] | undefined) ?? []).join(","),
-        prompt_format: bodyField(q, "promptFormat") ?? "markdown",
-        prompt: bodyField(q, "prompt") ?? "",
-        input_format: jsonStringifyMaybe(bodyField(q, "inputFormat")),
-        output_format: jsonStringifyMaybe(bodyField(q, "outputFormat")),
-        constraints_format: jsonStringifyMaybe(bodyField(q, "constraintsFormat")),
-        starter_code_json: jsonStringifyMaybe(bodyField(q, "starterCode")),
-        hints_enabled: !!bodyField(q, "hintsEnabled"),
-        hints_json: jsonStringifyMaybe(bodyField(q, "hints")),
-        test_cases_json: JSON.stringify(q.test_cases ?? []),
-    }));
+    // Questions sheet — one row per question, mixed types. The 'type' column
+    // is the discriminator; columns not relevant to a row's type stay empty.
+    const allSamples: AdminQuestionInput[] = [...SAMPLE_QUESTIONS, SAMPLE_MCQ, SAMPLE_FILLBLANK];
+    const rows = allSamples.map((q) => {
+        const t = (bodyField(q, "type") as string) ?? "coding";
+        return {
+            type: t,
+            title: q.title,
+            difficulty: INT_TO_DIFFICULTY[q.difficulty ?? 1] ?? "easy",
+            max_score: q.max_score,
+            mode: bodyField(q, "mode") ?? "main",
+            section: bodyField(q, "section") ?? "",
+            category: bodyField(q, "category") ?? "",
+            tags_csv: ((bodyField(q, "tags") as string[] | undefined) ?? []).join(","),
+            language: (bodyField(q, "language") as string) ?? "",
+            // Coding-specific
+            allowed_languages_csv: ((bodyField(q, "allowedLanguages") as string[] | undefined) ?? []).join(","),
+            prompt_format: bodyField(q, "promptFormat") ?? "markdown",
+            prompt: bodyField(q, "prompt") ?? "",
+            input_format: jsonStringifyMaybe(bodyField(q, "inputFormat")),
+            output_format: jsonStringifyMaybe(bodyField(q, "outputFormat")),
+            constraints_format: jsonStringifyMaybe(bodyField(q, "constraintsFormat")),
+            starter_code_json: jsonStringifyMaybe(bodyField(q, "starterCode")),
+            hints_enabled: !!bodyField(q, "hintsEnabled"),
+            hints_json: jsonStringifyMaybe(bodyField(q, "hints")),
+            test_cases_json: JSON.stringify(q.test_cases ?? []),
+            // MCQ-specific
+            options_json: jsonStringifyMaybe(bodyField(q, "options")),
+            correct_ids_csv: ((bodyField(q, "correctOptionIds") as string[] | undefined) ?? []).join(","),
+            multi_select: !!bodyField(q, "multiSelect"),
+            shuffle_options: bodyField(q, "shuffleOptions") !== false,
+            // FillBlank-specific
+            blanks_json: jsonStringifyMaybe(bodyField(q, "blanks")),
+            // Shared optional
+            explanation: (bodyField(q, "explanation") as string) ?? "",
+        };
+    });
     const ws = xlsx.utils.json_to_sheet(rows);
     // Widen the most-edited columns so the file is usable on first open.
     ws["!cols"] = [
+        { wch: 10 }, // type
         { wch: 22 }, // title
         { wch: 10 }, // difficulty
         { wch: 10 }, // max_score
@@ -186,6 +269,7 @@ export async function downloadSampleXlsx() {
         { wch: 18 }, // section
         { wch: 18 }, // category
         { wch: 22 }, // tags_csv
+        { wch: 22 }, // language
         { wch: 36 }, // allowed_languages_csv
         { wch: 12 }, // prompt_format
         { wch: 50 }, // prompt
@@ -196,54 +280,74 @@ export async function downloadSampleXlsx() {
         { wch: 12 }, // hints_enabled
         { wch: 40 }, // hints_json
         { wch: 60 }, // test_cases_json
+        { wch: 50 }, // options_json
+        { wch: 18 }, // correct_ids_csv
+        { wch: 12 }, // multi_select
+        { wch: 14 }, // shuffle_options
+        { wch: 50 }, // blanks_json
+        { wch: 40 }, // explanation
     ];
     xlsx.utils.book_append_sheet(wb, ws, "Questions");
 
     // README sheet — single-column documentation.
     const readme = [
-        ["Coding Question Bulk Import — Sample"],
+        ["Assessment Bulk Import — Sample"],
         [""],
-        ["Sheet: Questions"],
-        ["  Each row is one question. Required columns: title, difficulty, max_score, prompt, allowed_languages_csv, test_cases_json."],
+        ["Sheet: Questions — one row per question. The 'type' column dispatches by type."],
         [""],
-        ["Columns"],
+        ["Scoring convention"],
+        ["  coding   : easy=10, medium=20, hard=30"],
+        ["  mcq      : easy=1,  medium=3,  hard=5"],
+        ["  fillblank: easy=1,  medium=3,  hard=5"],
+        [""],
+        ["Shared columns (all types)"],
+        ["  type                   coding | mcq | fillblank. Defaults to coding."],
         ["  title                  Question title. Required."],
         ["  difficulty             One of: easy, medium, hard. Maps to 1 / 3 / 5 in the DB."],
-        ["  max_score              Integer total points for the question."],
+        ["  max_score              Integer total points (follow the scoring convention above)."],
         ["  mode                   trial | main. Defaults to main."],
         ["  section                Display group on the candidate sidebar."],
         ["  category               Free-form taxonomy (e.g. 'Arrays & Hashing')."],
         ["  tags_csv               Comma-separated tags (no spaces around commas)."],
-        ["  allowed_languages_csv  Comma-separated language plugin slugs (language.python, language.javascript, ...)."],
+        ["  prompt                 The problem statement, rendered in prompt_format."],
         ["  prompt_format          markdown | html | plain. Defaults to markdown."],
-        ["  prompt                 The problem statement, rendered in the chosen format."],
-        ["  input_format           JSON object: { kind: 'markdown'|'plain'|'html', content: '…' }"],
+        ["  explanation            Optional after-submit explanation (mcq, fillblank)."],
+        [""],
+        ["Coding rows (type=coding)"],
+        ["  allowed_languages_csv  Exactly one language plugin slug (e.g. language.python). Coding questions are single-language."],
+        ["  input_format           JSON object: { kind: 'markdown'|'plain'|'html', content: '…' }."],
         ["  output_format          Same shape as input_format."],
         ["  constraints_format     Same shape as input_format."],
         ["  starter_code_json      JSON object mapping language slug -> starter source string."],
-        ["  hints_enabled          true|false. When true, hints[] becomes available to candidates."],
+        ["  hints_enabled          true|false."],
         ["  hints_json             JSON array of { afterFailures: number, text: string }."],
-        ["  test_cases_json        JSON array. Each entry: { name, is_sample, is_hidden, weight, stdin, expected_stdout, comparator }."],
+        ["  test_cases_json        JSON array of { name, is_sample, is_hidden, weight, stdin, expected_stdout, comparator }."],
         [""],
-        ["Comparators"],
-        ["  trim_equal  Default. Compares stdout to expected_stdout after stripping leading/trailing whitespace."],
+        ["MCQ rows (type=mcq)"],
+        ["  language               Single language plugin slug (e.g. language.python). Required."],
+        ["  options_json           JSON array of { id, text, explanation? }. At least 2 entries."],
+        ["  correct_ids_csv        Comma-separated option ids (1+ entries). Multi-correct = multi-select."],
+        ["  multi_select           Optional override; implied true if correct_ids_csv has > 1 entry."],
+        ["  shuffle_options        true|false. Defaults to true."],
+        [""],
+        ["Fill-in-the-Blank rows (type=fillblank)"],
+        ["  language               Single language plugin slug. Required."],
+        ["  blanks_json            JSON array of { id, answers[], matchMode?, hint?, placeholder? }."],
+        ["                         matchMode is one of exact|ci|trim|regex (default ci)."],
+        ["                         Reference blanks from prompt via {{<id>}} placeholders."],
+        [""],
+        ["Comparators (coding test cases)"],
+        ["  trim_equal  Default. Compares stdout to expected_stdout after stripping outer whitespace."],
         ["  strict      Byte-exact match (including trailing newline)."],
-        ["  json        Parses both sides as JSON and compares structurally (key order ignored)."],
+        ["  json        Parses both sides as JSON and compares structurally."],
         ["  regex       expected_stdout is a regex; pass if it matches actual stdout."],
-        [""],
-        ["Scoring"],
-        ["  All test cases share the question's max_score equally by default (weight=1)."],
-        ["  Example: max_score=30, 6 tests at weight=1 each → 5 points per test."],
-        ["  To weight some tests higher, set weight to a positive integer (e.g. 2 = double share)."],
-        [""],
-        ["Three worked examples are included in the Questions sheet — Easy / Medium / Hard."],
     ];
     const wsReadme = xlsx.utils.aoa_to_sheet(readme);
     wsReadme["!cols"] = [{ wch: 120 }];
     xlsx.utils.book_append_sheet(wb, wsReadme, "README");
 
     const out = xlsx.write(wb, { bookType: "xlsx", type: "array" });
-    triggerDownload("coding-questions-sample.xlsx", new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    triggerDownload("assessment-questions-sample.xlsx", new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
 }
 
 // ── parse incoming file → AdminQuestionInput[] ─────────────────────────────
@@ -273,11 +377,76 @@ export function parseJsonText(text: string): AdminQuestionInput[] {
     } catch (err) {
         throw new Error(`Invalid JSON: ${err instanceof Error ? err.message : String(err)}`);
     }
+    let rows: unknown[] = [];
     if (parsed && typeof parsed === "object" && "questions" in parsed && Array.isArray((parsed as { questions: unknown }).questions)) {
-        return (parsed as { questions: AdminQuestionInput[] }).questions;
+        rows = (parsed as { questions: unknown[] }).questions;
+    } else if (Array.isArray(parsed)) {
+        rows = parsed;
+    } else {
+        throw new Error('JSON must be either an array of questions or { "questions": [ … ] }');
     }
-    if (Array.isArray(parsed)) return parsed as AdminQuestionInput[];
-    throw new Error('JSON must be either an array of questions or { "questions": [ … ] }');
+    // Each row can be a Coding, MCQ, or Fill-in-the-Blank question. The shape
+    // is discriminated by either `type` on the row itself, `body.type`, or the
+    // explicit `plugin_slug`; normalizeJsonRow resolves all three forms into a
+    // canonical AdminQuestionInput with the right plugin_slug.
+    return rows.map((row, i) => normalizeJsonRow(row, i + 1));
+}
+
+function normalizeJsonRow(raw: unknown, rowNum: number): AdminQuestionInput {
+    if (!raw || typeof raw !== "object") {
+        throw new Error(`Row ${rowNum}: expected an object`);
+    }
+    const item = raw as Record<string, unknown> & { body?: Record<string, unknown> };
+    const body = (item.body ?? {}) as Record<string, unknown>;
+
+    // Resolve question type with priority: top-level `type` > body.type > pluginSlug.
+    const topType = typeof item.type === "string" ? (item.type as string).toLowerCase() : undefined;
+    const bodyType = typeof body.type === "string" ? (body.type as string).toLowerCase() : undefined;
+    const slug = typeof item.plugin_slug === "string" ? (item.plugin_slug as string) : undefined;
+    const inferred = topType ?? bodyType ?? slugToType(slug);
+
+    if (!inferred) {
+        throw new Error(
+            `Row ${rowNum}: cannot tell question type — set "type": "coding" | "mcq" | "fillblank" or include "plugin_slug".`,
+        );
+    }
+
+    switch (inferred) {
+        case "coding":
+            return {
+                ...item,
+                plugin_slug: "assessment.coding",
+                body: { ...body, type: "coding" },
+                test_cases: item.test_cases as AdminQuestionInput["test_cases"],
+            } as AdminQuestionInput;
+        case "mcq":
+            return {
+                ...item,
+                plugin_slug: "assessment.mcq",
+                body: { ...body, type: "mcq" },
+            } as AdminQuestionInput;
+        case "fillblank":
+            return {
+                ...item,
+                plugin_slug: "assessment.fillblank",
+                body: { ...body, type: "fillblank" },
+            } as AdminQuestionInput;
+        default:
+            throw new Error(`Row ${rowNum}: unknown type "${inferred}" — expected coding|mcq|fillblank`);
+    }
+}
+
+function slugToType(slug: string | undefined): "coding" | "mcq" | "fillblank" | undefined {
+    switch (slug) {
+        case "assessment.coding":
+            return "coding";
+        case "assessment.mcq":
+            return "mcq";
+        case "assessment.fillblank":
+            return "fillblank";
+        default:
+            return undefined;
+    }
 }
 
 function xlsxRowToQuestion(row: Record<string, unknown>, index: number): AdminQuestionInput {
@@ -290,14 +459,38 @@ function xlsxRowToQuestion(row: Record<string, unknown>, index: number): AdminQu
     const maxScore = readNumber(row, "max_score");
     if (!Number.isFinite(maxScore) || maxScore <= 0) throw new Error(`Row ${rowNum}: max_score must be a positive number`);
 
-    const allowedLanguages = readCsv(row, "allowed_languages_csv");
-    if (allowedLanguages.length === 0) throw new Error(`Row ${rowNum}: allowed_languages_csv must list at least one language slug`);
+    // 'type' column dispatches between the three question types. A missing
+    // type column is back-compat-shimmed to coding so older XLSX templates
+    // (which had no type column) still import cleanly.
+    const type = readString(row, "type").toLowerCase() || "coding";
+    switch (type) {
+        case "coding":
+            return xlsxCodingRow(row, rowNum, title, diffWord, difficulty, maxScore);
+        case "mcq":
+            return xlsxMcqRow(row, rowNum, title, diffWord, difficulty, maxScore);
+        case "fillblank":
+            return xlsxFillBlankRow(row, rowNum, title, diffWord, difficulty, maxScore);
+        default:
+            throw new Error(`Row ${rowNum}: type must be coding|mcq|fillblank, got '${type}'`);
+    }
+}
 
+function xlsxCodingRow(
+    row: Record<string, unknown>,
+    rowNum: number,
+    title: string,
+    diffWord: DifficultyWord,
+    difficulty: number,
+    maxScore: number,
+): AdminQuestionInput {
+    const allowedLanguages = readCsv(row, "allowed_languages_csv");
+    if (allowedLanguages.length === 0) {
+        throw new Error(`Row ${rowNum}: allowed_languages_csv must list at least one language slug`);
+    }
     const testCases = parseJsonCell<AdminQuestionInput["test_cases"]>(row, "test_cases_json", rowNum);
     if (!Array.isArray(testCases) || testCases.length === 0) {
         throw new Error(`Row ${rowNum}: test_cases_json must be a non-empty JSON array`);
     }
-
     return {
         title,
         plugin_slug: "assessment.coding",
@@ -323,6 +516,91 @@ function xlsxRowToQuestion(row: Record<string, unknown>, index: number): AdminQu
             hints: parseJsonCell(row, "hints_json", rowNum, { optional: true }) ?? undefined,
         },
         test_cases: testCases,
+    };
+}
+
+function xlsxMcqRow(
+    row: Record<string, unknown>,
+    rowNum: number,
+    title: string,
+    diffWord: DifficultyWord,
+    difficulty: number,
+    maxScore: number,
+): AdminQuestionInput {
+    const language = readString(row, "language") || "";
+    if (!language) throw new Error(`Row ${rowNum}: language is required for mcq rows (e.g. language.python)`);
+    const options = parseJsonCell<Array<{ id: string; text: string; explanation?: string }>>(
+        row,
+        "options_json",
+        rowNum,
+    );
+    if (!Array.isArray(options) || options.length < 2) {
+        throw new Error(`Row ${rowNum}: options_json must be a JSON array with at least 2 options`);
+    }
+    const correctIds = readCsv(row, "correct_ids_csv");
+    if (correctIds.length === 0) {
+        throw new Error(`Row ${rowNum}: correct_ids_csv must list at least one option id`);
+    }
+    return {
+        title,
+        plugin_slug: "assessment.mcq",
+        difficulty,
+        max_score: maxScore,
+        body: {
+            type: "mcq",
+            title,
+            section: readString(row, "section") || undefined,
+            category: readString(row, "category") || undefined,
+            difficulty: diffWord,
+            mode: readString(row, "mode") || "main",
+            tags: readCsv(row, "tags_csv"),
+            promptFormat: readString(row, "prompt_format") || "markdown",
+            prompt: readString(row, "prompt"),
+            language,
+            options,
+            correctOptionIds: correctIds,
+            multiSelect: readBool(row, "multi_select"),
+            shuffleOptions: readString(row, "shuffle_options").toLowerCase() !== "false",
+            explanation: readString(row, "explanation") || undefined,
+        },
+    };
+}
+
+function xlsxFillBlankRow(
+    row: Record<string, unknown>,
+    rowNum: number,
+    title: string,
+    diffWord: DifficultyWord,
+    difficulty: number,
+    maxScore: number,
+): AdminQuestionInput {
+    const language = readString(row, "language") || "";
+    if (!language) throw new Error(`Row ${rowNum}: language is required for fillblank rows`);
+    const blanks = parseJsonCell<
+        Array<{ id: string; answers: string[]; matchMode?: string; hint?: string; placeholder?: string }>
+    >(row, "blanks_json", rowNum);
+    if (!Array.isArray(blanks) || blanks.length === 0) {
+        throw new Error(`Row ${rowNum}: blanks_json must be a non-empty JSON array`);
+    }
+    return {
+        title,
+        plugin_slug: "assessment.fillblank",
+        difficulty,
+        max_score: maxScore,
+        body: {
+            type: "fillblank",
+            title,
+            section: readString(row, "section") || undefined,
+            category: readString(row, "category") || undefined,
+            difficulty: diffWord,
+            mode: readString(row, "mode") || "main",
+            tags: readCsv(row, "tags_csv"),
+            promptFormat: readString(row, "prompt_format") || "markdown",
+            prompt: readString(row, "prompt"),
+            language,
+            blanks,
+            explanation: readString(row, "explanation") || undefined,
+        },
     };
 }
 

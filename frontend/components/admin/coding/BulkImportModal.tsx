@@ -195,14 +195,16 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ open, onClose, onImpo
             open={open}
             onClose={handleClose}
             eyebrow="Question Bank"
-            title="Bulk import coding questions"
+            title="Bulk import questions"
             wide
         >
             <p
                 className="admin-card-subtitle"
                 style={{ margin: 0, fontSize: 12.5 }}
             >
-                Upload XLSX or JSON. Each row creates one question with its test cases.
+                Upload XLSX or JSON. Each row creates one question — mix coding, MCQ, and fill-in-the-blank in a single file.
+                Set the row&apos;s <span className="admin-mono">type</span> column (XLSX) or <span className="admin-mono">type</span> field (JSON)
+                to <span className="admin-mono">coding</span>, <span className="admin-mono">mcq</span>, or <span className="admin-mono">fillblank</span>.
             </p>
 
             <div

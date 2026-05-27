@@ -36,6 +36,60 @@ import {
 
 const PAGE_SIZE = 25;
 
+// Type filter values. 'all' omits the plugin_slug filter so the backend
+// returns every question; the rest map 1:1 to the assessment.* plugin slugs.
+type BankType = "all" | "coding" | "mcq" | "fillblank";
+
+const PLUGIN_SLUG_BY_BANK_TYPE: Record<Exclude<BankType, "all">, string> = {
+  coding: "assessment.coding",
+  mcq: "assessment.mcq",
+  fillblank: "assessment.fillblank",
+};
+
+// Reverse lookup so we can show a "Type" chip in the table when the All
+// filter is active. Falls back to the raw slug for unknown plugins.
+function bankTypeLabel(pluginSlug: string): string {
+  switch (pluginSlug) {
+    case "assessment.coding": return "Coding";
+    case "assessment.mcq": return "MCQ";
+    case "assessment.fillblank": return "Fill-blank";
+    default: return pluginSlug;
+  }
+}
+
+function typeBadgeTone(pluginSlug: string): "amber" | "blue" | "purple" | "neutral" {
+  switch (pluginSlug) {
+    case "assessment.coding": return "amber";
+    case "assessment.mcq": return "blue";
+    case "assessment.fillblank": return "purple";
+    default: return "neutral";
+  }
+}
+
+// Each question type has its own dedicated editor route — MCQ and Fill-blank
+// rows would mangle their body if routed through the coding editor.
+function editHrefFor(q: { id: string; pluginSlug: string }): string {
+  switch (q.pluginSlug) {
+    case "assessment.mcq": return `/admin/mcq/${q.id}`;
+    case "assessment.fillblank": return `/admin/fillblank/${q.id}`;
+    default: return `/admin/coding/${q.id}`;
+  }
+}
+
+// Resolve the language(s) attached to a question regardless of its type:
+//   - Coding stores body.allowedLanguages (array)
+//   - MCQ / FillBlank store body.language (string)
+// Both forms are normalized to the bare-slug ('python' instead of
+// 'language.python') the filter UI uses.
+function questionLanguages(q: AdminQuestion): string[] {
+  const out = getBodyArray(q, "allowedLanguages").map((l) => l.replace(/^language\./, ""));
+  if (out.length === 0) {
+    const single = getBodyText(q, "language", "");
+    if (single) out.push(single.replace(/^language\./, ""));
+  }
+  return out;
+}
+
 // The schema allows difficulty 1..5 but the product surface is three buckets:
 // 1–2 = Easy, 3–4 = Medium, 5 = Hard. 0 / negative shows as "—" so unset
 // legacy rows still render without crashing the table.
@@ -66,15 +120,26 @@ function getQuestionMode(q: AdminQuestion): "trial" | "main" {
   return getBodyText(q, "mode", "main") === "trial" ? "trial" : "main";
 }
 
-// FilterField wraps a control in the same eyebrow-label rhythm CustomSelect
-// uses so unlabeled controls (segmented toggle, search input) line up with
-// labeled ones in the filter row.
-function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+// FilterField wraps one control in the shared eyebrow-label rhythm and a width
+// tier the admin-filter-bar grid expects. `w` controls how aggressively the
+// field shrinks/grows when wrapped:
+//   seg  — sizes to content (use for segmented toggles)
+//   sm   — ~140px (compact dropdowns)
+//   md   — ~180px (standard dropdowns)
+//   lg   — fills row (search, free-form input)
+//   grow — alias of lg
+function FilterField({
+  label,
+  w = "md",
+  children,
+}: {
+  label: string;
+  w?: "seg" | "sm" | "md" | "lg" | "grow";
+  children: React.ReactNode;
+}) {
   return (
-    <div className="w-full">
-      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-white/40 ml-1 block mb-1.5">
-        {label}
-      </label>
+    <div className="admin-filter-field" data-w={w}>
+      <span className="admin-filter-label">{label}</span>
       {children}
     </div>
   );
@@ -95,11 +160,11 @@ function downloadBlob(filename: string, contents: string, mime: string) {
 function CodingListInner() {
   useRegisterAdminPage({
     eyebrow: "Question Banks",
-    title: "Coding Question Bank",
-    subtitle: "List of problems with inline status and pool toggles, filterable by language, topic, and difficulty.",
+    title: "Question Bank",
+    subtitle: "Coding, MCQ, and Fill-in-the-Blank questions in one place. Filter by type, language, topic, and difficulty.",
     breadcrumb: [
       { label: "Question Banks", href: "/admin/questions" },
-      { label: "Coding" },
+      { label: "All Types" },
     ],
   });
 
@@ -111,6 +176,7 @@ function CodingListInner() {
   const [mode, setMode] = useState<"trial" | "main">("main");
   const [topic, setTopic] = useState("all");
   const [language, setLanguage] = useState("all");
+  const [bankType, setBankType] = useState<BankType>("all");
   // Pagination is reset whenever any filter changes by including the filter
   // signature in a memoized key; the rendered page is `Math.min(page, totalPages)`
   // so a filter change naturally clamps without an extra effect.
@@ -123,8 +189,11 @@ function CodingListInner() {
   const reload = useCallback(() => {
     setLoading(true);
     setError(null);
+    // 'all' omits the plugin_slug filter so the backend returns every type;
+    // any other value maps to its concrete assessment.* slug.
+    const pluginSlug = bankType === "all" ? undefined : PLUGIN_SLUG_BY_BANK_TYPE[bankType];
     listAdminQuestions({
-      pluginSlug: "assessment.coding",
+      pluginSlug,
       search: search.trim() || undefined,
       difficulty: Number(difficulty) || undefined,
       includeArchived,
@@ -132,7 +201,7 @@ function CodingListInner() {
       .then((data) => setQuestions(data.questions))
       .catch((err) => setError(err))
       .finally(() => setLoading(false));
-  }, [includeArchived, search, difficulty]);
+  }, [bankType, includeArchived, search, difficulty]);
 
   // Initial + filter-driven reload. Reload talks to the server, so it must
   // run from an effect — the rule-of-thumb exception to set-state-in-effect.
@@ -153,9 +222,7 @@ function CodingListInner() {
   const allLanguages = useMemo(() => {
     const set = new Set<string>();
     questions.forEach((q) => {
-      getBodyArray(q, "allowedLanguages").forEach((l) =>
-        set.add(l.replace(/^language\./, "")),
-      );
+      questionLanguages(q).forEach((l) => set.add(l));
     });
     return Array.from(set).sort();
   }, [questions]);
@@ -168,8 +235,7 @@ function CodingListInner() {
         if (cat !== topic.toLowerCase()) return false;
       }
       if (language !== "all") {
-        const langs = getBodyArray(q, "allowedLanguages").map((l) => l.replace(/^language\./, ""));
-        if (!langs.includes(language)) return false;
+        if (!questionLanguages(q).includes(language)) return false;
       }
       return true;
     });
@@ -296,9 +362,9 @@ function CodingListInner() {
       <div className="admin-page-header">
         <div>
           <p className="admin-page-eyebrow">Content / Question Banks</p>
-          <h2 className="admin-page-title">Coding Question Bank</h2>
+          <h2 className="admin-page-title">Question Bank</h2>
           <p className="admin-page-copy">
-            Backed by the assessment.coding plugin. Toggle pool membership and visibility inline; use Export to snapshot the filtered set.
+            Coding, MCQ, and Fill-in-the-Blank questions in one bank. Filter by Type to focus on a single category, or All to see everything. Toggle pool membership and visibility inline; use Export to snapshot the filtered set.
           </p>
         </div>
         <div className="admin-row">
@@ -312,8 +378,17 @@ function CodingListInner() {
           <button type="button" onClick={onExport} className="admin-btn admin-btn-secondary" disabled={filtered.length === 0}>
             <Download size={14} /> Export
           </button>
+          {/* One primary New button per type. Coding stays primary; the other
+              two use the secondary style so the visual weight matches the
+              current Coding-first usage pattern. */}
           <Link href="/admin/coding/new" className="admin-btn admin-btn-primary">
-            <Plus size={14} /> New Problem
+            <Plus size={14} /> New Coding
+          </Link>
+          <Link href="/admin/mcq/new" className="admin-btn admin-btn-secondary">
+            <Plus size={14} /> New MCQ
+          </Link>
+          <Link href="/admin/fillblank/new" className="admin-btn admin-btn-secondary">
+            <Plus size={14} /> New Fill-blank
           </Link>
         </div>
       </div>
@@ -326,64 +401,73 @@ function CodingListInner() {
           }}
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
-          {/* Every filter sits in a labeled column so the controls share a
-              common baseline; the segmented toggle and search input each get
-              an explicit eyebrow label to match the CustomSelect rhythm. */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "auto repeat(3, minmax(160px, 1fr)) minmax(220px, 1.5fr) auto",
-              alignItems: "end",
-              gap: 12,
-            }}
-          >
-            <FilterField label="Pool">
+          {/* admin-filter-bar is a flex-wrap row: every control shares the same
+              40px baseline and sizes to its content. On narrow viewports the
+              row wraps naturally — no horizontal scroll, no chip wrapping. */}
+          <div className="admin-filter-bar">
+            <FilterField label="Type" w="seg">
               <SegmentedToggle
+                className="is-compact"
+                value={bankType}
+                onChange={(v) => setBankType(v as BankType)}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "coding", label: "Coding" },
+                  { value: "mcq", label: "MCQ" },
+                  { value: "fillblank", label: "Fill-blank" },
+                ]}
+              />
+            </FilterField>
+            <FilterField label="Pool" w="seg">
+              <SegmentedToggle
+                className="is-compact"
                 value={mode}
                 onChange={setMode}
                 options={[
-                  { value: "trial", label: "Trial / Sample" },
+                  { value: "trial", label: "Trial" },
                   { value: "main", label: "Main" },
                 ]}
               />
             </FilterField>
-            <CustomSelect
-              label="Language"
-              value={language}
-              onChange={setLanguage}
-              options={[{ value: "all", label: "All languages" }, ...allLanguages.map((l) => ({ value: l, label: l }))]}
-            />
-            <CustomSelect
-              label="Topic"
-              value={topic}
-              onChange={setTopic}
-              options={[{ value: "all", label: "All topics" }, ...allTopics.map((t) => ({ value: t, label: t }))]}
-            />
-            <CustomSelect
-              label="Difficulty"
-              value={difficulty}
-              onChange={setDifficulty}
-              options={[
-                { value: "0", label: "Any difficulty" },
-                { value: "1", label: "Easy" },
-                { value: "3", label: "Medium" },
-                { value: "5", label: "Hard" },
-              ]}
-            />
-            <FilterField label="Search">
-              <label className="admin-search" style={{ height: 44, width: "100%" }}>
+            <FilterField label="Language" w="md">
+              <CustomSelect
+                value={language}
+                onChange={setLanguage}
+                options={[{ value: "all", label: "All languages" }, ...allLanguages.map((l) => ({ value: l, label: l }))]}
+              />
+            </FilterField>
+            <FilterField label="Topic" w="md">
+              <CustomSelect
+                value={topic}
+                onChange={setTopic}
+                options={[{ value: "all", label: "All topics" }, ...allTopics.map((t) => ({ value: t, label: t }))]}
+              />
+            </FilterField>
+            <FilterField label="Difficulty" w="sm">
+              <CustomSelect
+                value={difficulty}
+                onChange={setDifficulty}
+                options={[
+                  { value: "0", label: "Any difficulty" },
+                  { value: "1", label: "Easy" },
+                  { value: "3", label: "Medium" },
+                  { value: "5", label: "Hard" },
+                ]}
+              />
+            </FilterField>
+            <FilterField label="Search" w="grow">
+              <label className="admin-search">
                 <Search size={14} />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search problems…"
+                  placeholder="Search questions…"
                 />
               </label>
             </FilterField>
             <button
               type="submit"
-              className="admin-btn admin-btn-secondary"
-              style={{ minHeight: 44, alignSelf: "end" }}
+              className="admin-btn admin-btn-secondary admin-filter-submit"
             >
               <Search size={14} /> Search
             </button>
@@ -405,7 +489,7 @@ function CodingListInner() {
 
       {error !== null ? (
         <ErrorState
-          title="Couldn't load coding problems"
+          title="Couldn't load questions"
           error={error}
           onRetry={reload}
           hint="If you just started the dev server, make sure NEXT_PUBLIC_API_BASE points at the Go exam-engine."
@@ -419,8 +503,9 @@ function CodingListInner() {
               <thead>
                 <tr style={{ textAlign: "left", color: "var(--admin-fg-3)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: 1.2 }}>
                   <th style={{ padding: "8px 10px" }}>Title</th>
+                  <th style={{ padding: "8px 10px" }}>Type</th>
                   <th style={{ padding: "8px 10px" }}>Topic</th>
-                  <th style={{ padding: "8px 10px" }}>Languages</th>
+                  <th style={{ padding: "8px 10px" }}>Language</th>
                   <th style={{ padding: "8px 10px" }}>Difficulty</th>
                   <th style={{ padding: "8px 10px" }}>Score</th>
                   <th style={{ padding: "8px 10px", textAlign: "center" }}>Active</th>
@@ -431,18 +516,23 @@ function CodingListInner() {
               <tbody>
                 {pageRows.map((q) => {
                   const cat = getBodyText(q, "category", "") || getBodyText(q, "section", "") || "—";
-                  const langs = getBodyArray(q, "allowedLanguages").map((l) => l.replace(/^language\./, ""));
+                  const langs = questionLanguages(q);
                   const active = !q.isArchived;
                   const sample = getQuestionMode(q) === "trial";
                   return (
                     <tr key={q.id} style={{ borderTop: "1px solid var(--admin-border)" }}>
                       <td style={{ padding: "10px" }}>
-                        <Link href={`/admin/coding/${q.id}`} style={{ color: "var(--admin-fg)", fontWeight: 700, textDecoration: "none" }}>
+                        <Link href={editHrefFor(q)} style={{ color: "var(--admin-fg)", fontWeight: 700, textDecoration: "none" }}>
                           {q.title}
                         </Link>
                         <div className="admin-mono" style={{ fontSize: 10.5, color: "var(--admin-fg-4)" }}>
                           {q.id.slice(0, 8)} · v{q.versionNumber}
                         </div>
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <Badge tone={typeBadgeTone(q.pluginSlug)}>
+                          {bankTypeLabel(q.pluginSlug)}
+                        </Badge>
                       </td>
                       <td style={{ padding: "10px", color: "var(--admin-fg-2)" }}>{cat}</td>
                       <td style={{ padding: "10px", color: "var(--admin-fg-2)" }}>
@@ -468,7 +558,7 @@ function CodingListInner() {
                       </td>
                       <td style={{ padding: "10px", textAlign: "right" }}>
                         <div className="admin-row" style={{ justifyContent: "flex-end", gap: 6 }}>
-                          <Link href={`/admin/coding/${q.id}`} className="admin-btn admin-btn-secondary">
+                          <Link href={editHrefFor(q)} className="admin-btn admin-btn-secondary">
                             Edit
                           </Link>
                           <button
@@ -534,11 +624,25 @@ function CodingListInner() {
       {!error && !loading && filtered.length === 0 && (
         <EmptyState
           icon={<Code2 size={26} />}
-          title="No coding problems found"
-          description="Try adjusting the filters above or create your first problem."
+          title="No questions found"
+          description="Try adjusting the Type or other filters above, or import a batch from JSON / XLSX."
           action={
-            <Link href="/admin/coding/new" className="admin-btn admin-btn-primary">
-              <Plus size={14} /> New Problem
+            <Link
+              href={
+                bankType === "mcq"
+                  ? "/admin/mcq/new"
+                  : bankType === "fillblank"
+                    ? "/admin/fillblank/new"
+                    : "/admin/coding/new"
+              }
+              className="admin-btn admin-btn-primary"
+            >
+              <Plus size={14} />{" "}
+              {bankType === "mcq"
+                ? "New MCQ"
+                : bankType === "fillblank"
+                  ? "New Fill-blank"
+                  : "New Coding"}
             </Link>
           }
         />

@@ -203,7 +203,14 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusInternalServerError, "attempt lookup failed")
+		// Surfacing the pgx error in the response is debug instrumentation:
+		// previously this returned a flat "attempt lookup failed" which gave
+		// the candidate UI no way to diagnose a poisoned tx or connection
+		// loss. Once the root cause is understood the detail can be replaced
+		// with a stable user-facing string again.
+		s.logger.Error("attempts done-lookup failed",
+			"assignmentId", assignmentID, "candidateUserId", principal.UserID, "err", err.Error())
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("attempt lookup failed: %v", err))
 		return
 	}
 
@@ -234,7 +241,12 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusInternalServerError, "attempt lookup failed")
+		// Debug instrumentation — see comment on the earlier "attempt lookup
+		// failed" site. Includes the underlying pgx error so we can tell a
+		// poisoned-tx state apart from a connection drop.
+		s.logger.Error("attempts active-lookup failed",
+			"assignmentId", assignmentID, "candidateUserId", principal.UserID, "err", err.Error())
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("attempt lookup failed: %v", err))
 		return
 	}
 
@@ -267,11 +279,24 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		}
 		frozen, spill, err = s.buildCodingFrozenSnapshot(ctx, tx, examVersionID, attemptID, codingLanguageSlug, totalSeconds)
 		if err != nil {
-			writeJSON(w, http.StatusConflict, map[string]any{
-				"error":    "coding bank under-stocked",
-				"detail":   err.Error(),
-				"language": codingLanguageSlug,
-			})
+			// Only the real "under-stocked" branch in pickCodingQuestions
+			// should surface as 409; everything else (DB error, context
+			// timeout, etc.) is an actual server-side failure that deserves
+			// a 500 with the real reason. The previous catch-all always
+			// labeled it under-stocked, which masked real bugs (e.g. the
+			// pool-inside-tx contention that produced
+			// "timeout: context deadline exceeded").
+			if strings.Contains(err.Error(), "under-stocked") {
+				writeJSON(w, http.StatusConflict, map[string]any{
+					"error":    "coding bank under-stocked",
+					"detail":   err.Error(),
+					"language": codingLanguageSlug,
+				})
+				return
+			}
+			s.logger.Error("coding snapshot build failed",
+				"attemptId", attemptID, "language", codingLanguageSlug, "err", err.Error())
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("snapshot build failed: %v", err))
 			return
 		}
 		spillBuilt = true
@@ -304,7 +329,16 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			    time_remaining_ms = $3
 			WHERE id = $4
 		`, fingerprint, deadline, totalSeconds*1000, attemptID); err != nil {
-			writeError(w, http.StatusInternalServerError, "attempt update failed")
+			// Debug instrumentation matching the other attempt_handlers.go
+			// error sites. The pgx error code/message is the only thing that
+			// distinguishes a poisoned tx from a constraint violation from a
+			// statement-level trigger; surface it both in logs and the
+			// response body until the underlying cause is fixed.
+			s.logger.Error("attempts coding-update failed",
+				"attemptId", attemptID, "assignmentId", assignmentID,
+				"candidateUserId", principal.UserID, "totalSeconds", totalSeconds,
+				"fingerprintBytes", len(fingerprint), "err", err.Error())
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("attempt update failed: %v", err))
 			return
 		}
 	} else {
@@ -780,7 +814,9 @@ func (s *Server) loadSnapshot(ctx context.Context, userID int64, attemptID uuid.
 		}
 		q.ExamQuestionID = eqID.String()
 		q.QuestionVersionID = qvID.String()
-		candidateBody, err := s.candidateQuestionBody(ctx, qvID, title, difficulty, body)
+		// writeSnapshot reads its own questions via s.pool above, so reuse the
+		// pool here too — there's no in-flight tx in this code path.
+		candidateBody, err := s.candidateQuestionBody(ctx, s.pool, qvID, title, difficulty, body)
 		if err != nil {
 			return snapshotResponse{}, err
 		}
@@ -857,12 +893,12 @@ func (s *Server) loadAnswerSnapshots(ctx context.Context, examVersionID uuid.UUI
 
 func (s *Server) buildFrozenSnapshot(
 	ctx context.Context,
-	q snapshotQueryer,
+	dbq snapshotQueryer,
 	examVersionID uuid.UUID,
 	assignmentRef string,
 	totalSeconds int,
 ) (frozenAttemptSnapshot, error) {
-	rows, err := q.Query(ctx, `
+	rows, err := dbq.Query(ctx, `
 		SELECT eq.id,
 		       qv.id,
 		       eq.ordinal,
@@ -893,7 +929,10 @@ func (s *Server) buildFrozenSnapshot(
 		}
 		q.ExamQuestionID = eqID.String()
 		q.QuestionVersionID = qvID.String()
-		candidateBody, err := s.candidateQuestionBody(ctx, qvID, title, difficulty, body)
+		// buildFrozenSnapshot is called from start-attempt with the tx as dbq;
+		// thread it through so the per-question lookups stay on the same
+		// connection as the surrounding transaction.
+		candidateBody, err := s.candidateQuestionBody(ctx, dbq, qvID, title, difficulty, body)
 		if err != nil {
 			return frozenAttemptSnapshot{}, err
 		}
@@ -915,6 +954,7 @@ func (s *Server) buildFrozenSnapshot(
 
 func (s *Server) candidateQuestionBody(
 	ctx context.Context,
+	q snapshotQueryer,
 	questionVersionID uuid.UUID,
 	title string,
 	difficulty int,
@@ -942,7 +982,7 @@ func (s *Server) candidateQuestionBody(
 	}
 
 	if responseType == "mcq" || questionType == "mcq" {
-		options, err := s.visibleMCQOptions(ctx, questionVersionID)
+		options, err := s.visibleMCQOptions(ctx, q, questionVersionID)
 		if err != nil {
 			return nil, err
 		}
@@ -954,7 +994,7 @@ func (s *Server) candidateQuestionBody(
 		delete(body, "correctOptionId")
 		delete(body, "answer")
 	} else {
-		testCases, err := s.visibleQuestionTestCases(ctx, questionVersionID)
+		testCases, err := s.visibleQuestionTestCases(ctx, q, questionVersionID)
 		if err != nil {
 			return nil, err
 		}
@@ -968,8 +1008,15 @@ func (s *Server) candidateQuestionBody(
 	return json.RawMessage(encoded), nil
 }
 
-func (s *Server) visibleMCQOptions(ctx context.Context, questionVersionID uuid.UUID) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `
+// visibleMCQOptions and visibleQuestionTestCases now both accept a
+// snapshotQueryer so callers in an in-flight transaction can reuse the same
+// connection instead of grabbing a fresh one from the pool. Previously they
+// hard-coded s.pool, which during a long snapshot build (10 per-question
+// lookups per candidate) could stall on pool exhaustion / connection setup
+// and time out the parent 5s context — surfaced upstream as the misleading
+// "coding bank under-stocked: timeout" 409.
+func (s *Server) visibleMCQOptions(ctx context.Context, q snapshotQueryer, questionVersionID uuid.UUID) ([]string, error) {
+	rows, err := q.Query(ctx, `
 		SELECT label
 		FROM question_options
 		WHERE question_version_id = $1
@@ -990,8 +1037,8 @@ func (s *Server) visibleMCQOptions(ctx context.Context, questionVersionID uuid.U
 	return options, rows.Err()
 }
 
-func (s *Server) visibleQuestionTestCases(ctx context.Context, questionVersionID uuid.UUID) ([]candidateTestCaseDTO, error) {
-	rows, err := s.pool.Query(ctx, `
+func (s *Server) visibleQuestionTestCases(ctx context.Context, q snapshotQueryer, questionVersionID uuid.UUID) ([]candidateTestCaseDTO, error) {
+	rows, err := q.Query(ctx, `
 		SELECT COALESCE(name, ''), stdin, expected_stdout
 		FROM question_test_cases
 		WHERE question_version_id = $1
