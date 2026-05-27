@@ -1,8 +1,5 @@
 import type { NextConfig } from "next";
-import path from "path";
 
-// Read backend service URLs from env, falling back to localhost for local dev.
-// In production (DigitalOcean), these point to the Render-hosted services.
 const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:4002";
 const STUDENT_SERVICE_URL = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
 const ADMIN_API_BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "http://localhost:4001";
@@ -11,9 +8,6 @@ const TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5
 const JUDGE0_URL = process.env.NEXT_PUBLIC_JUDGE0_URL || "http://localhost:2358";
 
 const nextConfig: NextConfig = {
-  // Pin the tracing root to this frontend directory so Next.js doesn't
-  // walk up to C:\Users\Jaya Krishna and get confused by the lockfile there.
-  outputFileTracingRoot: path.join(__dirname),
   images: {
     unoptimized: true,
   },
