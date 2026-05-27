@@ -100,7 +100,6 @@ export class AdminDashboardService {
           SELECT (
             (SELECT COUNT(*) FROM tech_aptitude_questions WHERE status = 'active') +
             (SELECT COUNT(*) FROM tech_grammar_questions WHERE status = 'active') +
-            (SELECT COUNT(*) FROM tech_coding_questions WHERE status = 'active') +
             (SELECT COUNT(*) FROM tech_mnc_questions WHERE status = 'active') +
             (SELECT COUNT(*) FROM tech_role_questions WHERE status = 'active')
           ) as total
@@ -109,6 +108,8 @@ export class AdminDashboardService {
       } catch (e: any) {
         this.logger.error(`KPI question count failed: ${e.message}`);
       }
+      // 4 MCQ modules here + coding lives in exam-engine; surface that as a
+      // single "coding" plugin slot in the dashboard's bank breakdown.
       out.kpis.questionBankPluginCount = 5;
 
       try {
@@ -118,7 +119,6 @@ export class AdminDashboardService {
             UNION ALL SELECT status, updated_at FROM tech_grammar_attempts
             UNION ALL SELECT status, updated_at FROM tech_mnc_attempts
             UNION ALL SELECT status, updated_at FROM tech_role_attempts
-            UNION ALL SELECT status, updated_at FROM tech_coding_attempts
           )
           SELECT
             COUNT(*) FILTER (WHERE status = 'in_progress')::bigint AS live,
@@ -138,7 +138,6 @@ export class AdminDashboardService {
             UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_grammar_attempts
             UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_mnc_attempts
             UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_role_attempts
-            UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_coding_attempts
           )
           SELECT COUNT(DISTINCT user_id)::bigint as count
           FROM all_candidates
@@ -152,7 +151,6 @@ export class AdminDashboardService {
             UNION ALL SELECT user_id, updated_at FROM tech_grammar_attempts WHERE status = 'in_progress'
             UNION ALL SELECT user_id, updated_at FROM tech_mnc_attempts WHERE status = 'in_progress'
             UNION ALL SELECT user_id, updated_at FROM tech_role_attempts WHERE status = 'in_progress'
-            UNION ALL SELECT user_id, updated_at FROM tech_coding_attempts WHERE status = 'in_progress'
           )
           SELECT COUNT(DISTINCT user_id)::bigint as count
           FROM all_online
@@ -177,7 +175,6 @@ export class AdminDashboardService {
           const tableMap: any = {
             aptitude: 'tech_aptitude_attempts',
             grammar: 'tech_grammar_attempts',
-            coding: 'tech_coding_attempts',
             mnc: 'tech_mnc_attempts',
             role: 'tech_role_attempts',
             communication: 'tech_grammar_attempts'
@@ -221,7 +218,6 @@ export class AdminDashboardService {
             UNION ALL SELECT submitted_at::date as d FROM tech_grammar_attempts WHERE status IN ('submitted', 'evaluated')
             UNION ALL SELECT submitted_at::date as d FROM tech_mnc_attempts WHERE status IN ('submitted', 'evaluated')
             UNION ALL SELECT submitted_at::date as d FROM tech_role_attempts WHERE status IN ('submitted', 'evaluated')
-            UNION ALL SELECT submitted_at::date as d FROM tech_coding_attempts WHERE status IN ('submitted', 'evaluated')
           )
           SELECT days.d, COUNT(all_submissions.d)::bigint as count
           FROM days
@@ -245,7 +241,6 @@ export class AdminDashboardService {
         const breakdown = [
           { slug: 'aptitude', name: 'Aptitude' },
           { slug: 'grammar', name: 'Grammar' },
-          { slug: 'coding', name: 'Coding' },
           { slug: 'mnc', name: 'MNC' },
           { slug: 'role', name: 'Role-based' }
         ];

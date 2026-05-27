@@ -252,17 +252,11 @@ export class AssessmentService {
         hasDifficulty: false,  // tech_role_questions has NO difficulty column
         hasMode: false,        // tech_role_questions has NO mode column
       },
-      coding: {
-        attempts: 'tech_coding_attempts',
-        questions: 'tech_coding_questions',
-        junction: 'tech_coding_attempt_questions',
-        idCol: 'coding_question_id',
-        options: null,
-        attemptIdCol: 'coding_attempt_id',
-        catCol: 'difficulty',
-        hasDifficulty: true,
-        hasMode: false,
-      },
+      // Coding is intentionally absent. The tech_coding_* tables are retired;
+      // coding questions live in exam-engine (`questions` with plugin_slug
+      // 'assessment.coding') and are served from /admin/coding + a dedicated
+      // attempt flow. Anything calling into this service with module='coding'
+      // will fall through to the BadRequestException below.
     } as Record<string, any>;
   }
 
@@ -956,6 +950,7 @@ export class AssessmentService {
     const isRole = moduleType === 'role';
     const attemptId = attempt[config.attemptIdCol];
     const correctOptCol = isCoding ? `NULL as correct_option_id` : `q.correct_option_id`;
+    const selectedOptionIdCol = isCoding ? `NULL::bigint as selected_option_id` : `aq.selected_option_id`;
     const taskTypeCol = isGrammar ? `q.task_type` : `NULL as task_type`;
     const roleTypeCol = isRole ? `q.question_type` : `NULL as question_type`;
     const questionMetadataCol = (!isCoding && !isGrammar)
@@ -979,7 +974,7 @@ export class AssessmentService {
               aq.display_order,
               ${blockNumberCol},
               aq.${config.idCol} AS question_id,
-              aq.selected_option_id,
+              ${selectedOptionIdCol},
               ${answerTextCol},
               ${answerAudioCol},
               ${submittedCodeCol},
@@ -1132,15 +1127,17 @@ export class AssessmentService {
         }
       }
 
+      const taskType = String(aq.task_type || '').toLowerCase();
       const questionMetadata = asObject(aq.question_metadata);
       const attemptMetadata = asObject(aq.attempt_metadata);
-      const questionKind = (!isCoding && !isGrammar)
+      const isObjectiveGrammar = isGrammar && (taskType === 'listening_mcq' || taskType === 'reading_mcq');
+      const questionKind = (!isCoding && (!isGrammar || isObjectiveGrammar))
         ? normalizeQuestionKind((questionMetadata as any).kind)
         : null;
       const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
       const selectedAnswerValue =
         (!isCoding &&
-          !isGrammar &&
+          (!isGrammar || isObjectiveGrammar) &&
           (questionKind === 'msq' || questionKind === 'numerical') &&
           metadataSubmittedAnswer !== undefined &&
           metadataSubmittedAnswer !== null &&
@@ -1164,16 +1161,29 @@ export class AssessmentService {
         selectedOptionId: null,
         selectedAnswerText: null,
         correctOptionId:
-          aq.correct_option_id !== null && aq.correct_option_id !== undefined
-            ? String(aq.correct_option_id)
-            : null,
+          questionKind === 'msq'
+            ? (Array.isArray((questionMetadata as any).correctOptionIds)
+                ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+                : [])
+            : (aq.correct_option_id !== null && aq.correct_option_id !== undefined
+                ? String(aq.correct_option_id)
+                : null),
         correctAnswerText: null,
         isCorrect: null,
         status: 'unanswered',
       };
 
-      if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-        review.correctAnswerText = optionTextById.get(review.correctOptionId);
+      if (questionKind === 'msq') {
+        const correctChoices = Array.isArray(review.correctOptionId) ? review.correctOptionId : [];
+        review.correctAnswerText = correctChoices
+          .map((id: string) => optionTextById.get(id) ?? id)
+          .join(', ');
+      } else if (questionKind === 'numerical') {
+        review.correctAnswerText = String((questionMetadata as any).correctAnswer ?? '');
+      } else {
+        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+          review.correctAnswerText = optionTextById.get(review.correctOptionId);
+        }
       }
 
       if (isCoding) {
@@ -1191,7 +1201,7 @@ export class AssessmentService {
         continue;
       }
 
-      if (isGrammar) {
+      if (isGrammar && taskType !== 'listening_mcq' && taskType !== 'reading_mcq') {
         const taskType = String(aq.task_type || '').toLowerCase();
         const selectedOptionId = aq.selected_option_id !== null && aq.selected_option_id !== undefined
           ? String(aq.selected_option_id)
@@ -1842,6 +1852,15 @@ export class AssessmentService {
           }
         }
 
+        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+          const kind = String(rawKind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        };
+
+        const qMetadataForType = aq.question_metadata || {};
+        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType.kind) : null;
         const review: any = {
           questionId: questionIdStr,
           displayOrder: Number(aq.display_order || 0),
@@ -1852,7 +1871,7 @@ export class AssessmentService {
               ? String(aq.task_type || 'mcq').toLowerCase()
               : isRole
                 ? String(aq.question_type || 'conceptual').toLowerCase()
-                : 'mcq',
+                : (reviewKind || 'mcq'),
           questionText: String(aq.question_text || ''),
           options: optionsForReview,
           selectedOptionId: null,
@@ -1906,7 +1925,8 @@ export class AssessmentService {
           continue;
         }
 
-        if (isGrammar) {
+        const taskType = String(aq.task_type || '').toLowerCase();
+        if (isGrammar && taskType !== 'listening_mcq' && taskType !== 'reading_mcq') {
           const taskType  = String(aq.task_type || '').toLowerCase();
           const rawAnswer = rawSubmittedAnswer;
           if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
@@ -1985,15 +2005,8 @@ export class AssessmentService {
           continue;
         }
 
-        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-          const kind = String(rawKind || 'mcq').toLowerCase();
-          if (kind === 'true_false') return 'tf';
-          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
-          return 'mcq';
-        };
-
         // Scoring Logic: Support MCQ, MSQ, TF, Numerical
-        if (aq.mode !== 'trial' && !isCoding && !isGrammar) {
+        if (aq.mode !== 'trial' && !isCoding && (!isGrammar || taskType === 'listening_mcq' || taskType === 'reading_mcq')) {
           const hasObjectiveAnswer = Array.isArray(selectedOptionId)
             ? selectedOptionId.length > 0
             : !(selectedOptionId === undefined || selectedOptionId === null || selectedOptionId === '');
@@ -2006,6 +2019,9 @@ export class AssessmentService {
             const kind = normalizeQuestionKind(qMetadata.kind);
             let isCorrectAnswer = false;
 
+            // Update the review type to reflect the actual question kind
+            review.type = kind;
+
             if (kind === 'msq') {
               const studentChoices: string[] = Array.isArray(selectedOptionId) 
                 ? selectedOptionId.map(String) 
@@ -2015,6 +2031,16 @@ export class AssessmentService {
                 ? qMetadata.correctOptionIds.map(String)
                 : [];
               
+              // Populate review with MSQ selections
+              review.selectedOptionId = studentChoices;
+              review.selectedAnswerText = studentChoices
+                .map((id: string) => optionTextById.get(id) ?? id)
+                .join(', ');
+              // Populate correct answer text for MSQ
+              review.correctAnswerText = correctChoices
+                .map((id: string) => optionTextById.get(id) ?? id)
+                .join(', ');
+              
               // All-or-nothing check for MSQ
               isCorrectAnswer = studentChoices.length > 0 &&
                                studentChoices.length === correctChoices.length &&
@@ -2022,11 +2048,21 @@ export class AssessmentService {
             } else if (kind === 'numerical') {
               const studentAnswer = String(selectedOptionId || '').trim().toLowerCase();
               const correctAnswer = String(qMetadata.correctAnswer || '').trim().toLowerCase();
+              // Populate review with numerical answer
+              review.selectedOptionId = studentAnswer;
+              review.selectedAnswerText = studentAnswer;
+              review.correctAnswerText = String(qMetadata.correctAnswer || '');
               isCorrectAnswer = studentAnswer !== '' && studentAnswer === correctAnswer;
             } else {
               // Standard MCQ / TF (single choice)
+              review.selectedOptionId = String(selectedOptionId);
+              review.selectedAnswerText = optionTextById.get(String(selectedOptionId)) ?? String(selectedOptionId);
               isCorrectAnswer = String(selectedOptionId) === String(aq.correct_option_id);
             }
+
+            // Write scoring result into review
+            review.isCorrect = isCorrectAnswer;
+            review.status = isCorrectAnswer ? 'correct' : 'incorrect';
 
             const scoreAwarded    = isCorrectAnswer ? questionMarks : 0;
             const negativeApplied = isCorrectAnswer ? 0 : questionNegMarks;

@@ -455,12 +455,14 @@ export interface AdminUserEntitlement {
 export class ApiError extends Error {
   status: number;
   raw?: string;
+  body?: Record<string, unknown> | null;
 
-  constructor(status: number, message: string, raw?: string) {
+  constructor(status: number, message: string, raw?: string, body?: Record<string, unknown> | null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.raw = raw;
+    this.body = body;
   }
 }
 
@@ -641,7 +643,7 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
   const data = text ? safeJson(text) : null;
   if (!res.ok) {
     const msg = errorMessageFrom(data) ?? res.statusText;
-    throw new ApiError(res.status, msg, data?.__raw);
+    throw new ApiError(res.status, msg, data?.__raw, data);
   }
   return data as T;
 }
@@ -684,7 +686,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
   await assertRegistrationPhoneAvailable(input.mobileNumber);
   const hasGroup = !!input.groupCode?.trim();
 
-  await apiFetch<unknown>("/api/auth/register", {
+  await apiFetch<any>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email: input.email,
@@ -711,13 +713,13 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
   });
 
   return {
-    user: { email: input.email } as unknown as AuthResponse["user"],
+    user: { email: input.email } as any,
     registration: null,
-  } as unknown as AuthResponse;
+  } as any;
 }
 
-export async function getDepartments(): Promise<unknown[]> {
-  return apiFetch<unknown[]>("/student/departments", {
+export async function getDepartments(): Promise<any[]> {
+  return apiFetch<any[]>("/student/departments", {
     method: "POST",
     baseOverride: STUDENT_API_BASE,
     auth: false,
@@ -807,22 +809,10 @@ export async function loginUser(
   }
 
   if (!session) {
-    // Fallback: Fetch actual database profile and role from student-service.
-    // StudentProfile captures only the fields this fallback reads — the actual
-    // /student/profile response carries more keys we don't use here.
-    interface StudentProfile {
-      id?: number;
-      fullName?: string;
-      gender?: string;
-      mobileNumber?: string;
-      role?: string;
-      status?: string;
-      isTechAssessment?: number;
-      metadata?: { cognitoSub?: string | null; countryCode?: string };
-    }
-    let dbUser: StudentProfile | null = null;
+    // Fallback: Fetch actual database profile and role from student-service
+    let dbUser: any = null;
     try {
-      dbUser = await apiFetch<StudentProfile>("/student/profile", {
+      dbUser = await apiFetch<any>("/student/profile", {
         method: "POST",
         body: JSON.stringify({ email }),
         baseOverride: STUDENT_API_BASE,
@@ -842,7 +832,7 @@ export async function loginUser(
         cognitoSub: dbUser?.metadata?.cognitoSub || null,
         emailVerified: true,
         isActive: true,
-      } as unknown as AuthResponse["user"],
+      } as any,
       registration: dbUser ? {
         id: dbUser.id,
         fullName: dbUser.fullName,
@@ -851,7 +841,7 @@ export async function loginUser(
         mobileNumber: dbUser.mobileNumber,
         status: dbUser.status || "ACTIVE",
         isTechAssessment: dbUser.isTechAssessment || 0,
-      } as unknown as AuthResponse["registration"] : null,
+      } as any : null,
       tokens,
     };
   }
@@ -937,6 +927,51 @@ export async function saveAttemptAnswer(
       body: JSON.stringify(input),
     },
   );
+}
+
+export interface LastCodeRunTest {
+  ordinal: number;
+  name?: string;
+  passed: boolean;
+  actualStdout?: string;
+  expectedStdout?: string;
+  timeMs: number;
+  memoryKb: number;
+}
+
+export interface LastCodeRun {
+  runId: string;
+  mode: string;
+  language: string;
+  entryFile: string;
+  statusId?: number;
+  statusDesc?: string;
+  summary?: string;
+  timeMs: number;
+  memoryKb: number;
+  startedAt: string;
+  finishedAt?: string;
+  testResults: LastCodeRunTest[];
+}
+
+/**
+ * Fetches the most recent finished code_run for a question in this attempt,
+ * including per-test-case stdout/time/memory. Returns null when the candidate
+ * has not run this question yet (server replies 404), so the editor can show
+ * its empty state instead of an error.
+ */
+export async function getLastCodeRun(
+  attemptId: string,
+  examQuestionId: string,
+): Promise<LastCodeRun | null> {
+  try {
+    return await apiFetch<LastCodeRun>(
+      `/v1/attempts/${attemptId}/answers/${examQuestionId}/last-run`,
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("404")) return null;
+    throw err;
+  }
 }
 
 export async function runAttemptCode(
@@ -1162,8 +1197,178 @@ export async function updateAdminQuestion(
   });
 }
 
-export async function archiveAdminQuestion(questionId: string): Promise<void> {
-  await apiFetch(`/v1/admin/questions/${questionId}`, { method: "DELETE" });
+export async function archiveAdminQuestion(questionId: string): Promise<{ status: string }> {
+  return apiFetch<{ status: string }>(
+    `/v1/admin/questions/${questionId}?force=archive`,
+    { method: "DELETE" },
+  );
+}
+
+export type DeleteAdminQuestionResult =
+  | { status: "deleted" }
+  | { status: "archived" }
+  | { status: "in_use"; examCount: number; attemptCount: number };
+
+// Hard-delete a question. If the server reports it's still referenced by
+// exams or attempts (409), surface that to the caller so the UI can offer
+// archive as a fallback instead of silently failing.
+export async function deleteAdminQuestion(questionId: string): Promise<DeleteAdminQuestionResult> {
+  try {
+    await apiFetch(`/v1/admin/questions/${questionId}`, { method: "DELETE" });
+    return { status: "deleted" };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      const body = (err.body ?? {}) as { exam_count?: number; attempt_count?: number };
+      return {
+        status: "in_use",
+        examCount: body.exam_count ?? 0,
+        attemptCount: body.attempt_count ?? 0,
+      };
+    }
+    throw err;
+  }
+}
+
+// ── Admin coding language configs (exam builder) ─────────────────────────
+
+export interface AdminCodingBankCounts {
+  total: number;
+  easy: number;
+  medium: number;
+  hard: number;
+}
+
+// Question-type discriminator for the per-language config + banks. Matches the
+// backend `question_type` column on coding_language_configs (migration 028).
+export type AssessmentQuestionType = "coding" | "mcq" | "fillblank";
+
+// Plugin slug each AssessmentQuestionType maps to in the question bank.
+export const PLUGIN_SLUG_FOR_TYPE: Record<AssessmentQuestionType, string> = {
+  coding: "assessment.coding",
+  mcq: "assessment.mcq",
+  fillblank: "assessment.fillblank",
+};
+
+export interface AdminCodingLanguageConfig {
+  languageSlug: string;
+  questionType: AssessmentQuestionType;
+  enabled: boolean;
+  totalQuestions: number;
+  easyCount: number;
+  mediumCount: number;
+  hardCount: number;
+  inputMode: "count" | "percent";
+  allowSpillover: boolean;
+  includeTags: string[];
+  timeSecondsOverride?: number | null;
+  updatedAt?: string;
+}
+
+// Per-type configs / banks returned by the language list & get endpoints.
+export interface AdminAssessmentConfigsByType {
+  coding: AdminCodingLanguageConfig | null;
+  mcq: AdminCodingLanguageConfig | null;
+  fillblank: AdminCodingLanguageConfig | null;
+}
+
+export interface AdminAssessmentBanksByType {
+  coding: AdminCodingBankCounts;
+  mcq: AdminCodingBankCounts;
+  fillblank: AdminCodingBankCounts;
+}
+
+export interface AdminCodingLanguageEntry {
+  slug: string;
+  name: string;
+  // Per-type configs and bank counts (new shape).
+  configs: AdminAssessmentConfigsByType;
+  banks: AdminAssessmentBanksByType;
+  // Legacy single-flavor accessors mirror configs.coding / banks.coding; kept
+  // so the original CodingSettingsTab keeps compiling during the migration.
+  config?: AdminCodingLanguageConfig;
+  bank: AdminCodingBankCounts;
+}
+
+export async function listAdminCodingLanguages(): Promise<{ languages: AdminCodingLanguageEntry[] }> {
+  return apiFetch<{ languages: AdminCodingLanguageEntry[] }>("/v1/admin/coding/languages");
+}
+
+export interface AdminLanguageConfigBundle {
+  slug: string;
+  configs: AdminAssessmentConfigsByType;
+  banks: AdminAssessmentBanksByType;
+  // Legacy single-flavor fields (coding only).
+  config: AdminCodingLanguageConfig | null;
+  bank: AdminCodingBankCounts;
+}
+
+export async function getAdminLanguageConfigBundle(slug: string): Promise<AdminLanguageConfigBundle> {
+  return apiFetch<AdminLanguageConfigBundle>(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config`,
+  );
+}
+
+// Legacy single-flavor lookup, narrowed to one question_type via ?type=.
+export async function getAdminCodingLanguageConfig(
+  slug: string,
+  type: AssessmentQuestionType = "coding",
+): Promise<{ slug: string; questionType: AssessmentQuestionType; config: AdminCodingLanguageConfig | null; bank: AdminCodingBankCounts }> {
+  return apiFetch(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config?type=${encodeURIComponent(type)}`,
+  );
+}
+
+export async function updateAdminCodingLanguageConfig(
+  slug: string,
+  config: Omit<AdminCodingLanguageConfig, "languageSlug" | "updatedAt" | "questionType"> & {
+    questionType?: AssessmentQuestionType;
+  },
+  type: AssessmentQuestionType = "coding",
+): Promise<AdminCodingLanguageConfig> {
+  return apiFetch<AdminCodingLanguageConfig>(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config?type=${encodeURIComponent(type)}`,
+    { method: "PUT", body: JSON.stringify({ ...config, questionType: type }) },
+  );
+}
+
+export async function deleteAdminCodingLanguageConfig(
+  slug: string,
+  type: AssessmentQuestionType = "coding",
+): Promise<{ status: string }> {
+  return apiFetch<{ status: string }>(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/config?type=${encodeURIComponent(type)}`,
+    { method: "DELETE" },
+  );
+}
+
+export interface AdminCodingPreviewItem {
+  questionVersionId: string;
+  title: string;
+  difficulty: number;
+  bucket: "easy" | "medium" | "hard";
+  score: number;
+}
+
+export interface AdminCodingPreviewResponse {
+  languageSlug: string;
+  picked: AdminCodingPreviewItem[];
+  spillover: {
+    targets: { easy: number; medium: number; hard: number };
+    delivered: { easy: number; medium: number; hard: number };
+    borrows?: Record<string, number>;
+  };
+}
+
+// previewAdminCodingLanguageConfig runs the builder in dry-run mode and
+// returns the questions a candidate would receive right now. No DB writes,
+// can be called repeatedly to re-roll the random pick.
+export async function previewAdminCodingLanguageConfig(
+  slug: string,
+): Promise<AdminCodingPreviewResponse> {
+  return apiFetch<AdminCodingPreviewResponse>(
+    `/v1/admin/coding/languages/${encodeURIComponent(slug)}/preview`,
+    { method: "POST" },
+  );
 }
 
 // Toggle archived flag without bumping the question version.
@@ -1342,10 +1547,11 @@ export async function getLatestSubmittedResult(
   userId: string,
   attemptToken?: string,
 ): Promise<any> {
-  const params = new URLSearchParams({ userId });
-  if (attemptToken) params.set("attemptToken", attemptToken);
+  const tokenParam = attemptToken
+    ? `&attemptToken=${encodeURIComponent(attemptToken)}`
+    : "";
   return apiFetch<any>(
-    `/api/assessment/${module}/latest-result?${params.toString()}`,
+    `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}${tokenParam}`,
     {
       baseOverride: TECH_API_BASE,
       auth: false,
@@ -1483,102 +1689,98 @@ export async function listAdminUsers(
 }
 
 export interface BulkAdminUsersRow {
-  rowIndex: number;
-  status: "READY" | "INVALID" | "SUCCESS" | "FAILED";
-  errorMessage?: string | null;
-  rawData: Record<string, unknown>;
-  normalizedData: Record<string, unknown>;
-}
-
-export interface BulkAdminUsersPreviewResponse {
-  importId: string;
-  summary: {
-    total: number;
-    valid: number;
-    invalid: number;
-  };
-  rows: BulkAdminUsersRow[];
-}
-
-export interface BulkAdminUsersExecuteResponse {
-  jobId: string;
   status: string;
+  [key: string]: any;
 }
 
-export interface BulkAdminUsersJobStatusResponse {
-  status: string;
-  total: number;
-  processed: number;
-  success: number;
-  failed: number;
-  progress: number;
-  lastError?: string | null;
-}
-
-export async function bulkAdminUsersPreview(file: File): Promise<BulkAdminUsersPreviewResponse> {
+export async function bulkAdminUsersPreview(file: File) {
   const formData = new FormData();
   formData.append("file", file);
-  return apiFetch<BulkAdminUsersPreviewResponse>("/api/admin/users/bulk/preview", {
+  return apiFetch<any>("/api/admin/users/bulk/preview", {
     method: "POST",
     body: formData,
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function bulkAdminUsersExecute(importId: string, overrides?: unknown[]): Promise<BulkAdminUsersExecuteResponse> {
-  return apiFetch<BulkAdminUsersExecuteResponse>("/api/admin/users/bulk/execute", {
+export async function bulkAdminUsersExecute(importId: string, overrides?: any[]) {
+  return apiFetch<any>("/api/admin/users/bulk/execute", {
     method: "POST",
     body: JSON.stringify({ import_id: importId, overrides }),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getBulkAdminUsersJobStatus(importId: string): Promise<BulkAdminUsersJobStatusResponse> {
-  return apiFetch<BulkAdminUsersJobStatusResponse>(`/api/admin/users/bulk-jobs/${importId}`, {
+export async function getBulkAdminUsersJobStatus(importId: string) {
+  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}`, {
     method: "GET",
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getBulkAdminUsersJobRows(importId: string): Promise<BulkAdminUsersRow[]> {
-  return apiFetch<BulkAdminUsersRow[]>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
+export async function getBulkAdminUsersJobRows(importId: string) {
+  return apiFetch<any>(`/api/admin/users/bulk-jobs/${importId}/rows`, {
     method: "GET",
     baseOverride: TECH_API_BASE,
   });
 }
 
 // ── Admin Groups & Cohorts Database-backed CRUD ─────────────────────────────
-export async function getAdminGroups(): Promise<Record<string, unknown>[]> {
-  return apiFetch<Record<string, unknown>[]>("/api/admin/groups", {
+export async function getAdminGroups(): Promise<any[]> {
+  return apiFetch<any[]>("/api/admin/groups", {
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function createAdminGroup(body: Record<string, unknown>): Promise<unknown> {
-  return apiFetch<unknown>("/api/admin/groups", {
+export async function createAdminGroup(body: any): Promise<any> {
+  return apiFetch<any>("/api/admin/groups", {
     method: "POST",
     body: JSON.stringify(body),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function updateAdminGroup(id: number | string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return apiFetch<Record<string, unknown>>(`/api/admin/groups/${id}`, {
+export async function updateAdminGroup(id: number | string, body: any): Promise<any> {
+  return apiFetch<any>(`/api/admin/groups/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function deleteAdminGroup(id: number | string): Promise<unknown> {
-  return apiFetch<unknown>(`/api/admin/groups/${id}`, {
+export async function deleteAdminGroup(id: number | string): Promise<any> {
+  return apiFetch<any>(`/api/admin/groups/${id}`, {
     method: "DELETE",
     baseOverride: TECH_API_BASE,
   });
 }
 
-export async function getAdminAssessments(): Promise<{ data?: Array<Record<string, unknown> & { assessment_name?: string }> } | null> {
-  return apiFetch<{ data?: Array<Record<string, unknown> & { assessment_name?: string }> } | null>("/api/assessment/admin/assessments", {
+export async function getAdminAssessments(): Promise<any> {
+  return apiFetch<any>("/api/assessment/admin/assessments", {
     baseOverride: TECH_API_BASE,
+  });
+}
+
+export interface LoginStatusResponse {
+  redirectUrl?: string;
+  isAssessmentMode?: boolean;
+  status?: string;
+}
+
+export async function checkLoginStatus(email: string): Promise<LoginStatusResponse> {
+  return apiFetch<LoginStatusResponse>("/student/login-status", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    baseOverride: STUDENT_API_BASE,
+    auth: false,
+  });
+}
+
+export async function completeFirstLogin(email: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>("/student/complete-first-login", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    baseOverride: STUDENT_API_BASE,
+    auth: false,
   });
 }

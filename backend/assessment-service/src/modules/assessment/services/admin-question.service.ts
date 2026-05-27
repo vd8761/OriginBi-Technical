@@ -1,7 +1,10 @@
 import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
-export type ModuleType = 'aptitude' | 'grammar' | 'communication' | 'coding' | 'mnc' | 'role';
+// Coding lives in a separate schema (exam-engine `questions` with plugin_slug
+// 'assessment.coding') and has its own admin surface at /admin/coding. The
+// MCQ-style modules here cover every other assessment type.
+export type ModuleType = 'aptitude' | 'grammar' | 'communication' | 'mnc' | 'role';
 
 interface ModuleConfig {
   readonly questionTable: string;
@@ -62,11 +65,6 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     categoryColumn: 'category',
     subcategoryColumn: 'subcategory',
   },
-  coding: {
-    questionTable: 'tech_coding_questions',
-    idColumn: 'coding_question_id',
-    categoryColumn: 'category',
-  },
   mnc: {
     questionTable: 'tech_mnc_questions',
     idColumn: 'mnc_question_id',
@@ -94,62 +92,8 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
 @Injectable()
 export class AdminQuestionService {
   private readonly logger = new Logger(AdminQuestionService.name);
-  private readonly tableColumnsCache = new Map<string, Set<string>>();
 
   constructor(private dataSource: DataSource) {}
-
-  private async getTableColumns(tableName: string): Promise<Set<string>> {
-    const cached = this.tableColumnsCache.get(tableName);
-    if (cached) return cached;
-
-    const rows = await this.dataSource.query(
-      `SELECT column_name
-         FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = $1`,
-      [tableName],
-    );
-
-    const columns = new Set<string>(rows.map((row: { column_name: string }) => row.column_name));
-    this.tableColumnsCache.set(tableName, columns);
-    return columns;
-  }
-
-  private async tableHasColumn(tableName: string, columnName: string): Promise<boolean> {
-    const columns = await this.getTableColumns(tableName);
-    return columns.has(columnName);
-  }
-
-  private async countAssessmentQuestions(
-    tableName: string,
-    assessmentId: number,
-    mode?: 'trial' | 'main',
-  ): Promise<number> {
-    const columns = await this.getTableColumns(tableName);
-    if (columns.size === 0) {
-      return 0;
-    }
-
-    const clauses = [`assessment_id = $1`];
-    const params: any[] = [assessmentId];
-
-    if (columns.has('status')) {
-      clauses.push(`status = 'active'`);
-    }
-
-    if (mode && columns.has('mode')) {
-      params.push(mode);
-      clauses.push(`mode = $${params.length}`);
-    }
-
-    const rows = await this.dataSource.query(
-      `SELECT COUNT(*)::int AS count
-         FROM ${tableName}
-        WHERE ${clauses.join(' AND ')}`,
-      params,
-    );
-
-    return Number(rows[0]?.count ?? 0);
-  }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -198,19 +142,17 @@ export class AdminQuestionService {
     const response: any = {
       id: Number(row[config.idColumn]),
       assessmentId: Number(row.assessment_id),
-      category: module === 'coding'
-        ? 'Coding'
-        : (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
-          ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
-             : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
-             : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
-             : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
-             : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
-             : row[config.categoryColumn])
-          : row[config.categoryColumn],
+      category: (module === 'aptitude' && typeof row[config.categoryColumn] === 'string')
+        ? (row[config.categoryColumn] === 'QA' ? 'Quantitative Aptitude'
+           : row[config.categoryColumn] === 'LR' ? 'Logical Reasoning'
+           : row[config.categoryColumn] === 'DI' ? 'Data Interpretation'
+           : row[config.categoryColumn] === 'AR' ? 'Abstract Reasoning'
+           : row[config.categoryColumn] === 'VA' ? 'Verbal Ability'
+           : row[config.categoryColumn])
+        : row[config.categoryColumn],
       subcategory: config.subcategoryColumn ? row[config.subcategoryColumn] : undefined,
       difficulty: row.difficulty,
-      questionText: module === 'coding' ? (row.problem_title || row.problem_statement || '') : row.question_text,
+      questionText: row.question_text,
       explanation: row.explanation,
       options: options.map((o: any) => ({
         id: Number(o.option_id),
@@ -243,15 +185,12 @@ export class AdminQuestionService {
     const conditions: string[] = [];
     const params: any[] = [];
     let paramIdx = 1;
-    const hasModeColumn = module === 'coding'
-      ? false
-      : await this.tableHasColumn(config.questionTable, 'mode');
 
     if (assessmentId) {
       conditions.push(`q.assessment_id = $${paramIdx++}`);
       params.push(assessmentId);
     }
-    if (category && module !== 'coding') {
+    if (category) {
       conditions.push(`q.${config.categoryColumn} = $${paramIdx++}`);
       params.push(category);
     }
@@ -263,17 +202,12 @@ export class AdminQuestionService {
       conditions.push(`q.status = $${paramIdx++}`);
       params.push(status);
     }
-    if (mode && module !== 'coding' && hasModeColumn) {
+    if (mode) {
       conditions.push(`q.mode = $${paramIdx++}`);
       params.push(mode);
     }
     if (search) {
-      if (module === 'coding') {
-        conditions.push(`(LOWER(q.problem_title) LIKE $${paramIdx} OR LOWER(q.problem_statement) LIKE $${paramIdx})`);
-        paramIdx++;
-      } else {
-        conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
-      }
+      conditions.push(`LOWER(q.question_text) LIKE $${paramIdx++}`);
       params.push(`%${search.toLowerCase()}%`);
     }
 
@@ -806,76 +740,41 @@ export class AdminQuestionService {
 
   async listAssessments(moduleType?: string) {
     try {
-      const assessmentColumns = await this.getTableColumns('tech_assessments');
       const params: any[] = [];
       let where = '';
       if (moduleType) {
         where = 'WHERE a.module_type = $1';
         params.push(moduleType);
       }
-      const selectColumns = [
-        'assessment_id',
-        'assessment_code',
-        'assessment_name',
-        'module_type',
-        'total_time_minutes',
-        'total_questions',
-        'question_limit',
-        'status',
-        'created_at',
-        'categories',
-        'difficulty_marks',
-        'difficulty_negative_marks',
-        'tab_switch_limit',
-        'anti_copy_enabled',
-        'shuffle_questions',
-        'shuffle_options',
-        'amount',
-        'trial_attempts_limit',
-        'main_attempts_limit',
-        'enabled_question_types',
-        'proctoring_require_fullscreen',
-        'fullscreen_exit_limit',
-        'proctoring_block_devtools',
-        'devtools_open_limit',
-        'mouse_focus_loss_limit',
-        'keypress_log_enabled',
-        'require_camera_mic',
-        'live_proctoring_enabled',
-        'adaptive_enabled',
-        'adaptive_total_questions',
-        'adaptive_total_marks',
-        'adaptive_total_blocks',
-        'adaptive_seconds_per_mark',
-      ].filter((column) => assessmentColumns.has(column));
-
-      const rows = await this.dataSource.query(
-        `SELECT ${selectColumns.map((column) => `a.${column}`).join(', ')}
-           FROM tech_assessments a ${where}
-          ORDER BY a.assessment_id DESC`,
+      return await this.dataSource.query(
+        `SELECT a.assessment_id, a.assessment_code, a.assessment_name, a.module_type,
+                a.total_time_minutes, a.total_questions, a.question_limit, a.status, a.created_at,
+                a.categories, a.difficulty_marks, a.difficulty_negative_marks,
+                a.tab_switch_limit, a.anti_copy_enabled, a.shuffle_questions, a.shuffle_options,
+                a.amount, a.trial_attempts_limit, a.main_attempts_limit, a.enabled_question_types,
+                a.keypress_log_enabled,
+                a.require_camera_mic, a.live_proctoring_enabled,
+                a.adaptive_enabled,
+                a.adaptive_total_questions,
+                a.adaptive_total_marks,
+                a.adaptive_total_blocks,
+                a.adaptive_seconds_per_mark,
+                (CASE 
+                  WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  ELSE 0
+                END) as trial_questions_count,
+                (CASE 
+                  WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  ELSE 0
+                END) as main_questions_count
+         FROM tech_assessments a ${where} ORDER BY a.assessment_id DESC`,
         params,
-      );
-
-      return await Promise.all(
-        rows.map(async (row: any) => {
-          const moduleConfig = MODULE_CONFIGS[row.module_type as ModuleType];
-          const assessmentId = Number(row.assessment_id);
-          const totalCount = moduleConfig
-            ? await this.countAssessmentQuestions(moduleConfig.questionTable, assessmentId)
-            : 0;
-          const trialCount = row.module_type === 'coding' || !moduleConfig
-            ? totalCount
-            : await this.countAssessmentQuestions(moduleConfig.questionTable, assessmentId, 'trial');
-          const mainCount = row.module_type === 'coding' || !moduleConfig
-            ? totalCount
-            : await this.countAssessmentQuestions(moduleConfig.questionTable, assessmentId, 'main');
-
-          return {
-            ...row,
-            trial_questions_count: trialCount,
-            main_questions_count: mainCount,
-          };
-        }),
       );
     } catch (error) {
       this.logger.error('listAssessments error:', error);
@@ -912,7 +811,6 @@ export class AdminQuestionService {
     const adaptiveTotalMarks     = data.adaptive_total_marks     ?? data.adaptiveTotalMarks;
     const adaptiveTotalBlocks    = data.adaptive_total_blocks    ?? data.adaptiveTotalBlocks;
     const adaptiveSecondsPerMark = data.adaptive_seconds_per_mark ?? data.adaptiveSecondsPerMark;
-    const assessmentColumns = await this.getTableColumns('tech_assessments');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -927,7 +825,7 @@ export class AdminQuestionService {
       const oldAssessment = oldRows[0];
       const moduleType = oldAssessment?.module_type as ModuleType;
 
-      if (categories !== undefined && oldAssessment && assessmentColumns.has('categories')) {
+      if (categories !== undefined && oldAssessment) {
         let oldCats: any[] = [];
         try {
           oldCats = typeof oldAssessment.categories === 'string' 
@@ -999,62 +897,68 @@ export class AdminQuestionService {
         }
       }
 
-      const updates: string[] = [];
-      const params: any[] = [];
-      let paramIdx = 1;
-
-      const pushUpdate = (column: string, value: any, options?: { json?: boolean }) => {
-        if (value === undefined || !assessmentColumns.has(column)) {
-          return;
-        }
-
-        const cast = options?.json ? '::jsonb' : '';
-        updates.push(`${column} = $${paramIdx}${cast}`);
-        params.push(value);
-        paramIdx += 1;
-      };
-
-      pushUpdate('assessment_name', assessmentName);
-      pushUpdate('total_time_minutes', totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : undefined);
-      pushUpdate('question_limit', questionLimit !== undefined ? Number(questionLimit) : undefined);
-      pushUpdate('categories', categories !== undefined ? (typeof categories === 'string' ? categories : JSON.stringify(categories)) : undefined, { json: true });
-      pushUpdate('difficulty_marks', difficultyMarks !== undefined ? (typeof difficultyMarks === 'string' ? difficultyMarks : JSON.stringify(difficultyMarks)) : undefined, { json: true });
-      pushUpdate('difficulty_negative_marks', difficultyNegativeMarks !== undefined ? (typeof difficultyNegativeMarks === 'string' ? difficultyNegativeMarks : JSON.stringify(difficultyNegativeMarks)) : undefined, { json: true });
-      pushUpdate('tab_switch_limit', tabSwitchLimit !== undefined ? Number(tabSwitchLimit) : undefined);
-      pushUpdate('anti_copy_enabled', antiCopyEnabled !== undefined ? Boolean(antiCopyEnabled) : undefined);
-      pushUpdate('shuffle_questions', shuffleQuestions !== undefined ? Boolean(shuffleQuestions) : undefined);
-      pushUpdate('shuffle_options', shuffleOptions !== undefined ? Boolean(shuffleOptions) : undefined);
-      pushUpdate('amount', amount !== undefined ? Number(amount) : undefined);
-      pushUpdate('trial_attempts_limit', trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : undefined);
-      pushUpdate('main_attempts_limit', mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : undefined);
-      pushUpdate('enabled_question_types', enabledQuestionTypes !== undefined ? (typeof enabledQuestionTypes === 'string' ? enabledQuestionTypes : JSON.stringify(enabledQuestionTypes)) : undefined, { json: true });
-      pushUpdate('proctoring_require_fullscreen', proctoringRequireFullscreen !== undefined ? Boolean(proctoringRequireFullscreen) : undefined);
-      pushUpdate('fullscreen_exit_limit', fullscreenExitLimit !== undefined ? Number(fullscreenExitLimit) : undefined);
-      pushUpdate('proctoring_block_devtools', proctoringBlockDevtools !== undefined ? Boolean(proctoringBlockDevtools) : undefined);
-      pushUpdate('devtools_open_limit', devtoolsOpenLimit !== undefined ? Number(devtoolsOpenLimit) : undefined);
-      pushUpdate('mouse_focus_loss_limit', mouseFocusLossLimit !== undefined ? Number(mouseFocusLossLimit) : undefined);
-      pushUpdate('keypress_log_enabled', keypressLogEnabled !== undefined ? Boolean(keypressLogEnabled) : undefined);
-      pushUpdate('require_camera_mic', requireCameraMic !== undefined ? Boolean(requireCameraMic) : undefined);
-      pushUpdate('live_proctoring_enabled', liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : undefined);
-      pushUpdate('adaptive_enabled', adaptiveEnabled !== undefined ? Boolean(adaptiveEnabled) : undefined);
-      pushUpdate('adaptive_total_marks', adaptiveTotalMarks !== undefined ? Number(adaptiveTotalMarks) : undefined);
-      pushUpdate('adaptive_total_blocks', adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : undefined);
-      pushUpdate('adaptive_seconds_per_mark', adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : undefined);
-      pushUpdate('adaptive_total_questions', adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : undefined);
-
-      if (updates.length > 0) {
-        if (assessmentColumns.has('updated_at')) {
-          updates.push(`updated_at = NOW()`);
-        }
-
-        params.push(id);
-        await queryRunner.query(
-          `UPDATE tech_assessments
-              SET ${updates.join(', ')}
-            WHERE assessment_id = $${paramIdx}`,
-          params,
-        );
-      }
+      await queryRunner.query(
+        `UPDATE tech_assessments
+         SET assessment_name = COALESCE($1, assessment_name),
+             total_time_minutes = COALESCE($2, total_time_minutes),
+             question_limit = COALESCE($3, question_limit),
+             categories = COALESCE($4::jsonb, categories),
+             difficulty_marks = COALESCE($5::jsonb, difficulty_marks),
+             difficulty_negative_marks = COALESCE($6::jsonb, difficulty_negative_marks),
+             tab_switch_limit = COALESCE($7, tab_switch_limit),
+             anti_copy_enabled = COALESCE($8, anti_copy_enabled),
+             shuffle_questions = COALESCE($9, shuffle_questions),
+             shuffle_options = COALESCE($10, shuffle_options),
+             amount = COALESCE($11, amount),
+             trial_attempts_limit = COALESCE($12, trial_attempts_limit),
+             main_attempts_limit = COALESCE($13, main_attempts_limit),
+             enabled_question_types = COALESCE($14::jsonb, enabled_question_types),
+             proctoring_require_fullscreen = COALESCE($16, proctoring_require_fullscreen),
+             fullscreen_exit_limit = COALESCE($17, fullscreen_exit_limit),
+             proctoring_block_devtools = COALESCE($18, proctoring_block_devtools),
+             devtools_open_limit = COALESCE($19, devtools_open_limit),
+             mouse_focus_loss_limit = COALESCE($20, mouse_focus_loss_limit),
+             keypress_log_enabled = COALESCE($21, keypress_log_enabled),
+             require_camera_mic = COALESCE($22, require_camera_mic),
+             live_proctoring_enabled = COALESCE($23, live_proctoring_enabled),
+             adaptive_enabled = COALESCE($24, adaptive_enabled),
+             adaptive_total_marks = COALESCE($25, adaptive_total_marks),
+             adaptive_total_blocks = COALESCE($26, adaptive_total_blocks),
+             adaptive_seconds_per_mark = COALESCE($27, adaptive_seconds_per_mark),
+             adaptive_total_questions = COALESCE($28, adaptive_total_questions),
+             updated_at = NOW()
+         WHERE assessment_id = $15`,
+        [
+          assessmentName !== undefined ? assessmentName : null,
+          totalTimeMinutes !== undefined ? Number(totalTimeMinutes) : null,
+          questionLimit !== undefined ? Number(questionLimit) : null,
+          categories !== undefined ? (typeof categories === 'string' ? categories : JSON.stringify(categories)) : null,
+          difficultyMarks !== undefined ? (typeof difficultyMarks === 'string' ? difficultyMarks : JSON.stringify(difficultyMarks)) : null,
+          difficultyNegativeMarks !== undefined ? (typeof difficultyNegativeMarks === 'string' ? difficultyNegativeMarks : JSON.stringify(difficultyNegativeMarks)) : null,
+          tabSwitchLimit !== undefined ? Number(tabSwitchLimit) : null,
+          antiCopyEnabled !== undefined ? Boolean(antiCopyEnabled) : null,
+          shuffleQuestions !== undefined ? Boolean(shuffleQuestions) : null,
+          shuffleOptions !== undefined ? Boolean(shuffleOptions) : null,
+          amount !== undefined ? Number(amount) : null,
+          trialAttemptsLimit !== undefined ? Number(trialAttemptsLimit) : null,
+          mainAttemptsLimit !== undefined ? Number(mainAttemptsLimit) : null,
+          enabledQuestionTypes !== undefined ? (typeof enabledQuestionTypes === 'string' ? enabledQuestionTypes : JSON.stringify(enabledQuestionTypes)) : null,
+          id,
+          proctoringRequireFullscreen !== undefined ? Boolean(proctoringRequireFullscreen) : null,
+          fullscreenExitLimit !== undefined ? Number(fullscreenExitLimit) : null,
+          proctoringBlockDevtools !== undefined ? Boolean(proctoringBlockDevtools) : null,
+          devtoolsOpenLimit !== undefined ? Number(devtoolsOpenLimit) : null,
+          mouseFocusLossLimit !== undefined ? Number(mouseFocusLossLimit) : null,
+          keypressLogEnabled !== undefined ? Boolean(keypressLogEnabled) : null,
+          requireCameraMic !== undefined ? Boolean(requireCameraMic) : null,
+          liveProctoringEnabled !== undefined ? Boolean(liveProctoringEnabled) : null,
+          adaptiveEnabled !== undefined ? Boolean(adaptiveEnabled) : null,
+          adaptiveTotalMarks !== undefined ? Number(adaptiveTotalMarks) : null,
+          adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : null,
+          adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : null,
+          adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : null,
+        ]
+      );
 
       const rows = await queryRunner.query(
         `SELECT * FROM tech_assessments WHERE assessment_id = $1`,
@@ -1062,21 +966,9 @@ export class AdminQuestionService {
       );
 
       const updatedAssessment = rows[0];
-      if (updatedAssessment?.module_type === 'coding' && amount !== undefined) {
-        const pricingTable = await queryRunner.query(
-          `SELECT to_regclass('public.pricing_items') AS table_name`,
-        );
-        if (pricingTable?.[0]?.table_name) {
-          await queryRunner.query(
-            `UPDATE pricing_items
-             SET price_cents = $1,
-                 currency = COALESCE(currency, 'INR')
-             WHERE item_kind = 'coding_language'
-               AND item_ref LIKE 'coding:%'`,
-            [Math.round(Number(amount) * 100)],
-          );
-        }
-      }
+      // Coding assessments live in a separate service and table family; their
+      // pricing is managed there, not here.
+      void updatedAssessment;
 
       await queryRunner.commitTransaction();
       return rows[0];

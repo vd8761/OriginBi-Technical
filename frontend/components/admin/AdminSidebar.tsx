@@ -39,6 +39,7 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
       { href: "/admin/users", label: "Users", icon: Users, countKey: "users" },
       { href: "/admin/groups", label: "Groups", icon: Layers },
       { href: "/admin/questions", label: "Assessments", icon: BookOpen },
+      { href: "/admin/coding", label: "Coding Bank", icon: Code2, countKey: "questions" },
     ],
   },
   {
@@ -48,7 +49,7 @@ const sections: { label: string; mount: SurfaceMount; items: NavItem[] }[] = [
       { href: "/admin/plugins", label: "Plugins", icon: Blocks },
       { href: "/admin/plugins/languages", label: "Languages", icon: Code2 },
       { href: "/admin/proctoring", label: "Proctoring", icon: ShieldCheck },
-      { href: "/admin/settings", label: "Settings", icon: Settings },
+      { href: "/admin/settings", label: "Settings", icon: Settings, eyebrow: "DEV" },
     ],
   },
 ];
@@ -281,8 +282,8 @@ export default function AdminSidebar({ isCollapsed }: { isCollapsed?: boolean })
                       <motion.span 
                         variants={itemVariants}
                         className={`relative z-10 px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border transition-colors ${
-                          item.eyebrow.toLowerCase() === 'legacy' 
-                            ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20' 
+                          ["legacy", "dev"].includes(item.eyebrow.toLowerCase())
+                            ? 'bg-amber-400/10 text-amber-500/80 border-amber-400/20'
                             : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-slate-400 border-black/5 dark:border-white/10'
                         }`}
                       >

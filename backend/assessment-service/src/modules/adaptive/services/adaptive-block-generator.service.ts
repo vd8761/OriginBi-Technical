@@ -262,6 +262,7 @@ export class AdaptiveBlockGeneratorService {
     assessmentId: number,
     slot: QuestionSlot,
     usedIds: number[],
+    usedTexts: string[],
     mode: 'trial' | 'main',
     modeExists: boolean,
     difficultyExists: boolean,
@@ -307,10 +308,12 @@ export class AdaptiveBlockGeneratorService {
           marks, negative_marks, ${metadataSelect}${cfg.hasImageUrl ? ', image_url' : ''}${extraColsSelect}
          FROM ${cfg.questions}
          WHERE ${baseWhere}
+           AND TRIM(question_text) <> ALL($1::text[])
            ${catFilter}
            ${subFilter}
            ${diffFilter}
          ORDER BY RANDOM() LIMIT 1`,
+        [usedTexts],
       );
       return rows[0] ?? null;
     };
@@ -408,7 +411,7 @@ export class AdaptiveBlockGeneratorService {
         ? Math.max(1, totalQuestions - (blockNumber - 1) * questionsPerBlock)
         : questionsPerBlock;
 
-      // 3. Resolve attempt + used question IDs
+      // 3. Resolve attempt + used question IDs and texts
       const ar = await qr.query(
         `SELECT ${cfg.attemptIdCol} AS aid FROM ${cfg.attempts} WHERE attempt_token=$1`,
         [attemptToken],
@@ -417,10 +420,14 @@ export class AdaptiveBlockGeneratorService {
       const attemptId = Number(ar[0].aid);
 
       const ur = await qr.query(
-        `SELECT ${cfg.idCol} AS qid FROM ${cfg.junction} WHERE ${cfg.attemptIdCol}=$1`,
+        `SELECT aq.${cfg.idCol} AS qid, q.question_text
+         FROM ${cfg.junction} aq
+         JOIN ${cfg.questions} q ON q.${cfg.idCol} = aq.${cfg.idCol}
+         WHERE aq.${cfg.attemptIdCol}=$1`,
         [attemptId],
       );
       const usedIds: number[] = ur.map((r: any) => Number(r.qid));
+      const usedTexts: string[] = ur.map((r: any) => String(r.question_text || '').trim());
 
       // 4. Load subcategory coverage
       const coverage = await this.loadCoverage(attemptToken);
@@ -434,14 +441,16 @@ export class AdaptiveBlockGeneratorService {
       const metadataExists = await this.columnExists(cfg.questions, 'metadata');
       const fetchedQuestions: any[] = [];
       const localUsedIds = new Set(usedIds);
+      const localUsedTexts = new Set(usedTexts);
 
       for (const slot of slots) {
         const q = await this.fetchQuestionForSlot(
           cfg, assessmentId, slot,
-          Array.from(localUsedIds), mode, modeExists, difficultyExists, metadataExists,
+          Array.from(localUsedIds), Array.from(localUsedTexts), mode, modeExists, difficultyExists, metadataExists,
         );
         if (q) {
           localUsedIds.add(Number(q.id));
+          localUsedTexts.add(String(q.question_text || '').trim());
           fetchedQuestions.push({ ...q, _slot: slot });
         }
       }

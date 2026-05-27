@@ -109,84 +109,6 @@ const DEFAULT_ASSESSMENTS = [
   "MNC Readiness Assessment",
 ];
 
-const INITIAL_GROUPS: Group[] = [
-  {
-    id: "group-1",
-    code: "MCA-2026",
-    name: "MCA Batch 2026",
-    description: "Master of Computer Applications - Year 2 Technical Cohort",
-    status: "active",
-    createdAt: "2026-05-12T10:00:00Z",
-    proctoring: {
-      fullScreenLock: true,
-      tabSwitchLimit: 3,
-      webcamProctoring: true,
-    },
-    assessments: ["Technical Coding Challenge", "Aptitude & Logical Reasoning"],
-    members: [
-      { id: "m1", fullName: "Aarav Sharma", email: "aarav.sharma@mca2026.edu", status: "active", lastSeenAt: "2026-05-18T10:15:00Z" },
-      { id: "m2", fullName: "Ananya Iyer", email: "ananya.iyer@mca2026.edu", status: "active", lastSeenAt: "2026-05-18T09:42:00Z" },
-      { id: "m3", fullName: "Rahul Verma", email: "rahul.verma@mca2026.edu", status: "pending", lastSeenAt: null },
-      { id: "m4", fullName: "Priya Nair", email: "priya.nair@mca2026.edu", status: "active", lastSeenAt: "2026-05-17T15:30:00Z" },
-      { id: "m5", fullName: "Karan Johar", email: "karan.johar@mca2026.edu", status: "blocked", lastSeenAt: "2026-05-10T12:00:00Z" },
-    ],
-  },
-  {
-    id: "group-2",
-    code: "CSE-A-2027",
-    name: "B.Tech CSE A",
-    description: "B.Tech Computer Science & Engineering - Section A",
-    status: "active",
-    createdAt: "2026-05-10T09:30:00Z",
-    proctoring: {
-      fullScreenLock: true,
-      tabSwitchLimit: 5,
-      webcamProctoring: false,
-    },
-    assessments: ["Technical Coding Challenge"],
-    members: [
-      { id: "m6", fullName: "Vihaan Gupta", email: "vihaan.csea@college.edu", status: "active", lastSeenAt: "2026-05-18T08:00:00Z" },
-      { id: "m7", fullName: "Sneha Reddy", email: "sneha.csea@college.edu", status: "active", lastSeenAt: "2026-05-18T05:22:00Z" },
-      { id: "m8", fullName: "Aditya Das", email: "aditya.csea@college.edu", status: "active", lastSeenAt: "2026-05-16T11:45:00Z" },
-    ],
-  },
-  {
-    id: "group-3",
-    code: "QA-INTERN-2026",
-    name: "QA Engineering Interns",
-    description: "Quality Assurance Engineering Internship Program Batch",
-    status: "active",
-    createdAt: "2026-05-08T14:15:00Z",
-    proctoring: {
-      fullScreenLock: false,
-      tabSwitchLimit: 0,
-      webcamProctoring: false,
-    },
-    assessments: ["Technical Coding Challenge", "SQL & Database Design"],
-    members: [
-      { id: "m9", fullName: "Rohan Mehra", email: "rohan@company.com", status: "active", lastSeenAt: "2026-05-17T18:22:00Z" },
-      { id: "m10", fullName: "Tara Sutaria", email: "tara@company.com", status: "active", lastSeenAt: "2026-05-18T10:00:00Z" },
-    ],
-  },
-  {
-    id: "group-4",
-    code: "PD-2026",
-    name: "Product Design Group",
-    description: "Product Design and UI/UX Cohort",
-    status: "draft",
-    createdAt: "2026-05-15T11:00:00Z",
-    proctoring: {
-      fullScreenLock: false,
-      tabSwitchLimit: 0,
-      webcamProctoring: false,
-    },
-    assessments: ["Aptitude & Logical Reasoning"],
-    members: [
-      { id: "m11", fullName: "Kabir Roy", email: "kabir.design@academy.org", status: "pending", lastSeenAt: null },
-    ],
-  },
-];
-
 type FilterType = "all" | "active" | "draft" | "archived";
 
 function formatRelativeFromIso(iso: string | null): string {
@@ -207,61 +129,38 @@ function formatRelativeFromIso(iso: string | null): string {
 }
 
 // ── Mapper function ─────────────────────────────────────────────────────────
-// Accepts a loose record because the backend returns either the raw SQL row
-// (snake_case + groupMetadata) or the TypeORM entity (camelCase + metadata).
-// Narrowing happens field-by-field below.
-type BackendGroupRow = Record<string, unknown>;
-
-function readGroupStatus(value: unknown): Group["status"] {
-  if (value === "active" || value === "draft" || value === "archived") {
-    return value;
-  }
-  return "draft";
-}
-
-function mapBackendGroup(bg: BackendGroupRow): Group {
-  const readObj = (v: unknown): Record<string, unknown> =>
-    v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-  const readStr = (v: unknown, fallback = ""): string =>
-    typeof v === "string" ? v : v == null ? fallback : String(v);
-  const readBool = (v: unknown): boolean => v === true;
-  const readArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-
+function mapBackendGroup(bg: any): Group {
   // Handle both SQL query shape (groupMetadata) and TypeORM entity shape (metadata)
-  const meta = readObj(bg.groupMetadata ?? bg.metadata);
+  const meta = bg.groupMetadata || bg.metadata || {};
 
   // Handle both legacy objects and raw string arrays of assessments
-  const rawAssessments = Array.isArray(bg.assessments) ? readArr(bg.assessments) : readArr(meta.assessments);
-  const assessments = rawAssessments.map((a): string => {
+  const rawAssessments = Array.isArray(bg.assessments)
+    ? bg.assessments
+    : Array.isArray(meta.assessments)
+    ? meta.assessments
+    : [];
+  const assessments = rawAssessments.map((a: any) => {
     if (typeof a === "string") return a;
-    if (a && typeof a === "object" && "name" in a) {
-      return readStr((a as Record<string, unknown>).name);
-    }
+    if (a && typeof a === "object" && a.name) return a.name;
     return String(a);
   });
 
-  const isFree = readBool(meta.isFree);
-  const proctoring = readObj(meta.proctoring);
-  const candidateCount = typeof bg.candidateCount === "number" ? bg.candidateCount : 0;
+  const isFree = meta.isFree === true;
 
   return {
     id: String(bg.id),
-    code: readStr(bg.code),
-    name: readStr(bg.name),
-    description: readStr(meta.description),
-    status: meta.status != null
-      ? readGroupStatus(meta.status)
-      : (readBool(bg.isActive) ? "active" : "draft"),
-    createdAt: readStr(bg.createdAt) || readStr(bg.created_at) || new Date().toISOString(),
-    proctoring: Object.keys(proctoring).length > 0
-      ? (proctoring as Group["proctoring"])
-      : {
-          fullScreenLock: true,
-          tabSwitchLimit: 3,
-          webcamProctoring: true,
-        },
+    code: bg.code || "",
+    name: bg.name || "",
+    description: meta.description || "",
+    status: meta.status || (bg.isActive ? "active" : "draft"),
+    createdAt: bg.createdAt || bg.created_at || new Date().toISOString(),
+    proctoring: meta.proctoring || {
+      fullScreenLock: true,
+      tabSwitchLimit: 3,
+      webcamProctoring: true,
+    },
     assessments,
-    members: Array.from({ length: candidateCount }).map((_, i) => ({
+    members: Array.from({ length: bg.candidateCount || 0 }).map((_, i) => ({
       id: `m-${i}`,
       fullName: `Candidate #${i + 1}`,
       email: `candidate${i + 1}@cohort.com`,
@@ -341,17 +240,16 @@ function GroupsInner() {
         setLoading(true);
         
         try {
-          const backendGroups = (await getAdminGroups()) as BackendGroupRow[];
+          const backendGroups = await getAdminGroups();
           setGroups(backendGroups.map(mapBackendGroup));
         } catch (groupsErr) {
           console.error("Failed to load cohort groups:", groupsErr);
         }
 
         try {
-          const assessmentsRes = (await getAdminAssessments()) as { data?: Array<{ assessment_name?: string }> } | null;
-          const data = assessmentsRes?.data;
-          if (Array.isArray(data) && data.length > 0) {
-            const names = data.map((a) => a.assessment_name).filter((n): n is string => !!n);
+          const assessmentsRes = await getAdminAssessments();
+          if (assessmentsRes && Array.isArray(assessmentsRes.data) && assessmentsRes.data.length > 0) {
+            const names = assessmentsRes.data.map((a: any) => a.assessment_name).filter(Boolean);
             setAvailableAssessments(names.length > 0 ? names : DEFAULT_ASSESSMENTS);
           } else {
             setAvailableAssessments(DEFAULT_ASSESSMENTS);
@@ -530,7 +428,7 @@ function GroupsInner() {
         assessments: selectedGroup.assessments,
       };
 
-      const updated: BackendGroupRow = await updateAdminGroup(selectedGroup.id, body);
+      const updated = await updateAdminGroup(selectedGroup.id, body);
       await loadLatestGroups();
       setSelectedGroup(mapBackendGroup(updated));
       

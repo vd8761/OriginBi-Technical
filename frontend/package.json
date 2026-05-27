@@ -35,7 +35,8 @@
     "react-qr-code": "^2.0.21",
     "remark-gfm": "^4.0.1",
     "shadcn": "^3.8.3",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

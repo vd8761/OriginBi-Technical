@@ -51,10 +51,22 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
     return list.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
   }, [dynamicExams, isPaid]);
 
+  const hasResults = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const raw = localStorage.getItem("originbi:assessment-results");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" && Object.keys(parsed).length > 0;
+      }
+    } catch {}
+    return false;
+  }, []);
+
   const hasContent = useMemo(() => {
     const hasCompletions = completions.size > 0;
-    return hasPurchases || hasCompletions;
-  }, [hasPurchases, completions]);
+    return hasPurchases || hasCompletions || hasResults;
+  }, [hasPurchases, completions, hasResults]);
 
   const justCompleted = searchParams.get("completed");
 

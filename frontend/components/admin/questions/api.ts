@@ -98,7 +98,6 @@ const moduleMap: Record<string, string> = {
     role: "role",
     mnc: "mnc",
     aptitude: "aptitude",
-    coding: "coding",
 };
 
 const getBackendModule = (m: string) => moduleMap[m] || m;

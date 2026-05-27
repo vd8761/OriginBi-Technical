@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Code, Brain, RefreshCw, Zap, BarChart3, Layers, Clock, Target, ChevronDown } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Brain, RefreshCw, Zap, BarChart3, Layers, Clock, Target, ChevronDown } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment, fetchQuestions } from "./api";
 import {
   AssessmentType,
@@ -347,7 +346,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     const loadAll = async () => {
       setLoading(true);
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
         const results: Record<string, ApiAssessment> = {};
         for (const m of modules) {
           const list = await fetchAssessments(m);
@@ -635,7 +634,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   ["rules_limits",  "Rules & Limits",     Shield],
                   ["categories",    "Dynamic Categories", LayoutGrid],
                   ["grading",       "Scoring Matrix",     Award],
-                  ...(activeModule !== "coding" ? [["adaptive", "Adaptive", Brain] as [SettingsTab, string, any]] : []),
+                  ["adaptive", "Adaptive", Brain] as [SettingsTab, string, any],
                 ] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
                   <button 
                     key={key} 
@@ -705,7 +704,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                         </div>
                       )}
                       {matchesQuery(["Main Attempts Limit", "Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.", "main", "attempts", "limit", "paid"]) && (
-                        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-6 ${activeModule === "coding" ? "pb-10 border-b border-slate-50 dark:border-white/[0.02]" : ""}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                           <div className="sm:max-w-md"><label className={labelCls}>Main Attempts Limit</label><p className={descCls}>Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
                           <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
                         </div>
@@ -715,38 +714,6 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                           The Adaptive toggle and settings now live in the dedicated
                           "Adaptive" tab. Nothing is mounted here anymore. */}
 
-                      {activeModule === "coding" && (
-                        <div className="pt-10 mt-2 border-t border-slate-100 dark:border-white/[0.04]">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Code className="w-4 h-4 text-brand-green" />
-                            <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Coding-Specific Settings</h3>
-                          </div>
-                          <p className={descCls + " mb-6"}>
-                            Question authoring, language toggles, and Judge0 runtime limits for coding challenges
-                            live in their own surfaces. Use the shortcuts below.
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
-                            <Link
-                              href="/admin/coding"
-                              className="block p-5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-brand-green/40 transition-all"
-                            >
-                              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Manage Coding Questions</p>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                                Problems, test cases, starter code, and visibility per question.
-                              </p>
-                            </Link>
-                            <Link
-                              href="/admin/plugins/languages"
-                              className="block p-5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-brand-green/40 transition-all"
-                            >
-                              <p className="text-[13px] font-bold text-slate-900 dark:text-white">Languages & Judge0 Limits</p>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                                Allowed languages and per-language time and memory caps.
-                              </p>
-                            </Link>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -1203,7 +1170,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   )}
 
                   {/* ── Adaptive Tab ─────────────────────────────────────────── */}
-                  {(activeTab === "adaptive" || (searchQuery && hasAdaptiveMatches)) && activeModule !== "coding" && (
+                  {(activeTab === "adaptive" || (searchQuery && hasAdaptiveMatches)) && (
                     <div className="space-y-10">
                       {searchQuery && (
                         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">

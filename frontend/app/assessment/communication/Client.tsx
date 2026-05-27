@@ -34,11 +34,7 @@ export default function CommunicationClient() {
             timeTakenSeconds: assessmentResult.timeTakenSeconds ?? 0,
         });
 
-        if (mode === 'trial') {
-            router.push('/assessment');
-        } else {
-            router.push('/dashboard?completed=communication');
-        }
+        router.push('/dashboard?completed=communication');
     };
 
     return (
