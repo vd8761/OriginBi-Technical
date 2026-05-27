@@ -1166,16 +1166,29 @@ export class AssessmentService {
         selectedOptionId: null,
         selectedAnswerText: null,
         correctOptionId:
-          aq.correct_option_id !== null && aq.correct_option_id !== undefined
-            ? String(aq.correct_option_id)
-            : null,
+          questionKind === 'msq'
+            ? (Array.isArray((questionMetadata as any).correctOptionIds)
+                ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+                : [])
+            : (aq.correct_option_id !== null && aq.correct_option_id !== undefined
+                ? String(aq.correct_option_id)
+                : null),
         correctAnswerText: null,
         isCorrect: null,
         status: 'unanswered',
       };
 
-      if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-        review.correctAnswerText = optionTextById.get(review.correctOptionId);
+      if (questionKind === 'msq') {
+        const correctChoices = Array.isArray(review.correctOptionId) ? review.correctOptionId : [];
+        review.correctAnswerText = correctChoices
+          .map((id) => optionTextById.get(id) ?? id)
+          .join(', ');
+      } else if (questionKind === 'numerical') {
+        review.correctAnswerText = String((questionMetadata as any).correctAnswer ?? '');
+      } else {
+        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+          review.correctAnswerText = optionTextById.get(review.correctOptionId);
+        }
       }
 
       if (isCoding) {
