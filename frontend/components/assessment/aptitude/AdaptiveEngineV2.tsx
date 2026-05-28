@@ -32,7 +32,7 @@ import {
 const API_BASE =
   typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
     ? ""
-    : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+    : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

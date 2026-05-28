@@ -129,7 +129,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         window.location.hostname !== "localhost" &&
         window.location.hostname !== "127.0.0.1"
           ? ""
-          : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+          : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
 
       const [settingsRes, bpRes] = await Promise.allSettled([
         fetch(`${TECH_BASE}/api/adaptive/v2/settings/${assessmentId}`).then(r => r.json()),
@@ -179,7 +179,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         window.location.hostname !== "localhost" &&
         window.location.hostname !== "127.0.0.1"
           ? ""
-          : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+          : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
       const res = await fetch(`${TECH_BASE}/api/adaptive/v2/blueprint/${a.assessment_id}/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

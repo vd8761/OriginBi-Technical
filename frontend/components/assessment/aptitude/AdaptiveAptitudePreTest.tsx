@@ -55,8 +55,8 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
         const API_BASE =
           (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
             ? ""
-            : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
-          process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+            : process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, "")) ||
+          process.env.NEXT_PUBLIC_EXAM_ENGINE_URL?.replace(/\/$/, "") ||
           "";
 
         const [assessmentsRes, statsRes] = await Promise.all([
@@ -145,8 +145,8 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
         const API_BASE =
           (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
             ? ""
-            : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
-          process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+            : process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, "")) ||
+          process.env.NEXT_PUBLIC_EXAM_ENGINE_URL?.replace(/\/$/, "") ||
           "";
 
         // SECURITY: Comprehensive security check before starting
