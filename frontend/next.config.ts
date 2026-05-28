@@ -1,19 +1,13 @@
 import type { NextConfig } from "next";
-import path from "path";
 
-// Read backend service URLs from env, falling back to localhost for local dev.
-// In production (DigitalOcean), these point to the Render-hosted services.
 const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:4002";
 const STUDENT_SERVICE_URL = process.env.NEXT_PUBLIC_STUDENT_SERVICE_URL || "http://localhost:4004";
 const ADMIN_API_BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL || "http://localhost:4001";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8088";
-const TECH_API_URL = process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000";
+const EXAM_ENGINE_URL = process.env.NEXT_PUBLIC_EXAM_ENGINE_URL || "http://localhost:8088";
+const ASSESSMENT_SERVICE_URL = process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000";
 const JUDGE0_URL = process.env.NEXT_PUBLIC_JUDGE0_URL || "http://localhost:2358";
 
 const nextConfig: NextConfig = {
-  // Pin the tracing root to this frontend directory so Next.js doesn't
-  // walk up to C:\Users\Jaya Krishna and get confused by the lockfile there.
-  outputFileTracingRoot: path.join(__dirname),
   images: {
     unoptimized: true,
   },
@@ -25,11 +19,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${TECH_API_URL}/api/:path*`,
+        destination: `${ASSESSMENT_SERVICE_URL}/api/:path*`,
       },
       {
         source: "/v1/:path*",
-        destination: `${API_BASE}/v1/:path*`,
+        destination: `${EXAM_ENGINE_URL}/v1/:path*`,
       },
       {
         source: "/student-api/:path*",

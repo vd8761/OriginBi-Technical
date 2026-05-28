@@ -247,11 +247,20 @@ func (s *Server) setAdminQuestionArchive(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]bool{"archived": body.Archived})
 }
 
+// deleteAdminQuestion hard-deletes a question and everything that hangs off it
+// (question_versions and question_test_cases cascade away on the FK), but only
+// when nothing references the question — i.e. it has never been pulled into an
+// exam or attempted by a candidate. If references exist, the FK on
+// exam_questions / attempt_question_responses (ON DELETE RESTRICT / NO ACTION)
+// blocks the cascade and the caller gets a 409 with usage counts so the admin
+// can fall back to archive. Pass ?force=archive to bypass the hard-delete path
+// and just soft-archive the question.
 func (s *Server) deleteAdminQuestion(w http.ResponseWriter, r *http.Request) {
 	principal, ok := s.requireAdminPrincipal(w, r)
 	if !ok {
 		return
 	}
+	_ = principal
 	questionID, err := uuid.Parse(chi.URLParam(r, "question_id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid question_id")
@@ -259,12 +268,26 @@ func (s *Server) deleteAdminQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE questions
-		SET is_archived = true, deleted_at = COALESCE(deleted_at, now())
-		WHERE id = $1
-	`, questionID)
+
+	if strings.EqualFold(r.URL.Query().Get("force"), "archive") {
+		s.archiveQuestion(ctx, w, questionID)
+		return
+	}
+
+	tag, err := s.pool.Exec(ctx, `DELETE FROM questions WHERE id = $1`, questionID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			examCount, attemptCount := s.questionUsage(ctx, questionID)
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":         "question is referenced — cannot delete",
+				"in_use":        true,
+				"exam_count":    examCount,
+				"attempt_count": attemptCount,
+				"hint":          "Archive the question instead, or call DELETE with ?force=archive.",
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "question delete failed")
 		return
 	}
@@ -272,8 +295,43 @@ func (s *Server) deleteAdminQuestion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "question not found")
 		return
 	}
-	_ = principal
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (s *Server) archiveQuestion(ctx context.Context, w http.ResponseWriter, questionID uuid.UUID) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE questions
+		SET is_archived = true, deleted_at = COALESCE(deleted_at, now())
+		WHERE id = $1
+	`, questionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "question archive failed")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "question not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "archived"})
+}
+
+// questionUsage returns how many exam rows and attempt-answer rows still
+// reference any version of the given question. Best-effort: any DB error is
+// swallowed and reported as zero so the caller still gets a usable 409.
+func (s *Server) questionUsage(ctx context.Context, questionID uuid.UUID) (examCount int, attemptCount int) {
+	_ = s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM exam_questions eq
+		JOIN question_versions qv ON qv.id = eq.question_version_id
+		WHERE qv.question_id = $1
+	`, questionID).Scan(&examCount)
+	_ = s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM answers a
+		JOIN question_versions qv ON qv.id = a.question_version_id
+		WHERE qv.question_id = $1
+	`, questionID).Scan(&attemptCount)
+	return
 }
 
 func (s *Server) listAdminQuestionTestCases(w http.ResponseWriter, r *http.Request) {
@@ -368,15 +426,16 @@ func (s *Server) deleteAdminQuestionTestCase(w http.ResponseWriter, r *http.Requ
 	}
 	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	versionID, err := s.currentQuestionVersionID(ctx, questionID)
-	if err != nil {
-		writeAdminAuthoringErr(w, err)
-		return
-	}
+	// Same loose-version-match rationale as updateTestCase: allow deletion of
+	// a TC that lives under any version of this question, so admins holding
+	// stale IDs after a question edit can still clean up.
 	tag, err := s.pool.Exec(ctx, `
-		DELETE FROM question_test_cases
-		WHERE id = $1 AND question_version_id = $2
-	`, tcID, versionID)
+		DELETE FROM question_test_cases tc
+		USING question_versions qv
+		WHERE tc.id = $1
+		  AND tc.question_version_id = qv.id
+		  AND qv.question_id = $2
+	`, tcID, questionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "test case delete failed")
 		return
@@ -531,8 +590,12 @@ func (s *Server) validateQuestionRequest(req adminQuestionRequest) error {
 	if m == nil {
 		return fmt.Errorf("plugin %s is not installed", req.PluginSlug)
 	}
-	if req.Difficulty < 1 || req.Difficulty > 5 {
-		return errors.New("difficulty must be between 1 and 5")
+	// Three product-level difficulty buckets: 1 = Easy, 3 = Medium, 5 = Hard.
+	// The schema column allows 1..5 (legacy +/- granularity) so existing rows
+	// at 2 or 4 still load, but new writes are restricted to the canonical
+	// values so the admin UI's three-bucket filter stays meaningful.
+	if req.Difficulty != 1 && req.Difficulty != 3 && req.Difficulty != 5 {
+		return errors.New("difficulty must be 1 (Easy), 3 (Medium), or 5 (Hard)")
 	}
 	if len(req.Body) == 0 {
 		return errors.New("body is required")
@@ -748,11 +811,17 @@ func (s *Server) appendTestCase(ctx context.Context, questionID uuid.UUID, req a
 	return scanAdminTestCase(row)
 }
 
+// updateTestCase updates a test case by ID. The version filter is intentionally
+// loose: the WHERE clause matches the TC's question_version_id against ANY
+// version belonging to this question, not just the current one. This avoids a
+// 404 when the admin UI holds stale TC IDs after a question edit (which creates
+// a new question_versions row). Updating an old version's TC is harmless —
+// candidate runs always use the current version, and admins typically don't
+// realize editing the question creates a new version.
+//
+// Verifying the question_id<->version_id relationship still prevents one
+// question's admin from editing another question's TCs.
 func (s *Server) updateTestCase(ctx context.Context, questionID uuid.UUID, tcID uuid.UUID, req adminTestCaseInput) (adminTestCaseDTO, error) {
-	versionID, err := s.currentQuestionVersionID(ctx, questionID)
-	if err != nil {
-		return adminTestCaseDTO{}, err
-	}
 	comparator := strings.ToLower(strings.TrimSpace(req.Comparator))
 	if comparator == "" {
 		comparator = "trim_equal"
@@ -766,14 +835,17 @@ func (s *Server) updateTestCase(ctx context.Context, questionID uuid.UUID, tcID 
 		weight = 1
 	}
 	row := s.pool.QueryRow(ctx, `
-		UPDATE question_test_cases
+		UPDATE question_test_cases tc
 		SET name = $3, is_sample = $4, is_hidden = $5, weight = $6,
 		    stdin = $7, expected_stdout = $8, explanation = $9,
 		    comparator = $10, comparator_config = $11::jsonb
-		WHERE id = $1 AND question_version_id = $2
-		RETURNING id, question_version_id, ordinal, COALESCE(name, ''), is_sample, is_hidden,
-		          weight::float8, stdin, expected_stdout, COALESCE(explanation, ''), comparator, comparator_config
-	`, tcID, versionID, nullEmpty(req.Name), req.IsSample, req.IsHidden, weight,
+		FROM question_versions qv
+		WHERE tc.id = $1
+		  AND tc.question_version_id = qv.id
+		  AND qv.question_id = $2
+		RETURNING tc.id, tc.question_version_id, tc.ordinal, COALESCE(tc.name, ''), tc.is_sample, tc.is_hidden,
+		          tc.weight::float8, tc.stdin, tc.expected_stdout, COALESCE(tc.explanation, ''), tc.comparator, tc.comparator_config
+	`, tcID, questionID, nullEmpty(req.Name), req.IsSample, req.IsHidden, weight,
 		req.Stdin, req.ExpectedStdout, req.Explanation, comparator, []byte(config))
 	return scanAdminTestCase(row)
 }

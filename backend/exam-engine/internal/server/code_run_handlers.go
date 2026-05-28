@@ -126,6 +126,164 @@ func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type lastCodeRunDTO struct {
+	RunID       string                 `json:"runId"`
+	Mode        string                 `json:"mode"`
+	Language    string                 `json:"language"`
+	EntryFile   string                 `json:"entryFile"`
+	StatusID    *int                   `json:"statusId,omitempty"`
+	StatusDesc  string                 `json:"statusDesc,omitempty"`
+	Summary     string                 `json:"summary,omitempty"`
+	TimeMs      int                    `json:"timeMs"`
+	MemoryKb    int                    `json:"memoryKb"`
+	StartedAt   time.Time              `json:"startedAt"`
+	FinishedAt  *time.Time             `json:"finishedAt,omitempty"`
+	TestResults []lastCodeRunTestDTO   `json:"testResults"`
+}
+
+type lastCodeRunTestDTO struct {
+	Ordinal        int     `json:"ordinal"`
+	Name           string  `json:"name,omitempty"`
+	Passed         bool    `json:"passed"`
+	ActualStdout   string  `json:"actualStdout,omitempty"`
+	ExpectedStdout string  `json:"expectedStdout,omitempty"`
+	TimeMs         int     `json:"timeMs"`
+	MemoryKb       int     `json:"memoryKb"`
+}
+
+// lastCodeRun returns the most-recent finished code_run for an attempt +
+// question, plus per-test results. Used by the candidate-facing editor to
+// rehydrate the prior run's output panel when the candidate navigates back
+// to a question they have already run.
+//
+// Returns 404 when the candidate has not run this question yet (no run row),
+// so the frontend can render the empty "Run your code to see output" state.
+func (s *Server) lastCodeRun(w http.ResponseWriter, r *http.Request) {
+	principal, err := auth.Require(r.Context())
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	attemptID, err := uuid.Parse(chi.URLParam(r, "attempt_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid attempt_id")
+		return
+	}
+	examQuestionID, err := uuid.Parse(chi.URLParam(r, "exam_question_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid exam_question_id")
+		return
+	}
+
+	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var runID uuid.UUID
+	var mode, statusDesc string
+	var statusID *int
+	var stdoutPtr, stderrPtr *string
+	var timeSeconds *float64
+	var memoryKb *int
+	var startedAt time.Time
+	var finishedAt *time.Time
+	var submissionID uuid.UUID
+	err = s.pool.QueryRow(ctx, `
+		SELECT cr.id, cr.mode::text, cr.judge0_status_id, COALESCE(cr.judge0_status_desc, ''),
+		       cr.stdout, cr.stderr, cr.time_seconds::float8, cr.memory_kb,
+		       cr.started_at, cr.finished_at, cr.submission_id
+		FROM code_runs cr
+		JOIN answers a ON a.id = cr.answer_id
+		JOIN attempts att ON att.id = cr.attempt_id
+		WHERE cr.attempt_id = $1
+		  AND a.exam_question_id = $2
+		  AND att.candidate_user_id = $3
+		  AND cr.finished_at IS NOT NULL
+		ORDER BY cr.started_at DESC
+		LIMIT 1
+	`, attemptID, examQuestionID, principal.UserID).Scan(
+		&runID, &mode, &statusID, &statusDesc,
+		&stdoutPtr, &stderrPtr, &timeSeconds, &memoryKb,
+		&startedAt, &finishedAt, &submissionID,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "no run for this question yet")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "last-run lookup failed")
+		return
+	}
+
+	var language, entryFile string
+	if err := s.pool.QueryRow(ctx, `
+		SELECT language, entry_path FROM code_submissions WHERE id = $1
+	`, submissionID).Scan(&language, &entryFile); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusInternalServerError, "submission lookup failed")
+		return
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT r.ordinal, COALESCE(tc.name, ''), r.passed,
+		       COALESCE(r.actual_stdout, ''), COALESCE(r.expected_stdout, ''),
+		       r.time_seconds::float8, COALESCE(r.memory_kb, 0)
+		FROM code_run_test_results r
+		LEFT JOIN question_test_cases tc ON tc.id = r.test_case_id
+		WHERE r.code_run_id = $1
+		ORDER BY r.ordinal
+	`, runID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "test results lookup failed")
+		return
+	}
+	defer rows.Close()
+	tests := []lastCodeRunTestDTO{}
+	for rows.Next() {
+		var tr lastCodeRunTestDTO
+		var tcTimeSeconds *float64
+		if err := rows.Scan(&tr.Ordinal, &tr.Name, &tr.Passed, &tr.ActualStdout, &tr.ExpectedStdout, &tcTimeSeconds, &tr.MemoryKb); err != nil {
+			writeError(w, http.StatusInternalServerError, "test results scan failed")
+			return
+		}
+		if tcTimeSeconds != nil {
+			tr.TimeMs = int(*tcTimeSeconds*1000 + 0.5)
+		}
+		tests = append(tests, tr)
+	}
+
+	out := lastCodeRunDTO{
+		RunID:       runID.String(),
+		Mode:        mode,
+		Language:    language,
+		EntryFile:   entryFile,
+		StatusID:    statusID,
+		StatusDesc:  statusDesc,
+		StartedAt:   startedAt,
+		FinishedAt:  finishedAt,
+		TestResults: tests,
+	}
+	if timeSeconds != nil {
+		out.TimeMs = int(*timeSeconds*1000 + 0.5)
+	}
+	if memoryKb != nil {
+		out.MemoryKb = *memoryKb
+	}
+	// Build a short headline. If the stored stdout/stderr were trimmed/nulled,
+	// fall back to the Judge0 status description.
+	switch {
+	case len(tests) > 0:
+		passed := 0
+		for _, t := range tests {
+			if t.Passed {
+				passed++
+			}
+		}
+		out.Summary = fmt.Sprintf("%d/%d test cases passed.", passed, len(tests))
+	case statusDesc != "":
+		out.Summary = statusDesc
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	principal, err := auth.Require(r.Context())
 	if err != nil {

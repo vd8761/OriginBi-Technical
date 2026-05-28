@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-mcq/answer.schema.json",
+  "title": "MCQ answer payload",
+  "description": "Submitted by the candidate for the mcq.submit action.",
+  "type": "object",
+  "required": ["selectedOptionIds"],
+  "additionalProperties": false,
+  "properties": {
+    "selectedOptionIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "minItems": 0,
+      "description": "IDs of option(s) the candidate picked. Empty array means 'no answer'."
+    }
+  }
+}

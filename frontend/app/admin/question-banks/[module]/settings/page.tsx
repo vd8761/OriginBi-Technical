@@ -11,7 +11,6 @@ const MODULE_SLUGS: Record<string, AssessmentType> = {
   communication: "communication",
   comm: "communication",
   role: "role",
-  coding: "coding",
 };
 
 export default function ModuleSettingsPage() {

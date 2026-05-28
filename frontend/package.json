@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev --webpack",
-    "build": "cross-env node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -35,7 +35,8 @@
     "react-qr-code": "^2.0.21",
     "remark-gfm": "^4.0.1",
     "shadcn": "^3.8.3",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

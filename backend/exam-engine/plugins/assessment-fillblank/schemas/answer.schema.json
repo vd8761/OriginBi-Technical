@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://originbi.example.com/schemas/assessment-fillblank/answer.schema.json",
+  "title": "Fill-in-the-blank answer payload",
+  "type": "object",
+  "required": ["responses"],
+  "additionalProperties": false,
+  "properties": {
+    "responses": {
+      "type": "object",
+      "description": "Map of blank.id -> candidate string. Missing keys count as empty answers.",
+      "additionalProperties": { "type": "string", "maxLength": 500 }
+    }
+  }
+}

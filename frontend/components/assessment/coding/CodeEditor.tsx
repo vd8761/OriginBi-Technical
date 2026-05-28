@@ -9,7 +9,7 @@ import { reindent } from "./reindent";
 import FileTabs from "./FileTabs";
 import FileTreePanel from "./FileTreePanel";
 import { usePluginRuntime } from "@/plugins";
-import type { CodeRunRequest } from "@/lib/api";
+import type { CodeRunRequest, LastCodeRun } from "@/lib/api";
 
 interface StreamingTestEvent {
     runId?: string;
@@ -94,6 +94,13 @@ interface CodeEditorProps {
     initialEntryFile?: string;
     onWorkspaceChange?: (payload: { language: string; files: FileNode[]; entryFile: string }) => void;
     serverRun?: (input: CodeRunRequest) => Promise<RunResult | undefined>;
+    /**
+     * Most-recent finished server-side run for this question. When provided
+     * and the editor has no fresher local `result`, it is rendered into the
+     * output panel so the candidate sees their previous test outcomes after
+     * navigating back to a question.
+     */
+    initialLastRun?: LastCodeRun | null;
     /** When false, Ctrl+F find widget is disabled. Default true. */
     findEnabled?: boolean;
     /** When false, autocomplete is disabled. Default true. */
@@ -427,6 +434,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     initialEntryFile: restoredEntryFile,
     onWorkspaceChange,
     serverRun,
+    initialLastRun,
     findEnabled = true,
     suggestionsEnabled = true,
     lintsEnabled = true,
@@ -445,6 +453,48 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         [question, lang, initialFiles, restoredEntryFile],
     );
 
+    // Rehydrate the output panel from the most-recent finished server-side
+    // run. Builds the same RunResult shape `executeRun` produces so the
+    // rendering path is identical to a fresh run.
+    const lastRunAsResult = useMemo<RunResult | null>(() => {
+        if (!initialLastRun) return null;
+        const status = initialLastRun.statusId;
+        const allPassed =
+            initialLastRun.testResults.length > 0
+            && initialLastRun.testResults.every((t) => t.passed);
+        let type: RunResult["type"];
+        if (initialLastRun.mode === "custom") {
+            type = status === 3 ? "success" : status === 5 ? "timeout" : status === 6 ? "compile-error" : "error";
+        } else if (initialLastRun.testResults.length === 0) {
+            type = status === 6 ? "compile-error" : status === 5 ? "timeout" : "error";
+        } else if (allPassed) {
+            type = "success";
+        } else {
+            type = "partial";
+        }
+        return {
+            type,
+            stdout: "",
+            stderr: "",
+            testResults: initialLastRun.testResults.length > 0
+                ? initialLastRun.testResults.map((t) => ({
+                    input: "",
+                    expected: t.expectedStdout ?? "",
+                    passed: t.passed,
+                    actual: t.actualStdout ?? "",
+                    time: t.timeMs >= 1000 ? `${(t.timeMs / 1000).toFixed(2)}s` : `${t.timeMs}ms`,
+                }))
+                : null,
+            time: initialLastRun.timeMs >= 1000
+                ? `${(initialLastRun.timeMs / 1000).toFixed(2)}s`
+                : `${initialLastRun.timeMs}ms`,
+            memory: initialLastRun.memoryKb >= 1024
+                ? `${(initialLastRun.memoryKb / 1024).toFixed(1)} MB`
+                : `${initialLastRun.memoryKb} KB`,
+            summary: initialLastRun.summary,
+        };
+    }, [initialLastRun]);
+
     // Starters are authored at 4-space indent. If the user's saved pref differs,
     // normalize once on mount so the editor opens at the requested indent.
     const [files, setFiles] = useState<FileNode[]>(() => {
@@ -455,8 +505,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const [activePath, setActivePath] = useState<string>(initialActive);
     const [openTabs, setOpenTabs] = useState<string[]>([initialActive]);
     const [treeOpen, setTreeOpen] = useState(true);
-    const [result, setResult] = useState<RunResult | null>(null);
+    const [result, setResult] = useState<RunResult | null>(lastRunAsResult);
     const [running, setRunning] = useState(false);
+    // When the active question changes, the parent passes a new
+    // initialLastRun. Refresh `result` so the output panel mirrors the prior
+    // run for the newly-active question. We only do this when no fresh run is
+    // in-flight so we never clobber a result the candidate is about to see.
+    useEffect(() => {
+        if (running) return;
+        setResult(lastRunAsResult);
+    }, [lastRunAsResult, running]);
     // Per-test results streamed in via SSE before the final HTTP response lands.
     // Cleared at the start of each run; the full result from setResult takes over
     // once the HTTP response returns.

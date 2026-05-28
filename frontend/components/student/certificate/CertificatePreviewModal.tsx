@@ -217,7 +217,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 
     try {
       // SECURITY: Validate certificate eligibility before generation (optional for backward compatibility)
-      const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+      const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
       
       let userId: number | null = null;
       try {
