@@ -152,7 +152,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 if (TECH_API_BASE === undefined) return;
-                const response = await fetch(`${TECH_API_BASE}/api/assessment/stats${emailParam}`);
+                const response = await fetch(`${TECH_API_BASE}/api/assessment/attempts-stats${emailParam}`);
                 if (!response.ok) return;
                 const json = await response.json();
                 const data = json.data || json;

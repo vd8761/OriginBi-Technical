@@ -883,7 +883,9 @@ export class AssessmentService {
     const dbModule = module === 'communication' ? 'grammar' : module;
     const tableMap = this.getTableMap();
     const config = tableMap[dbModule];
-    if (!config) throw new BadRequestException(`Module ${module} not supported`);
+    // Coding lives in exam-engine, not here. Return null so DataHydration's
+    // shared loop doesn't surface a 500 for a module this service doesn't own.
+    if (!config) return null;
 
     let queryRunner: any;
     try {
