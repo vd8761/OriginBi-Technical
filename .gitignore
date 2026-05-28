@@ -79,3 +79,5 @@ backend/tech-assessment-engine/tech-engine
 *.zip
 *.7z
 *.rar
+
+origin services.bat
