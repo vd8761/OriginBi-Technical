@@ -40,20 +40,46 @@ export class AssessmentService {
         stats[module] = { trial: 0, main: 0 };
         
         try {
-          if (!config.hasMode) {
+          // Count only completed attempts (submitted or evaluated), not expired or in-progress
+          // Use the mode column on the attempt row directly when available
+          const modeColExists = await this.columnExistsSafe(queryRunner, config.attempts, 'mode');
+          
+          if (modeColExists) {
+            // Fast path: use mode column directly on attempts table
             const rows = await queryRunner.query(
-              `SELECT COUNT(*) as count FROM ${config.attempts} WHERE user_id = $1`,
+              `SELECT mode, COUNT(*) as count
+               FROM ${config.attempts}
+               WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
+               GROUP BY mode`,
+              [resolvedUserId]
+            );
+            for (const row of rows) {
+              const m = String(row.mode || '').toLowerCase();
+              const cnt = Number(row.count || 0);
+              if (m === 'trial') stats[module].trial = cnt;
+              else if (m === 'main') stats[module].main = cnt;
+              else {
+                // Unknown mode — count as main for safety
+                stats[module].main += cnt;
+              }
+            }
+          } else if (!config.hasMode) {
+            // Tables with no mode column (role): count all completed attempts
+            const rows = await queryRunner.query(
+              `SELECT COUNT(*) as count FROM ${config.attempts}
+               WHERE user_id = $1 AND status IN ('submitted', 'evaluated')`,
               [resolvedUserId]
             );
             const count = Number(rows[0]?.count || 0);
             stats[module] = { trial: count, main: count };
           } else {
+            // Fallback: join through questions to infer mode (slow path, kept for compatibility)
             const trialRows = await queryRunner.query(
               `SELECT COUNT(DISTINCT a.${config.attemptIdCol}) as count
                FROM ${config.attempts} a
                JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
                JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-               WHERE a.user_id = $1 AND q.mode = 'trial'`,
+               WHERE a.user_id = $1 AND a.status IN ('submitted', 'evaluated') AND q.mode = 'trial'`,
               [resolvedUserId]
             );
             const mainRows = await queryRunner.query(
@@ -61,7 +87,7 @@ export class AssessmentService {
                FROM ${config.attempts} a
                JOIN ${config.junction} aq ON aq.${config.attemptIdCol} = a.${config.attemptIdCol}
                JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}
-               WHERE a.user_id = $1 AND q.mode = 'main'`,
+               WHERE a.user_id = $1 AND a.status IN ('submitted', 'evaluated') AND q.mode = 'main'`,
               [resolvedUserId]
             );
             stats[module] = {
@@ -201,6 +227,13 @@ export class AssessmentService {
         }
       }
     }
+    
+    // Fall back to first available user in DB (matching Go engine's behavior)
+    const fallbackRows = await queryRunner.query('SELECT id FROM users ORDER BY id LIMIT 1');
+    if (fallbackRows.length > 0) {
+      return fallbackRows[0].id;
+    }
+    
     return null;
   }
 

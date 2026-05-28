@@ -10,6 +10,10 @@ import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
 import ProctoringHost from "@/lib/proctoring/ProctoringHost";
 import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import { McqQuestion } from "./question-types/McqQuestion";
+import { MsqQuestion } from "./question-types/MsqQuestion";
+import { TfQuestion } from "./question-types/TfQuestion";
+import { NumericalQuestion } from "./question-types/NumericalQuestion";
 import {
   DEFAULT_PROCTORING,
   fetchEffectiveAssessmentSettings,
@@ -146,6 +150,10 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   
   // Cache ref to prevent double-fetching
   const cacheRestoredRef = useRef(false);
+
+  // Always-current ref for answers — avoids stale closures in async callbacks
+  const allAnswersRef = useRef<Record<string, string | string[]>>({});
+  allAnswersRef.current = allAnswers;
 
   // Cache hook for block-based assessments
   const {
@@ -387,10 +395,13 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     try {
       const timeTaken = totalTime - timeLeft;
 
-      // Only send answers for the current block
+      // Use ref to get the latest answers (avoids stale closure issue)
+      const latestAnswers = allAnswersRef.current;
+
+      // Only send answers for the current block — use != null check so "0"/false answers aren't dropped
       const currentBlockAnswers: Record<string, string | string[]> = {};
       currentBlockQuestions.forEach(q => {
-        if (allAnswers[q.id]) currentBlockAnswers[q.id] = allAnswers[q.id];
+        if (latestAnswers[q.id] != null) currentBlockAnswers[q.id] = latestAnswers[q.id];
       });
 
       const response = await fetch(
@@ -533,17 +544,24 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     }
   };
 
-  // Handle final submission
+  // Ref-based submit guard to prevent double submission across renders
+  const submittingRef = useRef(false);
+
+  // Handle final submission — uses ref to always get latest answers (prevents stale closure)
   const handleSubmitAttempt = useCallback(async () => {
-    if (!attemptToken || isSubmitting) return;
+    if (!attemptToken || submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
+      // Read latest answers from ref — this prevents stale closure where
+      // the last block's answers might not be included
+      const latestAnswers = allAnswersRef.current;
       const response = await fetch(
         `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit-block-based`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers: allAnswers }),
+          body: JSON.stringify({ answers: latestAnswers }),
         }
       );
 
@@ -557,12 +575,13 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       onComplete(result);
       await clearSession();
     } catch (error) {
+      submittingRef.current = false;
       setShowSubmitModal(false);
       setLoadError((error as Error).message);
     } finally {
       setIsSubmitting(false);
     }
-  }, [allAnswers, attemptToken, clearSession, isSubmitting, onComplete]);
+  }, [attemptToken, clearSession, onComplete]);
 
   // Navigation handlers
   const handleOptionSelect = (optionId: string) => {
@@ -589,6 +608,15 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     setAllAnswers(newAnswers);
     setAnswers(newAnswers);
     cacheSaveAnswer(currentQuestion.id, { optionId: newAnswer as any });
+    void saveBlockAnswers(viewingBlockNumber, newAnswers);
+  };
+
+  const handleNumericalChange = (value: string) => {
+    if (!currentQuestion) return;
+    const newAnswers = { ...allAnswers, [currentQuestion.id]: value };
+    setAllAnswers(newAnswers);
+    setAnswers(newAnswers);
+    cacheSaveAnswer(currentQuestion.id, { optionId: value as any });
     void saveBlockAnswers(viewingBlockNumber, newAnswers);
   };
 
@@ -1045,43 +1073,57 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
               )}
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              {currentQuestion?.options?.map((option, index) => {
-                const kind = (currentQuestion as any).kind || currentQuestion.metadata?.kind || 'mcq';
-                const isSelected = kind === 'msq'
-                    ? (Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).includes(option.id))
-                    : allAnswers[currentQuestion.id] === option.id;
+            {currentQuestion && ((currentQuestion as any).kind === 'numerical' || currentQuestion.metadata?.kind === 'numerical') && (
+              <div className="mt-4 px-1">
+                <p className="text-[10px] font-bold italic text-[#17201b] dark:text-white">
+                  * Note: Only exact numerical matches will be considered correct. Space is not allowed.
+                </p>
+              </div>
+            )}
 
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => handleOptionSelect(option.id)}
-                    aria-pressed={isSelected}
-                    className={`group flex min-h-20 items-center gap-4 rounded-lg border p-4 text-left transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40 ${
-                      isSelected
-                        ? "border-brand-green bg-brand-green/10"
-                        : "border-brand-green/20 bg-white hover:border-brand-green/50 dark:border-white/10 dark:bg-[#0f1712] dark:hover:border-brand-green/50"
-                    }`}
-                  >
-                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
-                      isSelected
-                        ? "bg-brand-green text-[#0f1712]"
-                        : "bg-brand-green/10 text-brand-green"
-                    }`}>
-                        {kind === 'msq' ? (
-                            isSelected ? <Check size={18} strokeWidth={3} /> : labelForIndex(index)
-                        ) : labelForIndex(index)}
-                    </span>
-                    <span className={`text-sm font-semibold leading-6 ${
-                      isSelected ? "text-[#17201b] dark:text-white" : "text-[#17201b] dark:text-white"
-                    }`}>
-                      {option.text}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            {currentQuestion && (() => {
+              const kind = (currentQuestion as any).kind || currentQuestion.metadata?.kind || 'mcq';
+              const currentAnswer = allAnswers[currentQuestion.id] ?? "";
+
+              switch (kind) {
+                case 'numerical':
+                  return (
+                    <NumericalQuestion
+                      questionId={currentQuestion.id}
+                      value={currentAnswer as string || ""}
+                      onChange={handleNumericalChange}
+                    />
+                  );
+                case 'msq':
+                  return (
+                    <MsqQuestion
+                      options={currentQuestion.options}
+                      selectedOptionIds={Array.isArray(currentAnswer) ? currentAnswer : (currentAnswer ? [currentAnswer as string] : [])}
+                      onToggle={handleOptionSelect}
+                      labelForIndex={labelForIndex}
+                    />
+                  );
+                case 'tf':
+                  return (
+                    <TfQuestion
+                      options={currentQuestion.options}
+                      selectedOptionId={currentAnswer as string || null}
+                      onSelect={handleOptionSelect}
+                      labelForIndex={labelForIndex}
+                    />
+                  );
+                case 'mcq':
+                default:
+                  return (
+                    <McqQuestion
+                      options={currentQuestion.options}
+                      selectedOptionId={currentAnswer as string || null}
+                      onSelect={handleOptionSelect}
+                      labelForIndex={labelForIndex}
+                    />
+                  );
+              }
+            })()}
           </div>
 
           <div className="border-t border-brand-green/5 bg-brand-green/[0.02] p-3 dark:border-white/10 dark:bg-white/5">
