@@ -37,10 +37,10 @@ import { getDisplayedQuestionCount } from "@/lib/assessmentQuestionCount";
 
 type AssessmentView = "dashboard" | "assessment" | "profile" | "details" | "explore";
 type AssessmentFilter = "all" | "ready" | "core" | "technical" | "career";
-const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, ""));
+const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, ""));
 const TECH_API_BASE =
-  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "")) ||
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, "")) ||
+  process.env.NEXT_PUBLIC_EXAM_ENGINE_URL?.replace(/\/$/, "") ||
   "";
 
 const FILTERS: { label: string; value: AssessmentFilter }[] = [

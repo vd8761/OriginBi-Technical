@@ -8,7 +8,7 @@ import { API_BASE } from "@/lib/api";
  * Top-of-shell amber banner shown when the admin shell cannot reach the
  * exam-engine.
  *
- * The previous check warned when NEXT_PUBLIC_API_BASE was empty, but that's
+ * The previous check warned when NEXT_PUBLIC_EXAM_ENGINE_URL was empty, but that's
  * actually the *canonical* config: `API_BASE === ""` makes apiFetch issue
  * relative URLs (e.g. `/v1/...`) which Next.js then rewrites server-side to
  * the exam-engine via the `rewrites()` block in `next.config.ts`. Warning on
@@ -66,9 +66,9 @@ export default function EnvWarning() {
       <div>
         Backend unreachable — admin requests to{" "}
         <code>/v1/admin/plugins</code> failed. Confirm the exam-engine is
-        running and, if <code>NEXT_PUBLIC_API_BASE</code> is set, that its
+        running and, if <code>NEXT_PUBLIC_EXAM_ENGINE_URL</code> is set, that its
         CORS allowlist permits this origin. For a single-host deploy, leave{" "}
-        <code>NEXT_PUBLIC_API_BASE</code> unset so requests are proxied
+        <code>NEXT_PUBLIC_EXAM_ENGINE_URL</code> unset so requests are proxied
         same-origin via <code>next.config.ts</code> rewrites.
       </div>
     </div>

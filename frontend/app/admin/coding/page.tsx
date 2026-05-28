@@ -492,7 +492,7 @@ function CodingListInner() {
           title="Couldn't load questions"
           error={error}
           onRetry={reload}
-          hint="If you just started the dev server, make sure NEXT_PUBLIC_API_BASE points at the Go exam-engine."
+          hint="If you just started the dev server, make sure NEXT_PUBLIC_EXAM_ENGINE_URL points at the Go exam-engine."
         />
       ) : null}
 

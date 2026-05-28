@@ -66,7 +66,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({
                         }
                     }
                 }
-                const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+                const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
                 const json = await response.json();

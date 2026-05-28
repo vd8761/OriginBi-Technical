@@ -7,7 +7,7 @@ import { EXAMS, EXAM_DETAILS, type AssessmentId } from "@/lib/exams";
 import { getDisplayedQuestionCount } from "@/lib/assessmentQuestionCount";
 
 const VALID_IDS: AssessmentId[] = ["aptitude", "communication", "coding", "mnc", "role"];
-const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, ""));
+const LEGACY_TECH_API_URL = (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, ""));
 
 export default function ExploreDetailClient({ id }: { id: string }) {
     if (!VALID_IDS.includes(id as AssessmentId)) {
