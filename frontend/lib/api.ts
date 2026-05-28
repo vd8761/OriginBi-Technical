@@ -6,7 +6,7 @@
 export const API_BASE =
   typeof window !== "undefined"
     ? ""  // browser: use same-origin proxy (/v1/* → exam-engine via next.config.ts)
-    : (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8088");
+    : (process.env.NEXT_PUBLIC_EXAM_ENGINE_URL || "http://localhost:8088");
 
 // OriginBI auth-service (Cognito auth).
 // Proxied same-origin via /auth-api to prevent CORS blocks
@@ -22,7 +22,7 @@ export const STUDENT_API_BASE = "/student-api";
 export const TECH_API_BASE =
   typeof window !== "undefined"
     ? ""  // browser: use same-origin proxy (/api/* → assessment service via next.config.ts)
-    : (process.env.NEXT_PUBLIC_TECH_API_URL || "http://localhost:5000");
+    : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
 
 export const HAS_EXAM_API = true;
 export const HAS_TECH_API = true;
