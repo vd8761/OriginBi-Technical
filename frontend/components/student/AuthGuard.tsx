@@ -19,6 +19,20 @@ const AuthGuardContent: React.FC<AuthGuardProps> = ({ children }) => {
       const search = searchParams?.toString();
       const nextQuery = search ? `${pathname}?${search}` : pathname;
       router.replace(`/?next=${encodeURIComponent(nextQuery)}`);
+    } else if (!isLoading && isLoggedIn) {
+      // For active sessions, check if forced first-time password reset is required
+      const email = sessionStorage.getItem("userEmail") || localStorage.getItem("userEmail");
+      if (email) {
+        import("@/lib/api").then(({ checkLoginStatus }) => {
+          checkLoginStatus(email).then((status) => {
+            if (status.status === "FIRST_LOGIN" && status.redirectUrl) {
+              router.replace(status.redirectUrl);
+            }
+          }).catch((err) => {
+            console.error("AuthGuard login status check failed:", err);
+          });
+        });
+      }
     }
   }, [isLoggedIn, isLoading, pathname, searchParams, router]);
 

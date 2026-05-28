@@ -950,6 +950,7 @@ export class AssessmentService {
     const isRole = moduleType === 'role';
     const attemptId = attempt[config.attemptIdCol];
     const correctOptCol = isCoding ? `NULL as correct_option_id` : `q.correct_option_id`;
+    const selectedOptionIdCol = isCoding ? `NULL::bigint as selected_option_id` : `aq.selected_option_id`;
     const taskTypeCol = isGrammar ? `q.task_type` : `NULL as task_type`;
     const roleTypeCol = isRole ? `q.question_type` : `NULL as question_type`;
     const questionMetadataCol = (!isCoding && !isGrammar)
@@ -973,7 +974,7 @@ export class AssessmentService {
               aq.display_order,
               ${blockNumberCol},
               aq.${config.idCol} AS question_id,
-              aq.selected_option_id,
+              ${selectedOptionIdCol},
               ${answerTextCol},
               ${answerAudioCol},
               ${submittedCodeCol},
@@ -1160,16 +1161,29 @@ export class AssessmentService {
         selectedOptionId: null,
         selectedAnswerText: null,
         correctOptionId:
-          aq.correct_option_id !== null && aq.correct_option_id !== undefined
-            ? String(aq.correct_option_id)
-            : null,
+          questionKind === 'msq'
+            ? (Array.isArray((questionMetadata as any).correctOptionIds)
+                ? (questionMetadata as any).correctOptionIds.map((id: any) => String(id))
+                : [])
+            : (aq.correct_option_id !== null && aq.correct_option_id !== undefined
+                ? String(aq.correct_option_id)
+                : null),
         correctAnswerText: null,
         isCorrect: null,
         status: 'unanswered',
       };
 
-      if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-        review.correctAnswerText = optionTextById.get(review.correctOptionId);
+      if (questionKind === 'msq') {
+        const correctChoices = Array.isArray(review.correctOptionId) ? review.correctOptionId : [];
+        review.correctAnswerText = correctChoices
+          .map((id: string) => optionTextById.get(id) ?? id)
+          .join(', ');
+      } else if (questionKind === 'numerical') {
+        review.correctAnswerText = String((questionMetadata as any).correctAnswer ?? '');
+      } else {
+        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+          review.correctAnswerText = optionTextById.get(review.correctOptionId);
+        }
       }
 
       if (isCoding) {

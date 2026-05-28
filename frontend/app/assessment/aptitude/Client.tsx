@@ -34,12 +34,8 @@ export default function AptitudeClient() {
         });
 
         console.log("Aptitude: Submission complete, redirecting...");
-        if (mode === 'trial') {
-            window.location.href = '/assessment';
-        } else {
-            window.location.href = '/dashboard?completed=aptitude';
-        }
-    }, [markAssessmentComplete, mode]);
+        window.location.href = '/dashboard?completed=aptitude';
+    }, [markAssessmentComplete]);
 
     return (
         <div className="min-h-screen w-full">
