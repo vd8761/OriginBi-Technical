@@ -296,37 +296,28 @@ export class AdaptiveBlockService {
       const questions = await this.fetchQuestions(qr, cfg, req.assessmentId, targetDiff, desiredCount, req.mode, usedIds, usedTexts, modeExists);
       if (!questions.length) throw new BadRequestException(`No questions available for block ${req.blockNumber}`);
 
-      // 7. Insert into junction table (only current block — previous blocks already locked)
-      if (attemptId) {
+      // 7. Insert into junction table — batch all rows in a single multi-row INSERT
+      //    (avoids N sequential round-trips to Postgres, the main source of latency)
+      if (attemptId && questions.length > 0) {
+        const valueClauses: string[] = [];
+        const valueParams: any[] = [];
+        let pIdx = 1;
         for (let i = 0; i < questions.length; i++) {
           const displayOrder = usedIds.length + i + 1;
-          await qr.query(
-            `INSERT INTO ${cfg.junction}
-               (${cfg.attemptIdCol}, ${cfg.idCol}, display_order, block_number, block_sequence_order, is_locked)
-             VALUES ($1,$2,$3,$4,$5,false)
-             ON CONFLICT (${cfg.attemptIdCol}, ${cfg.idCol}) DO NOTHING`,
-            [attemptId, Number(questions[i].id), displayOrder, req.blockNumber, i + 1],
-          );
+          valueClauses.push(`($${pIdx},$${pIdx+1},$${pIdx+2},$${pIdx+3},$${pIdx+4},false)`);
+          valueParams.push(attemptId, Number(questions[i].id), displayOrder, req.blockNumber, i + 1);
+          pIdx += 5;
         }
+        await qr.query(
+          `INSERT INTO ${cfg.junction}
+             (${cfg.attemptIdCol}, ${cfg.idCol}, display_order, block_number, block_sequence_order, is_locked)
+           VALUES ${valueClauses.join(', ')}
+           ON CONFLICT (${cfg.attemptIdCol}, ${cfg.idCol}) DO NOTHING`,
+          valueParams,
+        );
       }
 
-      // 8. Update adaptive_blocks: store question IDs + mark generated
-      await qr.query(
-        `UPDATE adaptive_blocks SET status='generated', generated_questions=$1, updated_at=NOW() WHERE block_id=$2`,
-        [JSON.stringify(questions.map(q => q.id)), blockId],
-      );
-
-      // 9. Upsert block_attempts row for this block
       const token = req.attemptToken ?? `${req.assessmentId}-${req.userId}-${Date.now()}`;
-      await qr.query(
-        `INSERT INTO block_attempts (attempt_token,block_id,user_id,block_number,status,started_at,difficulty_achieved,total_count)
-         VALUES ($1,$2,$3,$4,'in_progress',NOW(),$5,$6)
-         ON CONFLICT (attempt_token,block_number)
-         DO UPDATE SET status='in_progress', started_at=NOW(), difficulty_achieved=$5, total_count=$6`,
-        [token, blockId, req.userId, req.blockNumber, targetDiff, questions.length],
-      );
-
-      // 10. Update adaptive_paths: append difficulty to path
       await qr.query(
         `INSERT INTO adaptive_paths (attempt_token,assessment_id,user_id,difficulty_path,accuracy_path,time_path,current_block)
          VALUES ($1,$2,$3,$4,'[]'::jsonb,'[]'::jsonb,$5)

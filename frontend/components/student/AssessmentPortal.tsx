@@ -21,7 +21,7 @@ import {
   type ExtendedExam,
   type PricingTier,
 } from "@/lib/exams";
-import { usePaidAssessments, useCompletedAssessments, type PaymentKey } from "@/lib/payments";
+import { usePaidAssessments, type PaymentKey } from "@/lib/payments";
 import { useSession } from "@/lib/contexts/SessionContext";
 import DashboardContent from "./dashboard/DashboardContent";
 import ProfileView from "./ProfileView";
@@ -68,7 +68,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isPaid, isVisible, isEntitlementsReady } = usePaidAssessments();
-  const { isCompleted } = useCompletedAssessments();
   const { user } = useSession();
   
   const [currentView, setCurrentView] = useState<AssessmentView>(initialView);
@@ -152,7 +151,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     return () => {
       active = false;
     };
-  }, [currentView, user?.email]);
+  }, [user?.email]);
 
   useEffect(() => {
     let active = true;
@@ -460,12 +459,6 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     if (!exam.available) {
       setSelectedExam(exam);
       setShowDetailModal(true);
-      return;
-    }
-
-    // Prevent re-taking already-completed non-coding assessments
-    if (exam.id !== "coding" && isCompleted(exam.id as AssessmentId)) {
-      router.push("/dashboard");
       return;
     }
 

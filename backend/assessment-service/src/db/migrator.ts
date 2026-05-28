@@ -68,19 +68,59 @@ async function listMigrationFiles(dir: string): Promise<string[]> {
         .sort((a, b) => a.localeCompare(b));
 }
 
+async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
+    const res = await pool.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+            SELECT FROM pg_tables
+            WHERE schemaname = 'public'
+            AND tablename  = $1
+        )`,
+        [tableName],
+    );
+    return res.rows[0]?.exists || false;
+}
+
 async function applyMigration(
     pool: Pool,
     dir: string,
     filename: string,
     logger: Logger,
 ): Promise<void> {
+    if (filename === "001_baseline.sql") {
+        const exists = await tableExists(pool, "adaptive_blocks");
+        if (exists) {
+            logger.warn(
+                `[Migrator] Table "adaptive_blocks" already exists. Skipping execution of ${filename} and marking it as applied.`,
+            );
+            const client = await pool.connect();
+            try {
+                await client.query("BEGIN");
+                await client.query(
+                    `INSERT INTO assessment_db_version (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
+                    [filename],
+                );
+                await client.query("COMMIT");
+                return;
+            } catch (err) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch {
+                    // ignore rollback failures
+                }
+                throw err;
+            } finally {
+                client.release();
+            }
+        }
+    }
+
     const sql = await fs.readFile(path.join(dir, filename), "utf8");
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
         await client.query(sql);
         await client.query(
-            `INSERT INTO assessment_db_version (filename) VALUES ($1)`,
+            `INSERT INTO assessment_db_version (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
             [filename],
         );
         await client.query("COMMIT");
