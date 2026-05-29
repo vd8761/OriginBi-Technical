@@ -202,6 +202,7 @@ export class AdaptiveBlockGeneratorService {
     blueprint: BlueprintConfig,
     questionCount: number,
     targetDifficulty: Difficulty,
+    usedCount = 0,
   ): QuestionSlot[] {
     if (questionCount <= 0) return [];
 
@@ -238,7 +239,7 @@ export class AdaptiveBlockGeneratorService {
     }
 
     const slots: QuestionSlot[] = [];
-    let rr = 0;
+    let rr = usedCount;
     const pushSlots = (difficulty: Difficulty, n: number) => {
       for (let i = 0; i < n; i++) {
         const cs = catSubPairs[rr % catSubPairs.length];
@@ -254,7 +255,7 @@ export class AdaptiveBlockGeneratorService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 8-phase fallback question fetch
+  // 8-phase fallback question fetch — Kept as legacy for signature compatibility but unused in optimized path
   // ─────────────────────────────────────────────────────────────────────────
 
   private async fetchQuestionForSlot(
@@ -286,13 +287,10 @@ export class AdaptiveBlockGeneratorService {
 
     const baseWhere = `assessment_id=${assessmentId} AND status='active' ${modeClause} ${excludeClause}`;
 
-    // Select difficulty column — fall back to literal 'medium' when column doesn't exist
     const diffSelect = difficultyExists ? 'difficulty' : `'medium' AS difficulty`;
     const metadataSelect = metadataExists ? 'metadata' : 'NULL AS metadata';
     const extraColsSelect = cfg.extraCols ? `, ${cfg.extraCols}` : '';
 
-    // Marks no longer constrain selection — the engine is question-count based,
-    // so any question matching the category/subcategory/difficulty is valid.
     const tryFetch = async (
       diffList: Difficulty[],
       catFilter: string,
@@ -318,24 +316,15 @@ export class AdaptiveBlockGeneratorService {
       return rows[0] ?? null;
     };
 
-    // Cast to text: categoryCol may be a Postgres enum (e.g. grammar task_type),
-    // and a non-member value like the 'General' fallback would otherwise error
-    // instead of simply matching no rows.
     const catFilter = `AND ${cfg.categoryCol}::text='${slot.category}'`;
     const subFilter = `AND ${cfg.subcategoryCol}::text='${slot.subcategory}'`;
 
     const phases: Array<() => Promise<any | null>> = [
-      // Phase 1: exact category + subcategory + difficulty
       () => tryFetch([slot.difficulty], catFilter, subFilter),
-      // Phase 2: same cat+sub, nearby difficulty
       () => tryFetch(nearbyDiff(slot.difficulty), catFilter, subFilter),
-      // Phase 3: same category, any subcategory, exact difficulty
       () => tryFetch([slot.difficulty], catFilter, ''),
-      // Phase 4: same category, any subcategory, nearby difficulty
       () => tryFetch(nearbyDiff(slot.difficulty), catFilter, ''),
-      // Phase 5: any category, exact difficulty
       () => tryFetch([slot.difficulty], '', ''),
-      // Phase 6: any category, any difficulty
       () => tryFetch([], '', ''),
     ];
 
@@ -347,7 +336,7 @@ export class AdaptiveBlockGeneratorService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Main: generate a block
+  // Main: generate a block (Highly Optimized with Single Query & In-Memory Fallbacks)
   // ─────────────────────────────────────────────────────────────────────────
 
   async generateBlock(params: {
@@ -366,7 +355,7 @@ export class AdaptiveBlockGeneratorService {
 
     try {
       // 1. Ensure blueprint exists (auto-builds from question bank if missing).
-      //    This also initializes adaptive_blocks rows, which are needed for the JOIN below.
+      //    This also initializes adaptive_blocks rows.
       const blueprint = await this.blueprintService.ensureBlueprint(assessmentId);
       if (!blueprint) {
         throw new BadRequestException(
@@ -399,9 +388,6 @@ export class AdaptiveBlockGeneratorService {
       const totalBlocks = blueprint.totalBlocks || Number(rawBC.blocksPerAssessment ?? rawBC.blocks_per_assessment ?? 4);
       const isLastBlock = blockNumber === totalBlocks;
 
-      // Question-count model: the assessment defines a fixed total number of
-      // questions, split evenly across blocks. The last block absorbs any
-      // remainder so the totals always add up exactly.
       const totalQuestions = Math.max(
         totalBlocks,
         Math.round(Number(row.adaptive_total_questions ?? 0)) || totalBlocks * 5,
@@ -432,25 +418,134 @@ export class AdaptiveBlockGeneratorService {
       // 4. Load subcategory coverage
       const coverage = await this.loadCoverage(attemptToken);
 
-      // 5. Build question slots — exactly `questionsThisBlock` slots
-      const slots = this.buildQuestionSlots(blueprint, questionsThisBlock, targetDifficulty);
+      // 5. Build question slots — exactly `questionsThisBlock` slots. Offsetting round-robin concepts by usedCount!
+      const slots = this.buildQuestionSlots(blueprint, questionsThisBlock, targetDifficulty, usedIds.length);
 
-      // 6. Fetch questions for each slot
+      // 6. Fetch all questions and pre-aggregate options in a single high-performance query
       const modeExists = await this.columnExists(cfg.questions, 'mode');
       const difficultyExists = await this.columnExists(cfg.questions, 'difficulty');
       const metadataExists = await this.columnExists(cfg.questions, 'metadata');
+
+      const imgSelect = cfg.hasImageUrl && (await this.columnExists(cfg.questions, 'image_url')) ? ', q.image_url' : '';
+      const diffSelect = difficultyExists ? 'q.difficulty' : `'medium' AS difficulty`;
+      const metadataSelect = metadataExists ? 'q.metadata' : 'NULL AS metadata';
+      const extraColsSelect = cfg.extraCols
+        ? cfg.extraCols.split(',').map(c => `q.${c.trim()}`).join(', ')
+        : '';
+      const extraColsSql = extraColsSelect ? `, ${extraColsSelect}` : '';
+
+      const modeCondition = cfg.hasMode && modeExists
+        ? `AND (q.mode = $2 OR q.mode IS NULL)`
+        : '';
+      const queryParams: any[] = [assessmentId];
+      if (cfg.hasMode && modeExists) {
+        queryParams.push(mode === 'trial' ? 'trial' : 'main');
+      }
+
+      const allRows = await qr.query(
+        `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
+                q.${cfg.categoryCol} AS category,
+                q.${cfg.subcategoryCol} AS subcategory,
+                q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql},
+                json_agg(
+                   json_build_object('option_id', o.option_id, 'option_text', o.option_text)
+                   ORDER BY o.option_id
+                ) FILTER (WHERE o.option_id IS NOT NULL) AS options
+         FROM ${cfg.questions} q
+         LEFT JOIN ${cfg.options} o ON o.${cfg.idCol} = q.${cfg.idCol}
+         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
+         GROUP BY q.${cfg.idCol}`,
+        queryParams,
+      );
+
+      const candidates = allRows.map((q: any) => {
+        const meta = typeof q.metadata === 'object' ? q.metadata : {};
+        const kind = this.engine.normalizeKind(meta?.kind);
+        return {
+          id: String(q.id),
+          question_text: q.question_text,
+          difficulty: String(q.difficulty || 'medium').toLowerCase() as Difficulty,
+          category: String(q.category || 'General'),
+          subcategory: String(q.subcategory || q.category || 'General'),
+          marks: Number(q.marks) || 1,
+          negative_marks: Number(q.negative_marks) || 0,
+          image_url: q.image_url ?? undefined,
+          metadata: meta,
+          options: (q.options ?? []).map((o: any) => ({
+            id: String(o.option_id),
+            text: o.option_text,
+          })),
+          audio_url: q.audio_url ?? undefined,
+          passage_text: q.passage_text ?? undefined,
+          task_type: q.task_type ?? undefined,
+          rubric_json: q.rubric_json ?? undefined,
+        };
+      });
+
       const fetchedQuestions: any[] = [];
-      const localUsedIds = new Set(usedIds);
-      const localUsedTexts = new Set(usedTexts);
+      const localUsedIds = new Set(usedIds.map(String));
+      const localUsedTexts = new Set(usedTexts.map(t => t.toLowerCase()));
+
+      // 7. Perform fallback selection phases purely in-memory
+      const fetchQuestionForSlotInMemory = (
+        slot: QuestionSlot,
+      ): any | null => {
+        const nearbyDiff = (d: Difficulty): Difficulty[] => {
+          if (d === 'easy')   return ['easy', 'medium'];
+          if (d === 'medium') return ['medium', 'easy', 'hard'];
+          return ['hard', 'medium'];
+        };
+
+        const tryFetch = (
+          diffList: Difficulty[],
+          catName: string | null,
+          subName: string | null,
+        ): any | null => {
+          const filtered = candidates.filter((q: any) => {
+            if (localUsedIds.has(q.id)) return false;
+            if (localUsedTexts.has(q.question_text.trim().toLowerCase())) return false;
+            if (catName !== null && q.category.trim().toLowerCase() !== catName.trim().toLowerCase()) return false;
+            if (subName !== null && q.subcategory.trim().toLowerCase() !== subName.trim().toLowerCase()) return false;
+            if (diffList.length && !diffList.includes(q.difficulty)) return false;
+            return true;
+          });
+
+          if (filtered.length === 0) return null;
+          const randIdx = Math.floor(Math.random() * filtered.length);
+          return filtered[randIdx];
+        };
+
+        const slotCat = slot.category;
+        const slotSub = slot.subcategory;
+        const slotDiff = slot.difficulty;
+
+        const phases: Array<() => any | null> = [
+          // Phase 1: exact category + subcategory + difficulty
+          () => tryFetch([slotDiff], slotCat, slotSub),
+          // Phase 2: same cat+sub, nearby difficulty
+          () => tryFetch(nearbyDiff(slotDiff), slotCat, slotSub),
+          // Phase 3: same category, any subcategory, exact difficulty
+          () => tryFetch([slotDiff], slotCat, null),
+          // Phase 4: same category, any subcategory, nearby difficulty
+          () => tryFetch(nearbyDiff(slotDiff), slotCat, null),
+          // Phase 5: any category, exact difficulty
+          () => tryFetch([slotDiff], null, null),
+          // Phase 6: any category, any difficulty
+          () => tryFetch([], null, null),
+        ];
+
+        for (const phase of phases) {
+          const result = phase();
+          if (result) return result;
+        }
+        return null;
+      };
 
       for (const slot of slots) {
-        const q = await this.fetchQuestionForSlot(
-          cfg, assessmentId, slot,
-          Array.from(localUsedIds), Array.from(localUsedTexts), mode, modeExists, difficultyExists, metadataExists,
-        );
+        const q = fetchQuestionForSlotInMemory(slot);
         if (q) {
-          localUsedIds.add(Number(q.id));
-          localUsedTexts.add(String(q.question_text || '').trim());
+          localUsedIds.add(q.id);
+          localUsedTexts.add(q.question_text.trim().toLowerCase());
           fetchedQuestions.push({ ...q, _slot: slot });
         }
       }
@@ -459,11 +554,10 @@ export class AdaptiveBlockGeneratorService {
         throw new BadRequestException(`No questions available for block ${blockNumber}`);
       }
 
-      // Deduplicate: the 8-phase fallback may return the same question for multiple slots
-      // when the question bank is small. Keep only the first occurrence of each question ID.
-      const seenQIds = new Set<number>();
+      // Deduplicate unique question IDs
+      const seenQIds = new Set<string>();
       const uniqueQuestions = fetchedQuestions.filter(q => {
-        const id = Number(q.id);
+        const id = q.id;
         if (seenQIds.has(id)) return false;
         seenQIds.add(id);
         return true;
@@ -475,11 +569,10 @@ export class AdaptiveBlockGeneratorService {
         [uniqueQuestions[i], uniqueQuestions[j]] = [uniqueQuestions[j], uniqueQuestions[i]];
       }
 
-      // Replace fetchedQuestions with deduplicated list for all downstream steps
       fetchedQuestions.length = 0;
       fetchedQuestions.push(...uniqueQuestions);
 
-      // 7. Build coverage map for this block
+      // 8. Build coverage map for this block
       const blockCoverageMap: Record<string, Record<string, number>> = {};
       for (const q of fetchedQuestions) {
         const cat = q.category ?? q._slot.category;
@@ -488,7 +581,7 @@ export class AdaptiveBlockGeneratorService {
         blockCoverageMap[cat][sub] = (blockCoverageMap[cat][sub] ?? 0) + Number(q.marks);
       }
 
-      // 8. Update subcategory coverage (inside transaction so it rolls back on failure)
+      // 9. Update subcategory coverage
       const updatedCoverage = { ...coverage };
       for (const [cat, subs] of Object.entries(blockCoverageMap)) {
         if (!updatedCoverage[cat]) updatedCoverage[cat] = {};
@@ -500,9 +593,7 @@ export class AdaptiveBlockGeneratorService {
       }
       await this.saveCoverage(qr, attemptToken, assessmentId, updatedCoverage);
 
-      // 9. Insert into junction table
-      // Use a per-block sequence counter that only increments on successful inserts
-      // to avoid gaps and duplicate block_sequence_order values.
+      // 10. Insert into junction table
       let blockSeqOrder = 0;
       for (let i = 0; i < fetchedQuestions.length; i++) {
         const q = fetchedQuestions[i];
@@ -513,11 +604,7 @@ export class AdaptiveBlockGeneratorService {
           blueprint.secondsPerMark,
         );
         blockSeqOrder++;
-        // ON CONFLICT covers both unique constraints:
-        //   1. (attemptId, questionId)       — question already assigned to this attempt
-        //   2. (attemptId, block_number, block_sequence_order) — sequence slot already taken
-        // In both cases we skip silently; the question is already recorded.
-        const result = await qr.query(
+        await qr.query(
           `INSERT INTO ${cfg.junction}
              (${cfg.attemptIdCol}, ${cfg.idCol}, display_order, block_number,
               block_sequence_order, is_locked, expected_time_seconds)
@@ -527,15 +614,15 @@ export class AdaptiveBlockGeneratorService {
         );
       }
 
-      // 10. Update adaptive_blocks
+      // 11. Update adaptive_blocks
       await qr.query(
         `UPDATE adaptive_blocks
          SET status='generated', generated_questions=$1, updated_at=NOW()
          WHERE block_id=$2`,
-        [JSON.stringify(fetchedQuestions.map(q => q.id)), blockId],
+        [JSON.stringify(fetchedQuestions.map(q => Number(q.id))), blockId],
       );
 
-      // 11. Upsert block_attempts
+      // 12. Upsert block_attempts
       const totalBlockMarks = fetchedQuestions.reduce((s: number, q: any) => s + Number(q.marks), 0);
       await qr.query(
         `INSERT INTO block_attempts
@@ -550,7 +637,7 @@ export class AdaptiveBlockGeneratorService {
          fetchedQuestions.length, totalBlockMarks],
       );
 
-      // 12. Update adaptive_paths
+      // 13. Update adaptive_paths
       await qr.query(
         `INSERT INTO adaptive_paths
            (attempt_token, assessment_id, user_id, difficulty_path, accuracy_path, time_path, current_block)
@@ -564,16 +651,9 @@ export class AdaptiveBlockGeneratorService {
 
       await qr.commitTransaction();
 
-      // 13. Build response
+      // 14. Build response using the pre-aggregated options (NO looping DB queries!)
       const questions: AdaptiveQuestion[] = [];
       for (const q of fetchedQuestions) {
-        const opts = await this.dataSource.query(
-          `SELECT option_id::text AS id, option_text AS text
-           FROM ${cfg.options} WHERE ${cfg.idCol}=$1 ORDER BY option_id`,
-          [Number(q.id)],
-        );
-        const meta = typeof q.metadata === 'object' ? q.metadata : {};
-        const kind = this.engine.normalizeKind(meta?.kind);
         const expectedSecs = this.engine.computeExpectedTime(
           Number(q.marks),
           (q.difficulty as Difficulty) ?? 'easy',
@@ -582,13 +662,13 @@ export class AdaptiveBlockGeneratorService {
         questions.push({
           id: String(q.id),
           text: q.question_text,
-          options: opts,
+          options: q.options,
           difficulty: (q.difficulty as Difficulty) ?? 'easy',
           category: q.category ?? q._slot.category,
           subcategory: q.subcategory ?? q._slot.subcategory,
           marks: Number(q.marks),
           negativeMarks: Number(q.negative_marks ?? 0),
-          kind,
+          kind: this.engine.normalizeKind(q.metadata?.kind),
           imageUrl: cfg.hasImageUrl ? (q.image_url ?? undefined) : undefined,
           expectedTimeSecs: expectedSecs,
           audioUrl: q.audio_url ?? undefined,

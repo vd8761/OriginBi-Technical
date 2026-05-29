@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import * as crypto from 'crypto';
 import { AdaptiveEngineService } from './adaptive-engine.service';
 import { AdaptiveSnapshotService } from './adaptive-snapshot.service';
+import { EmailService } from '../../assessment/services/email.service';
 import {
   Difficulty,
   AnswerStatus,
@@ -27,6 +29,7 @@ export class AdaptiveAnalyticsService {
     private readonly dataSource: DataSource,
     private readonly engine: AdaptiveEngineService,
     private readonly snapshotService: AdaptiveSnapshotService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -46,6 +49,12 @@ export class AdaptiveAnalyticsService {
       );
       const totalBlueprintMarks = Number(bpRows[0]?.total_marks ?? 100);
       const secondsPerMark = Number(bpRows[0]?.seconds_per_mark ?? 45);
+
+      const asmRows = await this.dataSource.query(
+        `SELECT module_type FROM tech_assessments WHERE assessment_id=$1`,
+        [assessmentId],
+      );
+      const moduleType = asmRows[0]?.module_type ?? 'aptitude';
 
       // 2. Load all block attempts (for adaptive path)
       const blockAttempts = await this.dataSource.query(
@@ -254,6 +263,18 @@ export class AdaptiveAnalyticsService {
 
       // 16. Mark the attempt as submitted (prevents dashboard resume cards)
       await this.markAttemptSubmitted(attemptToken, assessmentId, report);
+
+      // 17. Fire certificate email asynchronously (non-blocking)
+      const nowStr = new Date().toISOString();
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          userId,
+          assessmentId,
+          moduleType,
+          report.marksPercentage,
+          nowStr,
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
 
       return report;
     } catch (e) {
@@ -491,5 +512,135 @@ export class AdaptiveAnalyticsService {
        WHERE attempt_token=$1`,
       [attemptToken, report.timeTakenSeconds, report.obtainedMarks, 0],
     );
+  }
+
+  // ─── Certificate Email Helper ──────────────────────────────────────────────
+
+  private async sendCertificateEmailForAttempt(
+    userId: number,
+    assessmentId: number,
+    module: string,
+    overallScorePercent: number,
+    completedAt: string,
+  ): Promise<void> {
+    try {
+      const finalModule = module === 'communication' ? 'grammar' : module;
+
+      // Fetch user details
+      const userRows = await this.dataSource.query(
+        `SELECT email, name, full_name, first_name, last_name FROM users WHERE id = $1`,
+        [userId],
+      );
+      if (!userRows.length) {
+        this.logger.warn(`sendCertificateEmailForAttempt: user ${userId} not found`);
+        return;
+      }
+      const user = userRows[0];
+      const toEmail: string = user.email;
+      const userName: string =
+        user.full_name ||
+        user.name ||
+        [user.first_name, user.last_name].filter(Boolean).join(' ') ||
+        'Candidate';
+
+      // Fetch assessment title
+      const assessmentRows = await this.dataSource.query(
+        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1`,
+        [assessmentId],
+      );
+      const rawTitle: string =
+        assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(finalModule);
+
+      // Clean the title to remove any "adaptive" or "block" terms case-insensitively
+      const cleanTitle = (rawTitle || '')
+        .replace(/\b(adaptive|block-based|block\s+based|block)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const defaultLabel = this.getModuleLabelForEmail(finalModule);
+      const cleanDefaultLabel = defaultLabel
+        .replace(/\b(adaptive|block-based|block\s+based|block)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const assessmentTitle = cleanTitle || cleanDefaultLabel;
+
+      // Derive grade
+      const grade = this.getGradeFromScore(overallScorePercent);
+
+      // Build a stable certificate ID
+      const dateCode = this.getYyMm(new Date(completedAt));
+      const assessmentCode = this.assessmentCodeForEmail(finalModule);
+      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
+
+      this.logger.log(
+        `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId})`,
+      );
+
+      await this.emailService.sendCertificateEmail({
+        toEmail,
+        userName,
+        assessmentTitle,
+        assessmentModule: finalModule,
+        overallScorePercent,
+        grade,
+        certificateId,
+        completedAt,
+      });
+    } catch (err: any) {
+      this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);
+    }
+  }
+
+  private getGradeFromScore(score: number): string {
+    if (score >= 90) return 'A+';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B+';
+    if (score >= 60) return 'B';
+    if (score >= 50) return 'C';
+    if (score >= 40) return 'D';
+    return 'F';
+  }
+
+  private getModuleLabelForEmail(module: string): string {
+    const map: Record<string, string> = {
+      aptitude: 'Technical Aptitude Assessment',
+      grammar: 'Communication Skills Assessment',
+      communication: 'Communication Skills Assessment',
+      mnc: 'MNC Readiness Assessment',
+      role: 'Role-Based Assessment',
+      coding: 'Coding Assessment',
+    };
+    return map[module] || `${module} Assessment`;
+  }
+
+  private assessmentCodeForEmail(module: string): string {
+    if (module.startsWith('coding:')) {
+      const lang = module.slice('coding:'.length).toLowerCase();
+      if (lang === 'python') return 'PYT';
+      if (lang === 'java') return 'JAV';
+      return 'COD';
+    }
+    const map: Record<string, string> = {
+      aptitude: 'APT',
+      grammar: 'COM',
+      communication: 'COM',
+      mnc: 'MNC',
+      role: 'RBA',
+      coding: 'COD',
+    };
+    return map[module] || module.slice(0, 3).toUpperCase();
+  }
+
+  private getYyMm(d: Date): string {
+    const yy = String(d.getFullYear() % 100).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yy}${mm}`;
+  }
+
+  private randomCode(length: number): string {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const buf = crypto.randomBytes(length);
+    return Array.from(buf).map(b => charset[b % charset.length]).join('');
   }
 }

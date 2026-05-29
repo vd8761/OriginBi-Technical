@@ -10,6 +10,7 @@ import { AdaptiveBlockGeneratorService } from './services/adaptive-block-generat
 import { AdaptiveSnapshotService } from './services/adaptive-snapshot.service';
 import { AdaptiveAnalyticsService } from './services/adaptive-analytics.service';
 import { AdaptiveBlueprintService } from './services/adaptive-blueprint.service';
+import { EmailService } from '../assessment/services/email.service';
 
 /**
  * AdaptiveModule
@@ -36,6 +37,7 @@ import { AdaptiveBlueprintService } from './services/adaptive-blueprint.service'
     AdaptiveBlockGeneratorService,
     AdaptiveSnapshotService,
     AdaptiveAnalyticsService,
+    EmailService,
   ],
   exports: [
     AdaptiveEngineService,
@@ -43,6 +45,7 @@ import { AdaptiveBlueprintService } from './services/adaptive-blueprint.service'
     AdaptiveBlockGeneratorService,
     AdaptiveSnapshotService,
     AdaptiveAnalyticsService,
+    EmailService,
   ],
 })
 export class AdaptiveModule {}
