@@ -211,6 +211,55 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
   const portalTarget = typeof document !== "undefined" ? document.body : null;
   if (!portalTarget) return null;
 
+  const rawTitle = exam.title || "";
+  const cleanTitle = rawTitle
+    .replace(/\b(adaptive|block-based|block\s+based|block)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim() || rawTitle;
+
+  // Format date to "Jan 15, 2026"
+  const formattedDate = new Date(result.completedAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const completedDate = new Date(result.completedAt);
+  const dateCode = getYyMm(completedDate);
+  const assessmentCode = assessmentCodeFor(exam.id);
+  const serialStorageKey = `originbi:cert-serial:${exam.id}:${result.completedAt}`;
+  const registrationPrefix = result.module === "tech" ? "TCX" : "OBX";
+  let serialNumber = "";
+
+  if (typeof window !== "undefined") {
+    const cached = window.localStorage.getItem(serialStorageKey);
+    if (cached) {
+      serialNumber = cached;
+    } else {
+      serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
+      window.localStorage.setItem(serialStorageKey, serialNumber);
+    }
+  } else {
+    serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
+  }
+
+  const verificationUrl = `${
+    typeof window !== "undefined" ? window.location.origin : ""
+  }/verify/${serialNumber}`;
+
+  // Helper to determine Grade based on score
+  const getGrade = (score: number) => {
+    if (score >= 90) return "A";
+    if (score >= 80) return "B";
+    if (score >= 70) return "C";
+    if (score >= 60) return "D";
+    return "F";
+  };
+  const grade = getGrade(result.overallScore);
+
+  // Dynamic description based on assessment type
+  const certDescription = getCertificateDescription(exam.id, cleanTitle, grade, result.overallScore);
+
   const handleDownload = async () => {
     if (!certificateRef.current) return;
     setIsDownloading(true);
@@ -219,15 +268,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
       // SECURITY: Validate certificate eligibility before generation (optional for backward compatibility)
       const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
       
-      let userId: number | null = null;
-      try {
-        const profileRaw = localStorage.getItem("originbi:user-profile");
-        if (profileRaw) {
-          const p = JSON.parse(profileRaw);
-          if (p?.id) userId = Number(p.id);
-        }
-      } catch {}
-      
+      const userId = getUserId();
       if (!userId) {
         alert("User authentication required for certificate generation.");
         return;
@@ -348,11 +389,11 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
   };
 
   const handleShare = async () => {
-    const shareText = `I earned a certificate in ${exam.title} with ${result.overallScore}% on OriginBi!`;
+    const shareText = `I earned a certificate in ${cleanTitle} with ${result.overallScore}% on OriginBi!`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${exam.title} Certificate`,
+          title: `${cleanTitle} Certificate`,
           text: shareText,
           url: window.location.href,
         });
@@ -363,49 +404,6 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
       setTimeout(() => setShowCopiedToast(false), 2000);
     }
   };
-
-  // Format date to "Jan 15, 2026"
-  const formattedDate = new Date(result.completedAt).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const completedDate = new Date(result.completedAt);
-  const dateCode = getYyMm(completedDate);
-  const assessmentCode = assessmentCodeFor(exam.id);
-  const serialStorageKey = `originbi:cert-serial:${exam.id}:${result.completedAt}`;
-  const registrationPrefix = result.module === "tech" ? "TCX" : "OBX";
-  let serialNumber = "";
-
-  if (typeof window !== "undefined") {
-    const cached = window.localStorage.getItem(serialStorageKey);
-    if (cached) {
-      serialNumber = cached;
-    } else {
-      serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
-      window.localStorage.setItem(serialStorageKey, serialNumber);
-    }
-  } else {
-    serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
-  }
-
-  const verificationUrl = `${
-    typeof window !== "undefined" ? window.location.origin : ""
-  }/verify/${serialNumber}`;
-
-  // Helper to determine Grade based on score
-  const getGrade = (score: number) => {
-    if (score >= 90) return "A";
-    if (score >= 80) return "B";
-    if (score >= 70) return "C";
-    if (score >= 60) return "D";
-    return "F";
-  };
-  const grade = getGrade(result.overallScore);
-
-  // Dynamic description based on assessment type
-  const certDescription = getCertificateDescription(exam.id, exam.title, grade, result.overallScore);
 
   return createPortal(
     <AnimatePresence>
@@ -438,7 +436,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Certificate Preview</h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 truncate">{exam.title}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 truncate">{cleanTitle}</p>
                   </div>
                 </div>
                 <button
@@ -519,9 +517,9 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                       >
                         {/* Assessment Title */}
                         <h1
-                          data-cqw={`font-size:${exam.title.length > 20 ? "5.5" : "7"}`}
+                          data-cqw={`font-size:${cleanTitle.length > 20 ? "5.5" : "7"}`}
                           style={{
-                            fontSize: exam.title.length > 20 ? "5.5cqw" : "7cqw",
+                            fontSize: cleanTitle.length > 20 ? "5.5cqw" : "7cqw",
                             fontWeight: 700,
                             lineHeight: 1.15,
                             letterSpacing: "-0.02em",
@@ -530,7 +528,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                             marginBottom: "2cqw",
                           }}
                         >
-                          {exam.title}
+                          {cleanTitle}
                         </h1>
 
                         {/* Dynamic Description Paragraph */}

@@ -689,13 +689,39 @@ export class AdaptiveBlockService {
       [attemptId, blockNumber],
     );
 
+    if (rows.length === 0) {
+      return {
+        blockNumber,
+        difficulty: baRow[0].difficulty_achieved,
+        status: baRow[0].status,
+        questions: [],
+      };
+    }
+
+    // Fetch all options for these questions in a single query!
+    const questionIds = rows.map((r: any) => Number(r.aptitude_question_id));
+    const allOptions = await this.dataSource.query(
+      `SELECT ${cfg.idCol}::text AS question_id, option_id::text AS id, option_text AS text
+       FROM ${cfg.options}
+       WHERE ${cfg.idCol} IN (${questionIds.join(',')})
+       ORDER BY option_id`,
+    );
+
+    // Group options by question_id
+    const optionsMap = new Map<string, Array<{ id: string; text: string }>>();
+    for (const opt of allOptions) {
+      const qId = String(opt.question_id);
+      if (!optionsMap.has(qId)) optionsMap.set(qId, []);
+      optionsMap.get(qId)!.push({
+        id: String(opt.id),
+        text: opt.text,
+      });
+    }
+
     const questions: any[] = [];
     for (const r of rows) {
-      const opts = await this.dataSource.query(
-        `SELECT option_id::text AS id, option_text AS text
-         FROM ${cfg.options} WHERE ${cfg.idCol}=$1 ORDER BY option_id`,
-        [r.aptitude_question_id],
-      );
+      const qIdStr = String(r.aptitude_question_id);
+      const opts = optionsMap.get(qIdStr) ?? [];
       const questionMetadata = this.asObject(r.question_metadata);
       const attemptMetadata = this.asObject(r.attempt_metadata);
       const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
@@ -705,7 +731,7 @@ export class AdaptiveBlockService {
           : (r.selected_option_id ? String(r.selected_option_id) : null);
 
       questions.push({
-        id: String(r.aptitude_question_id),
+        id: qIdStr,
         text: r.question_text,
         difficulty: r.difficulty,
         category: r.category ?? '',
