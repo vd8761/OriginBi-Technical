@@ -3142,6 +3142,8 @@ export class AssessmentService {
     completedAt: string,
   ): Promise<void> {
     try {
+      const finalModule = module === 'communication' ? 'grammar' : module;
+
       // Fetch user details
       const userRows = await this.dataSource.query(
         `SELECT email, name, full_name, first_name, last_name FROM users WHERE id = $1`,
@@ -3164,26 +3166,40 @@ export class AssessmentService {
         `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1`,
         [assessmentId],
       );
-      const assessmentTitle: string =
-        assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(module);
+      const rawTitle: string =
+        assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(finalModule);
+
+      // Clean the title to remove any "adaptive" or "block" terms case-insensitively
+      const cleanTitle = (rawTitle || '')
+        .replace(/\b(adaptive|block-based|block\s+based|block)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const defaultLabel = this.getModuleLabelForEmail(finalModule);
+      const cleanDefaultLabel = defaultLabel
+        .replace(/\b(adaptive|block-based|block\s+based|block)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const assessmentTitle = cleanTitle || cleanDefaultLabel;
 
       // Derive grade
       const grade = this.getGradeFromScore(overallScorePercent);
 
       // Build a stable certificate ID
       const dateCode = this.getYyMm(new Date(completedAt));
-      const assessmentCode = this.assessmentCodeForEmail(module);
+      const assessmentCode = this.assessmentCodeForEmail(finalModule);
       const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
 
       this.logger.log(
-        `Sending certificate email to ${toEmail} for ${module} (score=${overallScorePercent}%, cert=${certificateId})`,
+        `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId})`,
       );
 
       await this.emailService.sendCertificateEmail({
         toEmail,
         userName,
         assessmentTitle,
-        assessmentModule: module,
+        assessmentModule: finalModule,
         overallScorePercent,
         grade,
         certificateId,

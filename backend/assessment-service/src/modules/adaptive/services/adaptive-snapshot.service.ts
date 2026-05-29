@@ -211,6 +211,28 @@ export class AdaptiveSnapshotService {
       [attemptId, blockNumber],
     );
 
+    if (rows.length === 0) return [];
+
+    // Fetch all options for these questions in a single query!
+    const questionIds = rows.map((r: any) => Number(r.question_id));
+    const allOptions = await this.dataSource.query(
+      `SELECT ${cfg.idCol}::text AS question_id, option_id::text AS id, option_text AS text
+       FROM ${cfg.options}
+       WHERE ${cfg.idCol} IN (${questionIds.join(',')})
+       ORDER BY option_id`,
+    );
+
+    // Group options by question_id
+    const optionsMap = new Map<string, Array<{ id: string; text: string }>>();
+    for (const opt of allOptions) {
+      const qId = String(opt.question_id);
+      if (!optionsMap.has(qId)) optionsMap.set(qId, []);
+      optionsMap.get(qId)!.push({
+        id: String(opt.id),
+        text: opt.text,
+      });
+    }
+
     const questionsWithOpts = [];
     for (const r of rows) {
       const qMeta = typeof r.question_meta === 'object' ? r.question_meta : {};
@@ -221,15 +243,12 @@ export class AdaptiveSnapshotService {
           ? (aMeta?.submittedAnswer ?? null)
           : (r.selected_option_id ? String(r.selected_option_id) : null);
 
-      const opts = await this.dataSource.query(
-        `SELECT option_id::text AS id, option_text AS text
-         FROM ${cfg.options} WHERE ${cfg.idCol}=$1 ORDER BY option_id`,
-        [Number(r.question_id)],
-      );
+      const qIdStr = String(r.question_id);
+      const opts = optionsMap.get(qIdStr) ?? [];
 
       questionsWithOpts.push({
-        questionId: String(r.question_id),
-        id: String(r.question_id),
+        questionId: qIdStr,
+        id: qIdStr,
         text: r.question_text ?? '',
         difficulty: (r.difficulty as Difficulty) ?? 'easy',
         category: r.category ?? 'General',
