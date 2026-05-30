@@ -32,6 +32,7 @@ export default function AssessmentSettingsModal({
     const [name, setName] = useState("");
     const [duration, setDuration] = useState(60);
     const [questionLimit, setQuestionLimit] = useState(0);
+    const [trialQuestionLimit, setTrialQuestionLimit] = useState(5);
     const [tabSwitchLimit, setTabSwitchLimit] = useState(0);
     const [antiCopyEnabled, setAntiCopyEnabled] = useState(false);
     const [shuffleQuestions, setShuffleQuestions] = useState(true);
@@ -67,6 +68,7 @@ export default function AssessmentSettingsModal({
         setName(assessment.assessment_name || "");
         setDuration(Number(assessment.total_time_minutes || 60));
         setQuestionLimit(Number(assessment.question_limit || 0));
+        setTrialQuestionLimit(assessment.trial_question_limit !== undefined && assessment.trial_question_limit !== null ? Number(assessment.trial_question_limit) : 5);
         setTabSwitchLimit(Number(assessment.tab_switch_limit || 0));
         setAntiCopyEnabled(Boolean(assessment.anti_copy_enabled));
         setShuffleQuestions(Boolean(assessment.shuffle_questions));
@@ -193,6 +195,7 @@ export default function AssessmentSettingsModal({
                 assessment_name: name,
                 total_time_minutes: duration,
                 question_limit: questionLimit,
+                trialQuestionLimit: trialQuestionLimit,
                 categories: categoriesList,
                 difficulty_marks: diffMarks,
                 difficulty_negative_marks: diffNegMarks,
@@ -429,6 +432,31 @@ export default function AssessmentSettingsModal({
                                             required
                                             value={questionLimit}
                                             onChange={(e) => setQuestionLimit(Math.max(0, Number(e.target.value)))}
+                                            className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
+                                        />
+                                        <div className="mt-2 text-xs leading-relaxed text-slate-400">
+                                            Active Question Pool size: <strong>{assessment?.main_questions_count ?? 0} active main question(s)</strong>.
+                                        </div>
+                                        <div className="mt-2 p-2.5 rounded-lg border border-blue-500/10 bg-blue-500/5 text-blue-400 text-xs leading-relaxed">
+                                            <strong>Trial Assessment:</strong> Bypasses adaptive engine and serves a fixed set of trial questions (first 5). Currently, there are <strong>{assessment?.trial_questions_count ?? 0} active trial question(s)</strong> in the question bank.
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-300 tracking-wider uppercase flex items-center gap-1.5">
+                                            Trial Question Limit
+                                            <span className="group relative text-slate-500 hover:text-emerald-400 cursor-help">
+                                                <Info className="w-3.5 h-3.5" />
+                                                <span className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-950 border border-slate-800 p-2 rounded text-[10px] w-52 text-slate-300 shadow-xl z-20 font-normal normal-case leading-normal">
+                                                    Set to 0 to use the default of 5 trial questions.
+                                                </span>
+                                            </span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            required
+                                            value={trialQuestionLimit}
+                                            onChange={(e) => setTrialQuestionLimit(Math.max(0, Number(e.target.value)))}
                                             className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/50 rounded-lg py-2 px-3 text-sm text-white outline-none transition"
                                         />
                                     </div>

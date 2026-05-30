@@ -215,6 +215,33 @@ export async function completeBlock(params: {
 }
 
 /**
+ * Complete a block and generate the next block in one unified API request.
+ * Reduces block transition loading times.
+ */
+export async function completeAndGenerateBlock(params: {
+  attemptToken: string;
+  blockNumber: number;
+  timeTaken: number;
+  answers: Record<string, string | string[]>;
+  questionTiming?: Record<string, number>;
+  assessmentId: number;
+  userId: number;
+  mode: "trial" | "main";
+}): Promise<{
+  alreadySnapshotted: boolean;
+  nextBlockDifficulty: Difficulty;
+  blockMetrics: BlockMetrics;
+  nextBlock: BlockResponse | null;
+  isLastBlock: boolean;
+}> {
+  const res = await apiFetch<any>(`${BASE}/block/complete-and-generate`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return res;
+}
+
+/**
  * Save updated answers for a previously completed block.
  * Does NOT change the snapshot or adaptive decision.
  */

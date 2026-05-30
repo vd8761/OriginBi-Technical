@@ -93,7 +93,7 @@ const labelForIndex = (index: number) => String.fromCharCode(65 + index);
 
 const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
     onComplete,
-    assessmentCode = "APTITUDE_DEFAULT",
+    assessmentCode = "TECH_APT_001",
     userId,
     mode = 'main',
 }) => {
@@ -297,23 +297,35 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         validateAndRestore();
     }, [isCacheRestored, isRestoredFromCache, cachedSession, clearSession, invalidateCache]);
 
-    const normalizeQuestions = (items: any[]): Question[] => items.map((q: any) => ({
-        id: String(q.id ?? q.questionId ?? q.question_id),
-        category: q.category ?? q.subcategory ?? "General",
-        text: q.text ?? q.questionText ?? q.question_text ?? "",
-        imageUrl: q.imageUrl ?? q.image_url ?? undefined,
-        options: Array.isArray(q.options)
-            ? q.options.map((opt: any) => ({
-                id: String(opt.id ?? opt.optionId ?? opt.option_id),
-                text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
-            }))
-            : [],
-        difficulty: q.difficulty ?? undefined,
-        marks: q.marks !== undefined ? Number(q.marks) : undefined,
-        negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
-        explanation: q.explanation ?? undefined,
-        metadata: q.metadata ?? {},
-    }));
+    const normalizeQuestions = (items: any[]): Question[] => items.map((q: any) => {
+        const rawType = String(q.metadata?.question_type ?? q.metadata?.kind ?? q.kind ?? q.type ?? 'mcq').toLowerCase();
+        let resolvedKind: 'mcq' | 'msq' | 'tf' | 'numerical' = 'mcq';
+        if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank')) {
+            resolvedKind = 'numerical';
+        } else if (rawType.includes('multi') || rawType.includes('msq')) {
+            resolvedKind = 'msq';
+        } else if (rawType.includes('true') || rawType.includes('tf')) {
+            resolvedKind = 'tf';
+        }
+        return {
+            id: String(q.id ?? q.questionId ?? q.question_id),
+            category: q.category ?? q.subcategory ?? "General",
+            text: q.text ?? q.questionText ?? q.question_text ?? "",
+            imageUrl: q.imageUrl ?? q.image_url ?? undefined,
+            options: Array.isArray(q.options)
+                ? q.options.map((opt: any) => ({
+                    id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                    text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+                }))
+                : [],
+            difficulty: q.difficulty ?? undefined,
+            marks: q.marks !== undefined ? Number(q.marks) : undefined,
+            negativeMarks: q.negativeMarks !== undefined ? Number(q.negativeMarks) : (q.negative_marks !== undefined ? Number(q.negative_marks) : undefined),
+            explanation: q.explanation ?? undefined,
+            kind: resolvedKind,
+            metadata: q.metadata ?? {},
+        };
+    });
 
     const currentQuestion = questions[currentIndex];
     const totalQuestions = questions.length;

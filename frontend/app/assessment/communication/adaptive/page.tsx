@@ -75,7 +75,7 @@ function AdaptiveCommunicationContent() {
     try {
       await persistAdaptiveResult({
         assessmentKey: "communication",
-        moduleSlug: "communication",
+        moduleSlug: "grammar",
         detail: EXAM_DETAILS.communication,
         report: r,
         userId: userId ?? 1,

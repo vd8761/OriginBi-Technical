@@ -80,6 +80,12 @@ function AdaptiveV2Content() {
   }, []);
 
   const handleComplete = async (r: AdaptiveFinalReport) => {
+    // Trial: never save result or redirect to dashboard
+    if (mode === 'trial') {
+      console.log("[AdaptiveV2] Trial complete, returning to assessment library...");
+      router.push("/assessment?view=assessment&completed=trial");
+      return;
+    }
     try {
       await persistAdaptiveResult({
         assessmentKey: "aptitude",
@@ -142,6 +148,11 @@ function AdaptiveV1Content() {
   }, []);
 
   const handleComplete = (result: AttemptSubmitResult) => {
+    // Trial: skip saving and redirect to assessment library
+    if (mode === 'trial') {
+      router.push("/assessment?view=assessment&completed=trial");
+      return;
+    }
     try {
       const assessmentResult = mapSubmissionToAssessmentResult({
         assessmentId: "aptitude",

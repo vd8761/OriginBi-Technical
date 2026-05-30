@@ -370,6 +370,7 @@ export class AdaptiveSnapshotService {
       expectedTimeSecs: number;
     }> = [];
 
+    const persistPromises = [];
     for (const q of questions) {
       const rawAnswer = answers[q.questionId];
       const sel = this.normalizeAnswer(rawAnswer);
@@ -410,11 +411,17 @@ export class AdaptiveSnapshotService {
       // score_awarded from the junction — without this write a block that is
       // only ever snapshotted (never re-edited) would score as all-skipped.
       if (cfg) {
-        await this.persistJunctionAnswer(
-          cfg, attemptId, q.questionId, q.kind, sel,
-          isCorrect, marksAwarded, timeSecs, status,
+        persistPromises.push(
+          this.persistJunctionAnswer(
+            cfg, attemptId, q.questionId, q.kind, sel,
+            isCorrect, marksAwarded, timeSecs, status,
+          )
         );
       }
+    }
+
+    if (persistPromises.length > 0) {
+      await Promise.all(persistPromises);
     }
 
     const totalTimeSecs = Object.values(questionTiming).reduce((a, b) => a + b, 0);
@@ -549,6 +556,7 @@ export class AdaptiveSnapshotService {
     const questions = await this.loadBlockQuestions(attemptToken, blockNumber);
     let saved = 0;
 
+    const savePromises = [];
     for (const q of questions) {
       const rawAnswer = answers[q.questionId];
       if (rawAnswer === undefined) continue;
@@ -567,34 +575,42 @@ export class AdaptiveSnapshotService {
         : (sel !== null && sel !== undefined && sel !== '');
 
       if (hasAnswer) {
-        await this.dataSource.query(
-          `UPDATE ${cfg.junction}
-           SET selected_option_id=$1, metadata=$2, is_correct=$3,
-               score_awarded=$4, answered_at=NOW()
-               ${timeSecs !== undefined ? ', time_taken_seconds=$6' : ''}
-           WHERE ${cfg.attemptIdCol}=$5 AND ${cfg.idCol}=$${timeSecs !== undefined ? 7 : 6}`,
-          timeSecs !== undefined
-            ? [
-                q.kind === 'msq' || q.kind === 'numerical' ? null : sel,
-                JSON.stringify({ submittedAnswer: q.kind === 'msq' || q.kind === 'numerical' ? sel : null }),
-                isCorrect, marksAwarded, attemptId, timeSecs, Number(q.questionId),
-              ]
-            : [
-                q.kind === 'msq' || q.kind === 'numerical' ? null : sel,
-                JSON.stringify({ submittedAnswer: q.kind === 'msq' || q.kind === 'numerical' ? sel : null }),
-                isCorrect, marksAwarded, attemptId, Number(q.questionId),
-              ],
+        savePromises.push(
+          this.dataSource.query(
+            `UPDATE ${cfg.junction}
+             SET selected_option_id=$1, metadata=$2, is_correct=$3,
+                 score_awarded=$4, answered_at=NOW()
+                 ${timeSecs !== undefined ? ', time_taken_seconds=$6' : ''}
+             WHERE ${cfg.attemptIdCol}=$5 AND ${cfg.idCol}=$${timeSecs !== undefined ? 7 : 6}`,
+            timeSecs !== undefined
+              ? [
+                  q.kind === 'msq' || q.kind === 'numerical' ? null : sel,
+                  JSON.stringify({ submittedAnswer: q.kind === 'msq' || q.kind === 'numerical' ? sel : null }),
+                  isCorrect, marksAwarded, attemptId, timeSecs, Number(q.questionId),
+                ]
+              : [
+                  q.kind === 'msq' || q.kind === 'numerical' ? null : sel,
+                  JSON.stringify({ submittedAnswer: q.kind === 'msq' || q.kind === 'numerical' ? sel : null }),
+                  isCorrect, marksAwarded, attemptId, Number(q.questionId),
+                ],
+          )
         );
         saved++;
       } else {
-        await this.dataSource.query(
-          `UPDATE ${cfg.junction}
-           SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
-               score_awarded=0, answered_at=NULL
-           WHERE ${cfg.attemptIdCol}=$1 AND ${cfg.idCol}=$2`,
-          [attemptId, Number(q.questionId)],
+        savePromises.push(
+          this.dataSource.query(
+            `UPDATE ${cfg.junction}
+             SET selected_option_id=NULL, metadata=NULL, is_correct=NULL,
+                 score_awarded=0, answered_at=NULL
+             WHERE ${cfg.attemptIdCol}=$1 AND ${cfg.idCol}=$2`,
+            [attemptId, Number(q.questionId)],
+          )
         );
       }
+    }
+
+    if (savePromises.length > 0) {
+      await Promise.all(savePromises);
     }
 
     return { saved };

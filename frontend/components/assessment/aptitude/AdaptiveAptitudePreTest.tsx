@@ -8,12 +8,22 @@ interface AdaptiveAptitudePreTestProps {
   onClose: () => void;
   accentColor?: string;
   gradient?: string;
+  trialAttemptsLimit?: number;
+  mainAttemptsLimit?: number;
+  attemptsCount?: number;
 }
 
 const checklist = [
   "Questions adapt in real-time based on your performance.",
   "Each block has its own time limit — manage your pace.",
   "Navigate freely within a block; previous blocks become read-only.",
+  "Do not refresh or navigate away during the assessment.",
+];
+
+const trialChecklist = [
+  "Fixed set of practice questions to familiarise yourself with the format.",
+  "Complete the test within the allotted time.",
+  "Your trial result will NOT appear in your dashboard or profile.",
   "Do not refresh or navigate away during the assessment.",
 ];
 
@@ -29,6 +39,9 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
   onClose,
   accentColor = '#1ED36A',
   gradient = 'linear-gradient(135deg, #1ED36A 0%, #1bb85c 100%)',
+  trialAttemptsLimit: initialTrialAttemptsLimit,
+  mainAttemptsLimit: initialMainAttemptsLimit,
+  attemptsCount: initialAttemptsCount,
 }) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -38,9 +51,9 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
   const [assessmentId, setAssessmentId] = useState<number | null>(null);
   const [isV2, setIsV2] = useState(false);
-  const [attemptsCount, setAttemptsCount] = useState<number>(0);
-  const [trialAttemptsLimit, setTrialAttemptsLimit] = useState<number>(5);
-  const [mainAttemptsLimit, setMainAttemptsLimit] = useState<number>(2);
+  const [attemptsCount, setAttemptsCount] = useState<number>(initialAttemptsCount ?? 0);
+  const [trialAttemptsLimit, setTrialAttemptsLimit] = useState<number>(initialTrialAttemptsLimit ?? 5);
+  const [mainAttemptsLimit, setMainAttemptsLimit] = useState<number>(initialMainAttemptsLimit ?? 2);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -48,6 +61,18 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
       document.body.style.overflow = '';
     };
   }, []);
+
+  useEffect(() => {
+    if (initialAttemptsCount !== undefined) {
+      setAttemptsCount(initialAttemptsCount);
+    }
+    if (initialTrialAttemptsLimit !== undefined) {
+      setTrialAttemptsLimit(initialTrialAttemptsLimit);
+    }
+    if (initialMainAttemptsLimit !== undefined) {
+      setMainAttemptsLimit(initialMainAttemptsLimit);
+    }
+  }, [initialAttemptsCount, initialTrialAttemptsLimit, initialMainAttemptsLimit]);
 
   useEffect(() => {
     const checkAdaptiveMode = async () => {
@@ -138,6 +163,14 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
   }, [mode]);
 
   const handleStart = async () => {
+    // Trial mode: always use the non-adaptive regular engine (no block-based API call)
+    if (mode === 'trial') {
+      onClose();
+      onStart('trial');
+      return;
+    }
+
+    // Main mode: use the adaptive engine if configured
     if (isV2 && assessmentId) {
       setIsStarting(true);
       setStartError(null);
@@ -184,16 +217,20 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
     }
   };
 
-  const blocks = blockConfig?.blocksPerAssessment ?? 5;
-  const qPerBlock = blockConfig?.questionsPerBlock ?? 9;
-  const effectiveTotalQuestions = totalQuestions ?? (blocks * qPerBlock);
+  // For trial: use admin-configured trial question count (fallback to 5)
+  const effectiveTotalQuestions = mode === 'trial'
+    ? (totalQuestions != null ? Math.round(totalQuestions * (5 / Math.max(totalQuestions, 1))) : 5)
+    : (totalQuestions ?? 15);
+  const effectiveDuration = mode === 'trial' ? "15 min" : "60 min";
   const limit = mode === 'trial' ? trialAttemptsLimit : mainAttemptsLimit;
   const currentAttempt = attemptsCount + 1;
+  // For trial display: show a simple 5-question count (or admin-set value)
+  const displayQuestions = mode === 'trial' ? 5 : (totalQuestions ?? 15);
+  const activeChecklist = mode === 'trial' ? trialChecklist : checklist;
 
   const metrics = [
-    { label: "Questions", value: `${effectiveTotalQuestions}` },
-    { label: "Blocks", value: `${blocks}` },
-    { label: "Format", value: "Adaptive MCQ" },
+    { label: "Questions", value: `${displayQuestions}` },
+    { label: "Duration", value: effectiveDuration },
     { label: "Attempts", value: `${currentAttempt}/${limit}` },
   ];
 
@@ -229,14 +266,20 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
                 >
                   Aptitude Assessment
                 </h2>
-                {mode === 'trial' && (
+                {mode === 'trial' ? (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 whitespace-nowrap">
                     Trial Assessment
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 whitespace-nowrap">
+                    Main Assessment
                   </span>
                 )}
               </div>
               <p className="mt-2 text-sm leading-relaxed text-slate-900 dark:text-white">
-                Adaptive evaluation of quantitative reasoning, logical thinking, and verbal ability.
+                {mode === 'trial'
+                  ? 'Practice session to help you understand the aptitude format before your main attempt.'
+                  : 'Adaptive evaluation of quantitative reasoning, logical thinking, and verbal ability.'}
               </p>
             </div>
           </div>
@@ -268,7 +311,9 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
               {/* Left column */}
               <div className="space-y-8 order-2 lg:order-1">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Core domains</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">
+                    {mode === 'trial' ? 'Practice Domains' : 'Core domains'}
+                  </h3>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {modules.map((m) => (
                       <div
@@ -294,7 +339,7 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Test Protocol</h3>
                   <div className="space-y-3">
-                    {checklist.map((point) => (
+                    {activeChecklist.map((point) => (
                       <div key={point} className="flex items-start gap-3">
                         <div
                           className="mt-1.5 h-2 w-2 shrink-0 rounded-full"

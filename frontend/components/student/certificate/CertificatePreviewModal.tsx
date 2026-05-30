@@ -82,7 +82,7 @@ const generateRandomCode = (length: number) => {
 
 /**
  * Returns a dynamic certificate description tailored to each assessment type.
- * Strictly 3 lines — modelled on the aptitude template word count.
+ * Strictly 3 lines â€” modelled on the aptitude template word count.
  * Format: "Awarded for successfully completing the [Title], [domain phrase] with
  * Grade [X] performance [Y]%, demonstrating exceptional proficiency and professional competency."
  */
@@ -125,7 +125,33 @@ const getCertificateDescription = (
   return `Awarded for successfully completing the ${examTitle}, ${domainPhrase} with Grade ${grade} and ${score}% score, demonstrating professional competency.`;
 };
 
-// ── Icons ──
+const getVerificationUrl = (exam: Exam, result: AssessmentResult) => {
+  const completedDate = new Date(result.completedAt);
+  const dateCode = getYyMm(completedDate);
+  const assessmentCode = assessmentCodeFor(exam.id);
+  const serialStorageKey = `originbi:cert-serial:${exam.id}:${result.completedAt}`;
+  const registrationPrefix = result.module === "tech" ? "TCX" : "OBX";
+  let serialNumber = "";
+
+  if (typeof window !== "undefined") {
+    const cached = window.localStorage.getItem(serialStorageKey);
+    if (cached) {
+      serialNumber = cached;
+    } else {
+      serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
+      window.localStorage.setItem(serialStorageKey, serialNumber);
+    }
+  } else {
+    serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
+  }
+
+  return {
+    serialNumber,
+    verificationUrl: `https://evaluation.originbi.com/verify/${serialNumber}?token=${result.attemptToken || (result as any).token || ""}&module=${exam.id}`,
+  };
+};
+
+// â”€â”€ Icons â”€â”€
 const CloseIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -201,6 +227,70 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const certificateRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (!isOpen || !exam || !result) {
+      setQrDataUrl("");
+      return;
+    }
+
+    const { verificationUrl } = getVerificationUrl(exam, result);
+
+    const timer = setTimeout(() => {
+      const svg = document.getElementById("certificate-hidden-qr-svg") as SVGSVGElement | null;
+      if (!svg) {
+        console.warn("Hidden QR SVG not found in DOM");
+        return;
+      }
+
+      try {
+        if (!svg.getAttribute("xmlns")) {
+          svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        }
+        const svgStr = new XMLSerializer().serializeToString(svg);
+        const dataUri = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
+
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 256;
+          canvas.height = 256;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.drawImage(image, 0, 0, 256, 256);
+            setQrDataUrl(canvas.toDataURL("image/png"));
+          }
+        };
+        image.onerror = (err) => {
+          console.error("Error loading SVG image for QR code conversion", err);
+        };
+        image.src = dataUri;
+      } catch (err) {
+        console.error("Failed to convert hidden QR SVG to data URL", err);
+      }
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, exam, result]);
+
+  // If userName is an email, extract name before '@' and replace punctuation with spaces
+  const cleanUserName = (name: string): string => {
+    if (!name) return "Candidate";
+    if (name.includes("@")) {
+      const localPart = name.split("@")[0];
+      return localPart
+        .replace(/[._-]/g, " ")
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+    return name;
+  };
+  const displayName = cleanUserName(userName);
 
   useEffect(() => {
     setMounted(true);
@@ -224,28 +314,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     year: "numeric",
   });
 
-  const completedDate = new Date(result.completedAt);
-  const dateCode = getYyMm(completedDate);
-  const assessmentCode = assessmentCodeFor(exam.id);
-  const serialStorageKey = `originbi:cert-serial:${exam.id}:${result.completedAt}`;
-  const registrationPrefix = result.module === "tech" ? "TCX" : "OBX";
-  let serialNumber = "";
-
-  if (typeof window !== "undefined") {
-    const cached = window.localStorage.getItem(serialStorageKey);
-    if (cached) {
-      serialNumber = cached;
-    } else {
-      serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
-      window.localStorage.setItem(serialStorageKey, serialNumber);
-    }
-  } else {
-    serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
-  }
-
-  const verificationUrl = `${
-    typeof window !== "undefined" ? window.location.origin : ""
-  }/verify/${serialNumber}`;
+  const { serialNumber, verificationUrl } = getVerificationUrl(exam, result);
 
   // Helper to determine Grade based on score
   const getGrade = (score: number) => {
@@ -264,73 +333,32 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
     if (!certificateRef.current) return;
     setIsDownloading(true);
 
+    const origStyles: { el: HTMLElement; originalValues: Record<string, string> }[] = [];
+
     try {
-      // SECURITY: Validate certificate eligibility before generation (optional for backward compatibility)
-      const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
-      
-      const userId = getUserId();
-      if (!userId) {
-        alert("User authentication required for certificate generation.");
-        return;
-      }
-
-      // Validate completion status on server (optional for backward compatibility)
-      try {
-        const validationRes = await fetch(`${API_BASE}/api/assessment/validate-certificate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            examId: exam.id,
-            mode: "main" // Only main assessments get certificates
-          }),
-        });
-
-        if (!validationRes.ok) {
-          // If it's a 404, the endpoint doesn't exist yet - continue for backward compatibility
-          if (validationRes.status === 404) {
-            console.warn('Certificate validation endpoint not available - continuing without validation');
-          } else {
-            const errText = await validationRes.text().catch(() => "Certificate not available");
-            alert(`Certificate validation failed: ${errText}`);
-            return;
-          }
-        }
-      } catch (validationError: any) {
-        // If it's a network error or 404, continue for backward compatibility
-        if (validationError.message?.includes('fetch') || validationError.message?.includes('404')) {
-          console.warn('Certificate validation unavailable - continuing without validation:', validationError.message);
-        } else {
-          // For other validation errors, show to user but continue
-          console.error('Certificate validation error:', validationError);
-        }
-      }
-
       const el = certificateRef.current;
       const containerWidth = el.offsetWidth;
 
-      // ── Step 1: resolve all cqw values to px so html2canvas captures them ──
-      type OrigStyle = { el: HTMLElement; fontSize: string; width: string; height: string; padding: string };
-      const origStyles: OrigStyle[] = [];
-
+      // Step 1: resolve cqw values to px so html2canvas captures them
       el.querySelectorAll<HTMLElement>("[data-cqw]").forEach((child) => {
         const cqwVal = child.getAttribute("data-cqw");
         if (!cqwVal) return;
-        origStyles.push({
-          el: child,
-          fontSize: child.style.fontSize,
-          width: child.style.width,
-          height: child.style.height,
-          padding: child.style.padding,
+
+        const originalValues: Record<string, string> = {};
+        const propsToConvert = cqwVal.split(",");
+        propsToConvert.forEach((v) => {
+          const [prop] = v.split(":");
+          originalValues[prop.trim()] = child.style.getPropertyValue(prop.trim());
         });
-        cqwVal.split(",").forEach((v) => {
+        origStyles.push({ el: child, originalValues });
+        propsToConvert.forEach((v) => {
           const [prop, cqw] = v.split(":");
           const px = (parseFloat(cqw) / 100) * containerWidth;
           child.style.setProperty(prop.trim(), `${px}px`);
         });
       });
 
-      // ── Step 2: capture at 3× scale for crisp PDF output ──
+      // Step 2: capture at 3x scale for crisp PDF output
       const canvas = await html2canvas(el, {
         scale: 3,
         useCORS: true,
@@ -339,51 +367,37 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
         logging: false,
       });
 
-      // ── Step 3: restore cqw styles ──
-      origStyles.forEach(({ el: child, fontSize, width, height, padding }) => {
-        child.style.fontSize = fontSize;
-        child.style.width = width;
-        child.style.height = height;
-        child.style.padding = padding;
-      });
-
-      // ── Step 4: build PDF sized to match the certificate aspect ratio ──
-      // Certificate is 2000×1414 px → landscape A4 is 297×210 mm
-      // We fit the image into A4 landscape with no margins.
-      const PDF_W_MM = 297; // A4 landscape width
-      const PDF_H_MM = 210; // A4 landscape height
-
-      // Scale the canvas image to fill the page while preserving aspect ratio
+      // Step 3: build PDF
+      const PDF_W_MM = 297;
+      const PDF_H_MM = 210;
       const imgAspect = canvas.width / canvas.height;
-      const pageAspect = PDF_W_MM / PDF_H_MM;
-
       let imgW = PDF_W_MM;
       let imgH = PDF_W_MM / imgAspect;
       if (imgH > PDF_H_MM) {
         imgH = PDF_H_MM;
         imgW = PDF_H_MM * imgAspect;
       }
-
-      // Centre on page
       const offsetX = (PDF_W_MM - imgW) / 2;
       const offsetY = (PDF_H_MM - imgH) / 2;
 
-      const pdf = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4",
-        compress: true,
-      });
-
-      // Use PNG for lossless quality (no JPEG artefacts on text/lines)
-      const imgData = canvas.toDataURL("image/png");
-      pdf.addImage(imgData, "PNG", offsetX, offsetY, imgW, imgH);
-
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", offsetX, offsetY, imgW, imgH);
       pdf.save(`${serialNumber}.pdf`);
     } catch (error) {
       console.error("Failed to generate certificate PDF", error);
       alert("Failed to download certificate. Please try again.");
     } finally {
+      // Always restore cqw styles
+      origStyles.forEach(({ el: child, originalValues }) => {
+        Object.entries(originalValues).forEach(([propName, originalValue]) => {
+          if (originalValue) {
+            child.style.setProperty(propName, originalValue);
+          } else {
+            child.style.removeProperty(propName);
+          }
+        });
+      });
+
       setIsDownloading(false);
     }
   };
@@ -578,7 +592,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                             textTransform: "none",
                           }}
                         >
-                          {userName
+                          {displayName
                             .split(" ")
                             .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
                             .join(" ")}
@@ -600,13 +614,16 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                             backgroundColor: "#ffffff",
                           }}
                         >
-                          <QRCode
-                            value={verificationUrl}
-                            size={256}
-                            data-cqw="width:11,height:11"
-                            style={{ height: "11cqw", width: "11cqw", display: "block" }}
-                            level="M"
-                          />
+                          {qrDataUrl ? (
+                            <img
+                              src={qrDataUrl}
+                              data-cqw="width:11,height:11"
+                              style={{ height: "11cqw", width: "11cqw", display: "block" }}
+                              alt="Verification QR Code"
+                            />
+                          ) : (
+                            <div style={{ height: "11cqw", width: "11cqw", backgroundColor: "#f3f4f6" }} />
+                          )}
                         </div>
                       </div>
 
@@ -615,7 +632,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                 </div>
               </div>
 
-              {/* ── Action Bar ── */}
+              {/* â”€â”€ Action Bar â”€â”€ */}
               <div className="shrink-0 bg-white/90 dark:bg-[#19211C]/90 backdrop-blur-sm border-t border-emerald-500/10 dark:border-emerald-400/10 px-4 sm:px-6 py-4 rounded-b-2xl">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-4">
@@ -643,7 +660,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                       {isDownloading ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Generating PDF...</span>
+                          <span>Downloading...</span>
                         </>
                       ) : (
                         <>
@@ -669,6 +686,16 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Hidden QR Code used to pre-render to image */}
+              <div style={{ display: "none" }} aria-hidden="true">
+                <QRCode
+                  id="certificate-hidden-qr-svg"
+                  value={verificationUrl}
+                  size={256}
+                  level="M"
+                />
+              </div>
             </div>
           </motion.div>
         </>

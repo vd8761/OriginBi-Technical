@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { EyeIcon, EyeOffIcon } from '../icons';
 import { ApiError, loginUser, checkLoginStatus } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { useSession } from '@/lib/contexts/SessionContext';
+import { useSession, cleanName } from '@/lib/contexts/SessionContext';
 // import { signIn, fetchAuthSession, signOut } from 'aws-amplify/auth';
 // import { configureAmplify } from '../../lib/aws-amplify-config.js';
 
@@ -124,7 +124,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         console.error('Failed to check login status redirection:', statusError);
       }
       
-      onLoginSuccess(session.registration?.fullName || session.user.email);
+      onLoginSuccess(cleanName(session.registration?.fullName || session.user.email));
     } catch (err) {
       setGeneralError(
         err instanceof ApiError

@@ -62,6 +62,7 @@ export interface ApiAssessment {
     status: string;
     created_at: string;
     question_limit?: number;
+    trial_question_limit?: number;
     categories?: string[] | string;
     difficulty_marks?: Record<string, number> | string;
     difficulty_negative_marks?: Record<string, number> | string;

@@ -381,7 +381,8 @@ export class AssessmentService {
       if (
         Boolean(assessment.adaptive_enabled) &&
         ADAPTIVE_SUPPORTED.includes(dbModule) &&
-        module !== 'coding'
+        module !== 'coding' &&
+        mode !== 'trial'
       ) {
         await queryRunner.rollbackTransaction();
         await queryRunner.release();
@@ -397,12 +398,11 @@ export class AssessmentService {
       const expiresAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
       const requestedMode = mode === 'trial' ? 'trial' : 'main';
 
-      // If there is an active in-progress attempt for this user+assessment, resume it.
       const existingRows = await queryRunner.query(
         `SELECT * FROM ${config.attempts}
-         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress'
+         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress' AND mode = $3
          ORDER BY started_at DESC LIMIT 1`,
-        [assessment.assessment_id, resolvedUserId],
+        [assessment.assessment_id, resolvedUserId, requestedMode],
       );
 
       if (existingRows.length > 0) {
@@ -555,8 +555,10 @@ export class AssessmentService {
 
       let finalQuestions = shuffled;
       if (requestedMode === 'trial') {
-        if (shuffled.length > 5) {
-          finalQuestions = shuffled.slice(0, 5);
+        const trialLimit = Number(assessment.trial_question_limit || 0);
+        const effectiveTrialLimit = trialLimit > 0 ? trialLimit : 5;
+        if (shuffled.length > effectiveTrialLimit) {
+          finalQuestions = shuffled.slice(0, effectiveTrialLimit);
         }
       } else {
         const questionLimit = Number(assessment.question_limit || 0);
@@ -923,9 +925,6 @@ export class AssessmentService {
       queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
 
-      const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
-      if (!resolvedUserId) return null;
-
       let attemptRows: any[] = [];
       const sanitizedToken = String(attemptTokenParam ?? '').trim();
 
@@ -933,22 +932,23 @@ export class AssessmentService {
         attemptRows = await queryRunner.query(
           `SELECT *
            FROM ${config.attempts}
-           WHERE attempt_token = $1 AND user_id = $2 AND status IN ('submitted', 'evaluated')
+           WHERE attempt_token = $1 AND status IN ('submitted', 'evaluated')
            ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
            LIMIT 1`,
-          [sanitizedToken, resolvedUserId],
+          [sanitizedToken],
         );
-      }
-
-      if (attemptRows.length === 0) {
-        attemptRows = await queryRunner.query(
-          `SELECT *
-           FROM ${config.attempts}
-           WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
-           ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
-           LIMIT 1`,
-          [resolvedUserId],
-        );
+      } else {
+        const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
+        if (resolvedUserId) {
+          attemptRows = await queryRunner.query(
+            `SELECT *
+             FROM ${config.attempts}
+             WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
+             ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
+             LIMIT 1`,
+            [resolvedUserId],
+          );
+        }
       }
 
       const attempt = attemptRows[0];
@@ -960,6 +960,37 @@ export class AssessmentService {
         config,
         attempt,
       );
+
+      if (snapshot) {
+        const snap = snapshot as any;
+        const userRows = await queryRunner.query(
+          `SELECT u.email, u.name, r.full_name, u.metadata 
+           FROM users u 
+           LEFT JOIN registrations r ON r.user_id = u.id 
+           WHERE u.id = $1`,
+          [attempt.user_id],
+        );
+        if (userRows.length > 0) {
+          const user = userRows[0];
+          snap.candidateEmail = user.email;
+          
+          let meta: any = {};
+          if (user.metadata) {
+            meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+          }
+          
+          snap.candidateName =
+            user.full_name ||
+            user.name ||
+            meta.fullName ||
+            meta.full_name ||
+            meta.firstName ||
+            'Candidate';
+        } else {
+          snap.candidateEmail = 'candidate@originbi.com';
+          snap.candidateName = 'Candidate';
+        }
+      }
 
       return snapshot;
     } catch (error) {
@@ -2363,15 +2394,17 @@ export class AssessmentService {
       };
 
       // Fire certificate email asynchronously (non-blocking)
-      setImmediate(() => {
-        this.sendCertificateEmailForAttempt(
-          attempt.user_id,
-          attempt.assessment_id,
-          module,
-          overallScorePercent,
-          now.toISOString(),
-        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
-      });
+      if (attempt.mode === 'main') {
+        setImmediate(() => {
+          this.sendCertificateEmailForAttempt(
+            attempt.user_id,
+            attempt.assessment_id,
+            module,
+            overallScorePercent,
+            now.toISOString(),
+          ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+        });
+      }
 
       return result;
     } catch (error) {
@@ -2466,14 +2499,13 @@ export class AssessmentService {
       if (!resolvedUserId) throw new BadRequestException('No users found.');
       const durationMinutes = Number(assessment.total_time_minutes || 60);
 
-      // Resume existing block-based attempt if one is in progress
       const blockPrefix = `${dbModule.substring(0, 3).toUpperCase()}-BLOCK-%`;
       const existingBlockRows = await queryRunner.query(
         `SELECT * FROM ${config.attempts}
-         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress'
-           AND attempt_token LIKE $3
+         WHERE assessment_id = $1 AND user_id = $2 AND status = 'in_progress' AND mode = $3
+           AND attempt_token LIKE $4
          ORDER BY started_at DESC LIMIT 1`,
-        [assessment.assessment_id, resolvedUserId, blockPrefix],
+        [assessment.assessment_id, resolvedUserId, mode === 'trial' ? 'trial' : 'main', blockPrefix],
       );
 
       if (existingBlockRows.length > 0) {
@@ -3081,15 +3113,17 @@ export class AssessmentService {
       });
 
       // Fire certificate email asynchronously (non-blocking)
-      setImmediate(() => {
-        this.sendCertificateEmailForAttempt(
-          attempt.user_id,
-          attempt.assessment_id,
-          module,
-          overallScorePercent,
-          now.toISOString(),
-        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
-      });
+      if (attempt.mode === 'main') {
+        setImmediate(() => {
+          this.sendCertificateEmailForAttempt(
+            attempt.user_id,
+            attempt.assessment_id,
+            module,
+            overallScorePercent,
+            now.toISOString(),
+          ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+        });
+      }
 
       return {
         success: true,
@@ -3146,7 +3180,10 @@ export class AssessmentService {
 
       // Fetch user details
       const userRows = await this.dataSource.query(
-        `SELECT email, name, full_name, first_name, last_name FROM users WHERE id = $1`,
+        `SELECT u.email, u.name, r.full_name, u.metadata 
+         FROM users u 
+         LEFT JOIN registrations r ON r.user_id = u.id 
+         WHERE u.id = $1`,
         [userId],
       );
       if (!userRows.length) {
@@ -3155,10 +3192,18 @@ export class AssessmentService {
       }
       const user = userRows[0];
       const toEmail: string = user.email;
+      
+      let meta: any = {};
+      if (user.metadata) {
+        meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+      }
+      
       const userName: string =
         user.full_name ||
         user.name ||
-        [user.first_name, user.last_name].filter(Boolean).join(' ') ||
+        meta.fullName ||
+        meta.full_name ||
+        meta.firstName ||
         'Candidate';
 
       // Fetch assessment title
@@ -3191,8 +3236,11 @@ export class AssessmentService {
       const assessmentCode = this.assessmentCodeForEmail(finalModule);
       const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
 
+      const frontendUrl = process.env.TECH_FRONTEND_URL || 'https://evaluation.originbi.com';
+      const verifyUrl = `${frontendUrl}/verify/${certificateId}`;
+
       this.logger.log(
-        `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId})`,
+        `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId}, verifyUrl=${verifyUrl})`,
       );
 
       await this.emailService.sendCertificateEmail({
@@ -3204,6 +3252,7 @@ export class AssessmentService {
         grade,
         certificateId,
         completedAt,
+        verifyUrl,
       });
     } catch (err: any) {
       this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);

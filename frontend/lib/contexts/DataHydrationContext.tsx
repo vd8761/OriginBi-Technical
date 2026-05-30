@@ -113,7 +113,8 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
       const fetchResults = await Promise.all(
         modules.map(async (module) => {
           try {
-            const submission = await getLatestSubmittedResult(module, email);
+            const dbModule = module === "communication" ? "grammar" : module;
+            const submission = await getLatestSubmittedResult(dbModule, email);
             if (!submission) {
               // No submission history yet, skip mapping
               return;

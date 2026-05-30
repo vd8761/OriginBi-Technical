@@ -30,6 +30,20 @@ export const isAdminRegisteredProfile = (
   return user.registrationSource.toUpperCase() === "ADMIN";
 };
 
+export const cleanName = (name: string): string => {
+  if (!name) return "Student";
+  if (name.includes("@")) {
+    const localPart = name.split("@")[0];
+    return localPart
+      .replace(/[._-]/g, " ")
+      .split(" ")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+  return name;
+};
+
 interface SessionContextType {
   user: UserProfile | null;
   isLoggedIn: boolean;
@@ -133,7 +147,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
             const session = await getSession();
             if (session) {
               const profile: UserProfile = {
-                name: session.registration?.fullName || session.user.email,
+                name: cleanName(session.registration?.fullName || session.user.email),
                 email: session.user.email,
                 registrationSource: session.registration?.registrationSource,
               };
@@ -155,7 +169,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
             const session = await getSession();
             if (session) {
               const profile: UserProfile = {
-                name: session.registration?.fullName || session.user.email,
+                name: cleanName(session.registration?.fullName || session.user.email),
                 email: session.user.email,
                 registrationSource: session.registration?.registrationSource,
               };
@@ -204,9 +218,13 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
 
   const login = (accessToken: string, idToken: string, profile: UserProfile) => {
     try {
+      const cleanedProfile = {
+        ...profile,
+        name: cleanName(profile.name),
+      };
       localStorage.setItem("originbi:access-token", accessToken);
       localStorage.setItem("originbi:id-token", idToken);
-      localStorage.setItem("originbi:user-profile", JSON.stringify(profile));
+      localStorage.setItem("originbi:user-profile", JSON.stringify(cleanedProfile));
 
       // Clear admin session flag and tokens to avoid cross-session contamination
       localStorage.removeItem("originbi:admin-session");
@@ -215,7 +233,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.removeItem("originbi:admin-refresh-token");
       localStorage.removeItem("user");
 
-      setUser(profile);
+      setUser(cleanedProfile);
       setIsLoggedIn(true);
       setActiveStudent(profile.email ?? null);
       window.dispatchEvent(new CustomEvent("originbi:session-ready", { detail: profile }));

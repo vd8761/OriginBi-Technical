@@ -132,7 +132,7 @@ interface CommunicationEngineProps {
 
 const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ 
     onComplete,
-    assessmentCode = "COMMUNICATION_DEFAULT",
+    assessmentCode = "TECH_COMM_001",
     userId,
     mode = 'main'
 }) => {

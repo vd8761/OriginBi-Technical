@@ -33,6 +33,11 @@ export interface ExtendedExam extends Exam {
   mainAttemptsLimit?: number;
   assessmentId?: number | string;
   assessmentCode?: string;
+  trialQuestionsCount?: number;
+  mainQuestionsCount?: number;
+  trialQuestionLimit?: number;
+  questionLimit?: number;
+  adaptive_enabled?: boolean;
 }
 
 export interface PricingTier {
@@ -63,7 +68,7 @@ export const EXAMS: ExtendedExam[] = [
     description:
       "Evaluate numerical agility, logical structure, data interpretation, and pattern recognition under timed conditions.",
     duration: "60 min",
-    questions: 60,
+    questions: 15,
     difficulty: "Intermediate",
     price: 99,
     tags: ["Quantitative", "Logical", "Data", "Abstract"],
@@ -80,8 +85,8 @@ export const EXAMS: ExtendedExam[] = [
     shortTitle: "Communication",
     description:
       "Measure listening, speaking, reading, and writing performance through workplace-style tasks.",
-    duration: "30 min",
-    questions: 40,
+    duration: "45 min",
+    questions: 8,
     difficulty: "Beginner",
     price: 149,
     tags: ["Listening", "Speaking", "Reading", "Writing"],
@@ -99,7 +104,7 @@ export const EXAMS: ExtendedExam[] = [
     description:
       "Validate programming fundamentals with number logic, strings, arrays, and simulation-driven exercises.",
     duration: "90 min",
-    questions: 30,
+    questions: 3,
     difficulty: "Intermediate",
     price: 99,
     tags: ["Logic", "Strings", "Arrays", "Simulation"],
@@ -117,13 +122,13 @@ export const EXAMS: ExtendedExam[] = [
     description:
       "Master high-frequency interview patterns and professional expectations for top-tier MNC roles.",
     duration: "60 min",
-    questions: 25,
+    questions: 15,
     difficulty: "Advanced",
     price: 249,
     tags: ["DSA", "System Design", "Culture", "HR Prep"],
     icon: <MNCIcon className="w-7 h-7" />,
-    available: true,
-    statusLabel: "Ready",
+    available: false,
+    statusLabel: "Coming Soon",
     accentColor: "#6366f1",
     gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
     track: "career",
@@ -135,7 +140,7 @@ export const EXAMS: ExtendedExam[] = [
     description:
       "Assess role-fit through conceptual MCQs and scenario decisions designed around practical job responsibilities.",
     duration: "45 min",
-    questions: 20,
+    questions: 15,
     difficulty: "Intermediate",
     price: 299,
     tags: ["Concepts", "Scenarios", "Judgement", "Role fit"],

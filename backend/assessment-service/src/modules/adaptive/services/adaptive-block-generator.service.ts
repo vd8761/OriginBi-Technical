@@ -594,23 +594,33 @@ export class AdaptiveBlockGeneratorService {
       await this.saveCoverage(qr, attemptToken, assessmentId, updatedCoverage);
 
       // 10. Insert into junction table
-      let blockSeqOrder = 0;
-      for (let i = 0; i < fetchedQuestions.length; i++) {
-        const q = fetchedQuestions[i];
-        const displayOrder = usedIds.length + i + 1;
-        const expectedSecs = this.engine.computeExpectedTime(
-          Number(q.marks),
-          (q.difficulty as Difficulty) ?? 'easy',
-          blueprint.secondsPerMark,
-        );
-        blockSeqOrder++;
+      if (fetchedQuestions.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        let pIdx = 1;
+
+        let blockSeqOrder = 0;
+        for (let i = 0; i < fetchedQuestions.length; i++) {
+          const q = fetchedQuestions[i];
+          const displayOrder = usedIds.length + i + 1;
+          const expectedSecs = this.engine.computeExpectedTime(
+            Number(q.marks),
+            (q.difficulty as Difficulty) ?? 'easy',
+            blueprint.secondsPerMark,
+          );
+          blockSeqOrder++;
+
+          valuesSql.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, false, $${pIdx++})`);
+          params.push(attemptId, Number(q.id), displayOrder, blockNumber, blockSeqOrder, expectedSecs);
+        }
+
         await qr.query(
           `INSERT INTO ${cfg.junction}
              (${cfg.attemptIdCol}, ${cfg.idCol}, display_order, block_number,
               block_sequence_order, is_locked, expected_time_seconds)
-           VALUES ($1,$2,$3,$4,$5,false,$6)
+           VALUES ${valuesSql.join(', ')}
            ON CONFLICT DO NOTHING`,
-          [attemptId, Number(q.id), displayOrder, blockNumber, blockSeqOrder, expectedSecs],
+          params,
         );
       }
 

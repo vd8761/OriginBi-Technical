@@ -218,6 +218,7 @@ export function downloadSampleJson() {
 }
 
 export async function downloadSampleXlsx() {
+    // @ts-ignore
     const xlsx = await import("xlsx");
     const wb = xlsx.utils.book_new();
 
@@ -358,14 +359,15 @@ export async function parseImportFile(file: File): Promise<AdminQuestionInput[]>
         return parseJsonText(text);
     }
     if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) {
+        // @ts-ignore
         const xlsx = await import("xlsx");
         const buf = await file.arrayBuffer();
         const wb = xlsx.read(buf, { type: "array" });
-        const sheetName = wb.SheetNames.find((n) => n.toLowerCase() === "questions") ?? wb.SheetNames[0];
+        const sheetName = wb.SheetNames.find((n: string) => n.toLowerCase() === "questions") ?? wb.SheetNames[0];
         if (!sheetName) throw new Error("workbook has no sheets");
         const sheet = wb.Sheets[sheetName];
-        const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-        return rows.map((row, idx) => xlsxRowToQuestion(row, idx));
+        const rows = (xlsx.utils.sheet_to_json as any)(sheet, { defval: "" }) as Array<Record<string, any>>;
+        return rows.map((row: any, idx: number) => xlsxRowToQuestion(row, idx));
     }
     throw new Error(`Unsupported file type: ${file.name}. Use .xlsx or .json.`);
 }

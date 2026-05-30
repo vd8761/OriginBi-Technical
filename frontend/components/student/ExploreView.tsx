@@ -369,7 +369,7 @@ const ExploreAssessmentCard: React.FC<ExploreAssessmentCardProps> = ({ exam, out
                             : 'bg-slate-100 dark:bg-white/[0.04] text-black dark:text-white cursor-not-allowed'
                         }`}
                 >
-                    {isReady ? 'Know More' : 'Notify Me'}
+                    {isReady ? 'Know More' : ' Scheduled'}
                     {isReady && <ArrowRightIcon className="w-3 h-3" />}
                 </button>
             </div>

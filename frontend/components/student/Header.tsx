@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from 'next/navigation';
 import ThemeToggle from '../ui/ThemeToggle';
 import Logo from '../ui/Logo';
-import { useSession } from "@/lib/contexts/SessionContext";
+import { useSession, cleanName } from "@/lib/contexts/SessionContext";
 import {
     DashboardIcon,
     JobsIcon,
@@ -217,7 +217,7 @@ const Header: React.FC<HeaderProps> = ({
                 });
                 if (res.ok) {
                     const profileData = await res.json();
-                    const freshName = profileData?.fullName || profileData?.metadata?.fullName || user.name;
+                    const freshName = cleanName(profileData?.fullName || profileData?.metadata?.fullName || user.name);
                     updateProfile({
                         name: freshName,
                     });

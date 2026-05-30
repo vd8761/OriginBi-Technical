@@ -18,6 +18,7 @@ import { AdaptiveBlueprintService } from '../services/adaptive-blueprint.service
 import {
   GenerateBlockDto,
   CompleteBlockDto,
+  CompleteAndGenerateNextDto,
   SaveBlockAnswersDto,
   FinalSubmitDto,
   StartAdaptiveAttemptDto,
@@ -404,6 +405,95 @@ export class AdaptiveController {
       blockMetrics: result.metrics,
     };
   }
+
+  /**
+   * POST /api/adaptive/v2/block/complete-and-generate
+   * Called to complete the current block and automatically generate the next block in one single operation.
+   * Eliminates the need for two sequential network requests on block transition.
+   */
+  @Post('block/complete-and-generate')
+  async completeAndGenerate(@Body() dto: CompleteAndGenerateNextDto) {
+    if (!dto.attemptToken || !dto.blockNumber || !dto.assessmentId || !dto.userId) {
+      throw new BadRequestException('attemptToken, blockNumber, assessmentId, and userId are required');
+    }
+
+    // 1. Load secondsPerMark from blueprint
+    const bpRows = await this.dataSource.query(
+      `SELECT bp.seconds_per_mark
+       FROM adaptive_blueprint bp
+       WHERE bp.assessment_id = $1
+       LIMIT 1`,
+      [dto.assessmentId],
+    );
+    const secondsPerMark = Number(bpRows[0]?.seconds_per_mark ?? 45);
+
+    // 2. Complete current block
+    let completeResult;
+    try {
+      completeResult = await this.snapshot.writeSnapshot(
+        dto.attemptToken,
+        dto.blockNumber,
+        dto.answers ?? {},
+        dto.questionTiming ?? {},
+        secondsPerMark,
+      );
+    } catch (e: any) {
+      this.logger.error(
+        `completeAndGenerate writeSnapshot failed: token=${dto.attemptToken} block=${dto.blockNumber} err=${e.message}`,
+        e.stack,
+      );
+      if (e.status) throw e;
+      throw new BadRequestException(
+        `Failed to complete block ${dto.blockNumber}. Detail: ${e.message}`,
+      );
+    }
+
+    const nextBlockDifficulty = completeResult.nextBlockDifficulty;
+
+    // 3. Determine if it is the last block
+    let isLastBlock = false;
+    const bpConfig = await this.blueprint.getBlueprint(dto.assessmentId);
+    if (bpConfig) {
+      isLastBlock = dto.blockNumber >= bpConfig.totalBlocks;
+    } else {
+      isLastBlock = dto.blockNumber >= 4; // default fallback
+    }
+
+    // 4. Generate next block if not last block
+    let nextBlock = null;
+    if (!isLastBlock) {
+      const nextNum = dto.blockNumber + 1;
+      try {
+        nextBlock = await this.generator.generateBlock({
+          assessmentId: dto.assessmentId,
+          blockNumber: nextNum,
+          userId: dto.userId,
+          mode: dto.mode ?? 'main',
+          attemptToken: dto.attemptToken,
+          targetDifficulty: nextBlockDifficulty,
+        });
+      } catch (e: any) {
+        this.logger.error(
+          `completeAndGenerate generateBlock failed: assessment=${dto.assessmentId} block=${nextNum} user=${dto.userId} token=${dto.attemptToken} err=${e.message}`,
+          e.stack,
+        );
+        if (e.status) throw e;
+        throw new BadRequestException(
+          `Failed to generate next block ${nextNum} after completing block ${dto.blockNumber}. Detail: ${e.message}`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      alreadySnapshotted: completeResult.alreadyExists,
+      nextBlockDifficulty: completeResult.nextBlockDifficulty,
+      blockMetrics: completeResult.metrics,
+      nextBlock,
+      isLastBlock,
+    };
+  }
+
 
   // ── Save answers (post-snapshot edit) ────────────────────────────────────
 
