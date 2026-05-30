@@ -268,7 +268,11 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     needs: [detect-changes, verify-frontend, sync]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.frontend == 'true'
+    if: >-
+      github.event_name == 'push' &&
+      !cancelled() &&
+      !failure() &&
+      needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload frontend
@@ -293,7 +297,11 @@ jobs:
   deploy-exam-engine:
     name: Deploy Exam Engine
     needs: [detect-changes, verify-exam-engine, sync]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.exam_engine == 'true'
+    if: >-
+      github.event_name == 'push' &&
+      !cancelled() &&
+      !failure() &&
+      needs.detect-changes.outputs.exam_engine == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart exam-engine
@@ -317,7 +325,11 @@ jobs:
   deploy-tech-engine:
     name: Deploy Tech Assessment Engine
     needs: [detect-changes, verify-tech-engine, sync]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.tech_engine == 'true'
+    if: >-
+      github.event_name == 'push' &&
+      !cancelled() &&
+      !failure() &&
+      needs.detect-changes.outputs.tech_engine == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart tech-assessment-engine
@@ -341,7 +353,11 @@ jobs:
   deploy-assessment-service:
     name: Deploy Assessment Service
     needs: [detect-changes, verify-assessment-service, sync]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.assessment_service == 'true'
+    if: >-
+      github.event_name == 'push' &&
+      !cancelled() &&
+      !failure() &&
+      needs.detect-changes.outputs.assessment_service == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload assessment-service
@@ -367,7 +383,11 @@ jobs:
   deploy-judge0:
     name: Deploy Judge0
     needs: [detect-changes, verify-judge0, sync]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.judge0 == 'true'
+    if: >-
+      github.event_name == 'push' &&
+      !cancelled() &&
+      !failure() &&
+      needs.detect-changes.outputs.judge0 == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Update Judge0 containers
