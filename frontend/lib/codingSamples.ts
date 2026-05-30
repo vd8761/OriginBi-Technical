@@ -218,7 +218,6 @@ export function downloadSampleJson() {
 }
 
 export async function downloadSampleXlsx() {
-    // @ts-ignore
     const xlsx = await import("xlsx");
     const wb = xlsx.utils.book_new();
 
@@ -359,7 +358,6 @@ export async function parseImportFile(file: File): Promise<AdminQuestionInput[]>
         return parseJsonText(text);
     }
     if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) {
-        // @ts-ignore
         const xlsx = await import("xlsx");
         const buf = await file.arrayBuffer();
         const wb = xlsx.read(buf, { type: "array" });

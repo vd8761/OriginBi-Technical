@@ -181,7 +181,7 @@ export default async function VerifyCertificatePage({
                   Verification Statement
                 </p>
                 <p className="text-base sm:text-lg text-slate-700 leading-relaxed font-sans">
-                  "OriginBi Technical Platform officially confirms that a secure credential record for the <span className="text-emerald-600 font-extrabold">{getModuleTitle()}</span> has been successfully verified. The credentials have been authenticated and recorded under secure system logs on <span className="text-slate-900 font-extrabold">{resultData?.completedAt ? new Date(resultData.completedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>."
+                  &quot;OriginBi Technical Platform officially confirms that a secure credential record for the <span className="text-emerald-600 font-extrabold">{getModuleTitle()}</span> has been successfully verified. The credentials have been authenticated and recorded under secure system logs on <span className="text-slate-900 font-extrabold">{resultData?.completedAt ? new Date(resultData.completedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>.&quot;
                 </p>
               </div>
 
