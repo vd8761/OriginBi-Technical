@@ -446,15 +446,9 @@ export class AdaptiveBlockGeneratorService {
         `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
                 q.${cfg.categoryCol} AS category,
                 q.${cfg.subcategoryCol} AS subcategory,
-                q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql},
-                json_agg(
-                   json_build_object('option_id', o.option_id, 'option_text', o.option_text)
-                   ORDER BY o.option_id
-                ) FILTER (WHERE o.option_id IS NOT NULL) AS options
+                q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
          FROM ${cfg.questions} q
-         LEFT JOIN ${cfg.options} o ON o.${cfg.idCol} = q.${cfg.idCol}
-         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
-         GROUP BY q.${cfg.idCol}`,
+         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}`,
         queryParams,
       );
 
@@ -471,10 +465,7 @@ export class AdaptiveBlockGeneratorService {
           negative_marks: Number(q.negative_marks) || 0,
           image_url: q.image_url ?? undefined,
           metadata: meta,
-          options: (q.options ?? []).map((o: any) => ({
-            id: String(o.option_id),
-            text: o.option_text,
-          })),
+          options: [],
           audio_url: q.audio_url ?? undefined,
           passage_text: q.passage_text ?? undefined,
           task_type: q.task_type ?? undefined,
@@ -572,6 +563,33 @@ export class AdaptiveBlockGeneratorService {
       fetchedQuestions.length = 0;
       fetchedQuestions.push(...uniqueQuestions);
 
+      // Fetch options only for selected question IDs in a single query
+      if (fetchedQuestions.length > 0) {
+        const selectedQIds = fetchedQuestions.map(q => Number(q.id));
+        const allOptions = await qr.query(
+          `SELECT ${cfg.idCol}::text AS question_id, option_id::text AS id, option_text AS text
+           FROM ${cfg.options}
+           WHERE ${cfg.idCol} IN (${selectedQIds.join(',')})
+           ORDER BY option_id`,
+        );
+
+        // Group options by question_id
+        const optionsMap = new Map<string, Array<{ id: string; text: string }>>();
+        for (const opt of allOptions) {
+          const qId = String(opt.question_id);
+          if (!optionsMap.has(qId)) optionsMap.set(qId, []);
+          optionsMap.get(qId)!.push({
+            id: String(opt.id),
+            text: opt.text,
+          });
+        }
+
+        // Map options back to fetchedQuestions
+        for (const q of fetchedQuestions) {
+          q.options = optionsMap.get(String(q.id)) ?? [];
+        }
+      }
+
       // 8. Build coverage map for this block
       const blockCoverageMap: Record<string, Record<string, number>> = {};
       for (const q of fetchedQuestions) {
@@ -594,23 +612,33 @@ export class AdaptiveBlockGeneratorService {
       await this.saveCoverage(qr, attemptToken, assessmentId, updatedCoverage);
 
       // 10. Insert into junction table
-      let blockSeqOrder = 0;
-      for (let i = 0; i < fetchedQuestions.length; i++) {
-        const q = fetchedQuestions[i];
-        const displayOrder = usedIds.length + i + 1;
-        const expectedSecs = this.engine.computeExpectedTime(
-          Number(q.marks),
-          (q.difficulty as Difficulty) ?? 'easy',
-          blueprint.secondsPerMark,
-        );
-        blockSeqOrder++;
+      if (fetchedQuestions.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        let pIdx = 1;
+
+        let blockSeqOrder = 0;
+        for (let i = 0; i < fetchedQuestions.length; i++) {
+          const q = fetchedQuestions[i];
+          const displayOrder = usedIds.length + i + 1;
+          const expectedSecs = this.engine.computeExpectedTime(
+            Number(q.marks),
+            (q.difficulty as Difficulty) ?? 'easy',
+            blueprint.secondsPerMark,
+          );
+          blockSeqOrder++;
+
+          valuesSql.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, false, $${pIdx++})`);
+          params.push(attemptId, Number(q.id), displayOrder, blockNumber, blockSeqOrder, expectedSecs);
+        }
+
         await qr.query(
           `INSERT INTO ${cfg.junction}
              (${cfg.attemptIdCol}, ${cfg.idCol}, display_order, block_number,
               block_sequence_order, is_locked, expected_time_seconds)
-           VALUES ($1,$2,$3,$4,$5,false,$6)
+           VALUES ${valuesSql.join(', ')}
            ON CONFLICT DO NOTHING`,
-          [attemptId, Number(q.id), displayOrder, blockNumber, blockSeqOrder, expectedSecs],
+          params,
         );
       }
 

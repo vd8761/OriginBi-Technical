@@ -78,10 +78,17 @@ export default function ExploreDetailClient({ id }: { id: string }) {
                 title: dbExam.assessment_name || exam.title,
                 duration: `${dbExam.total_time_minutes || 60} min`,
                 questions: getDisplayedQuestionCount(dbExam, exam.questions),
+                trialQuestionsCount: dbExam.trial_questions_count || 0,
+                mainQuestionsCount: dbExam.main_questions_count || 0,
+                trialQuestionLimit: dbExam.trial_question_limit !== undefined && dbExam.trial_question_limit !== null
+                    ? Number(dbExam.trial_question_limit)
+                    : 5,
                 price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
                 trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
                 mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
                 tags: tags,
+                adaptive_enabled: dbExam.adaptive_enabled === true,
+                requireCameraMic: dbExam.require_camera_mic === true,
             };
         }
         return exam;

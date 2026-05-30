@@ -9,6 +9,7 @@ ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT '[]'::jsonb,
 ADD COLUMN IF NOT EXISTS difficulty_marks JSONB DEFAULT '{"easy": 1, "medium": 2, "hard": 5}'::jsonb,
 ADD COLUMN IF NOT EXISTS difficulty_negative_marks JSONB DEFAULT '{"easy": 0, "medium": 0.25, "hard": 0.25}'::jsonb,
 ADD COLUMN IF NOT EXISTS question_limit INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS trial_question_limit INT DEFAULT 5,
 ADD COLUMN IF NOT EXISTS tab_switch_limit INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS anti_copy_enabled BOOLEAN DEFAULT FALSE;
 

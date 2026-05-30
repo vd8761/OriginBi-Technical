@@ -62,7 +62,7 @@ export interface AttemptSubmitResult {
 interface MNCEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     mode?: 'trial' | 'main';
 }
 
@@ -81,7 +81,7 @@ const API_BASE = typeof window !== "undefined" && window.location.hostname !== "
 
 const MNCEngine: React.FC<MNCEngineProps> = ({ 
     onComplete,
-    assessmentCode = "MNC_DEFAULT",
+    assessmentCode = "TECH_MNC_001",
     userId,
     mode = 'main'
 }) => {

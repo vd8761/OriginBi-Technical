@@ -57,7 +57,20 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
       const raw = localStorage.getItem("originbi:assessment-results");
       if (raw) {
         const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" && Object.keys(parsed).length > 0;
+        if (parsed && typeof parsed === "object") {
+          // Strip out any trial-mode results that were saved before the fix
+          let changed = false;
+          for (const key of Object.keys(parsed)) {
+            if (parsed[key]?.mode === 'trial') {
+              delete parsed[key];
+              changed = true;
+            }
+          }
+          if (changed) {
+            localStorage.setItem("originbi:assessment-results", JSON.stringify(parsed));
+          }
+          return Object.keys(parsed).length > 0;
+        }
       }
     } catch {}
     return false;

@@ -126,13 +126,13 @@ const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | unde
 interface CommunicationEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     mode?: 'trial' | 'main';
 }
 
 const CommunicationEngine: React.FC<CommunicationEngineProps> = ({ 
     onComplete,
-    assessmentCode = "COMMUNICATION_DEFAULT",
+    assessmentCode = "TECH_COMM_001",
     userId,
     mode = 'main'
 }) => {

@@ -11,6 +11,7 @@ export interface CertificateEmailPayload {
   certificateId: string;
   completedAt: string;
   verifyUrl?: string;
+  subject?: string;
 }
 
 /**

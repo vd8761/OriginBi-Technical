@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS tech_assessments (
     negative_mark_value DECIMAL(5,2) NULL,
     status tech_assessment_status NOT NULL,
     amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    trial_question_limit INT NOT NULL DEFAULT 5,
     trial_attempts_limit INT NOT NULL DEFAULT 5,
     main_attempts_limit INT NOT NULL DEFAULT 2,
     created_by BIGINT NOT NULL REFERENCES users(id),

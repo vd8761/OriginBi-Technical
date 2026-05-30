@@ -271,8 +271,9 @@ export class AdaptiveAnalyticsService {
           userId,
           assessmentId,
           moduleType,
-          report.marksPercentage,
+          Math.max(0, Math.round(report.marksPercentage)),
           nowStr,
+          attemptToken,
         ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
       });
 
@@ -522,13 +523,37 @@ export class AdaptiveAnalyticsService {
     module: string,
     overallScorePercent: number,
     completedAt: string,
+    attemptToken: string,
   ): Promise<void> {
     try {
       const finalModule = module === 'communication' ? 'grammar' : module;
 
+      // Restrict certificate email sending to main assessments only
+      const attemptTableMap: Record<string, string> = {
+        aptitude: 'tech_aptitude_attempts',
+        grammar: 'tech_grammar_attempts',
+        communication: 'tech_grammar_attempts',
+        mnc: 'tech_mnc_attempts',
+        role: 'tech_role_attempts',
+      };
+      const attemptsTable = attemptTableMap[finalModule];
+      if (attemptsTable) {
+        const attemptRows = await this.dataSource.query(
+          `SELECT mode FROM ${attemptsTable} WHERE attempt_token = $1`,
+          [attemptToken],
+        );
+        if (attemptRows.length && attemptRows[0].mode !== 'main') {
+          this.logger.log(`Skipping certificate email: attempt ${attemptToken} is in trial mode`);
+          return;
+        }
+      }
+
       // Fetch user details
       const userRows = await this.dataSource.query(
-        `SELECT email, name, full_name, first_name, last_name FROM users WHERE id = $1`,
+        `SELECT u.email, u.name, r.full_name, u.metadata 
+         FROM users u 
+         LEFT JOIN registrations r ON r.user_id = u.id 
+         WHERE u.id = $1`,
         [userId],
       );
       if (!userRows.length) {
@@ -537,10 +562,18 @@ export class AdaptiveAnalyticsService {
       }
       const user = userRows[0];
       const toEmail: string = user.email;
+      
+      let meta: any = {};
+      if (user.metadata) {
+        meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+      }
+      
       const userName: string =
         user.full_name ||
         user.name ||
-        [user.first_name, user.last_name].filter(Boolean).join(' ') ||
+        meta.fullName ||
+        meta.full_name ||
+        meta.firstName ||
         'Candidate';
 
       // Fetch assessment title
@@ -573,8 +606,12 @@ export class AdaptiveAnalyticsService {
       const assessmentCode = this.assessmentCodeForEmail(finalModule);
       const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
 
+      const frontendUrl = process.env.TECH_FRONTEND_URL || 'https://evaluation.originbi.com';
+      const verifyUrl = `${frontendUrl}/verify/${certificateId}?token=${encodeURIComponent(attemptToken)}&module=${encodeURIComponent(finalModule)}`;
+      const subject = `You have successfully completed the ${assessmentTitle} - Your Certificate is Ready`;
+
       this.logger.log(
-        `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId})`,
+        `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId}, verifyUrl=${verifyUrl})`,
       );
 
       await this.emailService.sendCertificateEmail({
@@ -586,6 +623,8 @@ export class AdaptiveAnalyticsService {
         grade,
         certificateId,
         completedAt,
+        verifyUrl,
+        subject,
       });
     } catch (err: any) {
       this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);

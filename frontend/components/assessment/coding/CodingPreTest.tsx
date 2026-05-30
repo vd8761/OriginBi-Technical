@@ -94,9 +94,9 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({
     const currentAttempt = attemptsCount + 1;
 
     const metrics = [
-        { label: "Questions", value: "5" },
-        { label: "Duration", value: "90 min" },
-        { label: "Sections", value: "5" },
+        { label: "Questions", value: mode === 'trial' ? "1" : "3" },
+        { label: "Duration", value: mode === 'trial' ? "30 min" : "90 min" },
+        { label: "Sections", value: mode === 'trial' ? "1" : "3" },
         { label: "Attempts", value: `${currentAttempt}/${limit}` },
     ];
 
@@ -150,7 +150,7 @@ const CodingPreTest: React.FC<CodingPreTestProps> = ({
                                 )}
                             </div>
                             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#17201b] dark:text-white sm:text-sm">
-                                Five problems covering core programming, data structures, algorithms, complexity, and dynamic programming — all evaluated in {language.name}.
+                                {mode === 'trial' ? "One problem" : "Three problems"} covering core programming, data structures, algorithms, complexity, and dynamic programming — all evaluated in {language.name}.
                             </p>
                         </div>
                     </div>

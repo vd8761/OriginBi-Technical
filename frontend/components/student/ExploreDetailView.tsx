@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Header from "./Header";
 import AptitudePreTest from "../assessment/aptitude/AptitudePreTest";
+import AdaptiveAptitudePreTest from "../assessment/aptitude/AdaptiveAptitudePreTest";
 import CommunicationPreTest from "../assessment/communication/CommunicationPreTest";
 import RolePreTest from "../assessment/role/RolePreTest";
 import MNCPreTest from "../assessment/mnc/MNCPreTest";
@@ -12,6 +13,12 @@ import PaymentModal from "../payments/PaymentModal";
 import LanguageSelectModal from "../payments/LanguageSelectModal";
 import CodingPreTest from "../assessment/coding/CodingPreTest";
 import { ArrowLeftIcon, LockIcon } from "../icons";
+import {
+    securityCheckBeforeStart,
+    getAssessmentCode,
+    getUserId,
+    type AssessmentModule,
+} from "@/lib/assessmentSecurity";
 import {
     CODING_LANGUAGES,
     type ExamDetailData,
@@ -190,6 +197,53 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         else if (exam.id === "communication") setShowCommunicationModal(true);
         else if (exam.id === "role") setShowRoleModal(true);
         else if (exam.id === "mnc") setShowMncModal(true);
+    };
+
+    const startAdaptiveV2Attempt = async (
+        module: "communication" | "mnc" | "role" | "aptitude",
+        mode: "trial" | "main",
+    ): Promise<boolean> => {
+        if (mode === "trial") return false;
+        if (!exam.adaptive_enabled) return false;
+
+        const dbModule = module === "communication" ? "grammar" : module;
+        const apiBase = TECH_API_BASE || "";
+        const security = await securityCheckBeforeStart(dbModule as AssessmentModule, mode, apiBase);
+        if (!security.canProceed) {
+            console.error("Adaptive start blocked:", security.error);
+            return false;
+        }
+
+        const assessmentId = exam.assessmentId;
+        if (!assessmentId) return false;
+
+        const payload = {
+            assessmentId,
+            assessmentCode: exam.assessmentCode || exam.id,
+            userId: getUserId(),
+            mode: security.sanitizedMode,
+        };
+
+        const res = await fetch(`${apiBase}/api/assessment/${module}/attempts/block-based`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const errText = await res.text().catch(() => "Unknown error");
+            console.error(`Adaptive start failed (${module}):`, res.status, errText);
+            return false;
+        }
+
+        const data = await res.json();
+        const token = data?.attemptToken;
+        if (!token) return false;
+
+        router.push(
+            `/assessment/${module}/adaptive?v2=true&mode=${security.sanitizedMode}&assessmentId=${assessmentId}&attemptToken=${token}`
+        );
+        return true;
     };
 
     const handlePrimaryClick = async () => {
@@ -715,15 +769,21 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         {/* Trial only available after purchase */}
-                        {isReady && (isCoding ? codingSummary.ready > 0 || codingSummary.completed > 0 : examPaid) && (
-                            <button
-                                type="button"
-                                onClick={handleTrial}
-                                className="inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-all border-[#1ED36A]/40 text-[#1ED36A] hover:bg-[#1ED36A]/10 cursor-pointer"
-                            >
-                                Trial Assessment
-                            </button>
-                        )}
+                        {isReady && (isCoding ? codingSummary.ready > 0 || codingSummary.completed > 0 : examPaid) && (() => {
+                            const trialLimit = exam.trialAttemptsLimit ?? 5;
+                            const trialUsed = isCoding ? 0 : (stats.trial ?? 0);
+                            const isTrialExhausted = trialLimit > 0 && trialUsed >= trialLimit;
+                            if (isTrialExhausted) return null;
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={handleTrial}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-all border-[#1ED36A]/40 text-[#1ED36A] hover:bg-[#1ED36A]/10 cursor-pointer"
+                                >
+                                    Trial Assessment
+                                </button>
+                            );
+                        })()}
                         <button
                             type="button"
                             onClick={handlePrimaryClick}
@@ -743,40 +803,99 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
 
             {/* Pre-test gates */}
             {showAptitudeModal && (
-                <AptitudePreTest
+                <AdaptiveAptitudePreTest
                     mode={assessmentMode}
                     onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
                     onClose={() => setShowAptitudeModal(false)}
-                    questions={exam.questions}
-                    duration={exam.duration}
-                    requireCameraMic={Boolean((exam as any).requireCameraMic)}
+                    accentColor={exam.accentColor}
+                    gradient={exam.gradient}
+                    trialAttemptsLimit={exam.trialAttemptsLimit}
+                    mainAttemptsLimit={exam.mainAttemptsLimit}
+                    attemptsCount={assessmentMode === 'trial' ? (attemptsStats['aptitude']?.trial ?? 0) : (attemptsStats['aptitude']?.main ?? 0)}
                 />
             )}
             {showCommunicationModal && (
                 <CommunicationPreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/communication?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+                    onStart={async (mode) => {
+                        // Trial: use non-adaptive regular engine
+                        if (mode === 'trial') {
+                            router.push(`/assessment/communication?mode=trial${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+                            setShowCommunicationModal(false);
+                            return;
+                        }
+                        // Main: try adaptive engine, fall back to standard
+                        const startedAdaptive = await startAdaptiveV2Attempt("communication", mode);
+                        if (!startedAdaptive) {
+                            router.push(`/assessment/communication?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`);
+                        }
+                    }}
                     onClose={() => setShowCommunicationModal(false)}
-                    questions={exam.questions}
-                    duration={exam.duration}
+                    accentColor={exam.accentColor}
+                    gradient={exam.gradient}
+                                        questions={assessmentMode === 'trial'
+                                            ? (exam.trialQuestionLimit && exam.trialQuestionLimit > 0 ? exam.trialQuestionLimit : 5)
+                                            : (exam.questionLimit ?? exam.questions ?? 8)}
+                    duration={assessmentMode === 'trial' ? "15 min" : (exam.duration ?? "45 min")}
+                    trialAttemptsLimit={exam.trialAttemptsLimit}
+                    mainAttemptsLimit={exam.mainAttemptsLimit}
+                    attemptsCount={assessmentMode === 'trial' ? (attemptsStats['grammar']?.trial ?? 0) : (attemptsStats['grammar']?.main ?? 0)}
                 />
             )}
             {showRoleModal && (
                 <RolePreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/role?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+                    onStart={async (mode) => {
+                        // Trial: use non-adaptive regular engine
+                        if (mode === 'trial') {
+                            router.push(`/assessment/role?mode=trial${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+                            setShowRoleModal(false);
+                            return;
+                        }
+                        // Main: try adaptive engine, fall back to standard
+                        const startedAdaptive = await startAdaptiveV2Attempt("role", mode);
+                        if (!startedAdaptive) {
+                            router.push(`/assessment/role?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`);
+                        }
+                    }}
                     onClose={() => setShowRoleModal(false)}
-                    questions={exam.questions}
-                    duration={exam.duration}
+                    accentColor={exam.accentColor}
+                    gradient={exam.gradient}
+                                        questions={assessmentMode === 'trial'
+                                            ? (exam.trialQuestionLimit && exam.trialQuestionLimit > 0 ? exam.trialQuestionLimit : 5)
+                                            : (exam.questionLimit ?? exam.questions ?? 15)}
+                    duration={assessmentMode === 'trial' ? "15 min" : (exam.duration ?? "45 min")}
+                    trialAttemptsLimit={exam.trialAttemptsLimit}
+                    mainAttemptsLimit={exam.mainAttemptsLimit}
+                    attemptsCount={assessmentMode === 'trial' ? (attemptsStats['role']?.trial ?? 0) : (attemptsStats['role']?.main ?? 0)}
                 />
             )}
             {showMncModal && (
                 <MNCPreTest
                     mode={assessmentMode}
-                    onStart={(mode) => router.push(`/assessment/mnc?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+                    onStart={async (mode) => {
+                        // Trial: use non-adaptive regular engine
+                        if (mode === 'trial') {
+                            router.push(`/assessment/mnc?mode=trial${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
+                            setShowMncModal(false);
+                            return;
+                        }
+                        // Main: try adaptive engine, fall back to standard
+                        const startedAdaptive = await startAdaptiveV2Attempt("mnc", mode);
+                        if (!startedAdaptive) {
+                            router.push(`/assessment/mnc?mode=${mode}${exam.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`);
+                        }
+                    }}
                     onClose={() => setShowMncModal(false)}
-                    questions={exam.questions}
-                    duration={exam.duration}
+                    accentColor={exam.accentColor}
+                    gradient={exam.gradient}
+                                        questions={assessmentMode === 'trial'
+                                            ? (exam.trialQuestionLimit && exam.trialQuestionLimit > 0 ? exam.trialQuestionLimit : 5)
+                                            : (exam.questionLimit ?? exam.questions ?? 15)}
+                    duration={assessmentMode === 'trial' ? "15 min" : (exam.duration ?? "60 min")}
+                    trialAttemptsLimit={exam.trialAttemptsLimit}
+                    mainAttemptsLimit={exam.mainAttemptsLimit}
+                    attemptsCount={assessmentMode === 'trial' ? (attemptsStats['mnc']?.trial ?? 0) : (attemptsStats['mnc']?.main ?? 0)}
                 />
             )}
 
@@ -808,6 +927,9 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                         setPendingCodingLang(null);
                         setAssessmentMode("main");
                     }}
+                    trialAttemptsLimit={exam.trialAttemptsLimit}
+                    mainAttemptsLimit={exam.mainAttemptsLimit}
+                    attemptsCount={assessmentMode === 'trial' ? (attemptsStats['coding']?.trial ?? 0) : (attemptsStats['coding']?.main ?? 0)}
                 />
             )}
 

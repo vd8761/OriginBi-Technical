@@ -23,7 +23,7 @@ import {
   type ProctoringSettings,
 } from "@/lib/proctoring";
 import {
-  generateBlock, completeBlock, saveBlockAnswers, getBlockQuestions,
+  generateBlock, completeBlock, completeAndGenerateBlock, saveBlockAnswers, getBlockQuestions,
   submitAssessment, getAttemptStatus,
   type BlockResponse, type BlockMetrics,
   type Difficulty, type AdaptiveFinalReport,
@@ -45,7 +45,7 @@ interface BlockState {
 
 export interface AdaptiveV2Props {
   assessmentId: number;
-  userId: number;
+  userId: number | string;
   attemptToken: string;
   moduleSlug?: string;
   mode?: "trial" | "main";
@@ -138,9 +138,9 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
     const perBlock = Math.max(1, Number(block.questionsPerBlock ?? block.questions.length ?? questionsPerBlock));
     const total = Math.max(block.questions.length, Number(block.totalQuestions ?? blockCount * perBlock));
 
-    setTotalBlocks(prev => totalsInitializedRef.current ? Math.max(prev, blockCount) : blockCount);
-    setQuestionsPerBlock(prev => totalsInitializedRef.current ? Math.max(prev, perBlock) : perBlock);
-    setTotalQuestionCount(prev => totalsInitializedRef.current ? Math.max(prev, total) : total);
+    setTotalBlocks(blockCount);
+    setQuestionsPerBlock(perBlock);
+    setTotalQuestionCount(total);
     totalsInitializedRef.current = true;
   }, [questionsPerBlock, totalBlocks]);
 
@@ -551,9 +551,15 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
       bs.block.questions.forEach(q => { if (questionTiming[q.id]) blockTiming[q.id] = questionTiming[q.id]; });
 
       const timeTaken = totalTime - timeLeft;
-      const result = await completeBlock({
-        attemptToken, blockNumber: currentBlockNum,
-        timeTaken, answers: blockAnswers, questionTiming: blockTiming,
+      const result = await completeAndGenerateBlock({
+        attemptToken,
+        blockNumber: currentBlockNum,
+        timeTaken,
+        answers: blockAnswers,
+        questionTiming: blockTiming,
+        assessmentId,
+        userId,
+        mode,
       });
 
       // Mark current block as snapshotted
@@ -561,33 +567,37 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
         const n = new Map(prev);
         const cur = n.get(currentBlockNum)!;
         n.set(currentBlockNum, { ...cur, snapshotTaken: true, metrics: result.blockMetrics, nextDifficulty: result.nextBlockDifficulty });
+        
+        if (result.nextBlock) {
+          const nextNum = currentBlockNum + 1;
+          n.set(nextNum, {
+            block: result.nextBlock, snapshotTaken: false, metrics: null, nextDifficulty: null,
+          });
+        }
         return n;
       });
 
-      if (isLastBlock) {
+      if (isLastBlock || result.isLastBlock) {
         await handleFinalSubmit();
         return;
       }
 
-      // Generate next block
+      // Handle next block
       const nextNum = currentBlockNum + 1;
-      const nextBlock = await generateBlock({
-        assessmentId, blockNumber: nextNum, userId, mode, attemptToken,
-      });
+      const nextBlock = result.nextBlock;
 
-      setBlocks(prev => new Map(prev).set(nextNum, {
-        block: nextBlock, snapshotTaken: false, metrics: null, nextDifficulty: null,
-      }));
-      applyAssessmentTotals(nextBlock);
+      if (nextBlock) {
+        applyAssessmentTotals(nextBlock);
 
-      // Recalculate total time: sum of all generated block time limits
-      setTotalTime(() => {
-        const allBlocks = Array.from(blocks.values());
-        const knownTime = allBlocks.reduce((s, bs) => s + bs.block.timeLimitSeconds, 0);
-        const remainingBlocks = nextBlock.totalBlocks - nextNum;
-        const estimated = knownTime + nextBlock.timeLimitSeconds + (remainingBlocks * nextBlock.timeLimitSeconds);
-        return estimated;
-      });
+        // Recalculate total time: sum of all generated block time limits
+        setTotalTime(() => {
+          const allBlocks = Array.from(blocks.values());
+          const knownTime = allBlocks.reduce((s, bs) => s + bs.block.timeLimitSeconds, 0);
+          const remainingBlocks = nextBlock.totalBlocks - nextNum;
+          const estimated = knownTime + nextBlock.timeLimitSeconds + (remainingBlocks * nextBlock.timeLimitSeconds);
+          return estimated;
+        });
+      }
 
       setCurrentBlockNum(nextNum);
       setViewingBlockNum(nextNum);

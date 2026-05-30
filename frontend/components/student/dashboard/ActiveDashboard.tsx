@@ -253,6 +253,28 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
+  // Clean up any trial-mode results that were incorrectly persisted before the fix
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("originbi:assessment-results");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return;
+      let changed = false;
+      for (const key of Object.keys(parsed)) {
+        if (parsed[key]?.mode === 'trial') {
+          delete parsed[key];
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem("originbi:assessment-results", JSON.stringify(parsed));
+        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
+      }
+    } catch {}
+  }, []);
+
   const baseExamsList = dynamicExams || EXAMS;
   const purchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
   const unpurchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);

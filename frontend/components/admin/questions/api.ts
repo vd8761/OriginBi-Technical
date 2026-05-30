@@ -62,6 +62,7 @@ export interface ApiAssessment {
     status: string;
     created_at: string;
     question_limit?: number;
+    trial_question_limit?: number;
     categories?: string[] | string;
     difficulty_marks?: Record<string, number> | string;
     difficulty_negative_marks?: Record<string, number> | string;
@@ -86,6 +87,8 @@ export interface ApiAssessment {
     adaptive_total_marks?: number;
     adaptive_total_blocks?: number;
     adaptive_seconds_per_mark?: number;
+    main_questions_count?: number;
+    trial_questions_count?: number;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

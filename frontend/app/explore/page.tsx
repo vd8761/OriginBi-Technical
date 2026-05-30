@@ -81,6 +81,9 @@ export default function ExplorePage() {
           trialQuestionsCount: dbExam.trial_questions_count || 0,
           mainQuestionsCount: dbExam.main_questions_count || 0,
           questionLimit: getDisplayedQuestionCount(dbExam, exam.questions),
+          trialQuestionLimit: dbExam.trial_question_limit !== undefined && dbExam.trial_question_limit !== null
+            ? Number(dbExam.trial_question_limit)
+            : 5,
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,

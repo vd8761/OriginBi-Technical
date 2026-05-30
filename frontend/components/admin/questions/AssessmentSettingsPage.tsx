@@ -50,6 +50,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [name, setName] = useState("");
   const [duration, setDuration] = useState<number | "">(60);
   const [questionLimit, setQuestionLimit] = useState<number | "">(0);
+  const [trialQuestionLimit, setTrialQuestionLimit] = useState<number | "">(5);
   const [tabSwitchLimit, setTabSwitchLimit] = useState<number | "">(0);
   const [antiCopyEnabled, setAntiCopyEnabled] = useState(false);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
@@ -219,6 +220,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         assessmentName: name,
         totalTimeMinutes: duration === "" ? 60 : Number(duration),
         questionLimit: questionLimit === "" ? 0 : Number(questionLimit),
+        trialQuestionLimit: trialQuestionLimit === "" ? 5 : Number(trialQuestionLimit),
         categories: categoriesList,
         difficultyMarks: {
           easy: easyMarks === "" ? 1 : Number(easyMarks),
@@ -418,6 +420,9 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     setName(a.assessment_name || "");
     setDuration(Number(a.total_time_minutes || 60));
     setQuestionLimit(Number(a.question_limit || 0));
+    setTrialQuestionLimit(a.trial_question_limit !== undefined && a.trial_question_limit !== null
+      ? Number(a.trial_question_limit)
+      : 5);
     setTabSwitchLimit(Number(a.tab_switch_limit || 0));
     setAntiCopyEnabled(Boolean(a.anti_copy_enabled));
     setShuffleQuestions(Boolean(a.shuffle_questions));
@@ -456,6 +461,8 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const markDirty = () => setHasModifications(true);
   const visibleQuestionKinds = getSupportedQuestionKinds(activeModule);
   const normalizedQuestionLimit = questionLimit === "" ? 0 : Number(questionLimit);
+  const normalizedTrialQuestionLimit = trialQuestionLimit === "" ? 5 : Number(trialQuestionLimit);
+  const effectiveTrialQuestionLimit = normalizedTrialQuestionLimit > 0 ? normalizedTrialQuestionLimit : 5;
   const normalizedAdaptiveTotalQuestions = adaptiveTotalQuestions === "" ? 20 : Number(adaptiveTotalQuestions);
   const fullQuestionBankCount = questionsList.length;
   const effectiveQuestionCount = adaptiveEnabled
@@ -511,6 +518,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const hasRulesLimitsMatches = 
     matchesQuery(["Test Timer (Minutes)", "Total duration candidates have to complete this assessment.", "timer", "time", "duration", "minutes"]) ||
     matchesQuery(["Question Limit", "Serve a random subset of this size. Set to 0 to deliver the entire question pool.", "limit", "pool", "questions count"]) ||
+    matchesQuery(["Trial Question Limit", "Serve a fixed number of trial questions.", "trial", "limit", "questions"]) ||
     matchesQuery(["Tab-Switch Warning Limit", "Auto-submit after this many tab switches. Set to 0 to disable.", "tab", "switch", "warning", "proctoring", "cheat"]) ||
     matchesQuery(["Block Copy & Paste", "Prevent candidates from selecting or copying content during the test.", "copy", "paste", "block", "select", "prevent"]) ||
     matchesQuery(["Shuffle Questions Order", "Scramble question ordering dynamically per candidate session.", "shuffle", "randomize", "questions"]) ||
@@ -799,7 +807,34 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                                 ? `Adaptive Mode is enabled. The active UI question count is ${normalizedAdaptiveTotalQuestions} from Adaptive Total Questions.`
                                 : normalizedQuestionLimit > 0
                                   ? `The current UI question count is ${effectiveQuestionCount} from Question Limit.`
-                                  : `Question Limit is 0, so the full question bank will be used. Current bank size: ${fullQuestionBankCount} question(s).`}
+                                  : `Question Limit is 0, so the full question pool will be used. Main pool size: ${assessments[activeModule]?.main_questions_count ?? fullQuestionBankCount} active question(s).`}
+                            </div>
+                            <div className="rounded-xl border px-4 py-3 text-xs leading-relaxed border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                              <strong>Trial Assessment:</strong> Trial mode uses the configured trial question limit (default 5). Active trial pool size: <strong>{assessments[activeModule]?.trial_questions_count ?? 0} question(s)</strong>.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {matchesQuery(["Trial Question Limit", "Serve a fixed number of trial questions.", "trial", "limit", "questions"]) && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                          <div className="sm:max-w-md">
+                            <label className={labelCls}>Trial Question Limit</label>
+                            <p className={descCls}>Serve a fixed number of trial questions. Set to 0 to use the default of 5.</p>
+                          </div>
+                          <div className="sm:max-w-[400px] w-full space-y-3">
+                            <input
+                              type="number"
+                              min={0}
+                              value={trialQuestionLimit}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setTrialQuestionLimit(val === "" ? "" : Number(val));
+                                markDirty();
+                              }}
+                              className={inputCls}
+                            />
+                            <div className="rounded-xl border px-4 py-3 text-xs leading-relaxed border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                              Effective trial count: {effectiveTrialQuestionLimit} question(s). Active trial pool size: {assessments[activeModule]?.trial_questions_count ?? 0}.
                             </div>
                           </div>
                         </div>

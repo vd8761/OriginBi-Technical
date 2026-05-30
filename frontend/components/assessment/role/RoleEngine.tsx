@@ -61,7 +61,7 @@ const API_BASE = typeof window !== "undefined" && window.location.hostname !== "
 interface RoleEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     roleName?: string;
     mode?: 'trial' | 'main';
 }
@@ -99,7 +99,7 @@ const formatTime = (seconds: number) => {
 const RoleEngine: React.FC<RoleEngineProps> = ({ 
     onComplete, 
     roleName = "Full Stack Engineer",
-    assessmentCode = "ROLE_DEFAULT",
+    assessmentCode = "TECH_ROLE_001",
     userId,
     mode = 'main'
 }) => {

@@ -87,6 +87,42 @@ export class CompleteBlockDto {
   questionTiming?: Record<string, number>;
 }
 
+// ── Complete block and generate next ──────────────────────────────────────────
+
+export class CompleteAndGenerateNextDto {
+  @IsString()
+  attemptToken!: string;
+
+  @IsNumber()
+  @Type(() => Number)
+  blockNumber!: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  timeTaken!: number;
+
+  @IsOptional()
+  @IsObject()
+  answers!: Record<string, string | string[]>;
+
+  @IsOptional()
+  @IsObject()
+  questionTiming?: Record<string, number>;
+
+  @IsNumber()
+  @Type(() => Number)
+  assessmentId!: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  userId!: number;
+
+  @IsString()
+  @IsIn(['trial', 'main'])
+  mode!: 'trial' | 'main';
+}
+
+
 // ── Save block answers ────────────────────────────────────────────────────────
 
 /** Sent when the candidate edits answers in a previously completed block. */

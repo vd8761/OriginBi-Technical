@@ -352,7 +352,8 @@ export function useCompletedAssessments() {
             await Promise.all(
                 modules.map(async (module) => {
                     try {
-                        const submission = await getLatestSubmittedResult(module, email);
+                        const dbModule = module === "communication" ? "grammar" : module;
+                        const submission = await getLatestSubmittedResult(dbModule, email);
                         if (submission && !current.has(module)) {
                             current.add(module);
                             changed = true;

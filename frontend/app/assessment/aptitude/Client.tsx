@@ -14,10 +14,16 @@ import {
 export default function AptitudeClient() {
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
-    const assessmentCode = searchParams.get("assessmentCode") || "APTITUDE_DEFAULT";
+    const assessmentCode = searchParams.get("assessmentCode") || "TECH_APT_001";
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = useCallback((result: AttemptSubmitResult) => {
+        // Trial results are not saved or shown in the dashboard
+        if (mode === 'trial') {
+            console.log("Aptitude trial: submission complete, returning to assessment library...");
+            window.location.href = '/assessment?view=assessment&completed=trial';
+            return;
+        }
         const assessmentResult = mapSubmissionToAssessmentResult({
             assessmentId: "aptitude",
             submission: result,
@@ -35,7 +41,7 @@ export default function AptitudeClient() {
 
         console.log("Aptitude: Submission complete, redirecting...");
         window.location.href = '/dashboard?completed=aptitude';
-    }, [markAssessmentComplete]);
+    }, [markAssessmentComplete, mode]);
 
     return (
         <div className="min-h-screen w-full">

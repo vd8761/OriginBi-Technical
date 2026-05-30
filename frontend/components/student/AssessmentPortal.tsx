@@ -89,6 +89,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   const [filter, setFilter] = useState<AssessmentFilter>("all");
   const [showNextStepAlert, setShowNextStepAlert] = useState(true);
   const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>("main");
+  const assessmentModeRef = React.useRef<AssessmentMode>("main");
   const [assessmentsList, setAssessmentsList] = useState<any[]>([]);
   const [paidAssignments, setPaidAssignments] = useState<Assignment[] | null>(null);
   const [completionPopup, setCompletionPopup] = useState<{
@@ -203,9 +204,9 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   useEffect(() => {
     let active = true;
     const fetchAll = async () => {
-      if (LEGACY_TECH_API_URL === undefined) return;
       try {
-        const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`);
+        const apiBase = LEGACY_TECH_API_URL || "";
+        const response = await fetch(`${apiBase}/api/assessment/admin/assessments`);
         if (!response.ok) return;
         const json = await response.json();
         if (json && json.data && active) {
@@ -275,6 +276,9 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           trialQuestionsCount: dbExam.trial_questions_count || 0,
           mainQuestionsCount: dbExam.main_questions_count || 0,
           questionLimit: getDisplayedQuestionCount(dbExam, exam.questions),
+          trialQuestionLimit: dbExam.trial_question_limit !== undefined && dbExam.trial_question_limit !== null
+            ? Number(dbExam.trial_question_limit)
+            : 5,
           price: dbExam.amount !== undefined && dbExam.amount !== null ? Number(dbExam.amount) : exam.price,
           trialAttemptsLimit: dbExam.trial_attempts_limit !== undefined && dbExam.trial_attempts_limit !== null ? Number(dbExam.trial_attempts_limit) : 5,
           mainAttemptsLimit: dbExam.main_attempts_limit !== undefined && dbExam.main_attempts_limit !== null ? Number(dbExam.main_attempts_limit) : 2,
@@ -473,16 +477,21 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     console.log("currentCount >= limit evaluates to:", currentCount >= limit);
 
     if (currentCount >= limit) {
-      setLimitExceededPopup({
-        examId: exam.id,
-        examTitle: exam.title,
-        mode: mode,
-        limit: limit,
-        count: currentCount,
-      });
+      // For trial mode: button is hidden so this is a safety guard — just return silently.
+      // For main mode: show the limit-exceeded popup so the user knows they're done.
+      if (mode === 'main') {
+        setLimitExceededPopup({
+          examId: exam.id,
+          examTitle: exam.title,
+          mode: mode,
+          limit: limit,
+          count: currentCount,
+        });
+      }
       return;
     }
 
+    assessmentModeRef.current = mode;
     setAssessmentMode(mode);
     launchAssessment(exam as ExtendedExam, mode);
   };
@@ -498,10 +507,12 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
   };
 
   const startAdaptiveV2Attempt = async (
-    module: "communication" | "mnc" | "role",
+    module: "communication" | "mnc" | "role" | "aptitude",
     mode: AssessmentMode,
     assessmentCode?: string,
   ): Promise<boolean> => {
+    if (mode === "trial") return false;
+
     const dbModule = module === "communication" ? "grammar" : module;
     const dbExam = resolveAssessmentForModule(module, assessmentCode);
     if (!dbExam?.adaptive_enabled) return false;
@@ -600,6 +611,11 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
     }
 
     openAssessmentFlow(exam, "trial");
+  };
+
+  // Dashboard "Start Assessment" button always starts the main assessment
+  const handleDashboardStartExam = (exam: Exam) => {
+    openAssessmentFlow(exam, "main");
   };
 
   const currentHeaderView: AssessmentView = currentView === "details" ? "assessment" : currentView;
@@ -839,30 +855,37 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredExams.map((exam) => (
-                  <AssessmentCard
-                    key={exam.id}
-                    title={exam.title}
-                    description={exam.description}
-                    statusLabel={exam.statusLabel}
-                    statusTone={exam.available ? "success" : "warning"}
-                    totalQuestions={exam.questions}
-                    duration={exam.duration}
-                    price={exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
-                    tags={exam.tags}
-                    icon={exam.icon}
-                    available={exam.available}
-                    level={exam.difficulty}
-                    insight={exam.statusLabel}
-                    accentColor={exam.accentColor}
-                    gradient={exam.gradient}
-                    trialAttemptsLimit={(exam as any).trialAttemptsLimit}
-                    mainAttemptsLimit={(exam as any).mainAttemptsLimit}
-                    onDetailsClick={() => handleSelectExam(exam)}
-                    onTrialClick={() => handleCardTrialStart(exam)}
-                    onMainClick={() => handleCardMainStart(exam)}
-                  />
-                ))}
+                {filteredExams.map((exam) => {
+                  const dbModule = exam.id === "communication" ? "grammar" : exam.id;
+                  const examStats = attemptsStats[dbModule] || { trial: 0, main: 0 };
+                  const trialLimit = (exam as any).trialAttemptsLimit ?? 5;
+                  const isTrialExhausted = trialLimit > 0 && examStats.trial >= trialLimit;
+                  return (
+                    <AssessmentCard
+                      key={exam.id}
+                      title={exam.title}
+                      description={exam.description}
+                      statusLabel={exam.statusLabel}
+                      statusTone={exam.available ? "success" : "warning"}
+                      totalQuestions={exam.questions}
+                      duration={exam.duration}
+                      price={exam.price === 0 || !exam.price ? "Free" : `₹${exam.price}`}
+                      tags={exam.tags}
+                      icon={exam.icon}
+                      available={exam.available}
+                      level={exam.difficulty}
+                      insight={exam.statusLabel}
+                      accentColor={exam.accentColor}
+                      gradient={exam.gradient}
+                      trialAttemptsLimit={(exam as any).trialAttemptsLimit}
+                      mainAttemptsLimit={(exam as any).mainAttemptsLimit}
+                      trialExhausted={isTrialExhausted}
+                      onDetailsClick={() => handleSelectExam(exam)}
+                      onTrialClick={() => handleCardTrialStart(exam)}
+                      onMainClick={() => handleCardMainStart(exam)}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -870,7 +893,7 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
           <DashboardContent
             userName={userName}
             handleSelectExam={handleSelectExam}
-            handleStartExam={handleModalStart}
+            handleStartExam={handleDashboardStartExam}
             inProgressAttempt={inProgressAttempt}
             onResumeAttempt={handleResumeAttempt}
             dynamicExams={dynamicExams}
@@ -918,11 +941,19 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
         const stats = attemptsStats['aptitude'] || { trial: 0, main: 0 };
         return (
           <AdaptiveAptitudePreTest
-            mode={assessmentMode}
-            onStart={(mode) => router.push(`/assessment/aptitude?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`)}
+            mode={assessmentModeRef.current}
+            onStart={async (mode) => {
+              const startedAdaptive = await startAdaptiveV2Attempt("aptitude", mode, exam?.assessmentCode);
+              if (!startedAdaptive) {
+                router.push(`/assessment/aptitude?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ""}`);
+              }
+            }}
             onClose={() => setShowAptitudeModal(false)}
             accentColor={exam?.accentColor}
             gradient={exam?.gradient}
+            trialAttemptsLimit={exam?.trialAttemptsLimit}
+            mainAttemptsLimit={exam?.mainAttemptsLimit}
+            attemptsCount={assessmentModeRef.current === 'trial' ? stats.trial : stats.main}
           />
         );
       })()}
@@ -930,21 +961,24 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       {showCommunicationModal && (() => {
         const exam = dynamicExams.find(e => e.id === 'communication') as any;
         const stats = attemptsStats['grammar'] || { trial: 0, main: 0 };
-        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        const currentMode = assessmentModeRef.current;
+        const currentCount = currentMode === 'trial' ? stats.trial : stats.main;
         return (
           <CommunicationPreTest
-            mode={assessmentMode}
+            mode={currentMode}
             onStart={async (mode) => {
               const startedAdaptive = await startAdaptiveV2Attempt("communication", mode, exam?.assessmentCode);
               if (!startedAdaptive) {
                 router.push(`/assessment/communication?mode=${mode}${exam?.assessmentCode ? `&assessmentCode=${encodeURIComponent(exam.assessmentCode)}` : ''}`);
               }
             }}
-            onClose={() => setShowCommunicationModal(false)}
+             onClose={() => setShowCommunicationModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'communication')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'communication')?.gradient}
-            questions={exam?.questions}
-            duration={exam?.duration}
+            questions={currentMode === 'trial'
+              ? (exam?.trialQuestionLimit && exam.trialQuestionLimit > 0 ? exam.trialQuestionLimit : 5)
+              : (exam?.questionLimit ?? exam?.questions ?? 8)}
+            duration={currentMode === 'trial' ? "15 min" : (exam?.duration ?? "45 min")}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
@@ -955,10 +989,11 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       {showRoleModal && (() => {
         const exam = dynamicExams.find(e => e.id === 'role') as any;
         const stats = attemptsStats['role'] || { trial: 0, main: 0 };
-        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        const currentMode = assessmentModeRef.current;
+        const currentCount = currentMode === 'trial' ? stats.trial : stats.main;
         return (
           <RolePreTest
-            mode={assessmentMode}
+            mode={currentMode}
             onStart={async (mode) => {
               const startedAdaptive = await startAdaptiveV2Attempt("role", mode, exam?.assessmentCode);
               if (!startedAdaptive) {
@@ -968,8 +1003,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             onClose={() => setShowRoleModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'role')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'role')?.gradient}
-            questions={exam?.questions}
-            duration={exam?.duration}
+            questions={currentMode === 'trial'
+              ? (exam?.trialQuestionLimit && exam.trialQuestionLimit > 0 ? exam.trialQuestionLimit : 5)
+              : (exam?.questionLimit ?? exam?.questions ?? 15)}
+            duration={currentMode === 'trial' ? "15 min" : (exam?.duration ?? "45 min")}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}
@@ -980,10 +1017,11 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
       {showMncModal && (() => {
         const exam = dynamicExams.find(e => e.id === 'mnc') as any;
         const stats = attemptsStats['mnc'] || { trial: 0, main: 0 };
-        const currentCount = assessmentMode === 'trial' ? stats.trial : stats.main;
+        const currentMode = assessmentModeRef.current;
+        const currentCount = currentMode === 'trial' ? stats.trial : stats.main;
         return (
           <MNCPreTest
-            mode={assessmentMode}
+            mode={currentMode}
             onStart={async (mode) => {
               const startedAdaptive = await startAdaptiveV2Attempt("mnc", mode, exam?.assessmentCode);
               if (!startedAdaptive) {
@@ -993,8 +1031,10 @@ const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ userName = "Student
             onClose={() => setShowMncModal(false)}
             accentColor={exam?.accentColor || EXAMS.find(e => e.id === 'mnc')?.accentColor}
             gradient={exam?.gradient || EXAMS.find(e => e.id === 'mnc')?.gradient}
-            questions={exam?.questions}
-            duration={exam?.duration}
+            questions={currentMode === 'trial'
+              ? (exam?.trialQuestionLimit && exam.trialQuestionLimit > 0 ? exam.trialQuestionLimit : 5)
+              : (exam?.questionLimit ?? exam?.questions ?? 15)}
+            duration={currentMode === 'trial' ? "15 min" : (exam?.duration ?? "60 min")}
             trialAttemptsLimit={exam?.trialAttemptsLimit}
             mainAttemptsLimit={exam?.mainAttemptsLimit}
             attemptsCount={currentCount}

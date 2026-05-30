@@ -20,6 +20,7 @@ interface AssessmentCardProps {
     onMainClick: () => void;
     trialAttemptsLimit?: number;
     mainAttemptsLimit?: number;
+    trialExhausted?: boolean;
 }
 
 const AssessmentCard: React.FC<AssessmentCardProps> = ({
@@ -42,6 +43,7 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
     onMainClick,
     trialAttemptsLimit = 5,
     mainAttemptsLimit = 2,
+    trialExhausted = false,
 }) => {
     return (
         <div 
@@ -111,12 +113,14 @@ const AssessmentCard: React.FC<AssessmentCardProps> = ({
             {/* Bottom Actions */}
             <div className="flex items-center justify-end">
                 <div className="flex gap-2">
-                    <button
-                        onClick={onTrialClick}
-                        className="px-5 py-2 text-xs font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
-                    >
-                        Trial
-                    </button>
+                    {!trialExhausted && (
+                        <button
+                            onClick={onTrialClick}
+                            className="px-5 py-2 text-xs font-medium text-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all cursor-pointer"
+                        >
+                            Trial
+                        </button>
+                    )}
                     <button 
                         onClick={onMainClick}
                         className={`px-6 py-2 text-xs font-bold rounded-full transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-md ${
