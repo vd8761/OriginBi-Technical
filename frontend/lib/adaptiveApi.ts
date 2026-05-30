@@ -116,7 +116,7 @@ export interface TopicMastery {
 export interface AdaptiveFinalReport {
   attemptToken: string;
   assessmentId: number;
-  userId: number;
+  userId: number | string;
   totalMarks: number;
   obtainedMarks: number;
   marksPercentage: number;
@@ -181,7 +181,7 @@ export async function getBlueprint(assessmentId: number): Promise<BlueprintConfi
 export async function generateBlock(params: {
   assessmentId: number;
   blockNumber: number;
-  userId: number;
+  userId: number | string;
   mode: "trial" | "main";
   attemptToken: string;
 }): Promise<BlockResponse> {
@@ -225,7 +225,7 @@ export async function completeAndGenerateBlock(params: {
   answers: Record<string, string | string[]>;
   questionTiming?: Record<string, number>;
   assessmentId: number;
-  userId: number;
+  userId: number | string;
   mode: "trial" | "main";
 }): Promise<{
   alreadySnapshotted: boolean;
@@ -293,7 +293,7 @@ export async function getAttemptStatus(attemptToken: string): Promise<{
 export async function submitAssessment(params: {
   attemptToken: string;
   assessmentId: number;
-  userId: number;
+  userId: number | string;
 }): Promise<AdaptiveFinalReport> {
   const res = await apiFetch<{ report: AdaptiveFinalReport }>(`${BASE}/submit`, {
     method: "POST",

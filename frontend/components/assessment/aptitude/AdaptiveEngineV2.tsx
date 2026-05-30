@@ -45,7 +45,7 @@ interface BlockState {
 
 export interface AdaptiveV2Props {
   assessmentId: number;
-  userId: number;
+  userId: number | string;
   attemptToken: string;
   moduleSlug?: string;
   mode?: "trial" | "main";

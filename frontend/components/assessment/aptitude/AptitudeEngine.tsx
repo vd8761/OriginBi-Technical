@@ -71,7 +71,7 @@ export interface AttemptSubmitResult {
 interface AptitudeEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     mode?: 'trial' | 'main';
 }
 

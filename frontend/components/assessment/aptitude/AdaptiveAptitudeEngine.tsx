@@ -88,7 +88,7 @@ export type { BlockAttemptResult as AttemptSubmitResult };
 interface AdaptiveAptitudeEngineProps {
   onComplete: (result: BlockAttemptResult) => void;
   assessmentCode?: string;
-  userId?: number;
+  userId?: number | string;
   mode?: 'trial' | 'main';
 }
 

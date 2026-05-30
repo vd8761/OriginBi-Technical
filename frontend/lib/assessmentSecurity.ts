@@ -40,32 +40,48 @@ export function getAssessmentCode(module: AssessmentModule): string {
   return codeMap[module] || 'TECH_APT_001';
 }
 
-/**
- * Gets user ID from various localStorage sources
- */
-export function getUserId(): number {
-  let userId: number | null = null;
-  
+export function getUserId(): string | number {
   try {
     const profileRaw = localStorage.getItem("originbi:user-profile");
     if (profileRaw) {
       const p = JSON.parse(profileRaw);
-      if (p?.id) userId = Number(p.id);
+      if (p?.email) return p.email;
+      if (p?.id) return Number(p.id);
     }
   } catch {}
   
-  if (!userId) {
-    try {
-      const stored = localStorage.getItem("userId") || localStorage.getItem("user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const id = typeof parsed === "object" ? parsed?.id : parseInt(stored);
-        if (id) userId = Number(id);
+  try {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.email) return parsed.email;
+      if (parsed?.id) return Number(parsed.id);
+    }
+  } catch {}
+
+  try {
+    const stored = localStorage.getItem("userId");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const id = typeof parsed === "object" ? parsed?.id : parseInt(stored);
+      if (id) return Number(id);
+    }
+  } catch {}
+
+  // Fallback: try decoding JWT token
+  try {
+    const tok = localStorage.getItem("token") || localStorage.getItem("accessToken");
+    if (tok) {
+      const payload = JSON.parse(atob(tok.split(".")[1]));
+      if (payload?.email) return payload.email;
+      if (payload?.username && String(payload.username).includes("@")) {
+        return payload.username;
       }
-    } catch {}
-  }
-  
-  return userId ?? 1;
+      if (payload?.id) return Number(payload.id);
+    }
+  } catch {}
+
+  return 1;
 }
 
 /**

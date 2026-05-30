@@ -469,6 +469,9 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                   these variables here they cascade into every child element captured.
                 */}
                 <div style={OKLCH_RESET_STYLE}>
+                  <style>{`
+                    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&display=swap');
+                  `}</style>
                   {/*
                     We use an aspect ratio container to keep the certificate proportionally correct.
                     2000x1414 -> aspect ratio ~ 1.414.
@@ -487,8 +490,9 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                     <img
                       src="/certificate-template.jpg"
                       alt="Certificate Background"
-                      className="absolute inset-0 w-full h-full object-cover z-0"
+                      className="absolute inset-0 w-full h-full object-cover z-0 select-none pointer-events-none"
                       crossOrigin="anonymous"
+                      draggable={false}
                     />
 
                     {/* Dynamic Overlay — only dynamic values; all static labels baked into template */}
@@ -572,22 +576,23 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 
                       {/* ── Student Name ── */}
                       <div
+                        data-cqw="top:52.5"
                         style={{
                           position: "absolute",
                           left: "7%",
-                          top: "75%",
+                          top: "55.0cqw",
                         }}
                       >
                         <h2
-                          className={dmSerif.className}
-                          data-cqw="font-size:8"
+                          data-cqw="font-size:7.2"
                           style={{
-                            fontSize: "8cqw",
+                            fontFamily: "'DM Serif Display', serif",
+                            fontSize: "7.2cqw",
                             lineHeight: 1,
                             letterSpacing: "-0.02em",
                             color: "#111827",
                             fontStyle: "italic",
-                            fontWeight: 700,
+                            fontWeight: 400,
                             margin: 0,
                             textTransform: "none",
                           }}
@@ -618,8 +623,15 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                             <img
                               src={qrDataUrl}
                               data-cqw="width:11,height:11"
-                              style={{ height: "11cqw", width: "11cqw", display: "block" }}
+                              style={{
+                                height: "11cqw",
+                                width: "11cqw",
+                                display: "block",
+                                pointerEvents: "none",
+                                userSelect: "none",
+                              }}
                               alt="Verification QR Code"
+                              draggable={false}
                             />
                           ) : (
                             <div style={{ height: "11cqw", width: "11cqw", backgroundColor: "#f3f4f6" }} />

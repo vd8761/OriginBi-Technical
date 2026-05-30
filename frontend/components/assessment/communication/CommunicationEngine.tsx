@@ -126,7 +126,7 @@ const isTaskComplete = (task: AssessmentTask, answer: CommunicationAnswer | unde
 interface CommunicationEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     mode?: 'trial' | 'main';
 }
 

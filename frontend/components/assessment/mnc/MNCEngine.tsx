@@ -62,7 +62,7 @@ export interface AttemptSubmitResult {
 interface MNCEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     mode?: 'trial' | 'main';
 }
 

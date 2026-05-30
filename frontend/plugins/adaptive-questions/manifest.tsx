@@ -26,7 +26,7 @@ function AdaptiveEngineMount({ ctx }: { ctx: PluginCtx }) {
     adaptiveEnabled,
   } = ctx.config as {
     assessmentId?: number;
-    userId?: number;
+    userId?: number | string;
     attemptToken?: string;
     mode?: "trial" | "main";
     onComplete?: (report: any) => void;

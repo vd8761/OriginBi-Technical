@@ -61,7 +61,7 @@ const API_BASE = typeof window !== "undefined" && window.location.hostname !== "
 interface RoleEngineProps {
     onComplete: (result: AttemptSubmitResult) => void;
     assessmentCode?: string;
-    userId?: number;
+    userId?: number | string;
     roleName?: string;
     mode?: 'trial' | 'main';
 }

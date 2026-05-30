@@ -944,7 +944,10 @@ export class AssessmentService {
             `SELECT *
              FROM ${config.attempts}
              WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
-             ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
+             ORDER BY 
+               CASE WHEN mode = 'main' THEN 1 ELSE 2 END ASC,
+               submitted_at DESC NULLS LAST, 
+               updated_at DESC
              LIMIT 1`,
             [resolvedUserId],
           );
