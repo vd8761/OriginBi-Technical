@@ -124,31 +124,31 @@ export class AdaptiveSnapshotService {
   private async resolveAttempt(attemptToken: string): Promise<{
     attemptId: number;
     assessmentId: number;
+    userId: number;
     moduleType: string;
     cfg: ReturnType<AdaptiveSnapshotService['getModuleConfig']>;
   }> {
-    // Try each module's attempts table in order
-    const tables = [
-      { table: 'tech_aptitude_attempts', idCol: 'aptitude_attempt_id', module: 'aptitude' },
-      { table: 'tech_grammar_attempts',  idCol: 'grammar_attempt_id',  module: 'grammar' },
-      { table: 'tech_mnc_attempts',      idCol: 'mnc_attempt_id',      module: 'mnc' },
-      { table: 'tech_role_attempts',     idCol: 'role_attempt_id',     module: 'role' },
-    ];
+    const rows = await this.dataSource.query(
+      `SELECT aptitude_attempt_id AS aid, assessment_id, user_id, 'aptitude' AS module FROM tech_aptitude_attempts WHERE attempt_token = $1
+       UNION ALL
+       SELECT grammar_attempt_id AS aid, assessment_id, user_id, 'grammar' AS module FROM tech_grammar_attempts WHERE attempt_token = $1
+       UNION ALL
+       SELECT mnc_attempt_id AS aid, assessment_id, user_id, 'mnc' AS module FROM tech_mnc_attempts WHERE attempt_token = $1
+       UNION ALL
+       SELECT role_attempt_id AS aid, assessment_id, user_id, 'role' AS module FROM tech_role_attempts WHERE attempt_token = $1`,
+      [attemptToken],
+    );
 
-    for (const t of tables) {
-      const rows = await this.dataSource.query(
-        `SELECT ${t.idCol} AS aid, assessment_id FROM ${t.table} WHERE attempt_token=$1`,
-        [attemptToken],
-      );
-      if (rows.length) {
-        const cfg = this.getModuleConfig(t.module);
-        return {
-          attemptId: Number(rows[0].aid),
-          assessmentId: Number(rows[0].assessment_id),
-          moduleType: t.module,
-          cfg,
-        };
-      }
+    if (rows.length) {
+      const r = rows[0];
+      const cfg = this.getModuleConfig(r.module);
+      return {
+        attemptId: Number(r.aid),
+        assessmentId: Number(r.assessment_id),
+        userId: Number(r.user_id),
+        moduleType: r.module,
+        cfg,
+      };
     }
     throw new NotFoundException(`Attempt not found for token: ${attemptToken}`);
   }
@@ -158,7 +158,7 @@ export class AdaptiveSnapshotService {
   // ─────────────────────────────────────────────────────────────────────────
 
   async loadBlockQuestions(
-    attemptToken: string,
+    attemptTokenOrResolved: string | { attemptId: number; moduleType: string; cfg: any },
     blockNumber: number,
   ): Promise<Array<{
     questionId: string;
@@ -185,7 +185,21 @@ export class AdaptiveSnapshotService {
     taskType?: string;
     rubricJson?: any;
   }>> {
-    const { attemptId, moduleType, cfg } = await this.resolveAttempt(attemptToken);
+    let attemptId: number;
+    let moduleType: string;
+    let cfg: any;
+
+    if (typeof attemptTokenOrResolved === 'string') {
+      const resolved = await this.resolveAttempt(attemptTokenOrResolved);
+      attemptId = resolved.attemptId;
+      moduleType = resolved.moduleType;
+      cfg = resolved.cfg;
+    } else {
+      attemptId = attemptTokenOrResolved.attemptId;
+      moduleType = attemptTokenOrResolved.moduleType;
+      cfg = attemptTokenOrResolved.cfg;
+    }
+
     if (!cfg) throw new BadRequestException('Module not supported');
 
     const extraColsSelect = cfg.extraCols ? `, q.${cfg.extraCols.split(', ').join(', q.')}` : '';
@@ -353,11 +367,11 @@ export class AdaptiveSnapshotService {
       };
     }
 
-    const { attemptId, assessmentId, moduleType, cfg } = await this.resolveAttempt(attemptToken);
-    const userId = await this.getUserId(attemptToken, moduleType);
+    const resolvedAttempt = await this.resolveAttempt(attemptToken);
+    const { attemptId, assessmentId, userId, moduleType, cfg } = resolvedAttempt;
 
     // Load block questions
-    const questions = await this.loadBlockQuestions(attemptToken, blockNumber);
+    const questions = await this.loadBlockQuestions(resolvedAttempt, blockNumber);
 
     // Build question answer states from provided answers
     const questionAnswers: Record<string, QuestionAnswerState> = {};
@@ -425,13 +439,14 @@ export class AdaptiveSnapshotService {
     }
 
     const totalTimeSecs = Object.values(questionTiming).reduce((a, b) => a + b, 0);
+    const blockDifficulty = await this.getBlockDifficulty(attemptToken, blockNumber);
+
     const partialMetrics = this.engine.computeBlockMetrics(
       metricsInput,
-      await this.getBlockDifficulty(attemptToken, blockNumber),
+      blockDifficulty,
       secondsPerMark,
     );
 
-    const blockDifficulty = await this.getBlockDifficulty(attemptToken, blockNumber);
     const nextBlockDifficulty = this.engine.computeNextDifficulty(blockDifficulty, {
       attemptedCount: partialMetrics.attemptedCount,
       skipImpact: partialMetrics.skipImpact,

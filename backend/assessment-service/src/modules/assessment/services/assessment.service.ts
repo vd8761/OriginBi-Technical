@@ -2397,17 +2397,16 @@ export class AssessmentService {
       };
 
       // Fire certificate email asynchronously (non-blocking)
-      if (attempt.mode === 'main') {
-        setImmediate(() => {
-          this.sendCertificateEmailForAttempt(
-            attempt.user_id,
-            attempt.assessment_id,
-            module,
-            overallScorePercent,
-            now.toISOString(),
-          ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
-        });
-      }
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          attempt.user_id,
+          attempt.assessment_id,
+          module,
+          overallScorePercent,
+          now.toISOString(),
+          attempt.attempt_token,
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
 
       return result;
     } catch (error) {
@@ -3116,17 +3115,16 @@ export class AssessmentService {
       });
 
       // Fire certificate email asynchronously (non-blocking)
-      if (attempt.mode === 'main') {
-        setImmediate(() => {
-          this.sendCertificateEmailForAttempt(
-            attempt.user_id,
-            attempt.assessment_id,
-            module,
-            overallScorePercent,
-            now.toISOString(),
-          ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
-        });
-      }
+      setImmediate(() => {
+        this.sendCertificateEmailForAttempt(
+          attempt.user_id,
+          attempt.assessment_id,
+          module,
+          overallScorePercent,
+          now.toISOString(),
+          attempt.attempt_token,
+        ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
+      });
 
       return {
         success: true,
@@ -3177,9 +3175,30 @@ export class AssessmentService {
     module: string,
     overallScorePercent: number,
     completedAt: string,
+    attemptToken: string,
   ): Promise<void> {
     try {
       const finalModule = module === 'communication' ? 'grammar' : module;
+
+      const attemptTableMap: Record<string, string> = {
+        aptitude: 'tech_aptitude_attempts',
+        grammar: 'tech_grammar_attempts',
+        communication: 'tech_grammar_attempts',
+        mnc: 'tech_mnc_attempts',
+        role: 'tech_role_attempts',
+      };
+      const attemptsTable = attemptTableMap[finalModule];
+      if (attemptsTable) {
+        const attemptRows = await this.dataSource.query(
+          `SELECT mode FROM ${attemptsTable} WHERE attempt_token = $1 LIMIT 1`,
+          [attemptToken],
+        );
+        const attemptMode = String(attemptRows[0]?.mode || '').trim().toLowerCase();
+        if (attemptMode === 'trial') {
+          this.logger.log(`Skipping certificate email: attempt ${attemptToken} is in trial mode`);
+          return;
+        }
+      }
 
       // Fetch user details
       const userRows = await this.dataSource.query(
@@ -3198,7 +3217,11 @@ export class AssessmentService {
       
       let meta: any = {};
       if (user.metadata) {
-        meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+        try {
+          meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+        } catch {
+          meta = {};
+        }
       }
       
       const userName: string =
@@ -3240,7 +3263,8 @@ export class AssessmentService {
       const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
 
       const frontendUrl = process.env.TECH_FRONTEND_URL || 'https://evaluation.originbi.com';
-      const verifyUrl = `${frontendUrl}/verify/${certificateId}`;
+      const verifyUrl = `${frontendUrl}/verify/${certificateId}?token=${encodeURIComponent(attemptToken)}&module=${encodeURIComponent(finalModule)}`;
+      const subject = `You have successfully completed the ${assessmentTitle} - Your Certificate is Ready`;
 
       this.logger.log(
         `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId}, verifyUrl=${verifyUrl})`,
@@ -3256,6 +3280,7 @@ export class AssessmentService {
         certificateId,
         completedAt,
         verifyUrl,
+        subject,
       });
     } catch (err: any) {
       this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);

@@ -576,11 +576,11 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 
                       {/* ── Student Name ── */}
                       <div
-                        data-cqw="top:52.5"
+                        data-cqw="top:51.5"
                         style={{
                           position: "absolute",
                           left: "7%",
-                          top: "55.0cqw",
+                          top: "56.0cqw",
                         }}
                       >
                         <h2
@@ -610,6 +610,8 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                           position: "absolute",
                           right: "6.2%",
                           top: "73%",
+                          pointerEvents: "none",
+                          userSelect: "none",
                         }}
                       >
                         <div
@@ -617,6 +619,8 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                           style={{
                             padding: "0.8cqw",
                             backgroundColor: "#ffffff",
+                            pointerEvents: "none",
+                            userSelect: "none",
                           }}
                         >
                           {qrDataUrl ? (

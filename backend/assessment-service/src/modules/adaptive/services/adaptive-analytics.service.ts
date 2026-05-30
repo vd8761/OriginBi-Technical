@@ -271,7 +271,7 @@ export class AdaptiveAnalyticsService {
           userId,
           assessmentId,
           moduleType,
-          report.marksPercentage,
+          Math.max(0, Math.round(report.marksPercentage)),
           nowStr,
           attemptToken,
         ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
@@ -607,7 +607,8 @@ export class AdaptiveAnalyticsService {
       const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
 
       const frontendUrl = process.env.TECH_FRONTEND_URL || 'https://evaluation.originbi.com';
-      const verifyUrl = `${frontendUrl}/verify/${certificateId}`;
+      const verifyUrl = `${frontendUrl}/verify/${certificateId}?token=${encodeURIComponent(attemptToken)}&module=${encodeURIComponent(finalModule)}`;
+      const subject = `You have successfully completed the ${assessmentTitle} - Your Certificate is Ready`;
 
       this.logger.log(
         `Sending certificate email to ${toEmail} for ${finalModule} (score=${overallScorePercent}%, cert=${certificateId}, verifyUrl=${verifyUrl})`,
@@ -623,6 +624,7 @@ export class AdaptiveAnalyticsService {
         certificateId,
         completedAt,
         verifyUrl,
+        subject,
       });
     } catch (err: any) {
       this.logger.error(`sendCertificateEmailForAttempt error: ${err.message}`, err.stack);
