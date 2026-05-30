@@ -23,15 +23,5 @@ export function getDisplayedQuestionCount(
     return questionLimit;
   }
 
-  const totalQuestions = Number(assessment.total_questions ?? 0);
-  if (totalQuestions > 0) {
-    return totalQuestions;
-  }
-
-  const mainQuestionsCount = Number(assessment.main_questions_count ?? 0);
-  if (mainQuestionsCount > 0) {
-    return mainQuestionsCount;
-  }
-
   return fallback;
 }

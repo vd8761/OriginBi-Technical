@@ -61,7 +61,7 @@ export async function persistAdaptiveResult(params: {
   moduleSlug: string;
   detail: ExamDetailData;
   report: AdaptiveFinalReport;
-  userId: number;
+  userId: number | string;
   resultStorageKey: string;
 }) {
   const { assessmentKey, moduleSlug, detail, report, userId, resultStorageKey } = params;

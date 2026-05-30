@@ -66,9 +66,9 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
     // completely continuous — no visual gaps or separators between blocks.
     // We subtract any locked questions already included in the `questions` array.
     const lockedAlreadyIncluded = questions.filter((q) => q.isLocked).length;
-    const lockedFutureCount = Math.max(
-        0,
-        Math.max(0, totalBlocks - currentBlockNumber) * questionsPerBlock - lockedAlreadyIncluded
+    const lockedFutureCount = Math.min(
+        Math.max(0, displayTotal - questions.length),
+        Math.max(0, Math.max(0, totalBlocks - currentBlockNumber) * questionsPerBlock - lockedAlreadyIncluded)
     );
 
     return (

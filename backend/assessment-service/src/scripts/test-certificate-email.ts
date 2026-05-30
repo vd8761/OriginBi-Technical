@@ -17,10 +17,13 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const SOURCE_USER_EMAIL   = process.env.SOURCE_USER_EMAIL   || 'jai@gmail.com';
 const TEST_RECIPIENT      = process.env.TEST_RECIPIENT      || 'jayakrishna0023@gmail.com';
+const SOURCE_USER_EMAIL   = process.env.SOURCE_USER_EMAIL   || TEST_RECIPIENT;
 const STUDENT_SERVICE_URL = process.env.STUDENT_SERVICE_URL || 'http://localhost:4004';
 const TECH_FRONTEND_URL   = process.env.TECH_FRONTEND_URL   || 'http://localhost:3000';
+const ASSESSMENT_SERVICE_URL = process.env.ASSESSMENT_SERVICE_URL || 'http://localhost:5000';
+const MODULE_FILTER       = (process.env.MODULE_FILTER || '').trim().toLowerCase();
+const ATTEMPT_TOKEN_FILTER = (process.env.ATTEMPT_TOKEN || '').trim();
 
 // ── DB pool ───────────────────────────────────────────────────────────────────
 const pool = new Pool({
@@ -75,6 +78,30 @@ function moduleDisplayLabel(module: string): string {
   return map[module] || module;
 }
 
+function moduleFromToken(token: string): string | null {
+  const t = String(token || '').toUpperCase();
+  if (t.startsWith('APT-')) return 'aptitude';
+  if (t.startsWith('GRA-') || t.startsWith('COM-')) return 'grammar';
+  if (t.startsWith('MNC-')) return 'mnc';
+  if (t.startsWith('ROL-')) return 'role';
+  return null;
+}
+
+async function fetchCanonicalPercent(module: string, attemptToken: string): Promise<number | null> {
+  try {
+    const base = ASSESSMENT_SERVICE_URL.replace(/\/$/, '');
+    const url = `${base}/api/assessment/${module}/latest-result?attemptToken=${encodeURIComponent(attemptToken)}`;
+    const res = await axios.get(url, { timeout: 10_000 });
+    const value = Number(res?.data?.overallScorePercent);
+    if (Number.isFinite(value)) {
+      return Math.max(0, Math.min(100, Math.round(value)));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('─'.repeat(62));
@@ -108,9 +135,15 @@ async function main() {
     { module: 'grammar',  table: 'tech_grammar_attempts',  idCol: 'grammar_attempt_id'  },
     { module: 'mnc',      table: 'tech_mnc_attempts',      idCol: 'mnc_attempt_id'      },
     { module: 'role',     table: 'tech_role_attempts',     idCol: 'role_attempt_id'     },
-  ];
+  ].filter((m) => {
+    if (ATTEMPT_TOKEN_FILTER) {
+      return m.module === moduleFromToken(ATTEMPT_TOKEN_FILTER);
+    }
+    return !MODULE_FILTER || m.module === MODULE_FILTER;
+  });
 
   interface CompletedAttempt {
+    attemptToken: string;
     module: string;
     assessmentTitle: string;
     totalScore: number;
@@ -124,15 +157,22 @@ async function main() {
   for (const m of modules) {
     try {
       // Get the LATEST submitted attempt per assessment for this user
+      const params: any[] = [user.id];
+      let whereClause = `a.user_id = $1 AND a.status IN ('submitted', 'evaluated') AND COALESCE(a.mode, 'main') = 'main'`;
+      if (ATTEMPT_TOKEN_FILTER) {
+        params.push(ATTEMPT_TOKEN_FILTER);
+        whereClause += ` AND a.attempt_token = $2`;
+      }
+
       const res = await pool.query(
         `SELECT DISTINCT ON (a.assessment_id)
-                a.${m.idCol}, a.total_score, a.submitted_at,
+                a.${m.idCol}, a.total_score, a.submitted_at, a.attempt_token,
                 ass.assessment_name, ass.assessment_id
          FROM ${m.table} a
          JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
-         WHERE a.user_id = $1 AND a.status IN ('submitted', 'evaluated')
+         WHERE ${whereClause}
          ORDER BY a.assessment_id, a.submitted_at DESC NULLS LAST`,
-        [user.id],
+        params,
       );
 
       for (const row of res.rows) {
@@ -151,9 +191,15 @@ async function main() {
 
         const maxScore   = Math.max(1, Number(maxRes.rows[0]?.max_score || 100));
         const totalScore = Math.max(0, Number(row.total_score || 0));
-        const pct        = Math.round((totalScore / maxScore) * 100);
+        const pctFromRatio = Math.round((totalScore / maxScore) * 100);
+        const fallbackPct = totalScore > maxScore && totalScore <= 100
+          ? Math.round(totalScore)
+          : Math.max(0, Math.min(100, pctFromRatio));
+        const canonicalPct = await fetchCanonicalPercent(m.module, String(row.attempt_token || ''));
+        const pct = canonicalPct ?? fallbackPct;
 
         completed.push({
+          attemptToken:        String(row.attempt_token || ''),
           module:              m.module,
           assessmentTitle:     row.assessment_name || moduleDisplayLabel(m.module),
           totalScore,
@@ -164,6 +210,41 @@ async function main() {
       }
     } catch (err: any) {
       console.warn(`  ⚠️  Could not query ${m.table}: ${err.message}`);
+    }
+  }
+
+  if (!completed.length && modules.length > 0) {
+    for (const m of modules) {
+      try {
+        const moduleForApi = m.module === 'communication' ? 'grammar' : m.module;
+        const base = ASSESSMENT_SERVICE_URL.replace(/\/$/, '');
+        const url = `${base}/api/assessment/${moduleForApi}/latest-result?userId=${encodeURIComponent(SOURCE_USER_EMAIL)}`;
+        const res = await axios.get(url, { timeout: 10_000 });
+        const submission = res.data;
+        if (!submission) continue;
+
+        const totalScore = Number(submission.totalScore ?? submission.overallScore ?? 0);
+        const maxScore = Number(submission.maxScore ?? 100);
+        const pct = Math.max(0, Math.min(100, Math.round(Number(submission.overallScorePercent ?? 0))));
+        const attemptToken = String(submission.attemptToken || submission.token || '');
+        const submittedAt = submission.submittedAt
+          ? new Date(submission.submittedAt)
+          : submission.completedAt
+            ? new Date(submission.completedAt)
+            : new Date();
+
+        completed.push({
+          attemptToken,
+          module: m.module,
+          assessmentTitle: String(submission.assessmentTitle || moduleDisplayLabel(m.module)),
+          totalScore,
+          maxScore,
+          overallScorePercent: pct,
+          submittedAt,
+        });
+      } catch {
+        // keep silent; this is a fallback path
+      }
     }
   }
 
@@ -191,7 +272,8 @@ async function main() {
     const aCode         = assessmentCode(attempt.module);
     const certificateId = `OBX-${dateCode}-${aCode}-${randomCode(4)}`;
     const grade         = gradeFromScore(attempt.overallScorePercent);
-    const verifyUrl     = `${TECH_FRONTEND_URL}/verify/${certificateId}`;
+    const verifyUrl     = `${TECH_FRONTEND_URL}/verify/${certificateId}?token=${encodeURIComponent(attempt.attemptToken)}&module=${encodeURIComponent(attempt.module)}`;
+    const subject       = `You have successfully completed the ${attempt.assessmentTitle} - Your Certificate is Ready`;
 
     const payload = {
       toEmail:             TEST_RECIPIENT,
@@ -203,6 +285,7 @@ async function main() {
       certificateId,
       completedAt:         attempt.submittedAt.toISOString(),
       verifyUrl,
+      subject,
     };
 
     console.log(`  → [${attempt.module.toUpperCase()}] ${attempt.assessmentTitle}`);

@@ -88,7 +88,7 @@ export type { BlockAttemptResult as AttemptSubmitResult };
 interface AdaptiveAptitudeEngineProps {
   onComplete: (result: BlockAttemptResult) => void;
   assessmentCode?: string;
-  userId?: number;
+  userId?: number | string;
   mode?: 'trial' | 'main';
 }
 
@@ -114,6 +114,41 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
   userId,
   mode = 'main',
 }) => {
+  const normalizeBlock = (block: any): BlockData | null => {
+    if (!block) return null;
+    return {
+      ...block,
+      questions: Array.isArray(block.questions)
+        ? block.questions.map((q: any) => {
+            const rawType = String(q.metadata?.question_type ?? q.metadata?.kind ?? q.kind ?? q.type ?? 'mcq').toLowerCase();
+            let resolvedKind: 'mcq' | 'msq' | 'tf' | 'numerical' = 'mcq';
+            if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank')) {
+              resolvedKind = 'numerical';
+            } else if (rawType.includes('multi') || rawType.includes('msq')) {
+              resolvedKind = 'msq';
+            } else if (rawType.includes('true') || rawType.includes('tf')) {
+              resolvedKind = 'tf';
+            }
+            return {
+              ...q,
+              id: String(q.id ?? q.questionId ?? q.question_id),
+              category: q.category ?? q.subcategory ?? "General",
+              text: q.text ?? q.questionText ?? q.question_text ?? "",
+              imageUrl: q.imageUrl ?? q.image_url ?? undefined,
+              options: Array.isArray(q.options)
+                ? q.options.map((opt: any) => ({
+                    id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                    text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
+                  }))
+                : [],
+              kind: resolvedKind,
+              metadata: q.metadata ?? {},
+            };
+          })
+        : [],
+    };
+  };
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
@@ -181,7 +216,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     cacheRestoredRef.current = true;
     
     if (cachedSession.currentBlock) {
-      setCurrentBlock(cachedSession.currentBlock);
+      setCurrentBlock(normalizeBlock(cachedSession.currentBlock));
     }
     if (cachedSession.currentBlockNumber) {
       setCurrentBlockNumber(cachedSession.currentBlockNumber);
@@ -246,7 +281,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         const data = await response.json();
         const blockNumber = Number(data.currentBlockNumber ?? 1);
         setAttemptToken(data.attemptToken);
-        setCurrentBlock(data.currentBlock);
+        setCurrentBlock(normalizeBlock(data.currentBlock));
         setCurrentBlockNumber(blockNumber);
         setViewingBlockNumber(blockNumber);
         setTotalBlocks(data.totalBlocks ?? data.blockConfig?.blocksPerAssessment ?? 4);
@@ -259,7 +294,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         
         // Store the current block in allBlocks map
         const blocksMap = new Map<number, BlockData>();
-        blocksMap.set(blockNumber, data.currentBlock);
+        blocksMap.set(blockNumber, normalizeBlock(data.currentBlock)!);
         setAllBlocks(blocksMap);
 
         if (Array.isArray(data.currentBlock?.questions)) {
@@ -432,14 +467,14 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       // Store next block
       const nextBlockNum = currentBlockNumber + 1;
       const updatedBlocks = new Map(allBlocks);
-      updatedBlocks.set(nextBlockNum, result.nextBlock);
+      updatedBlocks.set(nextBlockNum, normalizeBlock(result.nextBlock)!);
       setAllBlocks(updatedBlocks);
 
       // Mark current block as completed and advance
       setCompletedBlocks(prev => new Set([...prev, currentBlockNumber]));
       setBlockTransitions(prev => ({ ...prev, [currentBlockNumber]: result.nextBlockDifficulty }));
 
-      setCurrentBlock(result.nextBlock);
+      setCurrentBlock(normalizeBlock(result.nextBlock));
       setCurrentBlockNumber(nextBlockNum);
       setViewingBlockNumber(nextBlockNum);
       setCurrentIndex(0);
@@ -461,7 +496,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     // Check if block is already loaded
     if (allBlocks.has(blockNum)) {
       const block = allBlocks.get(blockNum)!;
-      setCurrentBlock(block);
+      setCurrentBlock(normalizeBlock(block));
       setViewingBlockNumber(blockNum);
       setCurrentIndex(0);
       return;
@@ -496,10 +531,10 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       setAnswers(restoredAnswers);
 
       const updatedBlocks = new Map(allBlocks);
-      updatedBlocks.set(blockNum, blockData);
+      updatedBlocks.set(blockNum, normalizeBlock(blockData)!);
       setAllBlocks(updatedBlocks);
 
-      setCurrentBlock(blockData);
+      setCurrentBlock(normalizeBlock(blockData));
       setViewingBlockNumber(blockNum);
       setCurrentIndex(0);
     } catch (error) {

@@ -166,7 +166,8 @@ export function useAssessmentResults() {
       
       for (const assessment of modules) {
         try {
-          const submission = await getLatestSubmittedResult(assessment, email);
+          const dbModule = assessment === "communication" ? "grammar" : assessment;
+          const submission = await getLatestSubmittedResult(dbModule, email);
           if (cancelled) return;
           if (!submission) continue;
 

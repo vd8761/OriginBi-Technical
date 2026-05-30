@@ -47,6 +47,9 @@ export class TechAssessment {
     @Column({ name: "question_limit", type: "int", default: 0 })
     questionLimit!: number;
 
+    @Column({ name: "trial_question_limit", type: "int", default: 5 })
+    trialQuestionLimit!: number;
+
     @Column({ name: "categories", type: "jsonb", nullable: true })
     categories!: any;
 

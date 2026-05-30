@@ -15,10 +15,15 @@ export default function CommunicationClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = (searchParams.get('mode') as 'trial' | 'main') || 'main';
-    const assessmentCode = searchParams.get("assessmentCode") || "COMMUNICATION_DEFAULT";
+    const assessmentCode = searchParams.get("assessmentCode") || "TECH_COMM_001";
     const { markAssessmentComplete } = useAssessmentTracker();
 
     const handleComplete = (result: AttemptSubmitResult) => {
+        // Trial results are not saved or shown in the dashboard
+        if (mode === 'trial') {
+            router.push('/assessment?view=assessment&completed=trial');
+            return;
+        }
         const assessmentResult = mapSubmissionToAssessmentResult({
             assessmentId: "communication",
             submission: result,

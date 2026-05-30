@@ -116,7 +116,7 @@ export interface TopicMastery {
 export interface AdaptiveFinalReport {
   attemptToken: string;
   assessmentId: number;
-  userId: number;
+  userId: number | string;
   totalMarks: number;
   obtainedMarks: number;
   marksPercentage: number;
@@ -181,7 +181,7 @@ export async function getBlueprint(assessmentId: number): Promise<BlueprintConfi
 export async function generateBlock(params: {
   assessmentId: number;
   blockNumber: number;
-  userId: number;
+  userId: number | string;
   mode: "trial" | "main";
   attemptToken: string;
 }): Promise<BlockResponse> {
@@ -208,6 +208,33 @@ export async function completeBlock(params: {
   blockMetrics: BlockMetrics;
 }> {
   const res = await apiFetch<any>(`${BASE}/block/complete`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return res;
+}
+
+/**
+ * Complete a block and generate the next block in one unified API request.
+ * Reduces block transition loading times.
+ */
+export async function completeAndGenerateBlock(params: {
+  attemptToken: string;
+  blockNumber: number;
+  timeTaken: number;
+  answers: Record<string, string | string[]>;
+  questionTiming?: Record<string, number>;
+  assessmentId: number;
+  userId: number | string;
+  mode: "trial" | "main";
+}): Promise<{
+  alreadySnapshotted: boolean;
+  nextBlockDifficulty: Difficulty;
+  blockMetrics: BlockMetrics;
+  nextBlock: BlockResponse | null;
+  isLastBlock: boolean;
+}> {
+  const res = await apiFetch<any>(`${BASE}/block/complete-and-generate`, {
     method: "POST",
     body: JSON.stringify(params),
   });
@@ -266,7 +293,7 @@ export async function getAttemptStatus(attemptToken: string): Promise<{
 export async function submitAssessment(params: {
   attemptToken: string;
   assessmentId: number;
-  userId: number;
+  userId: number | string;
 }): Promise<AdaptiveFinalReport> {
   const res = await apiFetch<{ report: AdaptiveFinalReport }>(`${BASE}/submit`, {
     method: "POST",

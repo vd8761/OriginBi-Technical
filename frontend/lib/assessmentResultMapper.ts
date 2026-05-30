@@ -429,6 +429,8 @@ export const mapSubmissionToAssessmentResult = ({
 
 export const saveAssessmentResultToStorage = (result: AssessmentResult) => {
   if (typeof window === "undefined") return;
+  // Trial results are never persisted to the dashboard
+  if (result.mode === 'trial') return;
   const existingResults = JSON.parse(localStorage.getItem("originbi:assessment-results") || "{}");
   existingResults[result.assessmentId] = result;
   localStorage.setItem("originbi:assessment-results", JSON.stringify(existingResults));
