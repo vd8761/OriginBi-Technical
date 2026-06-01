@@ -20,7 +20,7 @@ import * as crypto from 'crypto';
 const TEST_RECIPIENT      = process.env.TEST_RECIPIENT      || 'jayakrishna0023@gmail.com';
 const SOURCE_USER_EMAIL   = process.env.SOURCE_USER_EMAIL   || TEST_RECIPIENT;
 const STUDENT_SERVICE_URL = process.env.STUDENT_SERVICE_URL || 'http://localhost:4004';
-const TECH_FRONTEND_URL   = process.env.TECH_FRONTEND_URL   || 'http://localhost:3000';
+const TECH_FRONTEND_URL   = process.env.TECH_FRONTEND_URL   || 'https://evaluation.originbi.com';
 const ASSESSMENT_SERVICE_URL = process.env.ASSESSMENT_SERVICE_URL || 'http://localhost:5000';
 const MODULE_FILTER       = (process.env.MODULE_FILTER || '').trim().toLowerCase();
 const ATTEMPT_TOKEN_FILTER = (process.env.ATTEMPT_TOKEN || '').trim();
