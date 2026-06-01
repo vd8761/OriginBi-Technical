@@ -3264,8 +3264,7 @@ export class AssessmentService {
         );
         const attemptMode = String(attemptRows[0]?.mode || '').trim().toLowerCase();
         if (attemptMode === 'trial') {
-          this.logger.log(`Attempt ${attemptToken} is in trial mode. Skipping certificate email.`);
-          return;
+          this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial mode`);
         }
       }
 
