@@ -120,29 +120,66 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       ...block,
       questions: Array.isArray(block.questions)
         ? block.questions.map((q: any) => {
-            const rawType = String(q.metadata?.question_type ?? q.metadata?.kind ?? q.kind ?? q.type ?? 'mcq').toLowerCase();
+            // Parse metadata if it is a JSON string
+            let meta = q.metadata ?? {};
+            if (typeof meta === 'string') {
+              try {
+                meta = JSON.parse(meta);
+              } catch (e) {
+                meta = {};
+              }
+            }
+
+            const rawType = String(meta?.question_type ?? meta?.kind ?? q.kind ?? q.type ?? '').toLowerCase();
+            const opts = Array.isArray(q.options) ? q.options : [];
             let resolvedKind: 'mcq' | 'msq' | 'tf' | 'numerical' = 'mcq';
+
             if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank')) {
               resolvedKind = 'numerical';
             } else if (rawType.includes('multi') || rawType.includes('msq')) {
               resolvedKind = 'msq';
             } else if (rawType.includes('true') || rawType.includes('tf')) {
               resolvedKind = 'tf';
+            } else if (opts.length === 1) {
+              resolvedKind = 'numerical';
+            } else if (opts.length === 2) {
+              // Check if it looks like a True/False question
+              const optTexts = opts.map(o => String(o.text ?? o.optionText ?? o.option_text ?? '').toLowerCase());
+              const isTFPattern = optTexts.every(t => 
+                t === '1' || t === '0' || t === '2' || 
+                t === 'true' || t === 'false' || 
+                t === 't' || t === 'f' ||
+                t === 'yes' || t === 'no' ||
+                t === 'y' || t === 'n'
+              );
+              if (isTFPattern) {
+                resolvedKind = 'tf';
+              }
             }
+
             return {
               ...q,
               id: String(q.id ?? q.questionId ?? q.question_id),
               category: q.category ?? q.subcategory ?? "General",
               text: q.text ?? q.questionText ?? q.question_text ?? "",
               imageUrl: q.imageUrl ?? q.image_url ?? undefined,
-              options: Array.isArray(q.options)
-                ? q.options.map((opt: any) => ({
-                    id: String(opt.id ?? opt.optionId ?? opt.option_id),
-                    text: opt.text ?? opt.optionText ?? opt.option_text ?? "",
-                  }))
-                : [],
+              options: opts.map((opt: any) => {
+                let text = opt.text ?? opt.optionText ?? opt.option_text ?? "";
+                if (resolvedKind === 'tf') {
+                  const lowerText = text.toLowerCase().trim();
+                  if (lowerText === '1' || lowerText === 'true' || lowerText === 't' || lowerText === 'yes' || lowerText === 'y') {
+                    text = 'True';
+                  } else if (lowerText === '0' || lowerText === '2' || lowerText === 'false' || lowerText === 'f' || lowerText === 'no' || lowerText === 'n') {
+                    text = 'False';
+                  }
+                }
+                return {
+                  id: String(opt.id ?? opt.optionId ?? opt.option_id),
+                  text,
+                };
+              }),
               kind: resolvedKind,
-              metadata: q.metadata ?? {},
+              metadata: meta,
             };
           })
         : [],
