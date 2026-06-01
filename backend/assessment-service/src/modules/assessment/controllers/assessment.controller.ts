@@ -17,10 +17,7 @@ export class AssessmentController {
 
   @Post('validate-certificate')
   async validateCertificate(@Body() body: { userId: number; examId: string; mode: 'trial' | 'main' }) {
-    // SECURITY: Only main assessments can generate certificates
-    if (body.mode !== 'main') {
-      throw new BadRequestException('Certificates are only available for main assessments');
-    }
+    // Both trial and main assessments can generate certificates
     
     const module = body.examId === 'communication' ? 'grammar' : body.examId;
     const result = await this.assessmentService.getLatestSubmittedResult(module, body.userId.toString());

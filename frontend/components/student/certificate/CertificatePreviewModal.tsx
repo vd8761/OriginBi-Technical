@@ -63,26 +63,29 @@ const assessmentCodeFor = (examId: string) => {
   }
 };
 
-const generateRandomCode = (length: number) => {
-  const out: string[] = [];
-  const size = SERIAL_CHARSET.length;
-  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
-    const buf = new Uint8Array(length);
-    window.crypto.getRandomValues(buf);
-    for (let i = 0; i < length; i += 1) {
-      out.push(SERIAL_CHARSET[buf[i] % size]);
-    }
-    return out.join("");
+const getDeterministicSuffix = (token: string): string => {
+  const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const cleanToken = String(token || "").trim();
+
+  let hash = 5381;
+  for (let i = 0; i < cleanToken.length; i++) {
+    hash = ((hash << 5) + hash) + cleanToken.charCodeAt(i);
+    hash |= 0;
   }
-  for (let i = 0; i < length; i += 1) {
-    out.push(SERIAL_CHARSET[Math.floor(Math.random() * size)]);
+
+  let seed = hash;
+  let resultStr = "";
+  for (let i = 0; i < 4; i++) {
+    seed = Math.imul(seed, 1664525) + 1013904223;
+    seed |= 0;
+    resultStr += charset[Math.abs(seed) % charset.length];
   }
-  return out.join("");
+  return resultStr;
 };
 
 /**
  * Returns a dynamic certificate description tailored to each assessment type.
- * Strictly 3 lines â€” modelled on the aptitude template word count.
+ * Strictly 3 lines — modelled on the aptitude template word count.
  * Format: "Awarded for successfully completing the [Title], [domain phrase] with
  * Grade [X] performance [Y]%, demonstrating exceptional proficiency and professional competency."
  */
@@ -129,25 +132,14 @@ const getVerificationUrl = (exam: Exam, result: AssessmentResult) => {
   const completedDate = new Date(result.completedAt);
   const dateCode = getYyMm(completedDate);
   const assessmentCode = assessmentCodeFor(exam.id);
-  const serialStorageKey = `originbi:cert-serial:${exam.id}:${result.completedAt}`;
-  const registrationPrefix = result.module === "tech" ? "TCX" : "OBX";
-  let serialNumber = "";
-
-  if (typeof window !== "undefined") {
-    const cached = window.localStorage.getItem(serialStorageKey);
-    if (cached) {
-      serialNumber = cached;
-    } else {
-      serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
-      window.localStorage.setItem(serialStorageKey, serialNumber);
-    }
-  } else {
-    serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${generateRandomCode(4)}`;
-  }
+  const registrationPrefix = "OBX"; // Standardized prefix to always match the backend
+  const token = result.attemptToken || (result as any).token || "";
+  const suffix = getDeterministicSuffix(token);
+  const serialNumber = `${registrationPrefix}-${dateCode}-${assessmentCode}-${suffix}`;
 
   return {
     serialNumber,
-    verificationUrl: `https://evaluation.originbi.com/verify/${serialNumber}?token=${result.attemptToken || (result as any).token || ""}&module=${exam.id}`,
+    verificationUrl: `https://evaluation.originbi.com/verify/${serialNumber}?token=${encodeURIComponent(token)}&module=${exam.id}`,
   };
 };
 
@@ -576,11 +568,11 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 
                       {/* ── Student Name ── */}
                       <div
-                        data-cqw="top:51.5"
+                        data-cqw="top:51.0"
                         style={{
                           position: "absolute",
                           left: "7%",
-                          top: "56.0cqw",
+                          top: "54.0cqw",
                         }}
                       >
                         <h2
@@ -609,7 +601,7 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
                         style={{
                           position: "absolute",
                           right: "6.2%",
-                          top: "73%",
+                          top: "74.5%",
                           pointerEvents: "none",
                           userSelect: "none",
                         }}
