@@ -470,7 +470,24 @@ export class AdaptiveBlueprintService {
   // Column existence check (cached)
   // ─────────────────────────────────────────────────────────────────────────
 
-  private readonly _colCache = new Map<string, boolean>();
+  private readonly _colCache = new Map<string, boolean>([
+    ['tech_aptitude_questions.mode', true],
+    ['tech_aptitude_questions.difficulty', true],
+    ['tech_aptitude_questions.metadata', true],
+    ['tech_aptitude_questions.image_url', true],
+    ['tech_grammar_questions.mode', true],
+    ['tech_grammar_questions.difficulty', true],
+    ['tech_grammar_questions.metadata', true],
+    ['tech_grammar_questions.image_url', true],
+    ['tech_mnc_questions.mode', true],
+    ['tech_mnc_questions.difficulty', true],
+    ['tech_mnc_questions.metadata', true],
+    ['tech_mnc_questions.image_url', true],
+    ['tech_role_questions.mode', true],
+    ['tech_role_questions.difficulty', true],
+    ['tech_role_questions.metadata', true],
+    ['tech_role_questions.image_url', true],
+  ]);
 
   private async columnExists(table: string, col: string): Promise<boolean> {
     const key = `${table}.${col}`;

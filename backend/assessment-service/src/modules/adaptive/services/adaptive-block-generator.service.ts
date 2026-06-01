@@ -29,7 +29,24 @@ import {
 @Injectable()
 export class AdaptiveBlockGeneratorService {
   private readonly logger = new Logger(AdaptiveBlockGeneratorService.name);
-  private readonly _colCache = new Map<string, boolean>();
+  private readonly _colCache = new Map<string, boolean>([
+    ['tech_aptitude_questions.mode', true],
+    ['tech_aptitude_questions.difficulty', true],
+    ['tech_aptitude_questions.metadata', true],
+    ['tech_aptitude_questions.image_url', true],
+    ['tech_grammar_questions.mode', true],
+    ['tech_grammar_questions.difficulty', true],
+    ['tech_grammar_questions.metadata', true],
+    ['tech_grammar_questions.image_url', true],
+    ['tech_mnc_questions.mode', true],
+    ['tech_mnc_questions.difficulty', true],
+    ['tech_mnc_questions.metadata', true],
+    ['tech_mnc_questions.image_url', true],
+    ['tech_role_questions.mode', true],
+    ['tech_role_questions.difficulty', true],
+    ['tech_role_questions.metadata', true],
+    ['tech_role_questions.image_url', true],
+  ]);
 
   constructor(
     private readonly dataSource: DataSource,
@@ -462,7 +479,8 @@ export class AdaptiveBlockGeneratorService {
                 q.${cfg.subcategoryCol} AS subcategory,
                 q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
          FROM ${cfg.questions} q
-         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}`,
+         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}
+         ORDER BY RANDOM() LIMIT 1000`,
         filterParams,
       );
 
@@ -474,7 +492,8 @@ export class AdaptiveBlockGeneratorService {
                   q.${cfg.subcategoryCol} AS subcategory,
                   q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
            FROM ${cfg.questions} q
-           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}`,
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
+           ORDER BY RANDOM() LIMIT 1000`,
           queryParams,
         );
       }
