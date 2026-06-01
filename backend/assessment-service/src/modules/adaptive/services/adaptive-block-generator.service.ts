@@ -442,15 +442,42 @@ export class AdaptiveBlockGeneratorService {
         queryParams.push(mode === 'trial' ? 'trial' : 'main');
       }
 
-      const allRows = await qr.query(
+      // Extract unique categories & subcategories from slots to limit database loading
+      const slotCats = [...new Set(slots.map(s => s.category))].filter(Boolean);
+      const slotSubs = [...new Set(slots.map(s => s.subcategory))].filter(Boolean);
+
+      let categoryFilter = '';
+      const filterParams = [...queryParams];
+      if (slotCats.length > 0 || slotSubs.length > 0) {
+        const catPlaceholders = slotCats.map((_, i) => `$${filterParams.length + i + 1}`).join(',');
+        const subPlaceholders = slotSubs.map((_, i) => `$${filterParams.length + slotCats.length + i + 1}`).join(',');
+
+        filterParams.push(...slotCats, ...slotSubs);
+        categoryFilter = `AND (q.${cfg.categoryCol}::text IN (${catPlaceholders}) OR q.${cfg.subcategoryCol}::text IN (${subPlaceholders}))`;
+      }
+
+      let allRows = await qr.query(
         `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
                 q.${cfg.categoryCol} AS category,
                 q.${cfg.subcategoryCol} AS subcategory,
                 q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
          FROM ${cfg.questions} q
-         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}`,
-        queryParams,
+         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}`,
+        filterParams,
       );
+
+      if (allRows.length < questionsThisBlock) {
+        this.logger.log(`Target category query returned only ${allRows.length} questions. Falling back to full assessment questions fetch.`);
+        allRows = await qr.query(
+          `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
+                  q.${cfg.categoryCol} AS category,
+                  q.${cfg.subcategoryCol} AS subcategory,
+                  q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
+           FROM ${cfg.questions} q
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}`,
+          queryParams,
+        );
+      }
 
       const candidates = allRows.map((q: any) => {
         const meta = typeof q.metadata === 'object' ? q.metadata : {};
