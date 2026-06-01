@@ -3187,7 +3187,9 @@ export class AssessmentService {
         role: 'tech_role_attempts',
       };
       const attemptsTable = attemptTableMap[finalModule];
-      if (attemptsTable) {
+      const tableMap = this.getTableMap();
+      const config = tableMap[finalModule];
+      if (attemptsTable && config?.hasMode) {
         const attemptRows = await this.dataSource.query(
           `SELECT mode FROM ${attemptsTable} WHERE attempt_token = $1 LIMIT 1`,
           [attemptToken],

@@ -310,10 +310,12 @@ const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = ({
 
   // Helper to determine Grade based on score
   const getGrade = (score: number) => {
-    if (score >= 90) return "A";
-    if (score >= 80) return "B";
-    if (score >= 70) return "C";
-    if (score >= 60) return "D";
+    if (score >= 90) return "A+";
+    if (score >= 80) return "A";
+    if (score >= 70) return "B+";
+    if (score >= 60) return "B";
+    if (score >= 50) return "C";
+    if (score >= 40) return "D";
     return "F";
   };
   const grade = getGrade(result.overallScore);
