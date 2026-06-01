@@ -3194,8 +3194,8 @@ export class AssessmentService {
         );
         const attemptMode = String(attemptRows[0]?.mode || '').trim().toLowerCase();
         if (attemptMode === 'trial') {
-          this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial mode`);
-          // Proceed with sending email for trial attempts too!
+          this.logger.log(`Attempt ${attemptToken} is in trial mode. Skipping certificate email.`);
+          return;
         }
       }
 
@@ -3259,7 +3259,7 @@ export class AssessmentService {
       // Build a stable certificate ID
       const dateCode = this.getYyMm(new Date(completedAt));
       const assessmentCode = this.assessmentCodeForEmail(finalModule);
-      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
+      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.getDeterministicSuffix(attemptToken)}`;
 
       const frontendUrl = process.env.TECH_FRONTEND_URL || 'https://evaluation.originbi.com';
       const verifyUrl = `${frontendUrl}/verify/${certificateId}?token=${encodeURIComponent(attemptToken)}&module=${encodeURIComponent(finalModule)}`;
@@ -3336,6 +3336,26 @@ export class AssessmentService {
     const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const buf = crypto.randomBytes(length);
     return Array.from(buf).map(b => charset[b % charset.length]).join('');
+  }
+
+  private getDeterministicSuffix(token: string): string {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const cleanToken = String(token || '').trim();
+    
+    let hash = 5381;
+    for (let i = 0; i < cleanToken.length; i++) {
+      hash = ((hash << 5) + hash) + cleanToken.charCodeAt(i);
+      hash |= 0;
+    }
+    
+    let seed = hash;
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      seed = Math.imul(seed, 1664525) + 1013904223;
+      seed |= 0;
+      result += charset[Math.abs(seed) % charset.length];
+    }
+    return result;
   }
 
   /**

@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import { headers } from "next/headers";
 import {
   ShieldCheck,
   Award,
@@ -62,10 +63,15 @@ export default async function VerifyCertificatePage({
   const { serialNumber } = resolvedParams;
   const { token, module: moduleParam } = resolvedSearchParams;
 
+  const headersList = await headers();
+  const host = headersList.get("host") || "evaluation.originbi.com";
+  const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
+  const publicApiBase = `${protocol}://${host}`;
+
   const apiBase =
     process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, "") ||
     process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
-    "http://localhost:5000";
+    publicApiBase;
 
   let resultData: any = null;
   let errorMsg: string | null = null;
