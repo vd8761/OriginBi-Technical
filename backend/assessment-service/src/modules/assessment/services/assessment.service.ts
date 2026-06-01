@@ -1103,8 +1103,25 @@ export class AssessmentService {
       objectiveAnsweredCount: number;
     }> = {};
 
-    const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-      const kind = String(rawKind || 'mcq').toLowerCase();
+    const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+      if (!meta) return 'mcq';
+      if (typeof meta === 'object') {
+        const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+        if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+          return 'numerical';
+        }
+        if (rawType.includes('multi') || rawType.includes('msq')) {
+          return 'msq';
+        }
+        if (rawType.includes('true') || rawType.includes('tf')) {
+          return 'tf';
+        }
+        const kind = String(meta.kind || 'mcq').toLowerCase();
+        if (kind === 'true_false') return 'tf';
+        if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+        return 'mcq';
+      }
+      const kind = String(meta).toLowerCase();
       if (kind === 'true_false') return 'tf';
       if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
       return 'mcq';
@@ -1198,7 +1215,7 @@ export class AssessmentService {
       const attemptMetadata = asObject(aq.attempt_metadata);
       const isObjectiveGrammar = isGrammar && (taskType === 'listening_mcq' || taskType === 'reading_mcq');
       const questionKind = (!isCoding && (!isGrammar || isObjectiveGrammar))
-        ? normalizeQuestionKind((questionMetadata as any).kind)
+        ? normalizeQuestionKind(questionMetadata)
         : null;
       const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
       const selectedAnswerValue =
@@ -1700,8 +1717,25 @@ export class AssessmentService {
           }
         }
 
-      const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-        const kind = String(rawKind || 'mcq').toLowerCase();
+      const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        if (!meta) return 'mcq';
+        if (typeof meta === 'object') {
+          const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+          if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+            return 'numerical';
+          }
+          if (rawType.includes('multi') || rawType.includes('msq')) {
+            return 'msq';
+          }
+          if (rawType.includes('true') || rawType.includes('tf')) {
+            return 'tf';
+          }
+          const kind = String(meta.kind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        }
+        const kind = String(meta).toLowerCase();
         if (kind === 'true_false') return 'tf';
         if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
         return 'mcq';
@@ -1712,7 +1746,7 @@ export class AssessmentService {
       const questionMetadata = mapping?.metadata && typeof mapping.metadata === 'object'
         ? mapping.metadata
         : {};
-      const kind = normalizeQuestionKind((questionMetadata as any)?.kind);
+      const kind = normalizeQuestionKind(questionMetadata);
       const isMsq = kind === 'msq';
       const isNumerical = kind === 'numerical';
       const shouldUseMetadataAnswer = isMsq || isNumerical;
@@ -1918,15 +1952,32 @@ export class AssessmentService {
           }
         }
 
-        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-          const kind = String(rawKind || 'mcq').toLowerCase();
+        const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+          if (!meta) return 'mcq';
+          if (typeof meta === 'object') {
+            const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+            if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+              return 'numerical';
+            }
+            if (rawType.includes('multi') || rawType.includes('msq')) {
+              return 'msq';
+            }
+            if (rawType.includes('true') || rawType.includes('tf')) {
+              return 'tf';
+            }
+            const kind = String(meta.kind || 'mcq').toLowerCase();
+            if (kind === 'true_false') return 'tf';
+            if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+            return 'mcq';
+          }
+          const kind = String(meta).toLowerCase();
           if (kind === 'true_false') return 'tf';
           if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
           return 'mcq';
         };
 
         const qMetadataForType = aq.question_metadata || {};
-        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType.kind) : null;
+        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType) : null;
         const review: any = {
           questionId: questionIdStr,
           displayOrder: Number(aq.display_order || 0),
@@ -2082,7 +2133,7 @@ export class AssessmentService {
             objectiveAnsweredCount++;
             
             const qMetadata = aq.question_metadata || {};
-            const kind = normalizeQuestionKind(qMetadata.kind);
+            const kind = normalizeQuestionKind(qMetadata);
             let isCorrectAnswer = false;
 
             // Update the review type to reflect the actual question kind
@@ -2796,8 +2847,25 @@ export class AssessmentService {
       // Per-block breakdown
       const blockMap: Record<number, { correct: number; total: number; positive: number; negative: number }> = {};
 
-      const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-        const kind = String(rawKind || 'mcq').toLowerCase();
+      const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        if (!meta) return 'mcq';
+        if (typeof meta === 'object') {
+          const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+          if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+            return 'numerical';
+          }
+          if (rawType.includes('multi') || rawType.includes('msq')) {
+            return 'msq';
+          }
+          if (rawType.includes('true') || rawType.includes('tf')) {
+            return 'tf';
+          }
+          const kind = String(meta.kind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        }
+        const kind = String(meta).toLowerCase();
         if (kind === 'true_false') return 'tf';
         if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
         return 'mcq';
@@ -2842,7 +2910,7 @@ export class AssessmentService {
         const blk = Number(aq.block_number ?? 0);
         const questionMetadata = asObject(aq.question_metadata);
         const attemptMetadata = asObject(aq.attempt_metadata);
-        const kind = normalizeQuestionKind((questionMetadata as any).kind);
+        const kind = normalizeQuestionKind(questionMetadata);
         const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
         const selectedAnswerValue =
           (kind === 'msq' || kind === 'numerical') &&
