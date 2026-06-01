@@ -451,6 +451,9 @@ export class AdaptiveBlockGeneratorService {
         : '';
       const extraColsSql = extraColsSelect ? `, ${extraColsSelect}` : '';
 
+      const imgOuterSelect = cfg.hasImageUrl && (await this.columnExists(cfg.questions, 'image_url')) ? ', image_url' : '';
+      const extraColsOuter = cfg.extraCols ? `, ${cfg.extraCols}` : '';
+
       const modeCondition = cfg.hasMode && modeExists
         ? `AND (q.mode = $2 OR q.mode IS NULL)`
         : '';
@@ -474,26 +477,44 @@ export class AdaptiveBlockGeneratorService {
       }
 
       let allRows = await qr.query(
-        `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
-                q.${cfg.categoryCol} AS category,
-                q.${cfg.subcategoryCol} AS subcategory,
-                q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
-         FROM ${cfg.questions} q
-         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}
-         ORDER BY RANDOM() LIMIT 1000`,
+        `WITH RankedQuestions AS (
+           SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect} AS difficulty,
+                  q.${cfg.categoryCol} AS category,
+                  q.${cfg.subcategoryCol} AS subcategory,
+                  q.marks AS marks, q.negative_marks AS negative_marks${imgSelect},
+                  ${metadataSelect} AS metadata${extraColsSql},
+                  ROW_NUMBER() OVER (
+                    PARTITION BY q.${cfg.categoryCol}, q.${cfg.subcategoryCol}, ${diffSelect} 
+                    ORDER BY RANDOM()
+                  ) as rn
+           FROM ${cfg.questions} q
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}
+         )
+         SELECT id, question_text, difficulty, category, subcategory, marks, negative_marks${imgOuterSelect}, metadata${extraColsOuter}
+         FROM RankedQuestions
+         WHERE rn <= 50`,
         filterParams,
       );
 
       if (allRows.length < questionsThisBlock) {
         this.logger.log(`Target category query returned only ${allRows.length} questions. Falling back to full assessment questions fetch.`);
         allRows = await qr.query(
-          `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
-                  q.${cfg.categoryCol} AS category,
-                  q.${cfg.subcategoryCol} AS subcategory,
-                  q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
-           FROM ${cfg.questions} q
-           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
-           ORDER BY RANDOM() LIMIT 1000`,
+          `WITH RankedQuestions AS (
+             SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect} AS difficulty,
+                    q.${cfg.categoryCol} AS category,
+                    q.${cfg.subcategoryCol} AS subcategory,
+                    q.marks AS marks, q.negative_marks AS negative_marks${imgSelect},
+                    ${metadataSelect} AS metadata${extraColsSql},
+                    ROW_NUMBER() OVER (
+                      PARTITION BY q.${cfg.categoryCol}, q.${cfg.subcategoryCol}, ${diffSelect} 
+                      ORDER BY RANDOM()
+                    ) as rn
+             FROM ${cfg.questions} q
+             WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
+           )
+           SELECT id, question_text, difficulty, category, subcategory, marks, negative_marks${imgOuterSelect}, metadata${extraColsOuter}
+           FROM RankedQuestions
+           WHERE rn <= 20`,
           queryParams,
         );
       }
