@@ -966,7 +966,7 @@ export class AssessmentService {
       if (snapshot) {
         const snap = snapshot as any;
         const userRows = await queryRunner.query(
-          `SELECT u.email, u.name, r.full_name, u.metadata 
+          `SELECT u.email, r.full_name, u.metadata 
            FROM users u 
            LEFT JOIN registrations r ON r.user_id = u.id 
            WHERE u.id = $1`,
@@ -3203,7 +3203,7 @@ export class AssessmentService {
 
       // Fetch user details
       const userRows = await this.dataSource.query(
-        `SELECT u.email, u.name, r.full_name, u.metadata 
+        `SELECT u.email, r.full_name, u.metadata 
          FROM users u 
          LEFT JOIN registrations r ON r.user_id = u.id 
          WHERE u.id = $1`,
