@@ -26,13 +26,15 @@ const MODULE_FILTER       = (process.env.MODULE_FILTER || '').trim().toLowerCase
 const ATTEMPT_TOKEN_FILTER = (process.env.ATTEMPT_TOKEN || '').trim();
 
 // ── DB pool ───────────────────────────────────────────────────────────────────
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     Number(process.env.DB_PORT || 5432),
-  user:     process.env.DB_USER     || 'postgres',
-  password: String(process.env.DB_PASS || '0023'),
-  database: process.env.DB_NAME     || 'originbi',
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : new Pool({
+      host:     process.env.DB_HOST     || 'localhost',
+      port:     Number(process.env.DB_PORT || 5432),
+      user:     process.env.DB_USER     || 'postgres',
+      password: String(process.env.DB_PASS || '0023'),
+      database: process.env.DB_NAME     || 'originbi',
+    });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const SERIAL_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
