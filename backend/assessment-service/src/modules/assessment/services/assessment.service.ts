@@ -474,11 +474,9 @@ export class AssessmentService {
         ? Number(assessment.trial_attempts_limit || 5)
         : Number(assessment.main_attempts_limit || 2);
 
+      // Bypassed: always allow unlimited attempts in startAttempt
       if (completedCount >= attemptLimit) {
-        await queryRunner.rollbackTransaction();
-        throw new BadRequestException(
-          `You have already completed this assessment ${attemptLimit} time(s) in ${requestedMode} mode. No more attempts allowed.`
-        );
+        this.logger.log(`Attempt limit reached (${completedCount}/${attemptLimit}) for user ${resolvedUserId} in mode ${requestedMode}, but allowing unlimited attempts.`);
       }
 
       const attemptToken = `${module.substring(0, 3).toUpperCase()}-${crypto.randomUUID()}`;
@@ -947,7 +945,6 @@ export class AssessmentService {
              FROM ${config.attempts}
              WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
              ORDER BY 
-               CASE WHEN mode = 'main' THEN 1 ELSE 2 END ASC,
                submitted_at DESC NULLS LAST, 
                updated_at DESC
              LIMIT 1`,
@@ -3197,7 +3194,7 @@ export class AssessmentService {
         );
         const attemptMode = String(attemptRows[0]?.mode || '').trim().toLowerCase();
         if (attemptMode === 'trial') {
-          this.logger.log(`Skipping certificate email: attempt ${attemptToken} is in trial mode`);
+          this.logger.log(`Attempt ${attemptToken} is in trial mode. Skipping certificate email.`);
           return;
         }
       }
@@ -3262,7 +3259,7 @@ export class AssessmentService {
       // Build a stable certificate ID
       const dateCode = this.getYyMm(new Date(completedAt));
       const assessmentCode = this.assessmentCodeForEmail(finalModule);
-      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.randomCode(4)}`;
+      const certificateId = `OBX-${dateCode}-${assessmentCode}-${this.getDeterministicSuffix(attemptToken)}`;
 
       const frontendUrl = process.env.TECH_FRONTEND_URL || 'https://evaluation.originbi.com';
       const verifyUrl = `${frontendUrl}/verify/${certificateId}?token=${encodeURIComponent(attemptToken)}&module=${encodeURIComponent(finalModule)}`;
@@ -3341,6 +3338,26 @@ export class AssessmentService {
     return Array.from(buf).map(b => charset[b % charset.length]).join('');
   }
 
+  private getDeterministicSuffix(token: string): string {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const cleanToken = String(token || '').trim();
+    
+    let hash = 5381;
+    for (let i = 0; i < cleanToken.length; i++) {
+      hash = ((hash << 5) + hash) + cleanToken.charCodeAt(i);
+      hash |= 0;
+    }
+    
+    let seed = hash;
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      seed = Math.imul(seed, 1664525) + 1013904223;
+      seed |= 0;
+      result += charset[Math.abs(seed) % charset.length];
+    }
+    return result;
+  }
+
   /**
    * Validates if user can start a new attempt for given assessment and mode
    * SECURITY: Server-side validation to prevent attempt limit bypass
@@ -3403,11 +3420,11 @@ export class AssessmentService {
       const completedResult = await queryRunner.query(completedQuery, completedParams);
       const currentCount = Number(completedResult[0]?.count || 0);
 
-      const canStart = currentCount < limit;
+      const canStart = true; // Always allow unlimited attempts
 
       return {
         canStart,
-        reason: canStart ? undefined : `Attempt limit exceeded (${currentCount}/${limit})`,
+        reason: undefined,
         currentCount,
         limit
       };

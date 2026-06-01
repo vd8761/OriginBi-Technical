@@ -543,8 +543,8 @@ export class AdaptiveAnalyticsService {
           [attemptToken],
         );
         if (attemptRows.length && attemptRows[0].mode !== 'main') {
-          this.logger.log(`Skipping certificate email: attempt ${attemptToken} is in trial mode`);
-          return;
+          this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial/practice mode`);
+          // Proceed with sending email for trial attempts too!
         }
       }
 
