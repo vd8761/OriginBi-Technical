@@ -115,9 +115,12 @@ async function main() {
   console.log(`  Frontend URL : ${TECH_FRONTEND_URL}`);
   console.log('─'.repeat(62));
 
-  // 1. Resolve user — users table has 'name' column (not first_name/last_name)
+  // 1. Resolve user
   const userRes = await pool.query(
-    `SELECT id, email, name FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+    `SELECT u.id, u.email, r.full_name, u.metadata 
+     FROM users u 
+     LEFT JOIN registrations r ON r.user_id = u.id 
+     WHERE LOWER(u.email) = LOWER($1) LIMIT 1`,
     [SOURCE_USER_EMAIL],
   );
 
@@ -127,7 +130,19 @@ async function main() {
   }
 
   const user = userRes.rows[0];
-  const userName: string = user.name || 'Jaya Krishna';
+  let meta: any = {};
+  if (user.metadata) {
+    try {
+      meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+    } catch {
+      meta = {};
+    }
+  }
+  const userName: string =
+    user.full_name ||
+    meta.fullName ||
+    meta.full_name ||
+    'Jaya Krishna';
 
   console.log(`\n✅  Found user: "${userName}" (id=${user.id}, email=${user.email})`);
 
