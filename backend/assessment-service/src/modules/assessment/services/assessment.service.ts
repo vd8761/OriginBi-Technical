@@ -474,11 +474,9 @@ export class AssessmentService {
         ? Number(assessment.trial_attempts_limit || 5)
         : Number(assessment.main_attempts_limit || 2);
 
+      // Bypassed: always allow unlimited attempts in startAttempt
       if (completedCount >= attemptLimit) {
-        await queryRunner.rollbackTransaction();
-        throw new BadRequestException(
-          `You have already completed this assessment ${attemptLimit} time(s) in ${requestedMode} mode. No more attempts allowed.`
-        );
+        this.logger.log(`Attempt limit reached (${completedCount}/${attemptLimit}) for user ${resolvedUserId} in mode ${requestedMode}, but allowing unlimited attempts.`);
       }
 
       const attemptToken = `${module.substring(0, 3).toUpperCase()}-${crypto.randomUUID()}`;
@@ -945,7 +943,6 @@ export class AssessmentService {
              FROM ${config.attempts}
              WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
              ORDER BY 
-               CASE WHEN mode = 'main' THEN 1 ELSE 2 END ASC,
                submitted_at DESC NULLS LAST, 
                updated_at DESC
              LIMIT 1`,
@@ -3195,8 +3192,8 @@ export class AssessmentService {
         );
         const attemptMode = String(attemptRows[0]?.mode || '').trim().toLowerCase();
         if (attemptMode === 'trial') {
-          this.logger.log(`Skipping certificate email: attempt ${attemptToken} is in trial mode`);
-          return;
+          this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial mode`);
+          // Proceed with sending email for trial attempts too!
         }
       }
 
@@ -3401,11 +3398,11 @@ export class AssessmentService {
       const completedResult = await queryRunner.query(completedQuery, completedParams);
       const currentCount = Number(completedResult[0]?.count || 0);
 
-      const canStart = currentCount < limit;
+      const canStart = true; // Always allow unlimited attempts
 
       return {
         canStart,
-        reason: canStart ? undefined : `Attempt limit exceeded (${currentCount}/${limit})`,
+        reason: undefined,
         currentCount,
         limit
       };

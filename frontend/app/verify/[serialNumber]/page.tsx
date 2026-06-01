@@ -64,6 +64,7 @@ export default async function VerifyCertificatePage({
 
   const apiBase =
     process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_TECH_API_URL?.replace(/\/$/, "") ||
     "http://localhost:5000";
 
   let resultData: any = null;

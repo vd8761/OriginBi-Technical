@@ -57,20 +57,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
       const raw = localStorage.getItem("originbi:assessment-results");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          // Strip out any trial-mode results that were saved before the fix
-          let changed = false;
-          for (const key of Object.keys(parsed)) {
-            if (parsed[key]?.mode === 'trial') {
-              delete parsed[key];
-              changed = true;
-            }
-          }
-          if (changed) {
-            localStorage.setItem("originbi:assessment-results", JSON.stringify(parsed));
-          }
+          // Both trial and main attempts are now preserved to display on the dashboard
           return Object.keys(parsed).length > 0;
-        }
       }
     } catch {}
     return false;

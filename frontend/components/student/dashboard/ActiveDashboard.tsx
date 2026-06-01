@@ -253,39 +253,18 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   const [selectedResult, setSelectedResult] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<{ exam: Exam; result: AssessmentResult } | null>(null);
 
-  // Clean up any trial-mode results that were incorrectly persisted before the fix
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem("originbi:assessment-results");
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object") return;
-      let changed = false;
-      for (const key of Object.keys(parsed)) {
-        if (parsed[key]?.mode === 'trial') {
-          delete parsed[key];
-          changed = true;
-        }
-      }
-      if (changed) {
-        localStorage.setItem("originbi:assessment-results", JSON.stringify(parsed));
-        window.dispatchEvent(new CustomEvent("originbi:results-changed"));
-      }
-    } catch {}
-  }, []);
+  // Both trial and main attempts are now preserved to display on the dashboard
+  useEffect(() => {}, []);
 
   const baseExamsList = dynamicExams || EXAMS;
   const purchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
   const unpurchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
-  const completedIds = Object.keys(results).filter(
-    (key) => results[key as AssessmentId]?.mode !== 'trial'
-  ) as AssessmentId[];
+  const completedIds = Object.keys(results) as AssessmentId[];
   const identity = deriveCareerIdentity(completedIds);
 
   const statusOf = (exam: Exam): "completed" | "pending" => {
     const res = getResult(exam.id as AssessmentId);
-    return res && res.mode !== 'trial' ? "completed" : "pending";
+    return res ? "completed" : "pending";
   };
 
   const completedCount = completedIds.length;
@@ -295,7 +274,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
     ? normalizeModuleKey(inProgressAttempt.module)
     : null;
   const hasCompletedInProgressModule = inProgressModuleKey
-    ? Boolean(results[inProgressModuleKey as AssessmentId] && results[inProgressModuleKey as AssessmentId]?.mode !== "trial")
+    ? Boolean(results[inProgressModuleKey as AssessmentId])
     : false;
   const effectiveInProgressAttempt = hasCompletedInProgressModule ? null : inProgressAttempt;
 
@@ -631,7 +610,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             {purchasedExams
               .filter(e => {
                 const res = getResult(e.id as AssessmentId);
-                return res && res.mode !== 'trial';
+                return !!res;
               })
               .map((exam, idx) => {
                 const result = getResult(exam.id as AssessmentId);
