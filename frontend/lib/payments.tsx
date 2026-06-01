@@ -25,6 +25,11 @@ const LEGACY_TECH_API_URL = TECH_API_BASE;
 const PAID_REFRESH_MS = 30000;
 const DEFAULT_VISIBLE_ASSESSMENTS = ["aptitude", "communication", "coding", "mnc", "role"];
 
+// Assessments that should be hidden from the explore UI regardless of what
+// the server's entitlements payload says. Flip an entry out of here to
+// re-enable. Kept as a Set so future additions stay O(1).
+const DISABLED_ASSESSMENTS = new Set<string>(["mnc"]);
+
 const isNetworkError = (err: any) => {
     if (err instanceof TypeError) return true;
     if (typeof err === "string") return /failed to fetch/i.test(err);
@@ -246,7 +251,9 @@ export function usePaidAssessments() {
 
     const isPaid = useCallback((key: PaymentKey) => set.has(key), [set]);
     const isVisible = useCallback((key: string) => {
+        if (DISABLED_ASSESSMENTS.has(key)) return false;
         if (key.startsWith("coding:")) {
+            if (DISABLED_ASSESSMENTS.has("coding")) return false;
             return visibleSet.has("coding") || visibleSet.has(key);
         }
         return visibleSet.has(key);
