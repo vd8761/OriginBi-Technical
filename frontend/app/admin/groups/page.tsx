@@ -292,6 +292,7 @@ function GroupsInner() {
       }
       loadMembers();
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGroupMembers([]);
     }
   }, [selectedGroup, membersRefreshTrigger]);
@@ -319,6 +320,7 @@ function GroupsInner() {
 
   // Reset pagination when search or filter updates
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [search, filter]);
 

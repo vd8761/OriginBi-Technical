@@ -96,7 +96,9 @@ function QuestionDetailsContent() {
 
   useEffect(() => {
     if (!questionId || !moduleParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError("Missing question ID or module parameter.");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
