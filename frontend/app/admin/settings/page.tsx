@@ -6,7 +6,6 @@ import {
   Award,
   Bell,
   Camera,
-  Code2,
   Cpu,
   Eye,
   Globe,
@@ -22,11 +21,10 @@ import {
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import { Badge, Card, PillTabs, ToggleSwitch, UnderDevelopment } from "@/components/admin/ui";
-import CodingSettingsTab from "@/components/admin/settings/CodingSettingsTab";
 import { MountPoint } from "@/plugins";
 import { IntervalSlider, ProctorRow } from "@/plugins/proctoringControls";
 
-type Tab = "coding" | "proctoring" | "general" | "scoring" | "notifications" | "integrations";
+type Tab = "proctoring" | "general" | "scoring" | "notifications" | "integrations";
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
@@ -656,10 +654,9 @@ function SettingsInner() {
     ],
   });
 
-  const [tab, setTab] = useState<Tab>("coding");
+  const [tab, setTab] = useState<Tab>("proctoring");
 
-  // The Coding tab is live (it persists to the exam-engine builder config).
-  // The other five tabs are still UI-only — they stay under the
+  // The tabs on this page are UI-only — they stay under the
   // UnderDevelopment placeholder so admins can't confuse them with working
   // settings.
   const dummyTabsUi = (
@@ -692,7 +689,6 @@ function SettingsInner() {
           value={tab}
           onChange={setTab}
           tabs={[
-            { value: "coding", label: "Coding", icon: <Code2 size={13} /> },
             { value: "proctoring", label: "Proctoring", icon: <ShieldCheck size={13} /> },
             { value: "general", label: "General Exam", icon: <SettingsIcon size={13} /> },
             { value: "scoring", label: "Scoring & Pass", icon: <Award size={13} /> },
@@ -702,15 +698,11 @@ function SettingsInner() {
         />
       </div>
 
-      {tab === "coding" ? (
-        <CodingSettingsTab />
-      ) : (
-        <UnderDevelopment
-          title="Workspace Settings"
-          note="The persistence layer isn't wired up yet — toggles on this page don't save anywhere. You can preview the intended layout below for design feedback."
-          dummy={dummyTabsUi}
-        />
-      )}
+      <UnderDevelopment
+        title="Workspace Settings"
+        note="The persistence layer isn't wired up yet — toggles on this page don't save anywhere. You can preview the intended layout below for design feedback."
+        dummy={dummyTabsUi}
+      />
     </div>
   );
 }

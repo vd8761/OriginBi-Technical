@@ -27,8 +27,8 @@ const run = async () => {
             `INSERT INTO tech_assessments
                 (assessment_code, assessment_name, module_type, total_time_minutes, total_questions,
                  shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value,
-                 status, created_by, created_at, updated_at)
-             VALUES ($1, $2, 'aptitude', $3, $4, $5, $6, $7, $8, 'active', $9, NOW(), NOW())
+                 status, created_by, email_sending_enabled, show_certificate_dashboard, created_at, updated_at)
+             VALUES ($1, $2, 'aptitude', $3, $4, $5, $6, $7, $8, 'active', $9, true, true, NOW(), NOW())
              ON CONFLICT (assessment_code)
              DO UPDATE SET
                  assessment_name = EXCLUDED.assessment_name,
@@ -39,6 +39,8 @@ const run = async () => {
                  negative_mark_enabled = EXCLUDED.negative_mark_enabled,
                  negative_mark_value = EXCLUDED.negative_mark_value,
                  status = EXCLUDED.status,
+                 email_sending_enabled = EXCLUDED.email_sending_enabled,
+                 show_certificate_dashboard = EXCLUDED.show_certificate_dashboard,
                  updated_at = NOW()
              RETURNING assessment_id`,
             [
