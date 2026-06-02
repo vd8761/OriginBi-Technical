@@ -1365,7 +1365,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                             {selectedRoles.length === 0 && (
                               <p className="text-xs font-semibold text-rose-500 mt-4 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-500/10 p-3 rounded-xl border border-rose-100 dark:border-rose-500/20">
                                 <Info className="w-4 h-4 shrink-0" />
-                                Please select at least one role. If no roles are selected, it will fall back to "All Roles" configuration automatically.
+                                Please select at least one role. If no roles are selected, it will fall back to &quot;All Roles&quot; configuration automatically.
                               </p>
                             )}
                           </motion.div>
