@@ -772,6 +772,55 @@
   font-family: 'codicon' !important;
 }
 
+/* Rendered markdown inside the question prompt (headings, code, lists, tables). */
+.coding-question-panel h1,
+.coding-question-panel h2,
+.coding-question-panel h3,
+.coding-question-panel h4 {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.1em 0 0.5em;
+}
+.coding-question-panel h1 { font-size: 19px; }
+.coding-question-panel h2 { font-size: 17px; }
+.coding-question-panel h3 { font-size: 15px; }
+.coding-question-panel h4,
+.coding-question-panel .obi-q-section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #1ED36A; }
+.coding-question-panel p { margin: 0.6em 0; }
+.coding-question-panel ul,
+.coding-question-panel ol { margin: 0.6em 0; padding-left: 1.4em; }
+.coding-question-panel li { margin: 0.25em 0; }
+.coding-question-panel a { color: #1ED36A; text-decoration: underline; }
+.coding-question-panel strong { color: #fff; font-weight: 700; }
+.coding-question-panel code {
+  font-family: 'Cascadia Code', 'Fira Code', ui-monospace, monospace !important;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+  color: #FFB703;
+}
+.coding-question-panel pre {
+  background: #0F1712;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.coding-question-panel pre code { background: none; border: 0; padding: 0; color: rgba(255,255,255,0.85); }
+.coding-question-panel blockquote {
+  border-left: 3px solid rgba(30,211,106,0.4);
+  margin: 0.8em 0;
+  padding: 0.2em 0 0.2em 1em;
+  color: rgba(255,255,255,0.6);
+}
+.coding-question-panel table { border-collapse: collapse; margin: 0.8em 0; font-size: 13px; }
+.coding-question-panel th,
+.coding-question-panel td { border: 1px solid rgba(255,255,255,0.12); padding: 5px 10px; text-align: left; }
+
 .coding-exam-root .hl-keyword { color: #AC96FF; font-weight: 600; }
 .coding-exam-root .hl-string  { color: #1ED36A; }
 .coding-exam-root .hl-number  { color: #FFB703; }
