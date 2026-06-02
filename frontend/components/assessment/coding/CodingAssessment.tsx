@@ -1612,6 +1612,20 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         terminationHandledRef.current = false;
     }, [backendAttemptId]);
 
+    // Backend-originated proctoring warnings funnel into the SAME single kernel
+    // toast as every other warning, so only one message shows at a time instead
+    // of a separate plugin toast stacking on top of this one.
+    useEffect(() => {
+        if (!pluginRuntime || !backendAttemptId || submitted) return;
+        return pluginRuntime.subscribe("attempt.warning-toast", (payload) => {
+            const data = payloadToRecord(payload);
+            showViolationToast(
+                String(data.title ?? "Proctoring warning"),
+                String(data.message ?? "Please follow the assessment rules."),
+            );
+        });
+    }, [pluginRuntime, backendAttemptId, submitted, showViolationToast]);
+
     useEffect(() => {
         if (!pluginRuntime || !backendAttemptId || submitted) return;
         return pluginRuntime.subscribe("attempt.terminate", (payload) => {
