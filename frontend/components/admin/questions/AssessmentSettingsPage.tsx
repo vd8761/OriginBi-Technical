@@ -99,6 +99,10 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [requireCameraMic, setRequireCameraMic] = useState(false);
   const [liveProctoringEnabled, setLiveProctoringEnabled] = useState(true);
 
+  // Email sending & Dashboard certificate settings
+  const [emailSendingEnabled, setEmailSendingEnabled] = useState(true);
+  const [showCertificateDashboard, setShowCertificateDashboard] = useState(true);
+
   // Adaptive Questions plugin state
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(false);
   const [adaptiveTotalQuestions, setAdaptiveTotalQuestions] = useState<number | "">(20);
@@ -253,6 +257,8 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         adaptive_total_marks: adaptiveTotalMarks === "" ? 100 : Number(adaptiveTotalMarks),
         adaptive_total_blocks: adaptiveTotalBlocks === "" ? 4 : Number(adaptiveTotalBlocks),
         adaptive_seconds_per_mark: adaptiveSecondsPerMark === "" ? 45 : Number(adaptiveSecondsPerMark),
+        email_sending_enabled: emailSendingEnabled,
+        show_certificate_dashboard: showCertificateDashboard,
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -451,6 +457,8 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     setAdaptiveTotalMarks(a.adaptive_total_marks !== undefined ? Number(a.adaptive_total_marks) : 100);
     setAdaptiveTotalBlocks(a.adaptive_total_blocks !== undefined ? Number(a.adaptive_total_blocks) : 4);
     setAdaptiveSecondsPerMark(a.adaptive_seconds_per_mark !== undefined ? Number(a.adaptive_seconds_per_mark) : 45);
+    setEmailSendingEnabled(a.email_sending_enabled !== false);
+    setShowCertificateDashboard(a.show_certificate_dashboard !== false);
 
     // Populate Question Types
     setEnabledQuestionKinds(parseQuestionKindEnabledMap(activeModule, a.enabled_question_types));
@@ -509,7 +517,9 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     matchesQuery(["Assessment Display Name", "The name shown to administrators and in assessment headers.", "name"]) ||
     matchesQuery(["Assessment Amount", "The fee or value associated with this assessment. Set to 0 if free.", "amount", "price", "cost", "fee", "rupees", "inr"]) ||
     matchesQuery(["Trial Attempts Limit", "Total number of trial attempts a candidate is allowed. Set to 0 for unlimited.", "trial", "attempts", "limit"]) ||
-    matchesQuery(["Main Attempts Limit", "Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.", "main", "attempts", "limit", "paid"]);
+    matchesQuery(["Main Attempts Limit", "Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.", "main", "attempts", "limit", "paid"]) ||
+    matchesQuery(["Email Sending Enabled", "Enable or disable automatic certificate emails to candidates upon completion.", "email", "sending", "completion"]) ||
+    matchesQuery(["Show Certificate in Dashboard", "Allow candidates to view and download their certificate from the student dashboard.", "show", "certificate", "dashboard"]);
 
   const hasQuestionTypeMatches = visibleQuestionKinds.some(kind => 
     matchesQuery([QUESTION_KIND_LABELS[kind], QUESTION_KIND_DESCRIPTIONS[kind], "question", "type", kind])
@@ -712,9 +722,25 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                         </div>
                       )}
                       {matchesQuery(["Main Attempts Limit", "Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.", "main", "attempts", "limit", "paid"]) && (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
                           <div className="sm:max-w-md"><label className={labelCls}>Main Attempts Limit</label><p className={descCls}>Total number of main/paid attempts a candidate is allowed. Set to 0 for unlimited.</p></div>
                           <div className="sm:max-w-[400px] w-full"><input type="number" min={0} value={mainAttemptsLimit} onChange={e => { const val = e.target.value; setMainAttemptsLimit(val === "" ? "" : Number(val)); markDirty(); }} className={inputCls} /></div>
+                        </div>
+                      )}
+                      {matchesQuery(["Email Sending Enabled", "Enable or disable automatic certificate emails to candidates upon completion.", "email", "sending", "completion"]) && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-slate-50 dark:border-white/[0.02]">
+                          <div className="sm:max-w-md"><label className={labelCls}>Email Sending Enabled</label><p className={descCls}>Enable or disable automatic certificate emails to candidates upon completion.</p></div>
+                          <div className="sm:max-w-[400px] w-full flex justify-end">
+                            <Switch checked={emailSendingEnabled} onCheckedChange={(val) => { setEmailSendingEnabled(val); markDirty(); }} />
+                          </div>
+                        </div>
+                      )}
+                      {matchesQuery(["Show Certificate in Dashboard", "Allow candidates to view and download their certificate from the student dashboard.", "show", "certificate", "dashboard"]) && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                          <div className="sm:max-w-md"><label className={labelCls}>Show Certificate in Dashboard</label><p className={descCls}>Allow candidates to view and download their certificate from the student dashboard.</p></div>
+                          <div className="sm:max-w-[400px] w-full flex justify-end">
+                            <Switch checked={showCertificateDashboard} onCheckedChange={(val) => { setShowCertificateDashboard(val); markDirty(); }} />
+                          </div>
                         </div>
                       )}
 

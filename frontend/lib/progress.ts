@@ -118,6 +118,7 @@ export interface AssessmentResult {
   questionReviews?: QuestionReviewItem[];
   insights: { type: "strength" | "improvement" | "time" | "pattern"; text: string }[];
   archetypeSnapshot?: string; // e.g. "Analytical Thinker"
+  showCertificateDashboard?: boolean;
 }
 
 const readResults = (): Record<string, AssessmentResult> => {

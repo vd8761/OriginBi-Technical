@@ -424,6 +424,7 @@ export const mapSubmissionToAssessmentResult = ({
     sections,
     questionReviews: reviews,
     insights,
+    showCertificateDashboard: (submission as any).showCertificateDashboard !== false,
   };
 };
 

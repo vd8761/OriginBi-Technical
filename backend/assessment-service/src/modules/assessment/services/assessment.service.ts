@@ -994,6 +994,21 @@ export class AssessmentService {
         }
       }
 
+      if (snapshot) {
+        const snap = snapshot as any;
+        const asmRows = await queryRunner.query(
+          `SELECT show_certificate_dashboard, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
+          [attempt.assessment_id],
+        );
+        if (asmRows.length) {
+          snap.showCertificateDashboard = asmRows[0].show_certificate_dashboard !== false;
+          snap.emailSendingEnabled = asmRows[0].email_sending_enabled !== false;
+        } else {
+          snap.showCertificateDashboard = true;
+          snap.emailSendingEnabled = true;
+        }
+      }
+
       return snapshot;
     } catch (error) {
       this.logger.error(`getLatestSubmittedResult (${module}) error:`, error);
@@ -3300,11 +3315,15 @@ export class AssessmentService {
         meta.firstName ||
         'Candidate';
 
-      // Fetch assessment title
+      // Fetch assessment details
       const assessmentRows = await this.dataSource.query(
-        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1`,
+        `SELECT assessment_name, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
         [assessmentId],
       );
+      if (assessmentRows.length && assessmentRows[0].email_sending_enabled === false) {
+        this.logger.log(`Skipping certificate email: email sending is disabled for assessment ${assessmentId}`);
+        return;
+      }
       const rawTitle: string =
         assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(finalModule);
 

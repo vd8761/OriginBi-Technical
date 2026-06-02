@@ -610,7 +610,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             {purchasedExams
               .filter(e => {
                 const res = getResult(e.id as AssessmentId);
-                return !!res;
+                return !!res && res.showCertificateDashboard !== false;
               })
               .map((exam, idx) => {
                 const result = getResult(exam.id as AssessmentId);
