@@ -73,6 +73,7 @@ const ACCENT_COLORS: Record<AssessmentType, { color: string; gradient: string }>
   mnc: { color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" },
   communication: { color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)" },
   role: { color: "#84cc16", gradient: "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)" },
+  coding: { color: "#f59e0b", gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" },
 };
 
 const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
@@ -80,6 +81,7 @@ const MODULE_ICONS: Record<AssessmentType, React.ReactNode> = {
   mnc: <MNCIcon className="w-7 h-7" />,
   communication: <CommunicationIcon className="w-7 h-7" />,
   role: <RoleIcon className="w-7 h-7" />,
+  coding: <Code2 className="w-7 h-7" />,
 };
 
 const MODULE_TAGS: Record<AssessmentType, string[]> = {
@@ -87,6 +89,7 @@ const MODULE_TAGS: Record<AssessmentType, string[]> = {
   mnc: ["DSA", "System Design", "Culture", "HR Prep"],
   communication: ["Listening", "Speaking", "Reading", "Writing"],
   role: ["Concepts", "Scenarios", "Judgement", "Role fit"],
+  coding: ["Languages", "Frameworks", "Testing", "Complexity"],
 };
 
 function getCatKey(q: AnyQuestion, t: AssessmentType): string {
@@ -95,6 +98,7 @@ function getCatKey(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": return (q as MNCQuestion).topic;
     case "communication": return (q as CommQuestion).taskType;
     case "role": return (q as RoleQuestion).questionType;
+    case "coding": return "coding";
   }
 }
 
@@ -104,6 +108,7 @@ function getFilterCategories(t: AssessmentType): { key: string; label: string; s
     case "mnc": return MNC_TOPICS.map(c => ({ key: c, label: c }));
     case "communication": return (Object.entries(COMM_TASK_LABELS) as [CommTaskType, string][]).map(([k, v]) => ({ key: k, label: v }));
     case "role": return (Object.entries(ROLE_QUESTION_TYPE_LABELS) as [RoleQuestionType, string][]).map(([k, v]) => ({ key: k, label: v }));
+    case "coding": return [{ key: "coding", label: "Coding" }];
   }
 }
 
@@ -113,6 +118,7 @@ function getSearchText(q: AnyQuestion, t: AssessmentType): string {
     case "mnc": { const m = q as MNCQuestion; return `${m.text} ${m.topic}`.toLowerCase(); }
     case "communication": { const c = q as CommQuestion; return `${c.instructions} ${c.prompt || ""} ${c.questions?.map(sq => sq.text).join(" ") || ""}`.toLowerCase(); }
     case "role": { const r = q as RoleQuestion; return `${r.text} ${r.category || ""} ${r.title || ""} ${r.scenarioContext || ""}`.toLowerCase(); }
+    case "coding": return q.text?.toLowerCase() || "";
   }
 }
 
@@ -225,6 +231,9 @@ function frontendToPayload(module: AssessmentType, q: AnyQuestion): CreateQuesti
       break;
     }
     case "role": category = (q as RoleQuestion).questionType; break;
+    case "coding":
+      category = "coding";
+      break;
   }
 
   // Build the complete metadata object containing all assessment-specific fields
@@ -313,6 +322,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     mnc: { trial: 0, main: 0 },
     communication: { trial: 0, main: 0 },
     role: { trial: 0, main: 0 },
+    coding: { trial: 0, main: 0 },
   });
   const [view, setView] = useState<"list" | "json-import">("list");
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
@@ -393,7 +403,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   useEffect(() => {
     const loadAllAssessments = async () => {
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
         const results: ApiAssessment[] = [];
         for (const m of modules) {
           const list = await fetchAssessments(m);
@@ -429,7 +439,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   const refreshModuleCounts = useCallback(async (module?: AssessmentType) => {
     const modules = module
       ? [module]
-      : (["aptitude", "mnc", "communication", "role"] as AssessmentType[]);
+      : (["aptitude", "mnc", "communication", "role", "coding"] as AssessmentType[]);
 
     await Promise.all(
       modules.map(async (currentModule) => {
@@ -941,6 +951,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
       mnc: { icon: Banknote, accentClass: "admin-acc-mnc", trial: 12, main: 86, categories: ["Aptitude", "Coding", "HR", "Comm"] },
       communication: { icon: MessageSquare, accentClass: "admin-acc-comm", trial: 8, main: 64, categories: ["Reading", "Writing", "Speaking"] },
       role: { icon: Target, accentClass: "admin-acc-role", trial: 14, main: 96, categories: ["Frontend", "Backend", "Data", "DevOps"] },
+      coding: { icon: Code, accentClass: "admin-acc-coding", trial: 0, main: 0, categories: ["Languages"] },
     };
 
     return (
@@ -1021,7 +1032,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 </div>
 
                 <div className="admin-control-row" style={{ marginTop: "auto", paddingTop: 16 }}>
-                  {isDbModule(at) && (
+                  {(isDbModule(at) || at === "coding") && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1034,8 +1045,12 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   )}
                   <button
                     onClick={() => {
-                      handleSelectModule(at);
-                      setView("list");
+                      if (at === "coding") {
+                        router.push("/admin/coding");
+                      } else {
+                        handleSelectModule(at);
+                        setView("list");
+                      }
                     }}
                     className="admin-btn admin-btn-primary"
                   >

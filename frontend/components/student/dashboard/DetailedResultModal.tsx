@@ -246,7 +246,7 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                   {[
                     { id: "summary", label: "Summary" },
                     { id: "analysis", label: "Analysis" },
-                    { id: "preview", label: "Attempt Preview" },
+                    ...(exam?.id !== "coding" ? [{ id: "preview", label: "Attempt Preview" }] : []),
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -297,37 +297,70 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
 
                         {/* Quick Stats */}
                         <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <ClockIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{result.timeTaken}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Time</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50">Avg: {timePerQ}m/q</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <TargetIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{answeredCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Answered</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <BarChartIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{correctCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Correct</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <AwardIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{wrongCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Wrong</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <AlertIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{skippedCount}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Skipped</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
-                            <BookIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{totalQuestions}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Qs</p>
-                          </div>
+                          {exam.id === "coding" ? (
+                            <>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <ClockIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{result.timeTaken}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Time</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50">Avg: {timePerQ}m/q</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <BookIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{totalQuestions}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Coding Qs</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <CheckIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{correctCount}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Fully Solved</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <TargetIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{answeredCount}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Attempted Qs</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <TrendUpIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{result.accuracy}%</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Overall Compliance</p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <ClockIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{result.timeTaken}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Time</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50">Avg: {timePerQ}m/q</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <TargetIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{answeredCount}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Answered</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <BarChartIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{correctCount}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Correct</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <AwardIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{wrongCount}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Wrong</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <AlertIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{skippedCount}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Skipped</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+                                <BookIcon c="w-4 h-4 text-gray-400 dark:text-white/40 mb-2" />
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{totalQuestions}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-white/50 uppercase tracking-wider">Total Qs</p>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
 

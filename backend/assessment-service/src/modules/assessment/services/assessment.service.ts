@@ -914,6 +914,9 @@ export class AssessmentService {
 
   async getLatestSubmittedResult(module: string, userIdParam?: any, attemptTokenParam?: string) {
     const dbModule = module === 'communication' ? 'grammar' : module;
+    if (dbModule === 'coding') {
+      return this.getCodingLatestSubmittedResult(userIdParam, attemptTokenParam);
+    }
     const tableMap = this.getTableMap();
     const config = tableMap[dbModule];
     // Coding lives in exam-engine, not here. Return null so DataHydration's
@@ -1012,6 +1015,274 @@ export class AssessmentService {
       return snapshot;
     } catch (error) {
       this.logger.error(`getLatestSubmittedResult (${module}) error:`, error);
+      throw error;
+    } finally {
+      if (queryRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+
+  async getCodingLatestSubmittedResult(userIdParam?: any, attemptTokenParam?: string) {
+    let queryRunner: any;
+    try {
+      queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+
+      let attemptRows: any[] = [];
+      const sanitizedToken = String(attemptTokenParam ?? '').trim();
+
+      if (sanitizedToken.length > 0) {
+        attemptRows = await queryRunner.query(
+          `SELECT *
+           FROM attempts
+           WHERE id = $1 AND status IN ('submitted', 'evaluated')
+           ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+           LIMIT 1`,
+          [sanitizedToken],
+        );
+      } else {
+        const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
+        if (resolvedUserId) {
+          attemptRows = await queryRunner.query(
+            `SELECT *
+             FROM attempts
+             WHERE candidate_user_id = $1 AND status IN ('submitted', 'evaluated')
+             ORDER BY 
+               submitted_at DESC NULLS LAST, 
+               created_at DESC
+             LIMIT 1`,
+            [resolvedUserId],
+          );
+        }
+      }
+
+      const attempt = attemptRows[0];
+      if (!attempt) return null;
+
+      const attemptId = attempt.id;
+
+      // Get exam_version details
+      const examVersionRows = await queryRunner.query(
+        `SELECT max_score::float8 FROM exam_versions WHERE id = $1`,
+        [attempt.exam_version_id]
+      );
+      const maxScore = examVersionRows[0]?.max_score || 0;
+      const totalScore = attempt.final_score !== null && attempt.final_score !== undefined
+        ? Number(attempt.final_score)
+        : 0;
+
+      const overallScorePercent = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+      // Fetch questions and answers
+      const questionRows = await queryRunner.query(
+        `SELECT eq.id as exam_question_id,
+                qv.id as question_version_id,
+                COALESCE(eq.score_override, qv.max_score)::float8 as max_score,
+                qv.body,
+                ans.id as answer_id,
+                ans.final_score::float8 as answer_score,
+                ans.payload
+         FROM exam_questions eq
+         JOIN question_versions qv ON qv.id = eq.question_version_id
+         LEFT JOIN answers ans ON ans.exam_question_id = eq.id AND ans.attempt_id = $1
+         WHERE eq.attempt_built_for = $1
+         ORDER BY eq.ordinal`,
+        [attemptId]
+      );
+
+      const sectionMap: Record<string, {
+        name: string;
+        score: number;
+        maxScore: number;
+        answeredCount: number;
+        totalCount: number;
+        correctCount: number;
+      }> = {};
+
+      const questionReviews: any[] = [];
+      let answeredCount = 0;
+      let correctCount = 0;
+
+      for (const row of questionRows) {
+        let body: any = {};
+        if (row.body) {
+          body = typeof row.body === 'string' ? JSON.parse(row.body) : row.body;
+        }
+
+        const category = body.category || body.section || 'General';
+        if (!sectionMap[category]) {
+          sectionMap[category] = {
+            name: category,
+            score: 0,
+            maxScore: 0,
+            answeredCount: 0,
+            totalCount: 0,
+            correctCount: 0,
+          };
+        }
+
+        const questionMarks = Number(row.max_score || 10);
+        sectionMap[category].totalCount += 1;
+        sectionMap[category].maxScore += questionMarks;
+
+        // Check code runs
+        let submittedCode = '';
+        let answerLanguage = '';
+        let codePassed = false;
+
+        if (row.answer_id) {
+          // Get code file
+          const codeRows = await queryRunner.query(
+            `SELECT csf.content, cs.language
+             FROM code_submissions cs
+             JOIN code_submission_files csf ON csf.submission_id = cs.id
+             WHERE cs.answer_id = $1
+             ORDER BY cs.created_at DESC
+             LIMIT 1`,
+            [row.answer_id]
+          );
+          if (codeRows.length > 0) {
+            submittedCode = codeRows[0].content || '';
+            answerLanguage = codeRows[0].language || '';
+          }
+
+          if (submittedCode.trim().length > 0) {
+            answeredCount++;
+            sectionMap[category].answeredCount++;
+          }
+
+          const answerScore = Number(row.answer_score || 0);
+          sectionMap[category].score += answerScore;
+          if (answerScore >= questionMarks) {
+            correctCount++;
+            sectionMap[category].correctCount++;
+            codePassed = true;
+          }
+        }
+
+        questionReviews.push({
+          questionId: String(row.exam_question_id),
+          displayOrder: questionReviews.length + 1,
+          category: category,
+          type: 'coding',
+          questionText: body.prompt || body.title || 'Coding Question',
+          selectedAnswerText: submittedCode || null,
+          correctAnswerText: '[Automated Test Cases Passed]',
+          isCorrect: codePassed,
+          status: submittedCode.trim().length > 0 ? (codePassed ? 'correct' : 'incorrect') : 'unanswered',
+        });
+      }
+
+      const sections = Object.values(sectionMap).map((sec) => {
+        const safeScore = sec.score < 0 ? 0 : sec.score;
+        const percentage = sec.maxScore > 0 ? Math.round((safeScore / sec.maxScore) * 100) : 0;
+        return {
+          name: sec.name,
+          score: safeScore,
+          maxScore: sec.maxScore,
+          percentage,
+          weight: `${safeScore}/${sec.maxScore}`,
+          answeredCount: sec.answeredCount,
+          totalCount: sec.totalCount,
+          correctCount: sec.correctCount,
+          wrongCount: Math.max(0, sec.answeredCount - sec.correctCount),
+          accuracyPct: sec.answeredCount > 0 ? Math.round((sec.correctCount / sec.answeredCount) * 100) : 0,
+        };
+      });
+
+      // Get user information
+      let candidateEmail = 'candidate@originbi.com';
+      let candidateName = 'Candidate';
+      const userRows = await queryRunner.query(
+        `SELECT u.email, r.full_name, u.metadata 
+         FROM users u 
+         LEFT JOIN registrations r ON r.user_id = u.id 
+         WHERE u.id = $1`,
+        [attempt.candidate_user_id],
+      );
+      if (userRows.length > 0) {
+        const user = userRows[0];
+        candidateEmail = user.email;
+        let meta: any = {};
+        if (user.metadata) {
+          meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+        }
+        candidateName = user.full_name || meta.fullName || meta.full_name || 'Candidate';
+      }
+
+      const submittedAt = attempt.submitted_at ? new Date(attempt.submitted_at) : null;
+      const startedAt = attempt.started_at ? new Date(attempt.started_at) : null;
+      const timeTakenSeconds = submittedAt && startedAt
+        ? Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / 1000))
+        : 0;
+
+      const response = {
+        success: true,
+        token: attempt.id,
+        attemptToken: attempt.id,
+        module: 'coding',
+        mode: attempt.mode || 'main',
+        overallScore: totalScore,
+        overallScorePercent,
+        totalScore,
+        maxScore,
+        positiveScore: totalScore,
+        negativeScore: 0,
+        accuracy: answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0,
+        timeTaken: timeTakenSeconds > 0 ? `${Math.max(1, Math.round(timeTakenSeconds / 60))} min` : '0 min',
+        timeTakenSeconds,
+        sections,
+        questionReviews,
+        candidateEmail,
+        candidateName,
+        showCertificateDashboard: true,
+        emailSendingEnabled: true,
+        status: 'completed',
+      };
+
+      if (attempt.status === 'evaluated') {
+        let fingerprint: any = {};
+        if (attempt.fingerprint) {
+          try {
+            fingerprint = typeof attempt.fingerprint === 'string'
+              ? JSON.parse(attempt.fingerprint)
+              : attempt.fingerprint;
+          } catch {
+            fingerprint = {};
+          }
+        }
+        if (!fingerprint || fingerprint.email_sent !== true) {
+          await queryRunner.query(
+            `UPDATE attempts 
+             SET fingerprint = jsonb_set(COALESCE(fingerprint, '{}'::jsonb), '{email_sent}', 'true'::jsonb)
+             WHERE id = $1`,
+            [attempt.id]
+          );
+
+          const techAssessmentRows = await queryRunner.query(
+            `SELECT assessment_id FROM tech_assessments WHERE module_type = 'coding' LIMIT 1`
+          );
+          const codingAssessmentId = techAssessmentRows[0]?.assessment_id
+            ? Number(techAssessmentRows[0].assessment_id)
+            : 15;
+
+          setImmediate(() => {
+            this.sendCertificateEmailForAttempt(
+              Number(attempt.candidate_user_id),
+              codingAssessmentId,
+              'coding',
+              overallScorePercent,
+              attempt.submitted_at ? new Date(attempt.submitted_at).toISOString() : new Date().toISOString(),
+              attempt.id,
+            ).catch(e => this.logger.error('Coding certificate email failed (non-fatal):', e));
+          });
+        }
+      }
+
+      return response;
+    } catch (error) {
+      this.logger.error(`getCodingLatestSubmittedResult error:`, error);
       throw error;
     } finally {
       if (queryRunner) {
