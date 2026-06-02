@@ -282,8 +282,8 @@ export class AssessmentService {
         options: 'tech_role_options',
         attemptIdCol: 'role_attempt_id',
         catCol: 'domain',
-        hasDifficulty: false,  // tech_role_questions has NO difficulty column
-        hasMode: false,        // tech_role_questions has NO mode column
+        hasDifficulty: true,
+        hasMode: true,
       },
       // Coding is intentionally absent. The tech_coding_* tables are retired;
       // coding questions live in exam-engine (`questions` with plugin_slug
@@ -912,6 +912,62 @@ export class AssessmentService {
     }
   }
 
+  /**
+   * Safely reads email_sending_enabled and show_certificate_dashboard from
+   * tech_assessments. If the columns do not yet exist in the database (i.e.,
+   * the migration has not been applied), PostgreSQL throws error 42703
+   * (undefined_column). We catch that specifically and fall back to the
+   * provided defaults so that the rest of the submit / result flow continues
+   * without a 500 error.
+   *
+   * Once migration 012_add_certificate_columns.sql has been applied this
+   * method will always succeed via the primary path.
+   */
+  private async readCertificateSettings(
+    queryRunner: any,
+    assessmentId: number,
+    moduleType: string,
+    defaults = { showCertificateDashboard: true, emailSendingEnabled: true },
+  ): Promise<{ showCertificateDashboard: boolean; emailSendingEnabled: boolean }> {
+    try {
+      let rows = await queryRunner.query(
+        `SELECT show_certificate_dashboard, email_sending_enabled
+           FROM tech_assessments
+          WHERE assessment_id = $1`,
+        [assessmentId],
+      );
+      if (!rows.length) {
+        rows = await queryRunner.query(
+          `SELECT show_certificate_dashboard, email_sending_enabled
+             FROM tech_assessments
+            WHERE module_type = $1
+            ORDER BY assessment_id DESC
+            LIMIT 1`,
+          [moduleType],
+        );
+      }
+      if (rows.length) {
+        return {
+          showCertificateDashboard: rows[0].show_certificate_dashboard !== false,
+          emailSendingEnabled: rows[0].email_sending_enabled !== false,
+        };
+      }
+      return defaults;
+    } catch (err: any) {
+      // PostgreSQL error 42703 = undefined_column — columns not yet migrated
+      const pgCode = err?.code ?? err?.driverError?.code ?? '';
+      if (pgCode === '42703') {
+        this.logger.warn(
+          `[readCertificateSettings] Columns email_sending_enabled/show_certificate_dashboard ` +
+          `not found on tech_assessments (assessment_id=${assessmentId}). ` +
+          `Run migration 012_add_certificate_columns.sql. Defaulting to ${JSON.stringify(defaults)}.`,
+        );
+        return defaults;
+      }
+      throw err;
+    }
+  }
+
   async getLatestSubmittedResult(module: string, userIdParam?: any, attemptTokenParam?: string) {
     const dbModule = module === 'communication' ? 'grammar' : module;
     if (dbModule === 'coding') {
@@ -999,17 +1055,13 @@ export class AssessmentService {
 
       if (snapshot) {
         const snap = snapshot as any;
-        const asmRows = await queryRunner.query(
-          `SELECT show_certificate_dashboard, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
-          [attempt.assessment_id],
+        const certSettings = await this.readCertificateSettings(
+          queryRunner,
+          attempt.assessment_id,
+          dbModule,
         );
-        if (asmRows.length) {
-          snap.showCertificateDashboard = asmRows[0].show_certificate_dashboard !== false;
-          snap.emailSendingEnabled = asmRows[0].email_sending_enabled !== false;
-        } else {
-          snap.showCertificateDashboard = true;
-          snap.emailSendingEnabled = true;
-        }
+        snap.showCertificateDashboard = certSettings.showCertificateDashboard;
+        snap.emailSendingEnabled = certSettings.emailSendingEnabled;
       }
 
       return snapshot;
@@ -1217,6 +1269,55 @@ export class AssessmentService {
         ? Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / 1000))
         : 0;
 
+      let codingAssessmentId: number | null = null;
+      let showCertificateDashboard = true;
+      let emailSendingEnabled = true;
+
+      const examSlugRows = await queryRunner.query(
+        `SELECT e.slug
+         FROM exam_versions ev
+         JOIN exams e ON e.id = ev.exam_id
+         WHERE ev.id = $1`,
+        [attempt.exam_version_id],
+      );
+      const examSlug = String(examSlugRows[0]?.slug || '').trim();
+
+      let codingAsmRows: any[] = [];
+      if (examSlug) {
+        try {
+          codingAsmRows = await queryRunner.query(
+            `SELECT assessment_id, show_certificate_dashboard, email_sending_enabled
+             FROM tech_assessments
+             WHERE assessment_code = $1
+             LIMIT 1`,
+            [examSlug],
+          );
+        } catch (err: any) {
+          const pgCode = err?.code ?? err?.driverError?.code ?? '';
+          if (pgCode !== '42703') throw err;
+          this.logger.warn('[getCodingLatestSubmittedResult] Certificate columns missing — run migration 012.');
+        }
+      }
+      if (!codingAsmRows.length) {
+        try {
+          codingAsmRows = await queryRunner.query(
+            `SELECT assessment_id, show_certificate_dashboard, email_sending_enabled
+             FROM tech_assessments
+             WHERE module_type = 'coding'
+             ORDER BY assessment_id DESC
+             LIMIT 1`,
+          );
+        } catch (err: any) {
+          const pgCode = err?.code ?? err?.driverError?.code ?? '';
+          if (pgCode !== '42703') throw err;
+        }
+      }
+      if (codingAsmRows.length) {
+        codingAssessmentId = Number(codingAsmRows[0].assessment_id);
+        showCertificateDashboard = codingAsmRows[0].show_certificate_dashboard !== false;
+        emailSendingEnabled = codingAsmRows[0].email_sending_enabled !== false;
+      }
+
       const response = {
         success: true,
         token: attempt.id,
@@ -1236,8 +1337,8 @@ export class AssessmentService {
         questionReviews,
         candidateEmail,
         candidateName,
-        showCertificateDashboard: true,
-        emailSendingEnabled: true,
+        showCertificateDashboard,
+        emailSendingEnabled,
         status: 'completed',
       };
 
@@ -1253,30 +1354,27 @@ export class AssessmentService {
           }
         }
         if (!fingerprint || fingerprint.email_sent !== true) {
-          await queryRunner.query(
-            `UPDATE attempts 
-             SET fingerprint = jsonb_set(COALESCE(fingerprint, '{}'::jsonb), '{email_sent}', 'true'::jsonb)
-             WHERE id = $1`,
-            [attempt.id]
-          );
+          if (emailSendingEnabled !== false) {
+            await queryRunner.query(
+              `UPDATE attempts 
+               SET fingerprint = jsonb_set(COALESCE(fingerprint, '{}'::jsonb), '{email_sent}', 'true'::jsonb)
+               WHERE id = $1`,
+              [attempt.id]
+            );
 
-          const techAssessmentRows = await queryRunner.query(
-            `SELECT assessment_id FROM tech_assessments WHERE module_type = 'coding' LIMIT 1`
-          );
-          const codingAssessmentId = techAssessmentRows[0]?.assessment_id
-            ? Number(techAssessmentRows[0].assessment_id)
-            : 15;
+            const resolvedAssessmentId = codingAssessmentId ?? 15;
 
-          setImmediate(() => {
-            this.sendCertificateEmailForAttempt(
-              Number(attempt.candidate_user_id),
-              codingAssessmentId,
-              'coding',
-              overallScorePercent,
-              attempt.submitted_at ? new Date(attempt.submitted_at).toISOString() : new Date().toISOString(),
-              attempt.id,
-            ).catch(e => this.logger.error('Coding certificate email failed (non-fatal):', e));
-          });
+            setImmediate(() => {
+              this.sendCertificateEmailForAttempt(
+                Number(attempt.candidate_user_id),
+                resolvedAssessmentId,
+                'coding',
+                overallScorePercent,
+                attempt.submitted_at ? new Date(attempt.submitted_at).toISOString() : new Date().toISOString(),
+                attempt.id,
+              ).catch(e => this.logger.error('Coding certificate email failed (non-fatal):', e));
+            });
+          }
         }
       }
 
@@ -2705,6 +2803,14 @@ export class AssessmentService {
         return orderA - orderB;
       });
 
+      const certSettings = await this.readCertificateSettings(
+        queryRunner,
+        attempt.assessment_id,
+        dbModule,
+      );
+      const showCertificateDashboard = certSettings.showCertificateDashboard;
+      const emailSendingEnabled = certSettings.emailSendingEnabled;
+
       const result = {
         success: true,
         token,
@@ -2727,6 +2833,8 @@ export class AssessmentService {
         timeTakenSeconds,
         completedAt: now.toISOString(),
         submittedAt: now.toISOString(),
+        showCertificateDashboard,
+        emailSendingEnabled,
         sections,
         questionReviews,
         status: 'completed',
@@ -3479,6 +3587,14 @@ export class AssessmentService {
         ).catch(e => this.logger.error('Certificate email failed (non-fatal):', e));
       });
 
+      const certSettingsBlock = await this.readCertificateSettings(
+        queryRunner,
+        attempt.assessment_id,
+        dbModule,
+      );
+      const showCertificateDashboard = certSettingsBlock.showCertificateDashboard;
+      const emailSendingEnabled = certSettingsBlock.emailSendingEnabled;
+
       return {
         success: true,
         token,
@@ -3500,6 +3616,8 @@ export class AssessmentService {
         completedAt: now.toISOString(),
         submittedAt: now.toISOString(),
         status: 'completed',
+        showCertificateDashboard,
+        emailSendingEnabled,
         // Dashboard data
         sections,
         weakCategories,
@@ -3587,10 +3705,20 @@ export class AssessmentService {
         'Candidate';
 
       // Fetch assessment details
-      const assessmentRows = await this.dataSource.query(
+      let assessmentRows = await this.dataSource.query(
         `SELECT assessment_name, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
         [assessmentId],
       );
+      if (!assessmentRows.length) {
+        assessmentRows = await this.dataSource.query(
+          `SELECT assessment_name, email_sending_enabled
+           FROM tech_assessments
+           WHERE module_type = $1
+           ORDER BY assessment_id DESC
+           LIMIT 1`,
+          [finalModule],
+        );
+      }
       if (assessmentRows.length && assessmentRows[0].email_sending_enabled === false) {
         this.logger.log(`Skipping certificate email: email sending is disabled for assessment ${assessmentId}`);
         return;

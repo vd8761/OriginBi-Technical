@@ -38,6 +38,8 @@ const buildFallbackSubmission = (
     timeTakenSeconds: report.timeTakenSeconds,
     sections,
     completedAt: new Date().toISOString(),
+    showCertificateDashboard: report.showCertificateDashboard,
+    emailSendingEnabled: report.emailSendingEnabled,
   };
 };
 

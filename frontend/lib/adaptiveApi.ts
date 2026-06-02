@@ -147,6 +147,8 @@ export interface AdaptiveFinalReport {
   skippedTopics: string[];
   recommendedTopics: string[];
   reliabilityDetail: any;
+  showCertificateDashboard?: boolean;
+  emailSendingEnabled?: boolean;
 }
 
 export interface BlueprintConfig {
