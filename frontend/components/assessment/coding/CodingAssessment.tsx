@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Video } from "lucide-react";
 import QuestionPanel from "./QuestionPanel";
+import { buildQuestionHtml } from "@/lib/markdown";
 import CodeEditor, { LANG_META, readPrefs, writePrefs } from "./CodeEditor";
 import SubmitModal, { type QStatus } from "./SubmitModal";
 import SubmittingModal, { type SubmitPhase } from "./SubmittingModal";
@@ -71,6 +72,10 @@ type SnapshotBody = Omit<Partial<Question>, "options" | "testCases"> & {
     title?: string;
     section?: string;
     prompt?: string;
+    promptFormat?: string;
+    inputFormat?: unknown;
+    outputFormat?: unknown;
+    constraintsFormat?: unknown;
     options?: Array<string | { label?: string; text?: string; value?: string }>;
     testCases?: { input?: string; stdin?: string; expected?: string; comparator?: string; comparatorConfig?: unknown }[];
 };
@@ -133,7 +138,9 @@ const mapSnapshotQuestion = (question: SnapshotQuestion): Question => {
         marks: question.score,
         section: body.section ?? "Coding",
         title: body.title ?? `Question ${question.ordinal}`,
-        prompt: body.prompt ?? "",
+        // Render the prompt (and Input/Output/Constraints) markdown to HTML so
+        // the candidate sees formatted text instead of raw `##` / backticks.
+        prompt: buildQuestionHtml(body),
         pretext: body.pretext,
         image: body.image,
         media: body.media,
@@ -1611,6 +1618,20 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     useEffect(() => {
         terminationHandledRef.current = false;
     }, [backendAttemptId]);
+
+    // Backend-originated proctoring warnings funnel into the SAME single kernel
+    // toast as every other warning, so only one message shows at a time instead
+    // of a separate plugin toast stacking on top of this one.
+    useEffect(() => {
+        if (!pluginRuntime || !backendAttemptId || submitted) return;
+        return pluginRuntime.subscribe("attempt.warning-toast", (payload) => {
+            const data = payloadToRecord(payload);
+            showViolationToast(
+                String(data.title ?? "Proctoring warning"),
+                String(data.message ?? "Please follow the assessment rules."),
+            );
+        });
+    }, [pluginRuntime, backendAttemptId, submitted, showViolationToast]);
 
     useEffect(() => {
         if (!pluginRuntime || !backendAttemptId || submitted) return;

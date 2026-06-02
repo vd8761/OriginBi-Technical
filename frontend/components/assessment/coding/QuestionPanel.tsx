@@ -29,26 +29,12 @@ const DifficultyBadge: React.FC<{ level: Difficulty }> = ({ level }) => {
 };
 
 const CodeBlock: React.FC<{ code: string; lang: string }> = ({ code, lang }) => {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
-        navigator.clipboard?.writeText(code).catch(() => { /* noop */ });
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-    };
     return (
         <div className="my-4 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0F1712]">
             <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.04] px-3.5 py-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1ED36A]">
                     {lang}
                 </span>
-                <button
-                    type="button"
-                    onClick={handleCopy}
-                    className={`bg-transparent border-0 cursor-pointer text-[11px] font-semibold transition-colors px-1.5 py-0.5 ${copied ? "text-[#1ED36A]" : "text-white/40 hover:text-white/70"
-                        }`}
-                >
-                    {copied ? "✓ Copied" : "Copy"}
-                </button>
             </div>
             <pre
                 className="m-0 px-4 py-3.5 overflow-x-auto text-[13px] leading-[1.6] text-white/85 font-mono"

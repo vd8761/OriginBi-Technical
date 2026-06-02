@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { PanelTopClose, ShieldAlert } from "lucide-react";
+import { PanelTopClose } from "lucide-react";
 import { Badge } from "@/components/admin/ui";
 import type { FrontendPlugin, PluginCtx } from "../types";
 import {
@@ -14,8 +13,6 @@ import {
 const PLUGIN_ID = "proctoring.tab-switch";
 const EVENT_SWITCHED = "proctoring.tab.switched";
 const EVENT_REFOCUSED = "proctoring.tab.refocused";
-const EVENT_WARNING = "attempt.warning-toast";
-const EVENT_TERMINATE = "attempt.terminate";
 
 interface TabSwitchConfig {
   enabled: boolean;
@@ -80,95 +77,12 @@ function TabSwitchSettingsCard({ ctx }: { ctx: PluginCtx }) {
   );
 }
 
-function WarningToast({ ctx }: { ctx: PluginCtx }) {
-  const [message, setMessage] = useState<{ title: string; body: string; tone: "warn" | "danger" } | null>(null);
-
-  const show = (title: string, body: string, tone: "warn" | "danger" = "warn") => {
-    setMessage({ title, body, tone });
-  };
-
-  useEffect(() => {
-    if (!message || message.tone === "danger") return;
-    const timer = setTimeout(() => {
-      setMessage(null);
-    }, 4500);
-    return () => clearTimeout(timer);
-  }, [message]);
-
-  useEffect(() => {
-    const cleanups = [
-      ctx.subscribe(EVENT_SWITCHED, (payload) => {
-        const data = payloadToRecord(payload);
-        const count = Number(data.count ?? 1);
-        const threshold = Number(data.threshold ?? ctx.config.threshold ?? 3);
-        const remaining = Math.max(0, threshold - count);
-        show(
-          "Tab switch detected",
-          remaining > 0
-            ? `${count} of ${threshold} recorded. Stay on this tab to avoid auto-submit.`
-            : "The tab-switch limit has been reached.",
-        );
-      }),
-      ctx.subscribe(EVENT_REFOCUSED, () => {
-        setMessage((prev) => {
-          if (prev && prev.tone !== "danger") {
-            return { ...prev };
-          }
-          return prev;
-        });
-      }),
-      ctx.subscribe(EVENT_WARNING, (payload) => {
-        const data = payloadToRecord(payload);
-        show(
-          String(data.title ?? "Proctoring warning"),
-          String(data.message ?? "Stay on this tab during the assessment."),
-        );
-      }),
-      ctx.subscribe(EVENT_TERMINATE, (payload) => {
-        const data = payloadToRecord(payload);
-        show(
-          String(data.title ?? "Assessment locked"),
-          String(data.message ?? "Your attempt is being submitted."),
-          "danger",
-        );
-      }),
-    ];
-    return () => {
-      for (const cleanup of cleanups) cleanup();
-    };
-  }, [ctx]);
-
-  if (!message) return null;
-
-  const danger = message.tone === "danger";
-  return (
-    <div className="pointer-events-none fixed left-1/2 top-20 z-[170] -translate-x-1/2">
-      <div
-        className="flex max-w-[440px] items-start gap-3 rounded-2xl px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-        style={{
-          background: "color-mix(in srgb, var(--c-card) 96%, transparent)",
-          border: `1px solid ${danger ? "rgba(237,47,52,0.55)" : "rgba(255,183,3,0.45)"}`,
-        }}
-      >
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
-          style={{
-            background: danger ? "rgba(237,47,52,0.16)" : "rgba(255,183,3,0.16)",
-            color: danger ? "#ED2F34" : "#FFB703",
-          }}
-        >
-          <ShieldAlert size={16} />
-        </div>
-        <div className="text-[12.5px] leading-snug">
-          <div className="font-bold" style={{ color: danger ? "#ff8a8d" : "var(--c-warn)" }}>
-            {message.title}
-          </div>
-          <div className="mt-0.5" style={{ color: "var(--c-text-soft)" }}>{message.body}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// NOTE: this plugin no longer renders its own warning toast. All proctoring
+// warnings (tab-switch, camera, fullscreen, copy/paste, backend
+// attempt.warning-toast, attempt.terminate) are funnelled into the single
+// kernel toast in CodingAssessment so only ONE message shows at a time. This
+// plugin keeps its visibility-detection runtime (which feeds the backend
+// counter) and its settings card.
 
 const proctoringTabSwitch: FrontendPlugin = {
   id: PLUGIN_ID,
@@ -217,19 +131,7 @@ const proctoringTabSwitch: FrontendPlugin = {
       label: "Tab Switching",
       Component: TabSwitchSettingsCard,
     },
-    {
-      mount: "attempt.warning-toast",
-      label: "Tab switch warnings",
-      Component: WarningToast,
-    },
   ],
 };
-
-function payloadToRecord(payload: unknown): Record<string, unknown> {
-  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    return payload as Record<string, unknown>;
-  }
-  return {};
-}
 
 export default proctoringTabSwitch;

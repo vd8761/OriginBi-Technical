@@ -5,12 +5,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+// defaultCodingQuestionCount caps how many questions a coding attempt draws
+// when the language has NO enabled builder config. Without this cap the builder
+// fell back to "serve the entire bank", which is the "loads all the questions I
+// uploaded" symptom. Configurable via DEFAULT_CODING_QUESTION_COUNT.
+func defaultCodingQuestionCount() int {
+	if v := strings.TrimSpace(os.Getenv("DEFAULT_CODING_QUESTION_COUNT")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 3
+}
 
 // pickedQuestion is the per-row output of pickCodingQuestions. It carries
 // enough to (a) write a per-attempt exam_questions row and (b) materialize
@@ -43,9 +58,9 @@ type spilloverReport struct {
 // reads the config (if present) and assembles the candidate's question set.
 //
 // Selection algorithm:
-//  1. Look up the per-language config. Missing row → default policy: take
-//     every eligible question (no difficulty quotas, no tag filter beyond
-//     "must allow this language").
+//  1. Look up the per-language config. Missing/disabled row → default policy:
+//     a balanced, capped default set (defaultCodingQuestionCount), NOT the
+//     whole bank.
 //  2. Query the active coding bank, randomly ordered, grouped by difficulty
 //     bucket (1–2 easy, 3–4 medium, 5+ hard).
 //  3. Pick min(configured, available) from each bucket.
@@ -80,13 +95,41 @@ func (s *Server) pickCodingQuestions(
 		buckets[b] = append(buckets[b], p)
 	}
 
-	// Default policy: no per-bucket quotas, just take everything matching.
+	// Default policy (no enabled config for this language): draw a sane,
+	// balanced default rather than dumping the entire bank. We aim for an even
+	// split across difficulty buckets, capped at defaultCodingQuestionCount(),
+	// and never error on a thin bank — take what's available.
 	if !hasCfg {
-		all := make([]pickedQuestion, 0, len(pool))
-		all = append(all, pool...)
-		return all, spilloverReport{
+		limit := defaultCodingQuestionCount()
+		if limit > len(pool) {
+			limit = len(pool)
+		}
+		order := []string{"easy", "medium", "hard"}
+		picked := []pickedQuestion{}
+		// Round-robin across buckets for a balanced spread.
+		for len(picked) < limit {
+			progressed := false
+			for _, b := range order {
+				if len(picked) >= limit {
+					break
+				}
+				if len(buckets[b]) > 0 {
+					picked = append(picked, buckets[b][0])
+					buckets[b] = buckets[b][1:]
+					progressed = true
+				}
+			}
+			if !progressed {
+				break
+			}
+		}
+		delivered := map[string]int{"easy": 0, "medium": 0, "hard": 0}
+		for _, p := range picked {
+			delivered[difficultyBucket(p.difficulty)]++
+		}
+		return picked, spilloverReport{
 			Targets:   map[string]int{"easy": 0, "medium": 0, "hard": 0},
-			Delivered: map[string]int{"easy": len(buckets["easy"]), "medium": len(buckets["medium"]), "hard": len(buckets["hard"])},
+			Delivered: delivered,
 		}, nil
 	}
 
@@ -164,8 +207,20 @@ func (s *Server) buildCodingFrozenSnapshot(
 	examVersionID, attemptID uuid.UUID,
 	languageSlug string,
 	totalSeconds int,
+	frozenQVIDs []string,
 ) (frozenAttemptSnapshot, spilloverReport, error) {
-	picked, spill, err := s.pickCodingQuestions(ctx, tx, languageSlug)
+	var picked []pickedQuestion
+	var spill spilloverReport
+	var err error
+	if len(frozenQVIDs) > 0 {
+		// "Configuration at the state of payment": this student already had a
+		// question set frozen on their assignment. Reuse the EXACT same
+		// questions for every attempt (including free retakes) rather than
+		// re-picking — the payload can't change once set.
+		picked, err = s.loadFrozenCodingQuestions(ctx, tx, frozenQVIDs)
+	} else {
+		picked, spill, err = s.pickCodingQuestions(ctx, tx, languageSlug)
+	}
 	if err != nil {
 		return frozenAttemptSnapshot{}, spill, err
 	}
@@ -200,10 +255,6 @@ func (s *Server) buildCodingFrozenSnapshot(
 		if err != nil {
 			return frozenAttemptSnapshot{}, spill, fmt.Errorf("insert per-attempt exam_question: %w", err)
 		}
-		// Pass the in-flight tx through so the per-question test-case lookups
-		// stay on the same connection — prevents pool-side calls from
-		// stalling on the connection the tx is already holding (the root
-		// cause of the "coding bank under-stocked: timeout" symptom).
 		candidateBody, err := s.candidateQuestionBody(ctx, tx, p.questionVersionID, p.title, p.difficulty, p.body)
 		if err != nil {
 			return frozenAttemptSnapshot{}, spill, err
@@ -217,18 +268,16 @@ func (s *Server) buildCodingFrozenSnapshot(
 		})
 	}
 
-	bareLang := strings.TrimPrefix(languageSlug, "language.")
+	language := strings.TrimPrefix(languageSlug, "language.")
 	return frozenAttemptSnapshot{
-		AssignmentRef:    "coding:" + bareLang,
-		Language:         bareLang,
+		AssignmentRef:    "coding:" + language,
+		Language:         language,
 		ExamVersionID:    examVersionID.String(),
 		TotalTimeSeconds: totalSeconds,
 		Questions:        questions,
 		CreatedAt:        time.Now().UTC(),
 	}, spill, nil
 }
-
-// ─── Helpers used by both the runtime builder and the preview endpoint ─────
 
 // builderConfig is the validated shape pickCodingQuestions operates on. Maps
 // 1:1 to the coding_language_configs row, minus UI-only fields.
@@ -249,6 +298,7 @@ func (s *Server) loadCodingConfigForBuilder(ctx context.Context, q snapshotQuery
 		       allow_spillover, include_tags
 		FROM coding_language_configs
 		WHERE language_slug = $1 AND question_type = 'coding'
+		  AND enabled = true
 	`, slug).Scan(
 		&cfg.TotalQuestions, &cfg.EasyCount, &cfg.MediumCount, &cfg.HardCount,
 		&cfg.AllowSpillover, &tags,
@@ -270,6 +320,7 @@ func (s *Server) loadCodingTimeOverride(ctx context.Context, q snapshotQueryer, 
 	err := q.QueryRow(ctx, `
 		SELECT time_seconds_override FROM coding_language_configs
 		WHERE language_slug = $1 AND question_type = 'coding'
+		  AND enabled = true
 	`, slug).Scan(&v)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -324,6 +375,42 @@ func (s *Server) queryCodingBankPool(
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// loadFrozenCodingQuestions loads a fixed set of question_versions by id,
+// preserving the frozen order. Used to reproduce a student's payment-time
+// question payload on every (re)attempt. Ids whose question was since deleted
+// are skipped silently.
+func (s *Server) loadFrozenCodingQuestions(ctx context.Context, q snapshotQueryer, ids []string) ([]pickedQuestion, error) {
+	rows, err := q.Query(ctx, `
+		SELECT qv.id, qq.title, qv.difficulty,
+		       COALESCE(qv.max_score, 0)::float8, qv.body
+		FROM question_versions qv
+		JOIN questions qq ON qq.id = qv.question_id
+		WHERE qv.id = ANY($1::uuid[])
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byID := map[string]pickedQuestion{}
+	for rows.Next() {
+		var p pickedQuestion
+		if err := rows.Scan(&p.questionVersionID, &p.title, &p.difficulty, &p.score, &p.body); err != nil {
+			return nil, err
+		}
+		byID[p.questionVersionID.String()] = p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]pickedQuestion, 0, len(ids))
+	for _, id := range ids {
+		if p, ok := byID[id]; ok {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 
 // codingLanguageSlugFromRef extracts the full language plugin slug

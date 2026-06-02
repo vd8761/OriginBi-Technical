@@ -411,6 +411,10 @@ interface MonacoEditorProps {
     suggestionsEnabled?: boolean;
     /** When false, language-service diagnostics (squiggles) are hidden. Default true. */
     lintsEnabled?: boolean;
+    /** When true, copy/cut/paste inside the editor are disabled (anti-cheat).
+     * Blocks the DOM clipboard events AND the Monaco Ctrl/Cmd+C/X/V keybindings.
+     * Default false so the admin authoring editors keep normal clipboard use. */
+    blockClipboard?: boolean;
     /** Called once after the editor instance is created, handing back an
      * imperative API. Used by the admin authoring panel to insert media
      * snippets at the caret from outside the editor's React tree. */
@@ -460,6 +464,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     findEnabled = true,
     suggestionsEnabled = true,
     lintsEnabled = true,
+    blockClipboard = false,
     onReady,
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -474,6 +479,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const suppressOnChange = useRef(false);
     const changeListenerRef = useRef<{ dispose: () => void } | null>(null);
     const tooltipTeardownRef = useRef<(() => void) | null>(null);
+    const clipboardTeardownRef = useRef<(() => void) | null>(null);
     const onReadyRef = useRef(onReady);
     useEffect(() => {
         onReadyRef.current = onReady;
@@ -722,6 +728,70 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
             tooltipTeardownRef.current = installFindTooltipObserver();
 
+            // Anti-cheat clipboard lock. Two layers because Monaco's Ctrl+V
+            // paste can bypass DOM clipboard events:
+            //   1) capture-phase DOM listeners catch context-menu / middle-click
+            //      paste, copy and cut on the editor node;
+            //   2) no-op actions override the Ctrl/Cmd+C/X/V (and Shift+Insert)
+            //      keybindings so Monaco's built-in clipboard actions don't run.
+            if (blockClipboard) {
+                const dom = editor.getDomNode();
+                if (dom) {
+                    const blockClip = (e: Event) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    };
+                    const blockBeforeInput = (e: InputEvent) => {
+                        if (e.inputType === "insertFromPaste") {
+                            blockClip(e);
+                        }
+                    };
+                    const blockKeys = (e: KeyboardEvent) => {
+                        const key = e.key.toLowerCase();
+                        const withModifier = e.ctrlKey || e.metaKey;
+                        const clipboardKey = withModifier && (key === "v" || key === "c" || key === "x");
+                        const shiftInsert = e.shiftKey && key === "insert";
+                        if (clipboardKey || shiftInsert) {
+                            blockClip(e);
+                        }
+                    };
+                    dom.addEventListener("paste", blockClip, true);
+                    dom.addEventListener("copy", blockClip, true);
+                    dom.addEventListener("cut", blockClip, true);
+                    dom.addEventListener("beforeinput", blockBeforeInput, true);
+                    dom.addEventListener("keydown", blockKeys, true);
+                    clipboardTeardownRef.current = () => {
+                        dom.removeEventListener("paste", blockClip, true);
+                        dom.removeEventListener("copy", blockClip, true);
+                        dom.removeEventListener("cut", blockClip, true);
+                        dom.removeEventListener("beforeinput", blockBeforeInput, true);
+                        dom.removeEventListener("keydown", blockKeys, true);
+                    };
+                }
+                const noop = () => {};
+                editor.addAction({
+                    id: "originbi.blockPaste",
+                    label: "Paste (disabled)",
+                    keybindings: [
+                        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
+                        monaco.KeyMod.Shift | monaco.KeyCode.Insert,
+                    ],
+                    run: noop,
+                });
+                editor.addAction({
+                    id: "originbi.blockCopy",
+                    label: "Copy (disabled)",
+                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC],
+                    run: noop,
+                });
+                editor.addAction({
+                    id: "originbi.blockCut",
+                    label: "Cut (disabled)",
+                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX],
+                    run: noop,
+                });
+            }
+
             onReadyRef.current?.({
                 insertAtCursor: (text: string) => {
                     const ed = editorRef.current;
@@ -742,6 +812,8 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
             changeListenerRef.current = null;
             tooltipTeardownRef.current?.();
             tooltipTeardownRef.current = null;
+            clipboardTeardownRef.current?.();
+            clipboardTeardownRef.current = null;
             editorRef.current?.dispose();
             editorRef.current = null;
             modelsRef.current.forEach((m) => {
