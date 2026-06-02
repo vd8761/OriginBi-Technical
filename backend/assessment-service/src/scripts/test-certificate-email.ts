@@ -20,19 +20,21 @@ import * as crypto from 'crypto';
 const TEST_RECIPIENT      = process.env.TEST_RECIPIENT      || 'jayakrishna0023@gmail.com';
 const SOURCE_USER_EMAIL   = process.env.SOURCE_USER_EMAIL   || TEST_RECIPIENT;
 const STUDENT_SERVICE_URL = process.env.STUDENT_SERVICE_URL || 'http://localhost:4004';
-const TECH_FRONTEND_URL   = process.env.TECH_FRONTEND_URL   || 'http://localhost:3000';
+const TECH_FRONTEND_URL   = process.env.TECH_FRONTEND_URL   || 'https://evaluation.originbi.com';
 const ASSESSMENT_SERVICE_URL = process.env.ASSESSMENT_SERVICE_URL || 'http://localhost:5000';
 const MODULE_FILTER       = (process.env.MODULE_FILTER || '').trim().toLowerCase();
 const ATTEMPT_TOKEN_FILTER = (process.env.ATTEMPT_TOKEN || '').trim();
 
 // ── DB pool ───────────────────────────────────────────────────────────────────
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     Number(process.env.DB_PORT || 5432),
-  user:     process.env.DB_USER     || 'postgres',
-  password: String(process.env.DB_PASS || '0023'),
-  database: process.env.DB_NAME     || 'originbi',
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : new Pool({
+      host:     process.env.DB_HOST     || 'localhost',
+      port:     Number(process.env.DB_PORT || 5432),
+      user:     process.env.DB_USER     || 'postgres',
+      password: String(process.env.DB_PASS || '0023'),
+      database: process.env.DB_NAME     || 'originbi',
+    });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const SERIAL_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -113,9 +115,12 @@ async function main() {
   console.log(`  Frontend URL : ${TECH_FRONTEND_URL}`);
   console.log('─'.repeat(62));
 
-  // 1. Resolve user — users table has 'name' column (not first_name/last_name)
+  // 1. Resolve user
   const userRes = await pool.query(
-    `SELECT id, email, name FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+    `SELECT u.id, u.email, r.full_name, u.metadata 
+     FROM users u 
+     LEFT JOIN registrations r ON r.user_id = u.id 
+     WHERE LOWER(u.email) = LOWER($1) LIMIT 1`,
     [SOURCE_USER_EMAIL],
   );
 
@@ -125,7 +130,19 @@ async function main() {
   }
 
   const user = userRes.rows[0];
-  const userName: string = user.name || 'Jaya Krishna';
+  let meta: any = {};
+  if (user.metadata) {
+    try {
+      meta = typeof user.metadata === 'string' ? JSON.parse(user.metadata) : user.metadata;
+    } catch {
+      meta = {};
+    }
+  }
+  const userName: string =
+    user.full_name ||
+    meta.fullName ||
+    meta.full_name ||
+    'Jaya Krishna';
 
   console.log(`\n✅  Found user: "${userName}" (id=${user.id}, email=${user.email})`);
 

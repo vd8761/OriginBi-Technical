@@ -166,8 +166,25 @@ export class AdaptiveBlockService {
     return order[idx];
   }
 
-  private normalizeQuestionKind(rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' {
-    const kind = String(rawKind || 'mcq').toLowerCase();
+  private normalizeQuestionKind(meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' {
+    if (!meta) return 'mcq';
+    if (typeof meta === 'object') {
+      const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+      if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+        return 'numerical';
+      }
+      if (rawType.includes('multi') || rawType.includes('msq')) {
+        return 'msq';
+      }
+      if (rawType.includes('true') || rawType.includes('tf')) {
+        return 'tf';
+      }
+      const kind = String(meta.kind || 'mcq').toLowerCase();
+      if (kind === 'true_false') return 'tf';
+      if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+      return 'mcq';
+    }
+    const kind = String(meta).toLowerCase();
     if (kind === 'true_false') return 'tf';
     if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
     return 'mcq';
@@ -408,7 +425,7 @@ export class AdaptiveBlockService {
           : rawSel;
         const questionMetadata = this.asObject(aq.question_metadata);
         const attemptMetadata = this.asObject(aq.attempt_metadata);
-        const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+        const kind = this.normalizeQuestionKind(questionMetadata);
         const qMarks = Number(aq.marks || 1);
         const negMarks = aq.negative_mark_enabled
           ? Number(aq.negative_marks || aq.negative_mark_value || 0)
@@ -599,7 +616,7 @@ export class AdaptiveBlockService {
           : rawSel;
         const questionMetadata = this.asObject(aq.question_metadata);
         const attemptMetadata = this.asObject(aq.attempt_metadata);
-        const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+        const kind = this.normalizeQuestionKind(questionMetadata);
         const hasAnswer = Array.isArray(sel)
           ? sel.length > 0
           : !(sel === undefined || sel === null || sel === '');
@@ -724,7 +741,7 @@ export class AdaptiveBlockService {
       const opts = optionsMap.get(qIdStr) ?? [];
       const questionMetadata = this.asObject(r.question_metadata);
       const attemptMetadata = this.asObject(r.attempt_metadata);
-      const kind = this.normalizeQuestionKind((questionMetadata as any).kind);
+      const kind = this.normalizeQuestionKind(questionMetadata);
       const selectedValue =
         (kind === 'msq' || kind === 'numerical')
           ? ((attemptMetadata as any).submittedAnswer ?? null)

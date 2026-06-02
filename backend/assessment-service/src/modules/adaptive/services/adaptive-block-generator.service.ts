@@ -29,7 +29,24 @@ import {
 @Injectable()
 export class AdaptiveBlockGeneratorService {
   private readonly logger = new Logger(AdaptiveBlockGeneratorService.name);
-  private readonly _colCache = new Map<string, boolean>();
+  private readonly _colCache = new Map<string, boolean>([
+    ['tech_aptitude_questions.mode', true],
+    ['tech_aptitude_questions.difficulty', true],
+    ['tech_aptitude_questions.metadata', true],
+    ['tech_aptitude_questions.image_url', true],
+    ['tech_grammar_questions.mode', true],
+    ['tech_grammar_questions.difficulty', true],
+    ['tech_grammar_questions.metadata', true],
+    ['tech_grammar_questions.image_url', true],
+    ['tech_mnc_questions.mode', true],
+    ['tech_mnc_questions.difficulty', true],
+    ['tech_mnc_questions.metadata', true],
+    ['tech_mnc_questions.image_url', true],
+    ['tech_role_questions.mode', true],
+    ['tech_role_questions.difficulty', true],
+    ['tech_role_questions.metadata', true],
+    ['tech_role_questions.image_url', true],
+  ]);
 
   constructor(
     private readonly dataSource: DataSource,
@@ -434,6 +451,9 @@ export class AdaptiveBlockGeneratorService {
         : '';
       const extraColsSql = extraColsSelect ? `, ${extraColsSelect}` : '';
 
+      const imgOuterSelect = cfg.hasImageUrl && (await this.columnExists(cfg.questions, 'image_url')) ? ', image_url' : '';
+      const extraColsOuter = cfg.extraCols ? `, ${cfg.extraCols}` : '';
+
       const modeCondition = cfg.hasMode && modeExists
         ? `AND (q.mode = $2 OR q.mode IS NULL)`
         : '';
@@ -442,15 +462,62 @@ export class AdaptiveBlockGeneratorService {
         queryParams.push(mode === 'trial' ? 'trial' : 'main');
       }
 
-      const allRows = await qr.query(
-        `SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect},
-                q.${cfg.categoryCol} AS category,
-                q.${cfg.subcategoryCol} AS subcategory,
-                q.marks, q.negative_marks${imgSelect}, ${metadataSelect}${extraColsSql}
-         FROM ${cfg.questions} q
-         WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}`,
-        queryParams,
+      // Extract unique categories & subcategories from slots to limit database loading
+      const slotCats = [...new Set(slots.map(s => s.category))].filter(Boolean);
+      const slotSubs = [...new Set(slots.map(s => s.subcategory))].filter(Boolean);
+
+      let categoryFilter = '';
+      const filterParams = [...queryParams];
+      if (slotCats.length > 0 || slotSubs.length > 0) {
+        const catPlaceholders = slotCats.map((_, i) => `$${filterParams.length + i + 1}`).join(',');
+        const subPlaceholders = slotSubs.map((_, i) => `$${filterParams.length + slotCats.length + i + 1}`).join(',');
+
+        filterParams.push(...slotCats, ...slotSubs);
+        categoryFilter = `AND (q.${cfg.categoryCol}::text IN (${catPlaceholders}) OR q.${cfg.subcategoryCol}::text IN (${subPlaceholders}))`;
+      }
+
+      let allRows = await qr.query(
+        `WITH RankedQuestions AS (
+           SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect} AS difficulty,
+                  q.${cfg.categoryCol} AS category,
+                  q.${cfg.subcategoryCol} AS subcategory,
+                  q.marks AS marks, q.negative_marks AS negative_marks${imgSelect},
+                  ${metadataSelect} AS metadata${extraColsSql},
+                  ROW_NUMBER() OVER (
+                    PARTITION BY q.${cfg.categoryCol}, q.${cfg.subcategoryCol}, ${diffSelect} 
+                    ORDER BY RANDOM()
+                  ) as rn
+           FROM ${cfg.questions} q
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}
+         )
+         SELECT id, question_text, difficulty, category, subcategory, marks, negative_marks${imgOuterSelect}, metadata${extraColsOuter}
+         FROM RankedQuestions
+         WHERE rn <= 50`,
+        filterParams,
       );
+
+      if (allRows.length < questionsThisBlock) {
+        this.logger.log(`Target category query returned only ${allRows.length} questions. Falling back to full assessment questions fetch.`);
+        allRows = await qr.query(
+          `WITH RankedQuestions AS (
+             SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect} AS difficulty,
+                    q.${cfg.categoryCol} AS category,
+                    q.${cfg.subcategoryCol} AS subcategory,
+                    q.marks AS marks, q.negative_marks AS negative_marks${imgSelect},
+                    ${metadataSelect} AS metadata${extraColsSql},
+                    ROW_NUMBER() OVER (
+                      PARTITION BY q.${cfg.categoryCol}, q.${cfg.subcategoryCol}, ${diffSelect} 
+                      ORDER BY RANDOM()
+                    ) as rn
+             FROM ${cfg.questions} q
+             WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
+           )
+           SELECT id, question_text, difficulty, category, subcategory, marks, negative_marks${imgOuterSelect}, metadata${extraColsOuter}
+           FROM RankedQuestions
+           WHERE rn <= 20`,
+          queryParams,
+        );
+      }
 
       const candidates = allRows.map((q: any) => {
         const meta = typeof q.metadata === 'object' ? q.metadata : {};

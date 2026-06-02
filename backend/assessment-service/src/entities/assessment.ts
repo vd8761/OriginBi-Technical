@@ -153,6 +153,12 @@ export class TechAssessment {
     @Column({ name: "block_config", type: "jsonb", nullable: true })
     blockConfig!: any;
 
+    @Column({ name: "email_sending_enabled", type: "boolean", default: true })
+    emailSendingEnabled!: boolean;
+
+    @Column({ name: "show_certificate_dashboard", type: "boolean", default: true })
+    showCertificateDashboard!: boolean;
+
     @ManyToOne(() => UserEntity, { nullable: false })
     @JoinColumn({ name: "created_by" })
     createdBy!: UserEntity;
