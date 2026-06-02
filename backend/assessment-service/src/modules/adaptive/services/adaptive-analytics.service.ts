@@ -56,6 +56,27 @@ export class AdaptiveAnalyticsService {
       );
       const moduleType = asmRows[0]?.module_type ?? 'aptitude';
 
+      // Resolve the actual user_id from the database attempt record based on attemptToken
+      let resolvedUserId = userId;
+      const attemptTableMap: Record<string, string> = {
+        aptitude: 'tech_aptitude_attempts',
+        grammar: 'tech_grammar_attempts',
+        communication: 'tech_grammar_attempts',
+        mnc: 'tech_mnc_attempts',
+        role: 'tech_role_attempts',
+      };
+      const attemptsTable = attemptTableMap[moduleType];
+      if (attemptsTable) {
+        const attemptRows = await this.dataSource.query(
+          `SELECT user_id FROM ${attemptsTable} WHERE attempt_token = $1 LIMIT 1`,
+          [attemptToken],
+        );
+        if (attemptRows.length && attemptRows[0].user_id) {
+          resolvedUserId = Number(attemptRows[0].user_id);
+          this.logger.log(`computeAndPersistFinalReport: Resolved actual user_id ${resolvedUserId} from database for attempt ${attemptToken} (passed userId was ${userId})`);
+        }
+      }
+
       // 2. Load all block attempts (for adaptive path)
       const blockAttempts = await this.dataSource.query(
         `SELECT block_number, difficulty_achieved, marks_score, adaptive_accuracy,
@@ -225,7 +246,7 @@ export class AdaptiveAnalyticsService {
       const report: AdaptiveFinalReport = {
         attemptToken,
         assessmentId,
-        userId,
+        userId: resolvedUserId,
         totalMarks,
         obtainedMarks,
         marksPercentage,
@@ -268,7 +289,7 @@ export class AdaptiveAnalyticsService {
       const nowStr = new Date().toISOString();
       setImmediate(() => {
         this.sendCertificateEmailForAttempt(
-          userId,
+          resolvedUserId,
           assessmentId,
           moduleType,
           Math.max(0, Math.round(report.marksPercentage)),
@@ -537,14 +558,20 @@ export class AdaptiveAnalyticsService {
         role: 'tech_role_attempts',
       };
       const attemptsTable = attemptTableMap[finalModule];
+      let actualUserId = userId;
       if (attemptsTable) {
         const attemptRows = await this.dataSource.query(
-          `SELECT mode FROM ${attemptsTable} WHERE attempt_token = $1`,
+          `SELECT user_id, mode FROM ${attemptsTable} WHERE attempt_token = $1 LIMIT 1`,
           [attemptToken],
         );
-        if (attemptRows.length && attemptRows[0].mode !== 'main') {
-          this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial/practice mode`);
-          // Proceed with sending email for trial attempts too!
+        if (attemptRows.length) {
+          if (attemptRows[0].user_id) {
+            actualUserId = Number(attemptRows[0].user_id);
+            this.logger.log(`Resolved actual user_id ${actualUserId} from ${attemptsTable} for token ${attemptToken} (passed userId was ${userId})`);
+          }
+          if (attemptRows[0].mode !== 'main') {
+            this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial/practice mode`);
+          }
         }
       }
 
@@ -554,10 +581,10 @@ export class AdaptiveAnalyticsService {
          FROM users u 
          LEFT JOIN registrations r ON r.user_id = u.id 
          WHERE u.id = $1`,
-        [userId],
+        [actualUserId],
       );
       if (!userRows.length) {
-        this.logger.warn(`sendCertificateEmailForAttempt: user ${userId} not found`);
+        this.logger.warn(`sendCertificateEmailForAttempt: user ${actualUserId} not found`);
         return;
       }
       const user = userRows[0];
