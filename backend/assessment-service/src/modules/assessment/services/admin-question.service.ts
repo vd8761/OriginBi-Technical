@@ -4,7 +4,7 @@ import { DataSource } from 'typeorm';
 // Coding lives in a separate schema (exam-engine `questions` with plugin_slug
 // 'assessment.coding') and has its own admin surface at /admin/coding. The
 // MCQ-style modules here cover every other assessment type.
-export type ModuleType = 'aptitude' | 'grammar' | 'communication' | 'mnc' | 'role';
+export type ModuleType = 'aptitude' | 'grammar' | 'communication' | 'mnc' | 'role' | 'coding';
 
 interface ModuleConfig {
   readonly questionTable: string;
@@ -80,6 +80,14 @@ const MODULE_CONFIGS: Record<ModuleType, ModuleConfig> = {
     categoryColumn: 'domain',
   },
   communication: {
+    questionTable: 'tech_grammar_questions',
+    idColumn: 'grammar_question_id',
+    optionsTable: 'tech_grammar_options',
+    optionsFk: 'grammar_question_id',
+    categoryColumn: 'category',
+    subcategoryColumn: 'subcategory',
+  },
+  coding: {
     questionTable: 'tech_grammar_questions',
     idColumn: 'grammar_question_id',
     optionsTable: 'tech_grammar_options',

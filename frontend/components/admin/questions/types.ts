@@ -2,13 +2,14 @@
 // Coding has its own dedicated bank at /admin/coding (backed by exam-engine's
 // `questions` table with plugin_slug='assessment.coding') and is intentionally
 // not part of this MCQ-style manager.
-export type AssessmentType = "aptitude" | "mnc" | "communication" | "role";
+export type AssessmentType = "aptitude" | "mnc" | "communication" | "role" | "coding";
 
 export const ASSESSMENT_TYPE_LABELS: Record<AssessmentType, string> = {
   aptitude: "Aptitude Assessment",
   mnc: "MNC Career Prep",
   communication: "Communication Skills",
   role: "Role-Based Technical",
+  coding: "Coding Assessment",
 };
 
 export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
@@ -16,6 +17,7 @@ export const ASSESSMENT_TYPE_DESCRIPTIONS: Record<AssessmentType, string> = {
   mnc: "Technical MCQs focused on Data Structures, Algorithms, and Core CS.",
   communication: "Multi-skill tasks including Audio, Speaking, Reading, and Writing.",
   role: "Context-aware conceptual and scenario-based technical evaluations.",
+  coding: "Standard hands-on programming and software engineering evaluations.",
 };
 
 export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
@@ -23,6 +25,7 @@ export const ASSESSMENT_TYPE_ICONS: Record<AssessmentType, string> = {
   mnc: "🏢",
   communication: "💬",
   role: "🎯",
+  coding: "💻",
 };
 
 // ── Shared ──
@@ -224,6 +227,7 @@ export const ASSESSMENT_SUPPORTED_QUESTION_KINDS: Record<AssessmentType, readonl
   mnc: ["mcq", "msq", "tf"],
   communication: ["mcq", "msq", "tf"],
   role: ["mcq", "msq", "tf"],
+  coding: [],
 };
 
 export function getSupportedQuestionKinds(assessmentType: AssessmentType): QuestionKind[] {
@@ -419,6 +423,7 @@ export const SAMPLE_JSONS: Record<AssessmentType, string> = {
     "correctOptionIndex": 1
   }
 ]`,
+  coding: `[]`,
 };
 
 export function matchCategory(qCat: string, filterCat: string): boolean {

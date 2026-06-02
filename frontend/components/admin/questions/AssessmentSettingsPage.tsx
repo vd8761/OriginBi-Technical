@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Brain, RefreshCw, Zap, BarChart3, Layers, Clock, Target, ChevronDown } from "lucide-react";
+import { Settings, Save, Loader2, Plus, X, Info, LayoutGrid, Award, SlidersHorizontal, Shield, Trash2, Edit2, Check, Search, ListChecks, Brain, RefreshCw, Zap, BarChart3, Layers, Clock, Target, ChevronDown, Code2 } from "lucide-react";
 import { ApiAssessment, fetchAssessments, updateAssessment, fetchQuestions } from "./api";
 import {
   AssessmentType,
@@ -21,8 +21,9 @@ import { useRegisterAdminPage } from "../AdminPageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/Switch";
 import { useConfirm } from "@/components/admin/ui";
+import CodingSettingsTab from "@/components/admin/settings/CodingSettingsTab";
 
-type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading" | "adaptive";
+type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading" | "adaptive" | "languages";
 
 // ... (Removed ProperToggle as it's replaced by the new Switch component)
 
@@ -354,7 +355,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     const loadAll = async () => {
       setLoading(true);
       try {
-        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role"];
+        const modules: AssessmentType[] = ["aptitude", "mnc", "communication", "role", "coding"];
         const results: Record<string, ApiAssessment> = {};
         for (const m of modules) {
           const list = await fetchAssessments(m);
@@ -375,6 +376,14 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
       populateForm(assessments[activeModule]);
     }
   }, [activeModule, assessments]);
+
+  useEffect(() => {
+    if (activeModule === "coding") {
+      if (activeTab !== "general" && activeTab !== "rules_limits" && activeTab !== "languages") {
+        setActiveTab("general");
+      }
+    }
+  }, [activeModule, activeTab]);
 
   useEffect(() => {
     const loadQuestions = async () => {
@@ -544,6 +553,11 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const hasAdaptiveMatches =
     matchesQuery(["Adaptive Mode", "Enable adaptive block-based assessment", "adaptive", "blueprint", "blocks", "marks", "seconds per mark", "auto"]);
 
+  const hasLanguagesMatches = activeModule === "coding" && (
+    matchesQuery(["Languages", "Assessment Builder", "toggles", "coding", "mcq", "fillblank", "config"]) || 
+    activeTab === "languages"
+  );
+
   const inputCls = "block w-full max-w-lg rounded-xl border-0 py-3 px-4 bg-slate-50 dark:bg-white/5 text-black dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-black/30 dark:placeholder:text-white/30 focus:ring-2 focus:ring-inset focus:ring-brand-green sm:text-sm transition-all hover:ring-slate-300 dark:hover:ring-white/20";
   const lockedInputCls = adaptiveEnabled
     ? `${inputCls} cursor-not-allowed ring-amber-200 dark:ring-amber-500/30 bg-amber-50 dark:bg-amber-500/10`
@@ -646,14 +660,18 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
               </div>
             ) : (
               <div className="flex border-b border-slate-100 dark:border-white/5 px-8 sm:px-12 pt-8 gap-8 overflow-x-auto no-scrollbar">
-                {([
+                {((activeModule === "coding" ? [
+                  ["general",       "General",            SlidersHorizontal],
+                  ["rules_limits",  "Rules & Limits",     Shield],
+                  ["languages",     "Languages",          Code2],
+                ] : [
                   ["general",       "General",            SlidersHorizontal],
                   ["question_type", "Question Type",      ListChecks],
                   ["rules_limits",  "Rules & Limits",     Shield],
                   ["categories",    "Dynamic Categories", LayoutGrid],
                   ["grading",       "Scoring Matrix",     Award],
-                  ["adaptive", "Adaptive", Brain] as [SettingsTab, string, any],
-                ] as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
+                  ["adaptive",      "Adaptive",           Brain],
+                ]) as [SettingsTab, string, any][]).map(([key, label, Icon]) => (
                   <button 
                     key={key} 
                     onClick={() => setActiveTab(key)}
@@ -752,7 +770,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   )}
 
                   {/* Question Type Tab */}
-                  {(activeTab === "question_type" || searchQuery) && hasQuestionTypeMatches && (
+                  {activeModule !== "coding" && (activeTab === "question_type" || searchQuery) && hasQuestionTypeMatches && (
                     <div className="space-y-12">
                       {searchQuery && (
                         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">
@@ -954,7 +972,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   )}
 
                   {/* Categories Tab */}
-                  {(activeTab === "categories" || searchQuery) && hasCategoriesMatches && (
+                  {activeModule !== "coding" && (activeTab === "categories" || searchQuery) && hasCategoriesMatches && (
                     <div className="space-y-12">
                       {searchQuery && (
                         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">
@@ -1190,7 +1208,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   )}
 
                   {/* Grading Tab */}
-                  {(activeTab === "grading" || searchQuery) && hasGradingMatches && (
+                  {activeModule !== "coding" && (activeTab === "grading" || searchQuery) && hasGradingMatches && (
                     <div className="space-y-12">
                       {searchQuery && (
                         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">
@@ -1231,7 +1249,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   )}
 
                   {/* ── Adaptive Tab ─────────────────────────────────────────── */}
-                  {(activeTab === "adaptive" || (searchQuery && hasAdaptiveMatches)) && (
+                  {activeModule !== "coding" && (activeTab === "adaptive" || (searchQuery && hasAdaptiveMatches)) && (
                     <div className="space-y-10">
                       {searchQuery && (
                         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">
@@ -1467,7 +1485,14 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                     </div>
                   )}
 
-                  {!hasGeneralMatches && !hasQuestionTypeMatches && !hasRulesLimitsMatches && !hasCategoriesMatches && !hasGradingMatches && !hasAdaptiveMatches && (
+                  {/* ── Languages Tab (Coding Only) ─────────────────────────── */}
+                  {activeTab === "languages" && activeModule === "coding" && (
+                    <div className="space-y-10">
+                      <CodingSettingsTab />
+                    </div>
+                  )}
+
+                  {!hasGeneralMatches && !hasQuestionTypeMatches && !hasRulesLimitsMatches && !hasCategoriesMatches && !hasGradingMatches && !hasAdaptiveMatches && !hasLanguagesMatches && (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                       <div className="p-4 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-white/20 mb-4">
                         <Search size={32} />
