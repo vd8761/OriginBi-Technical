@@ -1032,6 +1032,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                                     findEnabled={findEnabled}
                                     suggestionsEnabled={suggestionsEnabled}
                                     lintsEnabled={lintsEnabled}
+                                    blockClipboard
                                 />
                             )}
                         </div>
