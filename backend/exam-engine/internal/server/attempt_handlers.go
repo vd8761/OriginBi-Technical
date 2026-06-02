@@ -73,6 +73,21 @@ type attemptFingerprint struct {
 
 type assignmentMetadata struct {
 	SettingsSnapshot *frozenAttemptSnapshot `json:"settingsSnapshot,omitempty"`
+	// FrozenQuestionVersionIDs is the student's payment-time question payload.
+	// Once set, every (re)attempt for this assignment reuses these exact
+	// questions — the payload is fixed at the state of payment.
+	FrozenQuestionVersionIDs []string `json:"frozenQuestionVersionIds,omitempty"`
+}
+
+func frozenQuestionVersionIDsFromMetadata(raw []byte) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var m assignmentMetadata
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	return m.FrozenQuestionVersionIDs
 }
 
 type frozenAttemptSnapshot struct {
@@ -265,6 +280,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 
 	frozen, snapOk := frozenSnapshotFromAssignmentMetadata(assignmentMetadataBytes, examVersionID)
 	codingLanguageSlug := codingLanguageSlugFromRef(assignmentRef)
+	frozenQVIDs := frozenQuestionVersionIDsFromMetadata(assignmentMetadataBytes)
 	var spill spilloverReport
 	var spillBuilt bool
 
@@ -283,7 +299,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "attempt create failed")
 			return
 		}
-		frozen, spill, err = s.buildCodingFrozenSnapshot(ctx, tx, examVersionID, attemptID, codingLanguageSlug, totalSeconds)
+		frozen, spill, err = s.buildCodingFrozenSnapshot(ctx, tx, examVersionID, attemptID, codingLanguageSlug, totalSeconds, frozenQVIDs)
 		if err != nil {
 			// Only the real "under-stocked" branch in pickCodingQuestions
 			// should surface as 409; everything else (DB error, context
@@ -304,6 +320,27 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 				"attemptId", attemptID, "language", codingLanguageSlug, "err", err.Error())
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("snapshot build failed: %v", err))
 			return
+		}
+		// First attempt for this assignment: freeze the picked question set onto
+		// the assignment so every later attempt (free retakes) reuses the exact
+		// same payload — "configuration at the state of payment".
+		if len(frozenQVIDs) == 0 && len(frozen.Questions) > 0 {
+			ids := make([]string, 0, len(frozen.Questions))
+			for _, q := range frozen.Questions {
+				ids = append(ids, q.QuestionVersionID)
+			}
+			idsJSON, mErr := json.Marshal(ids)
+			if mErr == nil {
+				if _, uErr := tx.Exec(ctx, `
+					UPDATE exam_assignments
+					SET metadata = COALESCE(metadata, '{}'::jsonb)
+					    || jsonb_build_object('frozenQuestionVersionIds', $2::jsonb)
+					WHERE id = $1
+				`, assignmentID, idsJSON); uErr != nil {
+					s.logger.Warn("freeze question payload failed",
+						"assignmentId", assignmentID, "err", uErr.Error())
+				}
+			}
 		}
 		spillBuilt = true
 	} else if !snapOk {
@@ -1220,50 +1257,75 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 			Files:     payload.Files,
 			EntryFile: payload.EntryFile,
 		}
-		if len(req.Files) == 0 {
+		// Skip un-attempted questions. An answer with no files OR with only
+		// blank/whitespace source means the candidate wrote nothing — submitting
+		// it to Judge0 yields a 422 "source_code can't be blank". Leaving it
+		// un-run lets gradeCodingAnswerTx score it 0 ("not_run").
+		if len(req.Files) == 0 || !hasRunnableSource(req.Files) {
 			continue
 		}
+		// Per-question failures must NOT abort the whole attempt's evaluation.
+		// Previously a single bad/blank answer returned an error here, which
+		// stranded the attempt in 'submitted' forever (the sweeper retried it
+		// every minute). Now we log and move on so the rest of the attempt still
+		// grades and the attempt reaches 'evaluated'.
 		if err := validateCodeRunRequest(&req, true); err != nil {
-			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
+			s.logger.Warn("final eval: skipping question", "examQuestionId", ans.ExamQuestionID, "err", err.Error())
+			continue
 		}
 		if err := s.ensureLanguageEntitled(ctx, userID, req.Language); err != nil {
-			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
+			s.logger.Warn("final eval: skipping question", "examQuestionId", ans.ExamQuestionID, "err", err.Error())
+			continue
 		}
 		if err := s.validateCodingAnswerPayload(req, ans.Body); err != nil {
-			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
+			s.logger.Warn("final eval: skipping question", "examQuestionId", ans.ExamQuestionID, "err", err.Error())
+			continue
 		}
 
 		testCtx, testCancel := contextWithTimeout(ctx, 15*time.Second)
 		tests, err := s.loadRunTests(testCtx, attemptID, userID, ans.ExamQuestionID, req.Mode, req.Language)
 		testCancel()
-		if err != nil {
-			return fmt.Errorf("question %s final tests: %w", ans.ExamQuestionID, err)
-		}
-		if len(tests) == 0 {
-			return fmt.Errorf("question %s has no final tests", ans.ExamQuestionID)
+		if err != nil || len(tests) == 0 {
+			s.logger.Warn("final eval: no tests for question", "examQuestionId", ans.ExamQuestionID)
+			continue
 		}
 
 		persistCtx, persistCancel := contextWithTimeout(ctx, 15*time.Second)
 		runID, err := s.persistRunStart(persistCtx, userID, attemptID, ans.ExamQuestionID, req, true)
 		persistCancel()
 		if err != nil {
-			return fmt.Errorf("question %s final run start: %w", ans.ExamQuestionID, err)
+			s.logger.Warn("final eval: run start failed", "examQuestionId", ans.ExamQuestionID, "err", err.Error())
+			continue
 		}
 
 		judgePayload, err := s.buildJudge0Payload(req)
 		if err != nil {
 			_ = s.finishRunWithError(ctx, runID, err.Error())
-			return fmt.Errorf("question %s final payload: %w", ans.ExamQuestionID, err)
+			s.logger.Warn("final eval: payload build failed", "examQuestionId", ans.ExamQuestionID, "err", err.Error())
+			continue
 		}
 		runCtx, runCancel := context.WithTimeout(ctx, 120*time.Second)
 		_, err = s.executeJudge0(runCtx, attemptID, runID, req, judgePayload, tests)
 		runCancel()
 		if err != nil {
 			_ = s.finishRunWithError(ctx, runID, err.Error())
-			return fmt.Errorf("question %s Judge0: %w", ans.ExamQuestionID, err)
+			s.logger.Warn("final eval: judge0 run failed", "examQuestionId", ans.ExamQuestionID, "err", err.Error())
+			continue
 		}
 	}
 	return nil
+}
+
+// hasRunnableSource reports whether at least one file carries non-whitespace
+// content. Empty / whitespace-only submissions must never be sent to Judge0,
+// which rejects blank source with a 422.
+func hasRunnableSource(files []codeFileDTO) bool {
+	for _, f := range files {
+		if strings.TrimSpace(f.Content) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) languageSlugForAssignmentRef(ctx context.Context, assignmentRef string) string {
