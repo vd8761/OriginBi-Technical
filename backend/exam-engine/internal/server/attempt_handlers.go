@@ -139,6 +139,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 	var assignmentID, examVersionID uuid.UUID
 	var assignmentRef string
 	var totalSeconds int
+	var maxAttempts int
 	var assignmentMetadataBytes []byte
 	if req.AssignmentID != "" {
 		parsedID, parseErr := uuid.Parse(req.AssignmentID)
@@ -147,7 +148,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = tx.QueryRow(ctx, `
-			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata
+			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata, a.max_attempts
 			FROM exam_assignments a
 			JOIN exam_versions ev ON ev.id = a.exam_version_id
 			WHERE a.id = $1
@@ -156,10 +157,10 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			  AND now() >= COALESCE(a.available_from, '-infinity'::timestamptz)
 			  AND (a.available_until IS NULL OR now() <= a.available_until)
 			FOR UPDATE OF a
-		`, parsedID, principal.UserID).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes)
+		`, parsedID, principal.UserID).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes, &maxAttempts)
 	} else if req.AssignmentRef != "" {
 		err = tx.QueryRow(ctx, `
-			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata
+			SELECT a.id, a.exam_version_id, COALESCE(a.assignment_ref, ''), ev.total_time_seconds, a.metadata, a.max_attempts
 			FROM exam_assignments a
 			JOIN exam_versions ev ON ev.id = a.exam_version_id
 			WHERE a.candidate_user_id = $1
@@ -170,7 +171,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 			ORDER BY a.created_at DESC
 			LIMIT 1
 			FOR UPDATE OF a
-		`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes)
+		`, principal.UserID, req.AssignmentRef).Scan(&assignmentID, &examVersionID, &assignmentRef, &totalSeconds, &assignmentMetadataBytes, &maxAttempts)
 	} else {
 		writeError(w, http.StatusBadRequest, "assignmentId or assignmentRef is required")
 		return
@@ -184,33 +185,38 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var doneAttemptID string
-	var doneStatus string
-	err = tx.QueryRow(ctx, `
-		SELECT id::text, status::text
-		FROM attempts
-		WHERE assignment_id = $1
-		  AND status IN ('submitted','timed_out','under_review','evaluated','published')
-		ORDER BY created_at DESC
-		LIMIT 1
-	`, assignmentID).Scan(&doneAttemptID, &doneStatus)
-	if err == nil {
-		writeJSON(w, http.StatusConflict, map[string]string{
-			"error":     "assignment already completed",
-			"attemptId": doneAttemptID,
-			"status":    doneStatus,
-		})
-		return
-	}
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		// Surfacing the pgx error in the response is debug instrumentation:
-		// previously this returned a flat "attempt lookup failed" which gave
-		// the candidate UI no way to diagnose a poisoned tx or connection
-		// loss. Once the root cause is understood the detail can be replaced
-		// with a stable user-facing string again.
+	// Retake policy: count completed attempts and compare with the assignment's
+	// max_attempts. Only block when the candidate has exhausted their allowance.
+	// Below the cap, we fall through and build a fresh attempt (a retake).
+	var terminalCount int
+	var doneAttemptID, doneStatus sql.NullString
+	if err = tx.QueryRow(ctx, `
+		SELECT COUNT(*),
+		       MAX(id::text) FILTER (WHERE rn = 1),
+		       MAX(status::text) FILTER (WHERE rn = 1)
+		FROM (
+		    SELECT id, status, ROW_NUMBER() OVER (ORDER BY created_at DESC) AS rn
+		    FROM attempts
+		    WHERE assignment_id = $1
+		      AND status IN ('submitted','timed_out','under_review','evaluated','published')
+		) t
+	`, assignmentID).Scan(&terminalCount, &doneAttemptID, &doneStatus); err != nil {
 		s.logger.Error("attempts done-lookup failed",
 			"assignmentId", assignmentID, "candidateUserId", principal.UserID, "err", err.Error())
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("attempt lookup failed: %v", err))
+		return
+	}
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	if terminalCount >= maxAttempts {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":        "assignment already completed",
+			"attemptId":    doneAttemptID.String,
+			"status":       doneStatus.String,
+			"attemptsUsed": terminalCount,
+			"maxAttempts":  maxAttempts,
+		})
 		return
 	}
 
@@ -691,6 +697,10 @@ func (s *Server) evaluateAndGradeAttempt(ctx context.Context, attemptID uuid.UUI
 		"finalScore":    finalScore,
 		"gradingStatus": gradingStatus,
 	})
+
+	// Issue a certificate when the graded result clears the pass threshold
+	// (default 90%). Idempotent — re-evaluation won't duplicate it.
+	s.maybeIssueCertificate(ctx, attemptID, userID, finalScore)
 	return nil
 }
 

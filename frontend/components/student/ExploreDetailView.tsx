@@ -31,7 +31,15 @@ import {
     useCompletedAssessments,
     type PaymentKey,
 } from "@/lib/payments";
-import { ApiError, listAssignments, logoutUser, type Assignment } from "@/lib/api";
+import {
+    ApiError,
+    listAssignments,
+    logoutUser,
+    getCodingCatalog,
+    purchaseCoding,
+    type Assignment,
+    type CodingCatalogLanguage,
+} from "@/lib/api";
 import { readableTextOn } from "@/lib/colors";
 import { Loader2 } from "lucide-react";
 import { useSession, isAdminRegisteredProfile } from "@/lib/contexts/SessionContext";
@@ -65,6 +73,33 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const [serverAssignments, setServerAssignments] = useState<Assignment[]>([]);
     const [assignmentError, setAssignmentError] = useState("");
     const [isConnecting, setIsConnecting] = useState(false);
+    const [codingCatalog, setCodingCatalog] = useState<CodingCatalogLanguage[]>([]);
+
+    // Availability is the engine's truth: a language is purchasable only when its
+    // question bank can satisfy the configured set. Drives the pay-gate.
+    const languageAvailability = useCallback(
+        (langId: string): { available: boolean; reason: string } => {
+            const entry = codingCatalog.find((c) => c.id === langId);
+            if (!entry) return { available: true, reason: "" }; // catalog not loaded yet — don't block
+            return { available: entry.available, reason: entry.reason ?? "" };
+        },
+        [codingCatalog],
+    );
+
+    useEffect(() => {
+        if (exam.id !== "coding") return;
+        let active = true;
+        getCodingCatalog()
+            .then((data) => {
+                if (active) setCodingCatalog(data.languages);
+            })
+            .catch(() => {
+                if (active) setCodingCatalog([]);
+            });
+        return () => {
+            active = false;
+        };
+    }, [exam.id]);
 
     const refreshAssignments = useCallback(async () => {
         if (exam.id !== "coding") return;
@@ -332,19 +367,26 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
     const handleLanguagePick = async (language: CodingLanguage) => {
         const key = codingPaymentKey(language.id);
         const assignment = serverAssignments.find((a) => a.assignmentRef === key);
-        if (assignment?.completed) {
-            setShowLanguageModal(false);
-            return;
-        }
         const isUnlocked =
             isPaid(key) ||
             assignment?.status === "active" ||
             assignment?.status === "completed" ||
             assignment?.completed;
+        // Already entitled (including a completed language → retake): start now.
         if (isUnlocked) {
             setShowLanguageModal(false);
             setPendingCodingLang(language);
             setAssignmentError("");
+            return;
+        }
+
+        // Pay-gate: only allow purchasing a language whose question bank can
+        // actually deliver the configured set.
+        const avail = languageAvailability(language.id);
+        if (!avail.available) {
+            setAssignmentError(
+                `${language.name} isn't available yet${avail.reason ? ` — ${avail.reason}` : ""}.`,
+            );
             return;
         }
 
@@ -381,6 +423,8 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                 });
                 if (!verifyRes.ok) throw new Error("Failed to activate free assessment.");
 
+                // Engine owns the assignment — grant it here so start works.
+                await purchaseCoding(language.id);
                 await refreshAssignments();
                 setShowLanguageModal(false);
                 setIsConnecting(false);
@@ -412,11 +456,15 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
         setIsConnecting(false);
         if (paymentTarget.kind === "coding") {
             try {
+                // Grant the coding assignment in the engine (source of truth),
+                // then take the student straight into the start gate.
+                const lang = paymentTarget.language;
+                await purchaseCoding(lang.id);
                 await refreshAssignments();
                 setShowLanguageModal(false);
-                // After successful payment, take user to the assessment library
-                router.push("/assessment?view=assessment");
                 setAssignmentError("");
+                setAssessmentMode("main");
+                setPendingCodingLang(lang);
             } catch (err) {
                 const message =
                     err instanceof ApiError
@@ -905,6 +953,7 @@ const ExploreDetailView: React.FC<ExploreDetailViewProps> = ({ exam, detail }) =
                     price={exam.price}
                     isPaid={isCodingPaid}
                     isCompleted={isCodingCompleted}
+                    availability={languageAvailability}
                     onClose={() => {
                         setShowLanguageModal(false);
                         setAssessmentMode("main");

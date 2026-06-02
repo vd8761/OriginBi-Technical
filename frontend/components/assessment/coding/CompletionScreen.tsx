@@ -10,6 +10,7 @@ interface CompletionScreenProps {
     tabSwitches: number;
     languageLabel: string;
     onBackToExplore: () => void;
+    onViewResults?: () => void;
 }
 
 const CompletionScreen: React.FC<CompletionScreenProps> = ({
@@ -18,9 +19,13 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
     tabSwitches,
     languageLabel,
     onBackToExplore,
+    onViewResults,
 }) => {
     const { theme } = useTheme();
     const solved = Object.values(statuses).filter((s) => s === "solved").length;
+    // This ring reflects how many questions the candidate marked solved locally —
+    // it is NOT the graded score. The official, test-case-graded result (and any
+    // certificate) is computed server-side and shown on the My Performance page.
     const score = total > 0 ? Math.round((solved / total) * 100) : 0;
     const r = 50;
     const circ = 2 * Math.PI * r;
@@ -61,7 +66,7 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
                             className="text-[11px] font-semibold"
                             style={{ color: "var(--c-text-muted)" }}
                         >
-                            Score
+                            Solved
                         </span>
                     </div>
                 </div>
@@ -80,14 +85,16 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
                     <span className="font-semibold" style={{ color: "var(--c-text)" }}>
                         {languageLabel}
                     </span>{" "}
-                    coding assessment have been recorded. A detailed report will be shared to your registered email within 24 hours.
+                    coding assessment have been submitted. We&apos;re now running your code against
+                    the test cases — your graded score and certificate (if you scored 90% or above)
+                    will appear on your <strong>My Performance</strong> page shortly.
                 </p>
 
                 <div className="mb-8 grid grid-cols-3 gap-3">
                     {[
                         { label: "Solved", val: solved, color: "var(--c-ok)" },
                         { label: "Total", val: total, color: "var(--c-text)" },
-                        { label: "Accuracy", val: `${score}%`, color: "var(--c-ok)" },
+                        { label: "Marked", val: `${score}%`, color: "var(--c-ok)" },
                     ].map(({ label, val, color }) => (
                         <div
                             key={label}
@@ -116,11 +123,24 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
                     </div>
                 )}
 
-                <div className="flex justify-center gap-2.5">
+                <div className="flex flex-col justify-center gap-2.5 sm:flex-row">
+                    {onViewResults && (
+                        <button
+                            type="button"
+                            onClick={onViewResults}
+                            className="cursor-pointer rounded-full border-0 bg-[#1ED36A] px-8 py-3.5 text-[14px] font-extrabold text-white shadow-[0_4px_20px_rgba(30,211,106,0.3)]"
+                        >
+                            View My Results
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={onBackToExplore}
-                        className="cursor-pointer rounded-full border-0 bg-[#1ED36A] px-8 py-3.5 text-[14px] font-extrabold text-white shadow-[0_4px_20px_rgba(30,211,106,0.3)]"
+                        className={`cursor-pointer rounded-full px-8 py-3.5 text-[14px] font-extrabold ${
+                            onViewResults
+                                ? "border border-[#1ED36A]/40 bg-transparent text-[#1ED36A]"
+                                : "border-0 bg-[#1ED36A] text-white shadow-[0_4px_20px_rgba(30,211,106,0.3)]"
+                        }`}
                     >
                         Back to Explore
                     </button>

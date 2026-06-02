@@ -19,6 +19,7 @@ interface LanguageSelectModalProps {
     price: number;
     isPaid: (key: PaymentKey) => boolean;
     isCompleted: (key: PaymentKey) => boolean;
+    availability?: (langId: string) => { available: boolean; reason: string };
     onClose: () => void;
     onPick: (language: CodingLanguage) => void;
 }
@@ -28,6 +29,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
     price,
     isPaid,
     isCompleted,
+    availability,
     onClose,
     onPick,
 }) => {
@@ -39,15 +41,19 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                 const key = codingPaymentKey(lang.id);
                 const paid = isPaid(key);
                 const completed = isCompleted(key);
+                const avail = availability?.(lang.id) ?? { available: true, reason: "" };
+                // Entitled languages stay startable; un-entitled ones are only
+                // selectable when their questions are actually available.
+                const unavailable = !paid && !completed && !avail.available;
                 const status: LangStatus = completed
                     ? "completed"
                     : paid
                         ? "ready"
                         : "locked";
-                return { lang, paid, completed, status };
+                return { lang, paid, completed, status, unavailable, reason: avail.reason };
             })
             .sort((a, b) => statusRank[a.status] - statusRank[b.status]);
-    }, [isPaid, isCompleted]);
+    }, [isPaid, isCompleted, availability]);
 
     const selected = orderedLanguages.find((entry) => entry.lang.id === selectedId) ?? null;
     const selectedLang = selected?.lang ?? null;
@@ -119,7 +125,7 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                     aria-label="Coding language"
                     className="grid gap-2.5 overflow-y-auto px-7 py-6 sm:grid-cols-2 sm:px-8"
                 >
-                    {orderedLanguages.map(({ lang, status }) => {
+                    {orderedLanguages.map(({ lang, status, unavailable, reason }) => {
                         const isSelected = selectedId === lang.id;
                         return (
                             <button
@@ -127,8 +133,10 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                                 type="button"
                                 role="radio"
                                 aria-checked={isSelected}
-                                onClick={() => setSelectedId(lang.id)}
-                                className={`group relative flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-all ${isSelected
+                                disabled={unavailable}
+                                title={unavailable ? reason : undefined}
+                                onClick={() => !unavailable && setSelectedId(lang.id)}
+                                className={`group relative flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-all ${unavailable ? "cursor-not-allowed opacity-50" : ""} ${isSelected
                                         ? "border-transparent shadow-[0_10px_24px_rgba(15,23,42,0.10)]"
                                         : "border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] hover:-translate-y-0.5 hover:shadow-md"
                                     }`}
@@ -175,9 +183,13 @@ const LanguageSelectModal: React.FC<LanguageSelectModalProps> = ({
                                     ) : (
                                         <span
                                             className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                                            style={{ background: `${lang.accent}18`, color: lang.accent }}
+                                            style={
+                                                unavailable
+                                                    ? { background: "rgba(148,163,184,0.18)", color: "#64748b" }
+                                                    : { background: `${lang.accent}18`, color: lang.accent }
+                                            }
                                         >
-                                            {price === 0 ? "Free" : `₹${price}`}
+                                            {unavailable ? "Soon" : price === 0 ? "Free" : `₹${price}`}
                                         </span>
                                     )}
                                 </div>

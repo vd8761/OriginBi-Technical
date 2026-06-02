@@ -125,6 +125,7 @@ func (s *Server) routes() chi.Router {
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
 		r.Post("/admin/bootstrap", s.bootstrapAdmin)
+		r.Get("/certificates/{serial}", s.verifyCertificate)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.sessionMiddleware)
@@ -134,6 +135,10 @@ func (s *Server) routes() chi.Router {
 			r.Put("/me/registration", s.updateRegistration)
 			r.Get("/me/assignments", s.listAssignments)
 			r.Get("/me/languages", s.meLanguages)
+			r.Get("/me/results", s.meResults)
+			r.Get("/me/certificates", s.meCertificates)
+			r.Get("/catalog/coding/languages", s.codingCatalog)
+			r.Post("/purchases/coding", s.purchaseCoding)
 			r.Post("/attempts/start", s.startAttempt)
 			r.Get("/attempts/{attempt_id}/snapshot", s.attemptSnapshot)
 			r.Put("/attempts/{attempt_id}/answers/{exam_question_id}", s.saveAnswer)
