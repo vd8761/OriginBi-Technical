@@ -743,6 +743,22 @@
   font-family: 'Haskoy', var(--font-jakarta), ui-sans-serif, system-ui, sans-serif !important;
   box-sizing: border-box;
 }
+
+/* Anti-cheat: disable text selection everywhere in the exam (question prompts,
+   instructions, controls, etc.) EXCEPT the Monaco code editor. */
+.coding-exam-root {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.coding-exam-root .monaco-editor,
+.coding-exam-root .monaco-editor * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
 .coding-exam-root pre,
 .coding-exam-root code,
 .coding-exam-root .font-mono,

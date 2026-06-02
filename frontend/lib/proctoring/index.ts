@@ -299,19 +299,18 @@ export function useProctoring({ active, settings, onViolation }: ProctoringHookO
         return () => window.removeEventListener("keydown", handler);
     }, [active, settings.logKeypress, onViolation]);
 
-    // Copy / paste / cut block — except in the code editor textarea (the
-    // coding engine adds `.code-textarea` to its Monaco mount, others don't).
+    // Copy / paste / cut block. The coding Monaco editor adds its own
+    // capture-phase/keybinding lock as well; this shared hook covers the rest
+    // of the exam surface and native clipboard events.
     useEffect(() => {
         if (!active || !settings.blockCopyPaste) return;
         const handler = (e: ClipboardEvent) => {
-            const target = e.target as HTMLElement | null;
-            if (target?.classList?.contains("code-textarea")) return;
             e.preventDefault();
             const action = e.type === "cut" ? "cut" : e.type === "paste" ? "paste" : "copy";
             const label = action[0].toUpperCase() + action.slice(1);
             onViolation("copyPaste", {
                 title: `${label} blocked`,
-                desc: "Copy and paste are disabled outside of the code editor.",
+                desc: "Copy, cut, and paste are disabled during the assessment.",
                 meta: { action },
             });
         };
