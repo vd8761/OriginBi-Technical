@@ -32,6 +32,8 @@ export interface BackendAssessmentSubmissionResult {
   updatedAt?: string;
   sections?: Array<Record<string, unknown>>;
   questionReviews?: Array<Record<string, unknown>>;
+  showCertificateDashboard?: boolean;
+  emailSendingEnabled?: boolean;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -424,7 +426,12 @@ export const mapSubmissionToAssessmentResult = ({
     sections,
     questionReviews: reviews,
     insights,
-    showCertificateDashboard: (submission as any).showCertificateDashboard !== false,
+    showCertificateDashboard: 
+      (submission as any).showCertificateDashboard !== false &&
+      (submission as any).show_certificate_dashboard !== false,
+    emailSendingEnabled: 
+      (submission as any).emailSendingEnabled !== false &&
+      (submission as any).email_sending_enabled !== false,
   };
 };
 

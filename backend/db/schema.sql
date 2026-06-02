@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS tech_assessments (
     trial_question_limit INT NOT NULL DEFAULT 5,
     trial_attempts_limit INT NOT NULL DEFAULT 5,
     main_attempts_limit INT NOT NULL DEFAULT 2,
+    email_sending_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    show_certificate_dashboard BOOLEAN NOT NULL DEFAULT TRUE,
     created_by BIGINT NOT NULL REFERENCES users(id),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
