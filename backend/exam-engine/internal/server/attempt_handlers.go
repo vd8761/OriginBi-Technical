@@ -126,7 +126,7 @@ func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 	req.AssignmentRef = strings.ToLower(strings.TrimSpace(req.AssignmentRef))
 
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := contextWithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	tx, err := s.pool.Begin(ctx)
@@ -432,7 +432,7 @@ func (s *Server) saveAnswer(w http.ResponseWriter, r *http.Request) {
 		req.Payload = json.RawMessage("{}")
 	}
 
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := contextWithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -482,7 +482,7 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saveCtx, saveCancel := contextWithTimeout(r.Context(), 15*time.Second)
+	saveCtx, saveCancel := contextWithTimeout(r.Context(), 30*time.Second)
 	defer saveCancel()
 	tx, err := s.pool.Begin(saveCtx)
 	if err != nil {
@@ -564,7 +564,7 @@ func (s *Server) submitAttempt(w http.ResponseWriter, r *http.Request) {
 	// earlier (possibly concurrent) submit. Return its current state. If it is
 	// 'submitted' but grading never finished, re-kick evaluation.
 	if alreadyTerminal {
-		ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+		ctx, cancel := contextWithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
 		cur, ferr := s.fetchAttemptForSubmit(ctx, attemptID, principal.UserID)
 		if ferr != nil {
@@ -649,7 +649,7 @@ func (s *Server) evaluateAndGradeAttempt(ctx context.Context, attemptID uuid.UUI
 		return fmt.Errorf("final code evaluation: %w", err)
 	}
 
-	gradeCtx, cancel := contextWithTimeout(ctx, 20*time.Second)
+	gradeCtx, cancel := contextWithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(gradeCtx)
 	if err != nil {
@@ -695,7 +695,7 @@ func (s *Server) evaluateAndGradeAttempt(ctx context.Context, attemptID uuid.UUI
 }
 
 func (s *Server) writeSnapshot(w http.ResponseWriter, r *http.Request, userID int64, attemptID uuid.UUID) {
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := contextWithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	resp, err := s.loadSnapshot(ctx, userID, attemptID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -1159,7 +1159,7 @@ type finalCodePayload struct {
 }
 
 func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attemptID uuid.UUID) error {
-	queryCtx, queryCancel := contextWithTimeout(ctx, 5*time.Second)
+	queryCtx, queryCancel := contextWithTimeout(ctx, 15*time.Second)
 	defer queryCancel()
 	rows, err := s.pool.Query(queryCtx, `
 		SELECT ans.exam_question_id,
@@ -1223,7 +1223,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 			return fmt.Errorf("question %s: %w", ans.ExamQuestionID, err)
 		}
 
-		testCtx, testCancel := contextWithTimeout(ctx, 5*time.Second)
+		testCtx, testCancel := contextWithTimeout(ctx, 15*time.Second)
 		tests, err := s.loadRunTests(testCtx, attemptID, userID, ans.ExamQuestionID, req.Mode, req.Language)
 		testCancel()
 		if err != nil {
@@ -1233,7 +1233,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 			return fmt.Errorf("question %s has no final tests", ans.ExamQuestionID)
 		}
 
-		persistCtx, persistCancel := contextWithTimeout(ctx, 5*time.Second)
+		persistCtx, persistCancel := contextWithTimeout(ctx, 15*time.Second)
 		runID, err := s.persistRunStart(persistCtx, userID, attemptID, ans.ExamQuestionID, req, true)
 		persistCancel()
 		if err != nil {
