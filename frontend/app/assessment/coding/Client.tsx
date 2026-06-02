@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CodingAssessment from "@/components/assessment/coding/CodingAssessment";
+import AssessmentStartGate from "@/components/assessment/coding/AssessmentStartGate";
 import { LANG_META } from "@/components/assessment/coding/CodeEditor";
 import { fetchCandidatePluginConfig, PluginProvider, type EnabledPluginConfig } from "@/plugins";
 import {
@@ -39,6 +40,7 @@ export default function CodingClient() {
     const [snapshot, setSnapshot] = useState<AttemptSnapshot | null>(null);
     const [plugins, setPlugins] = useState<EnabledPluginConfig[]>([]);
     const [error, setError] = useState("");
+    const [started, setStarted] = useState(false);
 
     useEffect(() => {
         if (!lang || !VALID_LANGS.includes(lang)) {
@@ -104,6 +106,17 @@ export default function CodingClient() {
                     </button>
                 </div>
             </div>
+        );
+    }
+
+    // Mandatory camera/mic + fullscreen gate before the proctored exam renders.
+    if (!started) {
+        return (
+            <AssessmentStartGate
+                languageLabel={LANG_META[lang]?.label ?? lang}
+                onStart={() => setStarted(true)}
+                onCancel={() => router.replace("/explore/coding")}
+            />
         );
     }
 

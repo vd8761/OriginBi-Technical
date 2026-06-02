@@ -891,17 +891,111 @@ export async function getSession(): Promise<AuthResponse | null> {
 }
 
 export async function listAssignments(): Promise<AssignmentListResponse> {
-  // In local development, bypass the Go Exam Engine request to keep the console 100% clean
-  if (process.env.NODE_ENV === "development") {
-    return { assignments: [] };
-  }
+  // The exam-engine is the source of truth for coding entitlements (assignments)
+  // and must be consulted in every environment — a dev-only short-circuit here
+  // used to hide a paid student's coding access and break the post-payment flow.
   if (!HAS_EXAM_API) {
     return { assignments: [] };
   }
   if (!getAccessToken("user")) {
     return { assignments: [] };
   }
-  return apiFetch<AssignmentListResponse>("/v1/me/assignments");
+  try {
+    return await apiFetch<AssignmentListResponse>("/v1/me/assignments");
+  } catch {
+    // Best-effort: a transient engine error should not blank the library.
+    return { assignments: [] };
+  }
+}
+
+// ─── Coding lifecycle (catalog · purchase · results · certificates) ──────────
+
+export interface CodingCatalogLanguage {
+  id: string;
+  slug: string;
+  assignmentRef: string;
+  displayName: string;
+  available: boolean;
+  reason?: string;
+  questionCount: number;
+  entitled: boolean;
+}
+
+export async function getCodingCatalog(): Promise<{ languages: CodingCatalogLanguage[] }> {
+  if (!HAS_EXAM_API || !getAccessToken("user")) return { languages: [] };
+  try {
+    return await apiFetch<{ languages: CodingCatalogLanguage[] }>("/v1/catalog/coding/languages");
+  } catch {
+    return { languages: [] };
+  }
+}
+
+// Grants (or re-activates) a coding assignment in the exam-engine — the single
+// source of truth for who may start which language. Called after payment
+// succeeds (or immediately for free/admin users).
+export async function purchaseCoding(language: string): Promise<{ assignment: Assignment }> {
+  return apiFetch<{ assignment: Assignment }>("/v1/purchases/coding", {
+    method: "POST",
+    body: JSON.stringify({ language }),
+  });
+}
+
+export interface ResultQuestion {
+  ordinal: number;
+  title: string;
+  score: number;
+  maxScore: number;
+  testsTotal: number;
+  testsPassed: number;
+}
+
+export interface AssessmentResult {
+  attemptId: string;
+  assignmentRef: string;
+  language: string;
+  status: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  passed: boolean;
+  submittedAt?: string;
+  certificateSerial?: string;
+  questions: ResultQuestion[];
+}
+
+export interface ResultsResponse {
+  passPercent: number;
+  results: AssessmentResult[];
+}
+
+export async function getMyResults(): Promise<ResultsResponse> {
+  if (!HAS_EXAM_API || !getAccessToken("user")) return { passPercent: 90, results: [] };
+  try {
+    return await apiFetch<ResultsResponse>("/v1/me/results");
+  } catch {
+    return { passPercent: 90, results: [] };
+  }
+}
+
+export interface Certificate {
+  serial: string;
+  attemptId: string;
+  assignmentRef: string;
+  language: string;
+  candidateName: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  issuedAt: string;
+}
+
+export async function getMyCertificates(): Promise<{ certificates: Certificate[] }> {
+  if (!HAS_EXAM_API || !getAccessToken("user")) return { certificates: [] };
+  try {
+    return await apiFetch<{ certificates: Certificate[] }>("/v1/me/certificates");
+  } catch {
+    return { certificates: [] };
+  }
 }
 
 
