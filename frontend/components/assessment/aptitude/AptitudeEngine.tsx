@@ -322,7 +322,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             resolvedKind = 'numerical';
         } else if (opts.length === 2) {
             // Check if it looks like a True/False question
-            const optTexts = opts.map(o => String(o.text ?? o.optionText ?? o.option_text ?? '').toLowerCase());
+            const optTexts = opts.map((o: any) => String(o.text ?? o.optionText ?? o.option_text ?? '').toLowerCase());
             const isTFPattern = optTexts.every(t => 
                 t === '1' || t === '0' || t === '2' || 
                 t === 'true' || t === 'false' || 
