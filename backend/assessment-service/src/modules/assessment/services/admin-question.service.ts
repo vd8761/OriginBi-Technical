@@ -759,6 +759,8 @@ export class AdminQuestionService {
                 a.adaptive_total_marks,
                 a.adaptive_total_blocks,
                 a.adaptive_seconds_per_mark,
+                a.email_sending_enabled,
+                a.show_certificate_dashboard,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -812,6 +814,8 @@ export class AdminQuestionService {
     const adaptiveTotalMarks     = data.adaptive_total_marks     ?? data.adaptiveTotalMarks;
     const adaptiveTotalBlocks    = data.adaptive_total_blocks    ?? data.adaptiveTotalBlocks;
     const adaptiveSecondsPerMark = data.adaptive_seconds_per_mark ?? data.adaptiveSecondsPerMark;
+    const emailSendingEnabled = data.emailSendingEnabled !== undefined ? data.emailSendingEnabled : data.email_sending_enabled;
+    const showCertificateDashboard = data.showCertificateDashboard !== undefined ? data.showCertificateDashboard : data.show_certificate_dashboard;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -928,6 +932,8 @@ export class AdminQuestionService {
              adaptive_total_blocks = COALESCE($27, adaptive_total_blocks),
              adaptive_seconds_per_mark = COALESCE($28, adaptive_seconds_per_mark),
              adaptive_total_questions = COALESCE($29, adaptive_total_questions),
+             email_sending_enabled = COALESCE($30, email_sending_enabled),
+             show_certificate_dashboard = COALESCE($31, show_certificate_dashboard),
              updated_at = NOW()
          WHERE assessment_id = $16`,
         [
@@ -960,6 +966,8 @@ export class AdminQuestionService {
           adaptiveTotalBlocks !== undefined ? Number(adaptiveTotalBlocks) : null,
           adaptiveSecondsPerMark !== undefined ? Number(adaptiveSecondsPerMark) : null,
           adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : null,
+          emailSendingEnabled !== undefined ? Boolean(emailSendingEnabled) : null,
+          showCertificateDashboard !== undefined ? Boolean(showCertificateDashboard) : null,
         ]
       );
 

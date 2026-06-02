@@ -62,7 +62,7 @@ func (s *Server) pickCodingQuestions(
 	q snapshotQueryer,
 	languageSlug string,
 ) ([]pickedQuestion, spilloverReport, error) {
-	cfg, hasCfg, err := s.loadCodingConfigForBuilder(ctx, languageSlug)
+	cfg, hasCfg, err := s.loadCodingConfigForBuilder(ctx, q, languageSlug)
 	if err != nil {
 		return nil, spilloverReport{}, err
 	}
@@ -172,7 +172,7 @@ func (s *Server) buildCodingFrozenSnapshot(
 
 	// Honor optional per-language time override, even when no quota config is
 	// set (an admin might set just the time, leaving counts at default-all).
-	if override, err := s.loadCodingTimeOverride(ctx, languageSlug); err == nil && override != nil {
+	if override, err := s.loadCodingTimeOverride(ctx, tx, languageSlug); err == nil && override != nil {
 		totalSeconds = *override
 	}
 
@@ -241,10 +241,10 @@ type builderConfig struct {
 	IncludeTags    []string
 }
 
-func (s *Server) loadCodingConfigForBuilder(ctx context.Context, slug string) (builderConfig, bool, error) {
+func (s *Server) loadCodingConfigForBuilder(ctx context.Context, q snapshotQueryer, slug string) (builderConfig, bool, error) {
 	var cfg builderConfig
 	var tags []byte
-	err := s.pool.QueryRow(ctx, `
+	err := q.QueryRow(ctx, `
 		SELECT total_questions, easy_count, medium_count, hard_count,
 		       allow_spillover, include_tags
 		FROM coding_language_configs
@@ -265,9 +265,9 @@ func (s *Server) loadCodingConfigForBuilder(ctx context.Context, slug string) (b
 	return cfg, true, nil
 }
 
-func (s *Server) loadCodingTimeOverride(ctx context.Context, slug string) (*int, error) {
+func (s *Server) loadCodingTimeOverride(ctx context.Context, q snapshotQueryer, slug string) (*int, error) {
 	var v *int
-	err := s.pool.QueryRow(ctx, `
+	err := q.QueryRow(ctx, `
 		SELECT time_seconds_override FROM coding_language_configs
 		WHERE language_slug = $1 AND question_type = 'coding'
 	`, slug).Scan(&v)

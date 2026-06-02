@@ -1727,7 +1727,14 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
     }, [backendAttemptId, hydrated, resetTimer, submitted, traceEvent]);
 
     const handleBackToExplore = () => {
-        router.push("/explore/coding");
+        if (typeof document !== "undefined" && document.fullscreenElement) {
+            try {
+                void document.exitFullscreen();
+            } catch (e) {
+                console.error("Failed to exit fullscreen:", e);
+            }
+        }
+        window.location.href = "/explore/coding";
     };
 
     const tabSwitchCount = tabMonitor.count;

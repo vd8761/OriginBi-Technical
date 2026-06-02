@@ -966,7 +966,7 @@ export class AssessmentService {
       if (snapshot) {
         const snap = snapshot as any;
         const userRows = await queryRunner.query(
-          `SELECT u.email, u.name, r.full_name, u.metadata 
+          `SELECT u.email, r.full_name, u.metadata 
            FROM users u 
            LEFT JOIN registrations r ON r.user_id = u.id 
            WHERE u.id = $1`,
@@ -991,6 +991,21 @@ export class AssessmentService {
         } else {
           snap.candidateEmail = 'candidate@originbi.com';
           snap.candidateName = 'Candidate';
+        }
+      }
+
+      if (snapshot) {
+        const snap = snapshot as any;
+        const asmRows = await queryRunner.query(
+          `SELECT show_certificate_dashboard, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
+          [attempt.assessment_id],
+        );
+        if (asmRows.length) {
+          snap.showCertificateDashboard = asmRows[0].show_certificate_dashboard !== false;
+          snap.emailSendingEnabled = asmRows[0].email_sending_enabled !== false;
+        } else {
+          snap.showCertificateDashboard = true;
+          snap.emailSendingEnabled = true;
         }
       }
 
@@ -1103,8 +1118,25 @@ export class AssessmentService {
       objectiveAnsweredCount: number;
     }> = {};
 
-    const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-      const kind = String(rawKind || 'mcq').toLowerCase();
+    const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+      if (!meta) return 'mcq';
+      if (typeof meta === 'object') {
+        const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+        if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+          return 'numerical';
+        }
+        if (rawType.includes('multi') || rawType.includes('msq')) {
+          return 'msq';
+        }
+        if (rawType.includes('true') || rawType.includes('tf')) {
+          return 'tf';
+        }
+        const kind = String(meta.kind || 'mcq').toLowerCase();
+        if (kind === 'true_false') return 'tf';
+        if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+        return 'mcq';
+      }
+      const kind = String(meta).toLowerCase();
       if (kind === 'true_false') return 'tf';
       if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
       return 'mcq';
@@ -1198,7 +1230,7 @@ export class AssessmentService {
       const attemptMetadata = asObject(aq.attempt_metadata);
       const isObjectiveGrammar = isGrammar && (taskType === 'listening_mcq' || taskType === 'reading_mcq');
       const questionKind = (!isCoding && (!isGrammar || isObjectiveGrammar))
-        ? normalizeQuestionKind((questionMetadata as any).kind)
+        ? normalizeQuestionKind(questionMetadata)
         : null;
       const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
       const selectedAnswerValue =
@@ -1700,8 +1732,25 @@ export class AssessmentService {
           }
         }
 
-      const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-        const kind = String(rawKind || 'mcq').toLowerCase();
+      const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        if (!meta) return 'mcq';
+        if (typeof meta === 'object') {
+          const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+          if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+            return 'numerical';
+          }
+          if (rawType.includes('multi') || rawType.includes('msq')) {
+            return 'msq';
+          }
+          if (rawType.includes('true') || rawType.includes('tf')) {
+            return 'tf';
+          }
+          const kind = String(meta.kind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        }
+        const kind = String(meta).toLowerCase();
         if (kind === 'true_false') return 'tf';
         if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
         return 'mcq';
@@ -1712,7 +1761,7 @@ export class AssessmentService {
       const questionMetadata = mapping?.metadata && typeof mapping.metadata === 'object'
         ? mapping.metadata
         : {};
-      const kind = normalizeQuestionKind((questionMetadata as any)?.kind);
+      const kind = normalizeQuestionKind(questionMetadata);
       const isMsq = kind === 'msq';
       const isNumerical = kind === 'numerical';
       const shouldUseMetadataAnswer = isMsq || isNumerical;
@@ -1918,15 +1967,32 @@ export class AssessmentService {
           }
         }
 
-        const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-          const kind = String(rawKind || 'mcq').toLowerCase();
+        const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+          if (!meta) return 'mcq';
+          if (typeof meta === 'object') {
+            const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+            if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+              return 'numerical';
+            }
+            if (rawType.includes('multi') || rawType.includes('msq')) {
+              return 'msq';
+            }
+            if (rawType.includes('true') || rawType.includes('tf')) {
+              return 'tf';
+            }
+            const kind = String(meta.kind || 'mcq').toLowerCase();
+            if (kind === 'true_false') return 'tf';
+            if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+            return 'mcq';
+          }
+          const kind = String(meta).toLowerCase();
           if (kind === 'true_false') return 'tf';
           if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
           return 'mcq';
         };
 
         const qMetadataForType = aq.question_metadata || {};
-        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType.kind) : null;
+        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType) : null;
         const review: any = {
           questionId: questionIdStr,
           displayOrder: Number(aq.display_order || 0),
@@ -2082,7 +2148,7 @@ export class AssessmentService {
             objectiveAnsweredCount++;
             
             const qMetadata = aq.question_metadata || {};
-            const kind = normalizeQuestionKind(qMetadata.kind);
+            const kind = normalizeQuestionKind(qMetadata);
             let isCorrectAnswer = false;
 
             // Update the review type to reflect the actual question kind
@@ -2796,8 +2862,25 @@ export class AssessmentService {
       // Per-block breakdown
       const blockMap: Record<number, { correct: number; total: number; positive: number; negative: number }> = {};
 
-      const normalizeQuestionKind = (rawKind: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-        const kind = String(rawKind || 'mcq').toLowerCase();
+      const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        if (!meta) return 'mcq';
+        if (typeof meta === 'object') {
+          const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+          if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+            return 'numerical';
+          }
+          if (rawType.includes('multi') || rawType.includes('msq')) {
+            return 'msq';
+          }
+          if (rawType.includes('true') || rawType.includes('tf')) {
+            return 'tf';
+          }
+          const kind = String(meta.kind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        }
+        const kind = String(meta).toLowerCase();
         if (kind === 'true_false') return 'tf';
         if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
         return 'mcq';
@@ -2842,7 +2925,7 @@ export class AssessmentService {
         const blk = Number(aq.block_number ?? 0);
         const questionMetadata = asObject(aq.question_metadata);
         const attemptMetadata = asObject(aq.attempt_metadata);
-        const kind = normalizeQuestionKind((questionMetadata as any).kind);
+        const kind = normalizeQuestionKind(questionMetadata);
         const metadataSubmittedAnswer = (attemptMetadata as any).submittedAnswer;
         const selectedAnswerValue =
           (kind === 'msq' || kind === 'numerical') &&
@@ -3187,21 +3270,22 @@ export class AssessmentService {
         role: 'tech_role_attempts',
       };
       const attemptsTable = attemptTableMap[finalModule];
-      if (attemptsTable) {
+      const tableMap = this.getTableMap();
+      const config = tableMap[finalModule];
+      if (attemptsTable && config?.hasMode) {
         const attemptRows = await this.dataSource.query(
           `SELECT mode FROM ${attemptsTable} WHERE attempt_token = $1 LIMIT 1`,
           [attemptToken],
         );
         const attemptMode = String(attemptRows[0]?.mode || '').trim().toLowerCase();
         if (attemptMode === 'trial') {
-          this.logger.log(`Attempt ${attemptToken} is in trial mode. Skipping certificate email.`);
-          return;
+          this.logger.log(`Allowing certificate email: attempt ${attemptToken} is in trial mode`);
         }
       }
 
       // Fetch user details
       const userRows = await this.dataSource.query(
-        `SELECT u.email, u.name, r.full_name, u.metadata 
+        `SELECT u.email, r.full_name, u.metadata 
          FROM users u 
          LEFT JOIN registrations r ON r.user_id = u.id 
          WHERE u.id = $1`,
@@ -3231,11 +3315,15 @@ export class AssessmentService {
         meta.firstName ||
         'Candidate';
 
-      // Fetch assessment title
+      // Fetch assessment details
       const assessmentRows = await this.dataSource.query(
-        `SELECT assessment_name FROM tech_assessments WHERE assessment_id = $1`,
+        `SELECT assessment_name, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
         [assessmentId],
       );
+      if (assessmentRows.length && assessmentRows[0].email_sending_enabled === false) {
+        this.logger.log(`Skipping certificate email: email sending is disabled for assessment ${assessmentId}`);
+        return;
+      }
       const rawTitle: string =
         assessmentRows[0]?.assessment_name || this.getModuleLabelForEmail(finalModule);
 

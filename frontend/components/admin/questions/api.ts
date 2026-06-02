@@ -87,6 +87,8 @@ export interface ApiAssessment {
     adaptive_total_marks?: number;
     adaptive_total_blocks?: number;
     adaptive_seconds_per_mark?: number;
+    email_sending_enabled?: boolean;
+    show_certificate_dashboard?: boolean;
     main_questions_count?: number;
     trial_questions_count?: number;
 }

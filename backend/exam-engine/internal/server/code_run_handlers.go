@@ -94,7 +94,7 @@ func (s *Server) judge0Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := contextWithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	if s.plugins == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
@@ -175,7 +175,7 @@ func (s *Server) lastCodeRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := contextWithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
 	var runID uuid.UUID
@@ -311,7 +311,7 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	ctx, cancel := contextWithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := contextWithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if err := s.ensureLanguageEntitled(ctx, principal.UserID, req.Language); err != nil {
 		writeLanguageErr(w, err)
@@ -905,7 +905,7 @@ func (s *Server) persistRunFinish(
 }
 
 func (s *Server) finishRunWithError(ctx context.Context, runID uuid.UUID, msg string) error {
-	ctx, cancel := contextWithTimeout(ctx, 3*time.Second)
+	ctx, cancel := contextWithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
