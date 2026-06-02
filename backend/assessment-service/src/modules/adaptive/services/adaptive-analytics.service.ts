@@ -51,10 +51,12 @@ export class AdaptiveAnalyticsService {
       const secondsPerMark = Number(bpRows[0]?.seconds_per_mark ?? 45);
 
       const asmRows = await this.dataSource.query(
-        `SELECT module_type FROM tech_assessments WHERE assessment_id=$1`,
+        `SELECT module_type, show_certificate_dashboard, email_sending_enabled FROM tech_assessments WHERE assessment_id=$1`,
         [assessmentId],
       );
       const moduleType = asmRows[0]?.module_type ?? 'aptitude';
+      const showCertificateDashboard = asmRows[0]?.show_certificate_dashboard !== false;
+      const emailSendingEnabled = asmRows[0]?.email_sending_enabled !== false;
 
       // Resolve the actual user_id from the database attempt record based on attemptToken
       let resolvedUserId = userId;
@@ -277,6 +279,8 @@ export class AdaptiveAnalyticsService {
         skippedTopics,
         recommendedTopics,
         reliabilityDetail: reliabilityResult,
+        showCertificateDashboard,
+        emailSendingEnabled,
       };
 
       // 15. Persist to adaptive_performance_analytics
@@ -604,10 +608,29 @@ export class AdaptiveAnalyticsService {
         'Candidate';
 
       // Fetch assessment details
-      const assessmentRows = await this.dataSource.query(
-        `SELECT assessment_name, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
-        [assessmentId],
-      );
+      let assessmentRows: any[] = [];
+      try {
+        assessmentRows = await this.dataSource.query(
+          `SELECT assessment_name, email_sending_enabled FROM tech_assessments WHERE assessment_id = $1`,
+          [assessmentId],
+        );
+        if (!assessmentRows.length) {
+          assessmentRows = await this.dataSource.query(
+            `SELECT assessment_name, email_sending_enabled
+             FROM tech_assessments
+             WHERE module_type = $1
+             ORDER BY assessment_id DESC
+             LIMIT 1`,
+            [finalModule],
+          );
+        }
+      } catch (err: any) {
+        // PostgreSQL 42703 = column does not exist — migration 012 not yet applied.
+        // Default: allow email sending (fail open for email, admin can disable later).
+        const pgCode = err?.code ?? err?.driverError?.code ?? '';
+        if (pgCode !== '42703') throw err;
+        this.logger.warn(`[adaptive-analytics] Certificate columns missing — run migration 012. Defaulting email_sending_enabled=true for assessment ${assessmentId}.`);
+      }
       if (assessmentRows.length && assessmentRows[0].email_sending_enabled === false) {
         this.logger.log(`Skipping certificate email: email sending is disabled for assessment ${assessmentId}`);
         return;

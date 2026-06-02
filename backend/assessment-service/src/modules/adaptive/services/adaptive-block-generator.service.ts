@@ -133,7 +133,7 @@ export class AdaptiveBlockGeneratorService {
         attemptIdCol: 'role_attempt_id',
         categoryCol: 'domain',
         subcategoryCol: 'domain',
-        hasMode: false,
+        hasMode: true,
         hasImageUrl: true,
       },
       communication: {

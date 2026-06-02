@@ -86,7 +86,7 @@ export class AdaptiveBlockService {
         attempts: 'tech_role_attempts', questions: 'tech_role_questions',
         junction: 'tech_role_attempt_questions', idCol: 'role_question_id',
         options: 'tech_role_options', attemptIdCol: 'role_attempt_id',
-        categoryCol: 'domain', hasMode: false,
+        categoryCol: 'domain', hasMode: true,
       },
     };
     return map[moduleType] ?? null;

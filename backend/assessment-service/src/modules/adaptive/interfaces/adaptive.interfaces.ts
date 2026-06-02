@@ -213,4 +213,7 @@ export interface AdaptiveFinalReport {
 
   // Reliability detail
   reliabilityDetail: ReliabilityResult;
+
+  showCertificateDashboard?: boolean;
+  emailSendingEnabled?: boolean;
 }
