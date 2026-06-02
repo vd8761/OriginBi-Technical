@@ -386,6 +386,18 @@ func (s *Server) executeCodeRunAction(
 	if err := s.ensureRunnerAvailable(ctx); err != nil {
 		return codeRunResponse{}, err
 	}
+	// Blank/whitespace-only code must never reach Judge0 (it 422s on blank
+	// source). Return a friendly inline result instead of an error so the
+	// editor shows "write some code" rather than a failed request.
+	if !hasRunnableSource(req.Files) {
+		return codeRunResponse{
+			Type:    "error",
+			Stderr:  "No source code to run.",
+			Time:    "0ms",
+			Memory:  "0 MB",
+			Summary: "Write some code before running.",
+		}, nil
+	}
 	body, err := s.loadQuestionBodyForAttempt(ctx, attemptID, userID, examQuestionID)
 	if err != nil {
 		return codeRunResponse{}, fmt.Errorf("question body lookup failed: %w", err)

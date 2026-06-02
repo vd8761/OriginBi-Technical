@@ -207,8 +207,20 @@ func (s *Server) buildCodingFrozenSnapshot(
 	examVersionID, attemptID uuid.UUID,
 	languageSlug string,
 	totalSeconds int,
+	frozenQVIDs []string,
 ) (frozenAttemptSnapshot, spilloverReport, error) {
-	picked, spill, err := s.pickCodingQuestions(ctx, tx, languageSlug)
+	var picked []pickedQuestion
+	var spill spilloverReport
+	var err error
+	if len(frozenQVIDs) > 0 {
+		// "Configuration at the state of payment": this student already had a
+		// question set frozen on their assignment. Reuse the EXACT same
+		// questions for every attempt (including free retakes) rather than
+		// re-picking — the payload can't change once set.
+		picked, err = s.loadFrozenCodingQuestions(ctx, tx, frozenQVIDs)
+	} else {
+		picked, spill, err = s.pickCodingQuestions(ctx, tx, languageSlug)
+	}
 	if err != nil {
 		return frozenAttemptSnapshot{}, spill, err
 	}
@@ -363,6 +375,42 @@ func (s *Server) queryCodingBankPool(
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// loadFrozenCodingQuestions loads a fixed set of question_versions by id,
+// preserving the frozen order. Used to reproduce a student's payment-time
+// question payload on every (re)attempt. Ids whose question was since deleted
+// are skipped silently.
+func (s *Server) loadFrozenCodingQuestions(ctx context.Context, q snapshotQueryer, ids []string) ([]pickedQuestion, error) {
+	rows, err := q.Query(ctx, `
+		SELECT qv.id, qq.title, qv.difficulty,
+		       COALESCE(qv.max_score, 0)::float8, qv.body
+		FROM question_versions qv
+		JOIN questions qq ON qq.id = qv.question_id
+		WHERE qv.id = ANY($1::uuid[])
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byID := map[string]pickedQuestion{}
+	for rows.Next() {
+		var p pickedQuestion
+		if err := rows.Scan(&p.questionVersionID, &p.title, &p.difficulty, &p.score, &p.body); err != nil {
+			return nil, err
+		}
+		byID[p.questionVersionID.String()] = p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]pickedQuestion, 0, len(ids))
+	for _, id := range ids {
+		if p, ok := byID[id]; ok {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 
 // codingLanguageSlugFromRef extracts the full language plugin slug
