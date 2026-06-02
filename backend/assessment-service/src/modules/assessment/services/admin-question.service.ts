@@ -769,6 +769,7 @@ export class AdminQuestionService {
                 a.adaptive_seconds_per_mark,
                 a.email_sending_enabled,
                 a.show_certificate_dashboard,
+                a.metadata,
                 (CASE 
                   WHEN a.module_type = 'aptitude' THEN (SELECT COUNT(*)::int FROM tech_aptitude_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
@@ -942,6 +943,7 @@ export class AdminQuestionService {
              adaptive_total_questions = COALESCE($29, adaptive_total_questions),
              email_sending_enabled = COALESCE($30, email_sending_enabled),
              show_certificate_dashboard = COALESCE($31, show_certificate_dashboard),
+             metadata = COALESCE($32::jsonb, metadata),
              updated_at = NOW()
          WHERE assessment_id = $16`,
         [
@@ -976,6 +978,7 @@ export class AdminQuestionService {
           adaptiveTotalQuestions !== undefined ? Number(adaptiveTotalQuestions) : null,
           emailSendingEnabled !== undefined ? Boolean(emailSendingEnabled) : null,
           showCertificateDashboard !== undefined ? Boolean(showCertificateDashboard) : null,
+          data.metadata !== undefined ? (typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata)) : null,
         ]
       );
 

@@ -322,14 +322,34 @@ export class AdaptiveBlueprintService {
       ? `COALESCE(${t.subCol}::text, ${t.catCol}::text, 'General') AS subcategory`
       : `COALESCE(${t.catCol}::text, 'General') AS subcategory`;
 
+    let roleFilter = '';
+    const queryParams: any[] = [assessmentId];
+    if (moduleType === 'role') {
+      const asmRows = await this.dataSource.query(
+        `SELECT metadata FROM tech_assessments WHERE assessment_id = $1`,
+        [assessmentId],
+      );
+      if (asmRows.length) {
+        let meta: any = {};
+        try {
+          meta = typeof asmRows[0].metadata === 'string' ? JSON.parse(asmRows[0].metadata) : (asmRows[0].metadata ?? {});
+        } catch {}
+        if (meta.roleSelectionMode === 'specific' && Array.isArray(meta.selectedRoles) && meta.selectedRoles.length > 0) {
+          const placeholders = meta.selectedRoles.map((_: string, i: number) => `$${queryParams.length + i + 1}`).join(',');
+          queryParams.push(...meta.selectedRoles);
+          roleFilter = `AND domain::text IN (${placeholders})`;
+        }
+      }
+    }
+
     const rows = await this.dataSource.query(
       `SELECT DISTINCT
          COALESCE(${t.catCol}::text, 'General') AS category,
          ${subColSql}
        FROM ${t.table}
-       WHERE assessment_id=$1 AND status='active'
+       WHERE assessment_id=$1 AND status='active' ${roleFilter}
        ORDER BY category, subcategory`,
-      [assessmentId],
+      queryParams,
     );
 
     const subcategoriesByCategory: Record<string, string[]> = {};
@@ -367,6 +387,26 @@ export class AdaptiveBlueprintService {
     // Check if difficulty column exists
     const hasDifficulty = await this.columnExists(t.table, 'difficulty');
 
+    let roleFilter = '';
+    const queryParams: any[] = [assessmentId];
+    if (moduleType === 'role') {
+      const asmRows = await this.dataSource.query(
+        `SELECT metadata FROM tech_assessments WHERE assessment_id = $1`,
+        [assessmentId],
+      );
+      if (asmRows.length) {
+        let meta: any = {};
+        try {
+          meta = typeof asmRows[0].metadata === 'string' ? JSON.parse(asmRows[0].metadata) : (asmRows[0].metadata ?? {});
+        } catch {}
+        if (meta.roleSelectionMode === 'specific' && Array.isArray(meta.selectedRoles) && meta.selectedRoles.length > 0) {
+          const placeholders = meta.selectedRoles.map((_: string, i: number) => `$${queryParams.length + i + 1}`).join(',');
+          queryParams.push(...meta.selectedRoles);
+          roleFilter = `AND domain::text IN (${placeholders})`;
+        }
+      }
+    }
+
     let rows: any[];
     if (hasDifficulty) {
       rows = await this.dataSource.query(
@@ -375,9 +415,9 @@ export class AdaptiveBlueprintService {
            COALESCE(${t.catCol}::text, 'General') AS category,
            COALESCE(difficulty::text, 'medium') AS difficulty
          FROM ${t.table}
-         WHERE assessment_id=$1 AND status='active'
+         WHERE assessment_id=$1 AND status='active' ${roleFilter}
          GROUP BY COALESCE(${t.catCol}::text, 'General'), COALESCE(difficulty::text, 'medium')`,
-        [assessmentId],
+        queryParams,
       );
     } else {
       rows = await this.dataSource.query(
@@ -386,9 +426,9 @@ export class AdaptiveBlueprintService {
            COALESCE(${t.catCol}::text, 'General') AS category,
            'medium' AS difficulty
          FROM ${t.table}
-         WHERE assessment_id=$1 AND status='active'
+         WHERE assessment_id=$1 AND status='active' ${roleFilter}
          GROUP BY COALESCE(${t.catCol}::text, 'General')`,
-        [assessmentId],
+        queryParams,
       );
     }
 

@@ -178,6 +178,7 @@ export function DataHydrationProvider({ children }: { children: React.ReactNode 
 
   // Initial load from storage + backend sync
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     readFromStorage();
     
     // Brief delay to ensure session is ready

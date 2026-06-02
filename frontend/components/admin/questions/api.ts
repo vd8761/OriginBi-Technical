@@ -91,6 +91,7 @@ export interface ApiAssessment {
     show_certificate_dashboard?: boolean;
     main_questions_count?: number;
     trial_questions_count?: number;
+    metadata?: any;
 }
 
 // ─── Mapping ───────────────────────────────────────────────────────────────────

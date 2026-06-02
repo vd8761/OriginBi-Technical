@@ -23,9 +23,25 @@ import { Switch } from "@/components/ui/Switch";
 import { useConfirm } from "@/components/admin/ui";
 import CodingSettingsTab from "@/components/admin/settings/CodingSettingsTab";
 
-type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading" | "adaptive" | "languages";
+type SettingsTab = "general" | "question_type" | "rules_limits" | "categories" | "grading" | "adaptive" | "languages" | "role_settings";
 
-// ... (Removed ProperToggle as it's replaced by the new Switch component)
+const AVAILABLE_ROLES = [
+  "AI/ML Engineer",
+  "Backend Developer",
+  "Cloud Engineer",
+  "Cybersecurity Analyst",
+  "Database Developer",
+  "Data Analyst",
+  "Data Engineer",
+  "DevOps Engineer",
+  "Frontend Developer",
+  "Full Stack Developer",
+  "Mobile App Developer",
+  "Software Tester/QA Engineer",
+  "System Design Engineer",
+  "Technical Support Engineer",
+  "UI/UX Designer"
+];
 
 interface AssessmentSettingsPageProps {
   moduleOverride?: AssessmentType;
@@ -103,6 +119,10 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   // Email sending & Dashboard certificate settings
   const [emailSendingEnabled, setEmailSendingEnabled] = useState(true);
   const [showCertificateDashboard, setShowCertificateDashboard] = useState(true);
+
+  // Role-based selection states
+  const [roleSelectionMode, setRoleSelectionMode] = useState<"all" | "specific">("all");
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
   // Adaptive Questions plugin state
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(false);
@@ -260,6 +280,11 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
         adaptive_seconds_per_mark: adaptiveSecondsPerMark === "" ? 45 : Number(adaptiveSecondsPerMark),
         email_sending_enabled: emailSendingEnabled,
         show_certificate_dashboard: showCertificateDashboard,
+        metadata: {
+          ...(a.metadata ? (typeof a.metadata === 'string' ? JSON.parse(a.metadata) : a.metadata) : {}),
+          roleSelectionMode,
+          selectedRoles,
+        },
       };
       const updated = await updateAssessment(a.assessment_id, payload as any);
       setAssessments(prev => ({ ...prev, [activeModule]: updated }));
@@ -472,6 +497,14 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
     // Populate Question Types
     setEnabledQuestionKinds(parseQuestionKindEnabledMap(activeModule, a.enabled_question_types));
 
+    // Populate Role-based selection states
+    let meta: any = {};
+    if (a.metadata) {
+      meta = typeof a.metadata === "string" ? JSON.parse(a.metadata) : a.metadata;
+    }
+    setRoleSelectionMode(meta.roleSelectionMode === "specific" ? "specific" : "all");
+    setSelectedRoles(Array.isArray(meta.selectedRoles) ? meta.selectedRoles : []);
+
     setHasModifications(false);
   };
 
@@ -664,6 +697,14 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                   ["general",       "General",            SlidersHorizontal],
                   ["rules_limits",  "Rules & Limits",     Shield],
                   ["languages",     "Languages",          Code2],
+                ] : activeModule === "role" ? [
+                  ["general",       "General",            SlidersHorizontal],
+                  ["question_type", "Question Type",      ListChecks],
+                  ["rules_limits",  "Rules & Limits",     Shield],
+                  ["categories",    "Dynamic Categories", LayoutGrid],
+                  ["role_settings", "Role Configuration", SlidersHorizontal],
+                  ["grading",       "Scoring Matrix",     Award],
+                  ["adaptive",      "Adaptive",           Brain],
                 ] : [
                   ["general",       "General",            SlidersHorizontal],
                   ["question_type", "Question Type",      ListChecks],
@@ -1204,6 +1245,132 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Role Configuration Tab */}
+                  {activeModule === "role" && (activeTab === "role_settings" || searchQuery) && (
+                    <div className="space-y-12">
+                      {searchQuery && (
+                        <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-white/5">
+                          <SlidersHorizontal className="w-4 h-4 text-brand-green" />
+                          <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500">Role Configuration</h3>
+                        </div>
+                      )}
+
+                      <div className="bg-white dark:bg-white/[0.01] rounded-2xl border border-slate-200 dark:border-white/5 p-6 sm:p-8 space-y-8">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Role Selection Mode</h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Configure whether candidates should be asked questions from a specific set of roles, or if all roles should be mixed together.
+                          </p>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                            <label className={`flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer ${
+                              roleSelectionMode === "all"
+                                ? "bg-brand-green/5 border-brand-green/40 dark:bg-brand-green/10"
+                                : "border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10"
+                            }`}>
+                              <input 
+                                type="radio" 
+                                name="roleSelectionMode" 
+                                value="all" 
+                                checked={roleSelectionMode === "all"} 
+                                onChange={() => { setRoleSelectionMode("all"); markDirty(); }}
+                                className="mt-1 accent-brand-green"
+                              />
+                              <div>
+                                <span className="font-bold text-sm text-slate-900 dark:text-white block">All Roles (Mix Up)</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">Candidates will be evaluated across a randomized mix of all technical roles in the database.</span>
+                              </div>
+                            </label>
+
+                            <label className={`flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer ${
+                              roleSelectionMode === "specific"
+                                ? "bg-brand-green/5 border-brand-green/40 dark:bg-brand-green/10"
+                                : "border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10"
+                            }`}>
+                              <input 
+                                type="radio" 
+                                name="roleSelectionMode" 
+                                value="specific" 
+                                checked={roleSelectionMode === "specific"} 
+                                onChange={() => { setRoleSelectionMode("specific"); markDirty(); }}
+                                className="mt-1 accent-brand-green"
+                              />
+                              <div>
+                                <span className="font-bold text-sm text-slate-900 dark:text-white block">Select Specific Roles</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">Specify exactly which technical role(s) to evaluate. Questions will be drawn exclusively from these fields.</span>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+
+                        {roleSelectionMode === "specific" && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="pt-6 border-t border-slate-100 dark:border-white/5"
+                          >
+                            <div className="flex items-center justify-between mb-4">
+                              <h4 className="text-sm font-black uppercase tracking-wider text-slate-500">Select Target Roles</h4>
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => { setSelectedRoles([...AVAILABLE_ROLES]); markDirty(); }}
+                                  className="text-xs font-bold text-slate-500 hover:text-brand-green transition-colors"
+                                >
+                                  Select All
+                                </button>
+                                <span className="text-slate-300 dark:text-slate-700">|</span>
+                                <button 
+                                  onClick={() => { setSelectedRoles([]); markDirty(); }}
+                                  className="text-xs font-bold text-slate-500 hover:text-brand-green transition-colors"
+                                >
+                                  Clear All
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {AVAILABLE_ROLES.map(role => {
+                                const isChecked = selectedRoles.includes(role);
+                                return (
+                                  <label 
+                                    key={role}
+                                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer text-xs font-semibold ${
+                                      isChecked
+                                        ? "bg-brand-green/5 border-brand-green/30 text-brand-green dark:bg-brand-green/10"
+                                        : "border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/10 text-slate-700 dark:text-slate-300"
+                                    }`}
+                                  >
+                                    <input 
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        if (isChecked) {
+                                          setSelectedRoles(prev => prev.filter(r => r !== role));
+                                        } else {
+                                          setSelectedRoles(prev => [...prev, role]);
+                                        }
+                                        markDirty();
+                                      }}
+                                      className="rounded border-slate-300 text-brand-green focus:ring-brand-green w-4 h-4"
+                                    />
+                                    <span>{role}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            
+                            {selectedRoles.length === 0 && (
+                              <p className="text-xs font-semibold text-rose-500 mt-4 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-500/10 p-3 rounded-xl border border-rose-100 dark:border-rose-500/20">
+                                <Info className="w-4 h-4 shrink-0" />
+                                Please select at least one role. If no roles are selected, it will fall back to &quot;All Roles&quot; configuration automatically.
+                              </p>
+                            )}
+                          </motion.div>
+                        )}
+                      </div>
                     </div>
                   )}
 

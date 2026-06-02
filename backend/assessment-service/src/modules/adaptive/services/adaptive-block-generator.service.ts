@@ -383,7 +383,7 @@ export class AdaptiveBlockGeneratorService {
       // 2. Load assessment + adaptive_blocks row
       const asmRows = await qr.query(
         `SELECT a.assessment_id, a.module_type, a.block_config, a.question_limit,
-                a.adaptive_total_questions,
+                a.adaptive_total_questions, a.metadata,
                 ab.block_id, ab.difficulty_distribution
          FROM tech_assessments a
          JOIN adaptive_blocks ab ON ab.assessment_id=a.assessment_id AND ab.block_number=$2
@@ -476,6 +476,19 @@ export class AdaptiveBlockGeneratorService {
         categoryFilter = `AND (q.${cfg.categoryCol}::text IN (${catPlaceholders}) OR q.${cfg.subcategoryCol}::text IN (${subPlaceholders}))`;
       }
 
+      let roleFilter = '';
+      if (row.module_type === 'role') {
+        let meta: any = {};
+        try {
+          meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata ?? {});
+        } catch {}
+        if (meta.roleSelectionMode === 'specific' && Array.isArray(meta.selectedRoles) && meta.selectedRoles.length > 0) {
+          const placeholders = meta.selectedRoles.map((_: string, i: number) => `$${filterParams.length + i + 1}`).join(',');
+          filterParams.push(...meta.selectedRoles);
+          roleFilter = `AND q.domain::text IN (${placeholders})`;
+        }
+      }
+
       let allRows = await qr.query(
         `WITH RankedQuestions AS (
            SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect} AS difficulty,
@@ -488,7 +501,7 @@ export class AdaptiveBlockGeneratorService {
                     ORDER BY RANDOM()
                   ) as rn
            FROM ${cfg.questions} q
-           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter}
+           WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${categoryFilter} ${roleFilter}
          )
          SELECT id, question_text, difficulty, category, subcategory, marks, negative_marks${imgOuterSelect}, metadata${extraColsOuter}
          FROM RankedQuestions
@@ -498,6 +511,19 @@ export class AdaptiveBlockGeneratorService {
 
       if (allRows.length < questionsThisBlock) {
         this.logger.log(`Target category query returned only ${allRows.length} questions. Falling back to full assessment questions fetch.`);
+        let roleFilterFallback = '';
+        const queryParamsWithRoles = [...queryParams];
+        if (row.module_type === 'role') {
+          let meta: any = {};
+          try {
+            meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata ?? {});
+          } catch {}
+          if (meta.roleSelectionMode === 'specific' && Array.isArray(meta.selectedRoles) && meta.selectedRoles.length > 0) {
+            const placeholders = meta.selectedRoles.map((_: string, i: number) => `$${queryParamsWithRoles.length + i + 1}`).join(',');
+            queryParamsWithRoles.push(...meta.selectedRoles);
+            roleFilterFallback = `AND q.domain::text IN (${placeholders})`;
+          }
+        }
         allRows = await qr.query(
           `WITH RankedQuestions AS (
              SELECT q.${cfg.idCol} AS id, q.question_text, ${diffSelect} AS difficulty,
@@ -510,12 +536,12 @@ export class AdaptiveBlockGeneratorService {
                       ORDER BY RANDOM()
                     ) as rn
              FROM ${cfg.questions} q
-             WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition}
+             WHERE q.assessment_id = $1 AND q.status = 'active' ${modeCondition} ${roleFilterFallback}
            )
            SELECT id, question_text, difficulty, category, subcategory, marks, negative_marks${imgOuterSelect}, metadata${extraColsOuter}
            FROM RankedQuestions
            WHERE rn <= 20`,
-          queryParams,
+          queryParamsWithRoles,
         );
       }
 
