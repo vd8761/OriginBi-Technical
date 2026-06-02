@@ -1241,6 +1241,45 @@ export class AssessmentService {
         status: 'completed',
       };
 
+      if (attempt.status === 'evaluated') {
+        let fingerprint: any = {};
+        if (attempt.fingerprint) {
+          try {
+            fingerprint = typeof attempt.fingerprint === 'string'
+              ? JSON.parse(attempt.fingerprint)
+              : attempt.fingerprint;
+          } catch {
+            fingerprint = {};
+          }
+        }
+        if (!fingerprint || fingerprint.email_sent !== true) {
+          await queryRunner.query(
+            `UPDATE attempts 
+             SET fingerprint = jsonb_set(COALESCE(fingerprint, '{}'::jsonb), '{email_sent}', 'true'::jsonb)
+             WHERE id = $1`,
+            [attempt.id]
+          );
+
+          const techAssessmentRows = await queryRunner.query(
+            `SELECT assessment_id FROM tech_assessments WHERE module_type = 'coding' LIMIT 1`
+          );
+          const codingAssessmentId = techAssessmentRows[0]?.assessment_id
+            ? Number(techAssessmentRows[0].assessment_id)
+            : 15;
+
+          setImmediate(() => {
+            this.sendCertificateEmailForAttempt(
+              Number(attempt.candidate_user_id),
+              codingAssessmentId,
+              'coding',
+              overallScorePercent,
+              attempt.submitted_at ? new Date(attempt.submitted_at).toISOString() : new Date().toISOString(),
+              attempt.id,
+            ).catch(e => this.logger.error('Coding certificate email failed (non-fatal):', e));
+          });
+        }
+      }
+
       return response;
     } catch (error) {
       this.logger.error(`getCodingLatestSubmittedResult error:`, error);
