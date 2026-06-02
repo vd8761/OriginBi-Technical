@@ -1086,9 +1086,9 @@ export class AssessmentService {
          FROM exam_questions eq
          JOIN question_versions qv ON qv.id = eq.question_version_id
          LEFT JOIN answers ans ON ans.exam_question_id = eq.id AND ans.attempt_id = $1
-         WHERE eq.exam_version_id = $2
+         WHERE eq.attempt_built_for = $1
          ORDER BY eq.ordinal`,
-        [attemptId, attempt.exam_version_id]
+        [attemptId]
       );
 
       const sectionMap: Record<string, {

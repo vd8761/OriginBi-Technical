@@ -1032,7 +1032,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 </div>
 
                 <div className="admin-control-row" style={{ marginTop: "auto", paddingTop: 16 }}>
-                  {isDbModule(at) && (
+                  {(isDbModule(at) || at === "coding") && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1045,8 +1045,12 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   )}
                   <button
                     onClick={() => {
-                      handleSelectModule(at);
-                      setView("list");
+                      if (at === "coding") {
+                        router.push("/admin/coding");
+                      } else {
+                        handleSelectModule(at);
+                        setView("list");
+                      }
                     }}
                     className="admin-btn admin-btn-primary"
                   >
