@@ -111,7 +111,10 @@ func (s *Server) listAdminCodingLanguages(w http.ResponseWriter, r *http.Request
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
+	// Generous timeout: this endpoint reads from a (possibly distant) managed
+	// Postgres. The bank counts are now a single aggregate query instead of
+	// 3-per-language, but keep headroom so network latency can't 500 it.
+	ctx, cancel := contextWithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 
 	langs, err := s.fetchLanguagePlugins(ctx)
@@ -126,22 +129,89 @@ func (s *Server) listAdminCodingLanguages(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// One round-trip for every language × type bank count, instead of 3 queries
+	// per language (which, against a remote DB, blew the old 5s budget).
+	bankMap, err := s.allBankCountsAllLanguages(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "bank lookup failed")
+		return
+	}
+
 	resp := codingLanguageListResponse{Languages: make([]codingLanguageEntry, 0, len(langs))}
 	for _, l := range langs {
 		entry := codingLanguageEntry{Slug: l.slug, Name: l.name}
 		byType := configs[l.slug]
 		entry.Configs = byType.toPublic()
-		banks, err := s.allBankCountsForLanguage(ctx, l.slug, byType)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "bank lookup failed")
-			return
-		}
-		entry.Banks = banks
+		entry.Banks = bankMap[l.slug]
 		entry.Config = entry.Configs.Coding
 		entry.Bank = entry.Banks.Coding
 		resp.Languages = append(resp.Languages, entry)
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// allBankCountsAllLanguages computes the per-language, per-type bank counts in a
+// SINGLE query. Coding questions can allow multiple languages (body->
+// 'allowedLanguages' array); MCQ / fill-in-the-blank are scoped to one language
+// (body->>'language'). Tag filters are intentionally NOT applied here — this is
+// the catalog overview, which shows the full eligible pool per language.
+func (s *Server) allBankCountsAllLanguages(ctx context.Context) (map[string]banksByType, error) {
+	rows, err := s.pool.Query(ctx, `
+		WITH coding AS (
+		    SELECT lang AS language_slug, 'coding' AS qtype, qv.difficulty
+		    FROM questions q
+		    JOIN question_versions qv ON qv.id = q.current_version_id
+		    JOIN plugins p ON p.id = q.plugin_id
+		    CROSS JOIN LATERAL jsonb_array_elements_text(
+		        COALESCE(qv.body->'allowedLanguages', '[]'::jsonb)) AS lang
+		    WHERE p.slug = 'assessment.coding'
+		      AND q.is_archived = false
+		      AND COALESCE(qv.body->>'mode', 'main') = 'main'
+		),
+		others AS (
+		    SELECT qv.body->>'language' AS language_slug,
+		           CASE p.slug WHEN 'assessment.mcq' THEN 'mcq' ELSE 'fillblank' END AS qtype,
+		           qv.difficulty
+		    FROM questions q
+		    JOIN question_versions qv ON qv.id = q.current_version_id
+		    JOIN plugins p ON p.id = q.plugin_id
+		    WHERE p.slug IN ('assessment.mcq', 'assessment.fillblank')
+		      AND q.is_archived = false
+		      AND COALESCE(qv.body->>'mode', 'main') = 'main'
+		      AND qv.body->>'language' IS NOT NULL
+		),
+		allq AS (SELECT * FROM coding UNION ALL SELECT * FROM others)
+		SELECT language_slug, qtype,
+		       COUNT(*)::int AS total,
+		       COUNT(*) FILTER (WHERE difficulty BETWEEN 1 AND 2)::int AS easy,
+		       COUNT(*) FILTER (WHERE difficulty BETWEEN 3 AND 4)::int AS medium,
+		       COUNT(*) FILTER (WHERE difficulty >= 5)::int AS hard
+		FROM allq
+		GROUP BY language_slug, qtype
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]banksByType{}
+	for rows.Next() {
+		var slug, qtype string
+		var c bankCounts
+		if err := rows.Scan(&slug, &qtype, &c.Total, &c.Easy, &c.Medium, &c.Hard); err != nil {
+			return nil, err
+		}
+		entry := out[slug]
+		switch qtype {
+		case QuestionTypeMCQ:
+			entry.MCQ = c
+		case QuestionTypeFillBlank:
+			entry.FillBlank = c
+		default:
+			entry.Coding = c
+		}
+		out[slug] = entry
+	}
+	return out, rows.Err()
 }
 
 // getAdminCodingLanguageConfig returns the per-type configs + per-type bank
