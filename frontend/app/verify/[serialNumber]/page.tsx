@@ -77,7 +77,36 @@ export default async function VerifyCertificatePage({
   let errorMsg: string | null = null;
 
   if (!token || !moduleParam) {
-    errorMsg = "Verification parameters are missing. Please scan a valid QR code or check the certificate serial link.";
+    // Serial-only verification: coding certificates are issued by the exam-engine
+    // and looked up by their public serial (no token/module needed).
+    const engineBase =
+      process.env.NEXT_PUBLIC_EXAM_ENGINE_URL?.replace(/\/$/, "") ||
+      "http://localhost:8088";
+    try {
+      const res = await fetch(
+        `${engineBase}/v1/certificates/${encodeURIComponent(serialNumber)}`,
+        { cache: "no-store" },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.valid && data.certificate) {
+          const c = data.certificate;
+          resultData = {
+            candidateName: c.candidateName,
+            overallScorePercent: Math.round(c.percentage),
+            completedAt: c.issuedAt,
+            codingLanguage: c.language,
+          };
+        } else {
+          errorMsg = "No certificate matches this serial. It may be invalid or revoked.";
+        }
+      } else {
+        errorMsg = "No certificate matches this serial. It may be invalid or revoked.";
+      }
+    } catch (e) {
+      console.error("Certificate serial lookup failed:", e);
+      errorMsg = "Unable to connect to the OriginBi verification network. Please try again later.";
+    }
   } else {
     try {
       const res = await fetch(
@@ -102,6 +131,10 @@ export default async function VerifyCertificatePage({
   const grade = scorePercent >= 90 ? "A" : scorePercent >= 80 ? "B" : scorePercent >= 70 ? "C" : scorePercent >= 60 ? "D" : "F";
 
   const getModuleTitle = () => {
+    if (resultData?.codingLanguage) {
+      const lang = String(resultData.codingLanguage);
+      return `${lang.charAt(0).toUpperCase()}${lang.slice(1)} Coding Assessment`;
+    }
     if (moduleParam === "aptitude") return "Technical Aptitude & Reasoning";
     if (moduleParam === "communication" || moduleParam === "grammar") return "Professional Communication & English Literacy";
     if (moduleParam === "role") return "Role-Based Software Engineering Competency";

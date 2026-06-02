@@ -7,13 +7,13 @@ name: Deploy to VPS
 on:
   push:
     branches:
-      - develop
+      - main
   pull_request:
     branches:
-      - develop
+      - main
 
 # Cancel any in-progress run for the same ref when a new event arrives.
-# PR refs (refs/pull/N/merge) and the develop branch ref are distinct,
+# PR refs (refs/pull/N/merge) and the main branch ref are distinct,
 # so push deploys are never cancelled by PR validation runs.
 concurrency:
   group: deploy-${{ github.ref }}
@@ -233,7 +233,7 @@ jobs:
       - verify-tech-engine
       - verify-assessment-service
       - verify-judge0
-    # Run only on push events (i.e. after merge to develop), and only when at
+    # Run only on push events (i.e. after merge to main), and only when at
     # least one service changed AND no required verify failed. Skipped verify
     # jobs (untouched services) count as success; failed ones block sync.
     if: >-
@@ -258,8 +258,8 @@ jobs:
           script: |
             set -e
             cd ${{ env.PROJECT_PATH }}
-            git fetch origin develop
-            git reset --hard origin/develop
+            git fetch origin main
+            git reset --hard origin/main
             echo "✓ Synced to $(git rev-parse --short HEAD)"
 
   # ──────────────────────────────────────────────

@@ -1324,11 +1324,31 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
             if (!backendAttemptId) return undefined;
             const examQuestionId = examQuestionByLocalId[qId];
             if (!examQuestionId) return undefined;
-            const response: CodeRunResponse = await runAttemptCode(
-                backendAttemptId,
-                examQuestionId,
-                input,
-            );
+            let response: CodeRunResponse;
+            try {
+                response = await runAttemptCode(backendAttemptId, examQuestionId, input);
+            } catch (err) {
+                // Engine or Judge0 sandbox unreachable — surface a clear inline
+                // message instead of an unhandled rejection / silent failure.
+                const msg = err instanceof Error ? err.message : String(err);
+                const offline = /unavailable|judge0|runner|failed to fetch|networkerror|50[23]/i.test(msg);
+                traceEvent("code.run_failed", 2, {
+                    mode: input.mode,
+                    language: input.language,
+                    error: msg,
+                }, qId);
+                return {
+                    type: "error",
+                    stdout: "",
+                    stderr: msg,
+                    testResults: null,
+                    time: "0ms",
+                    memory: "0 MB",
+                    summary: offline
+                        ? "Compiler is offline — your code wasn't run. Please retry in a moment."
+                        : "Couldn't run your code. Please retry.",
+                };
+            }
             traceEvent("code.run_completed", response.type === "success" ? 0 : 1, {
                 mode: input.mode,
                 language: input.language,
@@ -1726,7 +1746,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
         return () => window.clearInterval(id);
     }, [backendAttemptId, hydrated, resetTimer, submitted, traceEvent]);
 
-    const handleBackToExplore = () => {
+    const leaveFullscreen = () => {
         if (typeof document !== "undefined" && document.fullscreenElement) {
             try {
                 void document.exitFullscreen();
@@ -1734,7 +1754,16 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 console.error("Failed to exit fullscreen:", e);
             }
         }
+    };
+
+    const handleBackToExplore = () => {
+        leaveFullscreen();
         window.location.href = "/explore/coding";
+    };
+
+    const handleViewResults = () => {
+        leaveFullscreen();
+        window.location.href = "/my-score";
     };
 
     const tabSwitchCount = tabMonitor.count;
@@ -1884,6 +1913,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 tabSwitches={tabSwitchCount}
                 languageLabel={languageLabel}
                 onBackToExplore={handleBackToExplore}
+                onViewResults={handleViewResults}
             />
         );
     }
