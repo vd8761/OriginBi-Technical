@@ -972,22 +972,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     </svg>
                     Reset
                 </button>
-                <button
-                    type="button"
-                    onClick={handleRun}
-                    disabled={running}
-                    title="Run with Custom Input"
-                    className="flex items-center gap-1.5 rounded-lg border border-[#1ED36A]/35 bg-[#1ED36A]/[0.12] px-4 py-1.5 text-[13px] font-bold text-[#1ED36A] transition-all hover:bg-[#1ED36A]/[0.18] disabled:cursor-not-allowed disabled:text-[#1ED36A]/50"
-                >
-                    {running ? (
-                        <div className="h-3 w-3 rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
-                    ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#1ED36A">
-                            <polygon points="5 3 19 12 5 21" />
-                        </svg>
-                    )}
-                    {running ? "Running…" : "Run"}
-                </button>
+
                 {(question.testCases?.length ?? 0) > 0 && (
                     <button
                         type="button"

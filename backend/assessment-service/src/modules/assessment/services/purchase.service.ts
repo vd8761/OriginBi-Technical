@@ -222,6 +222,22 @@ export class PurchaseService {
     async getUserPricingPolicy(email: string): Promise<"free" | "pay" | null> {
         if (!email) return null;
         try {
+            // Check users table first (since users is replicated and contains metadata)
+            const userRows = await this.dataSource.query(
+                `SELECT metadata FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+                [email],
+            );
+            if (userRows?.length) {
+                const metadata = userRows[0].metadata || {};
+                if (metadata.pricingPolicy === "pay") {
+                    return "pay";
+                }
+                if (metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
+                    return "free";
+                }
+            }
+
+            // Fallback to registrations table
             const rows = await this.dataSource.query(
                 `SELECT r.metadata
                  FROM registrations r
@@ -292,19 +308,30 @@ export class PurchaseService {
         if (!email) return false;
         try {
             // 1. Get the groupName the user is registered in
-            const regRows = await this.dataSource.query(
-                `SELECT r.metadata->>'groupName' as "groupName"
-                 FROM registrations r
-                 JOIN users u ON u.id = r.user_id
-                 WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
-                 LIMIT 1`,
+            let groupName = null;
+            const userRows = await this.dataSource.query(
+                `SELECT metadata->>'groupName' as "groupName" FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
                 [email]
             );
-            if (!regRows || regRows.length === 0 || !regRows[0].groupName) {
-                return false;
+            if (userRows?.[0]?.groupName) {
+                groupName = userRows[0].groupName;
+            } else {
+                const regRows = await this.dataSource.query(
+                    `SELECT r.metadata->>'groupName' as "groupName"
+                     FROM registrations r
+                     JOIN users u ON u.id = r.user_id
+                     WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+                     LIMIT 1`,
+                    [email]
+                );
+                if (regRows?.[0]?.groupName) {
+                    groupName = regRows[0].groupName;
+                }
             }
 
-            const groupName = regRows[0].groupName;
+            if (!groupName) {
+                return false;
+            }
 
             // 2. Fetch the tech_groups metadata
             const groupRows = await this.dataSource.query(
@@ -451,9 +478,9 @@ export class PurchaseService {
             this.logger.warn(`Failed to resolve group-based pricing override for ${email}: ${err.message}`);
         }
 
-        // Admin-registered users skip Razorpay entirely.
+        // Admin-registered users skip Razorpay entirely if not explicitly marked 'pay'.
         const isAdmin = await this.isAdminRegistered(email);
-        if (isAdmin) {
+        if (isAdmin && userPricingPolicy !== "pay") {
             isFree = true;
             finalAmount = 0;
         }
@@ -587,8 +614,9 @@ export class PurchaseService {
         // (PaymentModal still calls verify-payment even after createOrder
         // returns `free: true`). Skip signature verification because no real
         // Razorpay order existed, then record a free purchase.
+        const userPricingPolicy = await this.getUserPricingPolicy(body.email);
         const isFreeOrder = body.razorpay_order_id?.startsWith("free_admin_");
-        if (isFreeOrder || (await this.isAdminRegistered(body.email))) {
+        if ((isFreeOrder || (await this.isAdminRegistered(body.email))) && userPricingPolicy !== "pay") {
             await this.recordFreePurchase(
                 body.email,
                 body.assessmentId,
@@ -602,7 +630,6 @@ export class PurchaseService {
 
         // Verify signature (with secure fallback for free-tier bypasses)
         if (body.razorpay_order_id === "free_bypass" || body.razorpay_signature === "signature_free") {
-            const userPricingPolicy = await this.getUserPricingPolicy(body.email);
             let hasFreeOverride = assessmentAmount === 0 || userPricingPolicy === "free";
 
             if (!hasFreeOverride && userPricingPolicy !== "pay") {
@@ -797,7 +824,8 @@ export class PurchaseService {
                 }
             }
 
-            if (await this.isAdminRegistered(email)) {
+            const isAdmin = await this.isAdminRegistered(email);
+            if (isAdmin && userPricingPolicy !== "pay") {
                 for (const code of this.knownAssessmentCodes()) {
                     purchased.add(code);
                 }

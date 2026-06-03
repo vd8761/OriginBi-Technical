@@ -72,8 +72,7 @@ export class AdminUsersService {
       const args: any[] = [];
       const where: string[] = [];
 
-      // Mandatory tech assessment filter
-      where.push('r.is_tech_assessment IN (1, 2)');
+      // No longer filtering by is_tech_assessment to show all users
 
       if (q) {
         const p = args.length + 1;
@@ -132,7 +131,6 @@ export class AdminUsersService {
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
         LEFT JOIN programs p ON p.id = r.program_id
-        WHERE r.is_tech_assessment IN (1, 2)
       `);
       const countsRaw = countsResult[0];
       this.logger.debug(`listAdminUsers countsRaw: ${JSON.stringify(countsRaw)}`);
