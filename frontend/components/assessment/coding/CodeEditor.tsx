@@ -463,10 +463,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             initialLastRun.testResults.length > 0
             && initialLastRun.testResults.every((t) => t.passed);
         let type: RunResult["type"];
-        if (initialLastRun.mode === "custom") {
-            type = status === 3 ? "success" : status === 5 ? "timeout" : status === 6 ? "compile-error" : "error";
-        } else if (initialLastRun.testResults.length === 0) {
-            type = status === 6 ? "compile-error" : status === 5 ? "timeout" : "error";
+        if (initialLastRun.mode === "custom" || initialLastRun.mode === "final" || initialLastRun.testResults.length === 0) {
+            const isAccepted = status === 3 || initialLastRun.summary === "Accepted";
+            type = isAccepted ? "success" : status === 5 ? "timeout" : status === 6 ? "compile-error" : "error";
         } else if (allPassed) {
             type = "success";
         } else {
@@ -474,8 +473,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         }
         return {
             type,
-            stdout: "",
-            stderr: "",
+            stdout: initialLastRun.stdout ?? "",
+            stderr: initialLastRun.stderr ?? "",
             testResults: initialLastRun.testResults.length > 0
                 ? initialLastRun.testResults.map((t) => ({
                     input: "",
@@ -507,20 +506,46 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const [treeOpen, setTreeOpen] = useState(true);
     const [result, setResult] = useState<RunResult | null>(lastRunAsResult);
     const [running, setRunning] = useState(false);
-    // When the active question changes, the parent passes a new
-    // initialLastRun. Refresh `result` so the output panel mirrors the prior
-    // run for the newly-active question. We only do this when no fresh run is
-    // in-flight so we never clobber a result the candidate is about to see.
+
+    const currentRunIdRef = useRef<string | null>(null);
+    const lastQuestionIdRef = useRef<number>(question.id);
+
+    // Synchronize outputs when the question changes or when prior runs are fetched asynchronously.
     useEffect(() => {
-        if (running) return;
-        setResult(lastRunAsResult);
-    }, [lastRunAsResult, running]);
+        // If the question changed, we MUST rehydrate from the last run for this question.
+        if (lastQuestionIdRef.current !== question.id) {
+            lastQuestionIdRef.current = question.id;
+            currentRunIdRef.current = null;
+            setResult(lastRunAsResult);
+            return;
+        }
+
+        // If the question didn't change, we ONLY want to update the result if we are NOT running,
+        // AND the lastRunAsResult has actually changed to a new finished run (with a new runId)
+        // that we haven't rendered yet. E.g. when a prior run fetches asynchronously.
+        if (!running && lastRunAsResult) {
+            const newRunId = initialLastRun?.runId;
+            const currentResultRunId = result?.runId;
+            
+            if (currentRunIdRef.current) {
+                // We completed a run in this session. Only update setResult if the
+                // incoming lastRunAsResult matches our completed run ID.
+                if (newRunId === currentRunIdRef.current && newRunId !== currentResultRunId) {
+                    setResult(lastRunAsResult);
+                }
+            } else {
+                // No run in this session yet. Update setResult when the async prior run fetches.
+                if (!result || (newRunId && newRunId !== currentResultRunId)) {
+                    setResult(lastRunAsResult);
+                }
+            }
+        }
+    }, [lastRunAsResult, running, question.id, result, initialLastRun]);
     // Per-test results streamed in via SSE before the final HTTP response lands.
     // Cleared at the start of each run; the full result from setResult takes over
     // once the HTTP response returns.
     const [streamingTests, setStreamingTests] = useState<TestResult[]>([]);
     const [streamingTotal, setStreamingTotal] = useState(0);
-    const currentRunIdRef = useRef<string | null>(null);
     const pluginRuntime = usePluginRuntime();
     const [outputOpen, setOutputOpen] = useState(false);
     const [outputHeight, setOutputHeight] = useState(260);
@@ -677,6 +702,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                             summary: "Code runner unavailable.",
                         };
                 if (!res) return;
+                if (res.runId) {
+                    currentRunIdRef.current = res.runId;
+                }
                 setResult(res);
             } catch (e) {
                 if ((e as { name?: string })?.name === "AbortError") return;
@@ -944,22 +972,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     </svg>
                     Reset
                 </button>
-                <button
-                    type="button"
-                    onClick={handleRun}
-                    disabled={running}
-                    title="Run with Custom Input"
-                    className="flex items-center gap-1.5 rounded-lg border border-[#1ED36A]/35 bg-[#1ED36A]/[0.12] px-4 py-1.5 text-[13px] font-bold text-[#1ED36A] transition-all hover:bg-[#1ED36A]/[0.18] disabled:cursor-not-allowed disabled:text-[#1ED36A]/50"
-                >
-                    {running ? (
-                        <div className="h-3 w-3 rounded-full border-2 border-[#1ED36A]/30 border-t-[#1ED36A] animate-spin-fast" />
-                    ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#1ED36A">
-                            <polygon points="5 3 19 12 5 21" />
-                        </svg>
-                    )}
-                    {running ? "Running…" : "Run"}
-                </button>
+
                 {(question.testCases?.length ?? 0) > 0 && (
                     <button
                         type="button"

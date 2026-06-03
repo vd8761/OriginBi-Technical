@@ -232,7 +232,7 @@ const AddRegistrationForm: React.FC<AddRegistrationFormProps> = ({
     currentRole: "",
     roleDescription: "",
     groupCode: initialGroupCode || "",
-    sendEmail: false,
+    sendEmail: true,
     pricingPolicy: "free",
   });
 

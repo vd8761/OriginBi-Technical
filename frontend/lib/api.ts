@@ -297,6 +297,7 @@ export interface CodeRunResponse {
   memory: string;
   summary: string;
   runId: string;
+  statusId?: number;
 }
 
 export interface AttemptEventInput {
@@ -706,7 +707,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       roleDescription: input.roleDescription,
       groupCode: input.groupCode,
       registrationSource: input.registrationSource,
-      ...(hasGroup ? {} : { pricingPolicy: input.pricingPolicy || "pay" }),
+      pricingPolicy: input.pricingPolicy || "free",
     }),
     baseOverride: TECH_API_BASE,
     auth: false,
@@ -1046,6 +1047,8 @@ export interface LastCodeRun {
   startedAt: string;
   finishedAt?: string;
   testResults: LastCodeRunTest[];
+  stdout?: string;
+  stderr?: string;
 }
 
 /**

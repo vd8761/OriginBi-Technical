@@ -1385,6 +1385,9 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                     language: input.language,
                     entryFile: input.entryFile,
                     summary: response.summary,
+                    statusId: response.statusId,
+                    stdout: response.stdout,
+                    stderr: response.stderr,
                     timeMs: parseTimeStringToMs(response.time),
                     memoryKb: parseMemoryStringToKb(response.memory),
                     startedAt: new Date().toISOString(),
@@ -1438,6 +1441,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 time: response.time,
                 memory: response.memory,
                 summary: response.summary,
+                runId: response.runId,
             };
         },
         [backendAttemptId, examQuestionByLocalId, mcqAnswers, traceEvent, statuses, setQuestionStatus, persistQuestion],

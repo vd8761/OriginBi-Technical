@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -47,6 +48,7 @@ type codeRunResponse struct {
 	Memory      string              `json:"memory"`
 	Summary     string              `json:"summary"`
 	RunID       string              `json:"runId"`
+	StatusID    int                 `json:"statusId,omitempty"`
 }
 
 type codeTestResultDTO struct {
@@ -139,6 +141,8 @@ type lastCodeRunDTO struct {
 	StartedAt   time.Time              `json:"startedAt"`
 	FinishedAt  *time.Time             `json:"finishedAt,omitempty"`
 	TestResults []lastCodeRunTestDTO   `json:"testResults"`
+	Stdout      string                 `json:"stdout,omitempty"`
+	Stderr      string                 `json:"stderr,omitempty"`
 }
 
 type lastCodeRunTestDTO struct {
@@ -261,6 +265,12 @@ func (s *Server) lastCodeRun(w http.ResponseWriter, r *http.Request) {
 		FinishedAt:  finishedAt,
 		TestResults: tests,
 	}
+	if stdoutPtr != nil {
+		out.Stdout = *stdoutPtr
+	}
+	if stderrPtr != nil {
+		out.Stderr = *stderrPtr
+	}
 	if timeSeconds != nil {
 		out.TimeMs = int(*timeSeconds*1000 + 0.5)
 	}
@@ -344,6 +354,11 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := s.executeCodeRunAction(ctx, principal.UserID, attemptID, examQuestionID, req)
 	if err != nil {
+		s.logger.Error("executeCodeRunAction failed",
+			slog.String("attempt_id", attemptID.String()),
+			slog.String("exam_question_id", examQuestionID.String()),
+			slog.String("error", err.Error()),
+		)
 		writeCodeRunErr(w, err)
 		return
 	}
@@ -369,6 +384,11 @@ func (s *Server) handleCodingAction(ctx context.Context, _ *pluginhost.Registry,
 	}
 	resp, err := s.executeCodeRunAction(ctx, actionReq.UserID, actionReq.AttemptID, actionReq.ExamQuestionID, req)
 	if err != nil {
+		s.logger.Error("executeCodeRunAction failed in plugin",
+			slog.String("attempt_id", actionReq.AttemptID.String()),
+			slog.String("exam_question_id", actionReq.ExamQuestionID.String()),
+			slog.String("error", err.Error()),
+		)
 		status, body := codeRunErrResponse(err)
 		return pluginhost.ActionResponse{HTTPStatus: status, Body: body}, nil
 	}
@@ -398,17 +418,45 @@ func (s *Server) executeCodeRunAction(
 			Summary: "Write some code before running.",
 		}, nil
 	}
-	body, err := s.loadQuestionBodyForAttempt(ctx, attemptID, userID, examQuestionID)
-	if err != nil {
-		return codeRunResponse{}, fmt.Errorf("question body lookup failed: %w", err)
+	type metadataResult struct {
+		body  []byte
+		verID uuid.UUID
+		ansID uuid.NullUUID
+		err   error
 	}
-	if err := s.validateCodingAnswerPayload(req, body); err != nil {
+	type testsResult struct {
+		tests []dbTestCase
+		err   error
+	}
+
+	metadataChan := make(chan metadataResult, 1)
+	testsChan := make(chan testsResult, 1)
+
+	go func() {
+		body, verID, ansID, err := s.loadQuestionMetadataForAttempt(ctx, attemptID, userID, examQuestionID)
+		metadataChan <- metadataResult{body: body, verID: verID, ansID: ansID, err: err}
+	}()
+
+	go func() {
+		tests, err := s.loadRunTests(ctx, attemptID, userID, examQuestionID, req.Mode, req.Language)
+		testsChan <- testsResult{tests: tests, err: err}
+	}()
+
+	mRes := <-metadataChan
+	if mRes.err != nil {
+		return codeRunResponse{}, fmt.Errorf("question metadata lookup failed: %w", mRes.err)
+	}
+
+	if err := s.validateCodingAnswerPayload(req, mRes.body); err != nil {
 		return codeRunResponse{}, err
 	}
-	tests, err := s.loadRunTests(ctx, attemptID, userID, examQuestionID, req.Mode, req.Language)
-	if err != nil {
-		return codeRunResponse{}, fmt.Errorf("testcase lookup failed: %w", err)
+
+	tRes := <-testsChan
+	if tRes.err != nil {
+		return codeRunResponse{}, fmt.Errorf("testcase lookup failed: %w", tRes.err)
 	}
+	tests := tRes.tests
+
 	if req.Mode == "tests" && len(tests) == 0 {
 		return codeRunResponse{}, errNoTestCases
 	}
@@ -425,7 +473,7 @@ func (s *Server) executeCodeRunAction(
 		return codeRunResponse{}, errCodeRunnerBusy
 	}
 
-	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req, false)
+	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req, false, &mRes.verID, &mRes.ansID)
 	if err != nil {
 		return codeRunResponse{}, fmt.Errorf("run persistence failed: %w", err)
 	}
@@ -446,21 +494,7 @@ func (s *Server) executeCodeRunAction(
 	return resp, nil
 }
 
-func (s *Server) loadQuestionBodyForAttempt(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID) ([]byte, error) {
-	var body []byte
-	err := s.pool.QueryRow(ctx, `
-		SELECT qv.body
-		FROM attempts a
-		JOIN exam_questions eq
-		     ON eq.exam_version_id = a.exam_version_id
-		    AND eq.id = $2
-		JOIN question_versions qv ON qv.id = eq.question_version_id
-		WHERE a.id = $1
-		  AND a.candidate_user_id = $3
-		  AND a.status IN ('started','in_progress','paused')
-	`, attemptID, examQuestionID, userID).Scan(&body)
-	return body, err
-}
+
 
 func actionForRunMode(mode string) string {
 	switch mode {
@@ -569,46 +603,62 @@ func codeRunErrResponse(err error) (int, json.RawMessage) {
 	return status, body
 }
 
-func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string, language string) ([]dbTestCase, error) {
+func (s *Server) loadQuestionMetadataForAttempt(
+	ctx context.Context,
+	attemptID uuid.UUID,
+	userID int64,
+	examQuestionID uuid.UUID,
+) ([]byte, uuid.UUID, uuid.NullUUID, error) {
+	var body []byte
+	var verID uuid.UUID
+	var ansIDNull uuid.NullUUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT qv.body, eq.question_version_id, a.id
+		FROM attempts att
+		JOIN exam_questions eq ON eq.exam_version_id = att.exam_version_id AND eq.id = $2
+		JOIN question_versions qv ON qv.id = eq.question_version_id
+		LEFT JOIN answers a ON a.attempt_id = att.id AND a.exam_question_id = eq.id
+		WHERE att.id = $1 AND att.candidate_user_id = $3
+		  AND att.status IN ('started','in_progress','paused')
+	`, attemptID, examQuestionID, userID).Scan(&body, &verID, &ansIDNull)
+	return body, verID, ansIDNull, err
+}
+
+func (s *Server) loadRunTests(
+	ctx context.Context,
+	attemptID uuid.UUID,
+	userID int64,
+	examQuestionID uuid.UUID,
+	mode string,
+	language string,
+) ([]dbTestCase, error) {
+	if mode == "custom" {
+		return nil, nil
+	}
 	itemRef := s.legacyItemRefForLanguage(language)
 	if itemRef == "" {
 		itemRef = "coding:" + runnerjudge0.LegacyLanguageName(language)
 	}
-	var exists int
-	// 'submitted' is included so the post-submit final-evaluation pass can
-	// still load the graded test cases — the attempt is already 'submitted'
-	// by then. The live run path is gated to active attempts elsewhere
-	// (loadQuestionBodyForAttempt), so this does not loosen it.
-	err := s.pool.QueryRow(ctx, `
-		SELECT 1
-		FROM attempts a
-		JOIN exam_assignments assign ON assign.id = a.assignment_id
-		JOIN exam_questions eq
-		     ON eq.exam_version_id = a.exam_version_id
-		    AND eq.id = $2
-		WHERE a.id = $1
-		  AND a.candidate_user_id = $3
-		  AND a.status IN ('started','in_progress','paused','submitted')
-		  AND (
-		      assign.assignment_ref IS NULL
-		      OR assign.assignment_ref = $4
-		  )
-	`, attemptID, examQuestionID, userID, itemRef).Scan(&exists)
-	if err != nil {
-		return nil, err
-	}
-	if mode != "tests" && mode != "final" {
-		return nil, nil
-	}
+
 	rows, err := s.pool.Query(ctx, `
 		SELECT tc.id, tc.ordinal, COALESCE(tc.name, ''), tc.stdin, tc.expected_stdout,
 		       tc.comparator, tc.comparator_config
-		FROM exam_questions eq
-		JOIN question_test_cases tc ON tc.question_version_id = eq.question_version_id
+		FROM question_test_cases tc
+		JOIN question_versions qv ON qv.id = tc.question_version_id
+		JOIN exam_questions eq ON eq.question_version_id = qv.id
+		JOIN attempts a ON a.exam_version_id = eq.exam_version_id
+		JOIN exam_assignments assign ON assign.id = a.assignment_id
 		WHERE eq.id = $1
-		  AND ($2 = 'final' OR tc.is_hidden = false)
+		  AND a.id = $2
+		  AND a.candidate_user_id = $3
+		  AND a.status IN ('started','in_progress','paused','submitted')
+		  AND ($4 = 'final' OR tc.is_hidden = false)
+		  AND (
+		      assign.assignment_ref IS NULL
+		      OR assign.assignment_ref = $5
+		  )
 		ORDER BY tc.ordinal
-	`, examQuestionID, mode)
+	`, examQuestionID, attemptID, userID, mode, itemRef)
 	if err != nil {
 		return nil, err
 	}
@@ -620,6 +670,9 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 			return nil, err
 		}
 		tests = append(tests, tc)
+	}
+	if len(tests) == 0 {
+		return nil, pgx.ErrNoRows
 	}
 	return tests, rows.Err()
 }
@@ -636,31 +689,106 @@ func (s *Server) persistRunStart(
 	examQuestionID uuid.UUID,
 	req codeRunRequest,
 	reuseAnswer bool,
+	prefetchedVerID *uuid.UUID,
+	prefetchedAnsID *uuid.NullUUID,
 ) (uuid.UUID, error) {
+	var questionVersionID uuid.UUID
+	var answerID uuid.UUID
+
+	if prefetchedVerID != nil && prefetchedAnsID != nil {
+		questionVersionID = *prefetchedVerID
+		if !prefetchedAnsID.Valid && reuseAnswer {
+			return uuid.Nil, errors.New("cannot reuse non-existent answer")
+		}
+		if prefetchedAnsID.Valid {
+			answerID = prefetchedAnsID.UUID
+		} else {
+			answerID = uuid.New()
+		}
+	} else {
+		var answerIDNull uuid.NullUUID
+		err := s.pool.QueryRow(ctx, `
+			SELECT eq.question_version_id, a.id
+			FROM attempts att
+			JOIN exam_questions eq ON eq.exam_version_id = att.exam_version_id AND eq.id = $2
+			LEFT JOIN answers a ON a.attempt_id = att.id AND a.exam_question_id = eq.id
+			WHERE att.id = $1 AND att.candidate_user_id = $3
+			  AND att.status IN ('started','in_progress','paused','submitted')
+		`, attemptID, examQuestionID, userID).Scan(&questionVersionID, &answerIDNull)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("metadata lookup failed: %w", err)
+		}
+		if !answerIDNull.Valid && reuseAnswer {
+			return uuid.Nil, errors.New("cannot reuse non-existent answer")
+		}
+		if answerIDNull.Valid {
+			answerID = answerIDNull.UUID
+		} else {
+			answerID = uuid.New()
+		}
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return uuid.Nil, err
 	}
 	defer tx.Rollback(ctx)
 
+	batch := &pgx.Batch{}
+	now := time.Now().UTC()
+
 	if !reuseAnswer {
-		payload, _ := json.Marshal(map[string]any{
+		payloadBytes, _ := json.Marshal(map[string]any{
 			"language":    req.Language,
 			"files":       req.Files,
 			"entryFile":   req.EntryFile,
 			"lastRunMode": req.Mode,
 		})
-		if _, err := s.saveAnswerTx(ctx, tx, userID, attemptID, examQuestionID, "attempted", payload); err != nil {
-			return uuid.Nil, err
-		}
-	}
-	var answerID uuid.UUID
-	if err := tx.QueryRow(ctx, `
-		SELECT id
-		FROM answers
-		WHERE attempt_id = $1 AND exam_question_id = $2
-	`, attemptID, examQuestionID).Scan(&answerID); err != nil {
-		return uuid.Nil, err
+
+		// 1. Save attempt question state
+		batch.Queue(`
+			INSERT INTO attempt_question_state (
+			    id, attempt_id, exam_question_id, state,
+			    visit_count, first_viewed_at, last_viewed_at
+			)
+			VALUES ($1, $2, $3, 'attempted', 1, $4, $4)
+			ON CONFLICT (attempt_id, exam_question_id) DO UPDATE
+			SET state = EXCLUDED.state,
+			    last_viewed_at = EXCLUDED.last_viewed_at,
+			    visit_count = GREATEST(attempt_question_state.visit_count, 1)
+		`, uuid.New(), attemptID, examQuestionID, now)
+
+		// 2. Save answer
+		batch.Queue(`
+			INSERT INTO answers (
+			    id, attempt_id, exam_question_id, question_version_id,
+			    payload, submitted_at
+			)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+			ON CONFLICT (attempt_id, exam_question_id) DO UPDATE
+			SET payload = EXCLUDED.payload,
+			    submitted_at = EXCLUDED.submitted_at
+		`, answerID, attemptID, examQuestionID, questionVersionID, payloadBytes, now)
+
+		// 3. Save telemetry event answer_saved
+		eventPayloadBytes, _ := json.Marshal(map[string]any{
+			"state":        "attempted",
+			"payloadBytes": len(payloadBytes),
+		})
+		batch.Queue(`
+			INSERT INTO attempt_events (
+			    attempt_id, occurred_at, kind, severity, exam_question_id, payload
+			)
+			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+		`, attemptID, now, "answer_saved", int16(0), &examQuestionID, eventPayloadBytes)
+
+		batch.Queue(`
+			INSERT INTO attempt_event_summary (attempt_id, kind, count, last_at)
+			VALUES ($1, $2, 1, $3)
+			ON CONFLICT (attempt_id, kind) DO UPDATE
+			SET count = attempt_event_summary.count + 1,
+			    last_at = GREATEST(attempt_event_summary.last_at, EXCLUDED.last_at)
+		`, attemptID, "answer_saved", now)
 	}
 
 	submissionID := uuid.New()
@@ -668,41 +796,60 @@ func (s *Server) persistRunStart(
 	for _, f := range req.Files {
 		totalBytes += len([]byte(f.Content))
 	}
-	if _, err := tx.Exec(ctx, `
+
+	// 4. Save submission metadata
+	batch.Queue(`
 		INSERT INTO code_submissions (id, answer_id, language, entry_path, total_bytes)
 		VALUES ($1, $2, $3, $4, $5)
-	`, submissionID, answerID, req.Language, req.EntryFile, totalBytes); err != nil {
-		return uuid.Nil, err
-	}
+	`, submissionID, answerID, req.Language, req.EntryFile, totalBytes)
+
+	// 5. Save submission files
 	for _, f := range req.Files {
-		if _, err := tx.Exec(ctx, `
+		batch.Queue(`
 			INSERT INTO code_submission_files (submission_id, path, content, is_read_only, language)
 			VALUES ($1, $2, $3, $4, $5)
-		`, submissionID, f.Path, f.Content, f.ReadOnly, nullEmpty(f.Language)); err != nil {
-			return uuid.Nil, err
-		}
+		`, submissionID, f.Path, f.Content, f.ReadOnly, nullEmpty(f.Language))
 	}
 
 	runID := uuid.New()
-	if _, err := tx.Exec(ctx, `
+	// 6. Save code run execution metadata
+	batch.Queue(`
 		INSERT INTO code_runs (
 		    id, attempt_id, answer_id, submission_id, mode,
 		    judge0_status_desc, custom_stdin, started_at
 		)
 		VALUES ($1, $2, $3, $4, $5, 'Queued', $6, now())
-	`, runID, attemptID, answerID, submissionID, req.Mode, nullableCustomStdin(req)); err != nil {
-		return uuid.Nil, err
-	}
-	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_started", 0, &examQuestionID, map[string]any{
+	`, runID, attemptID, answerID, submissionID, req.Mode, nullableCustomStdin(req))
+
+	// 7. Save telemetry event code_run_started
+	runEventPayload, _ := json.Marshal(map[string]any{
 		"runId":      runID.String(),
 		"mode":       req.Mode,
 		"language":   req.Language,
 		"entryFile":  req.EntryFile,
 		"fileCount":  len(req.Files),
 		"totalBytes": totalBytes,
-	}); err != nil {
+	})
+	batch.Queue(`
+		INSERT INTO attempt_events (
+		    attempt_id, occurred_at, kind, severity, exam_question_id, payload
+		)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+	`, attemptID, now, "code_run_started", int16(0), &examQuestionID, runEventPayload)
+
+	batch.Queue(`
+		INSERT INTO attempt_event_summary (attempt_id, kind, count, last_at)
+		VALUES ($1, $2, 1, $3)
+		ON CONFLICT (attempt_id, kind) DO UPDATE
+		SET count = attempt_event_summary.count + 1,
+		    last_at = GREATEST(attempt_event_summary.last_at, EXCLUDED.last_at)
+	`, attemptID, "code_run_started", now)
+
+	br := tx.SendBatch(ctx, batch)
+	if err := br.Close(); err != nil {
 		return uuid.Nil, err
 	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return uuid.Nil, err
 	}
@@ -723,7 +870,7 @@ func (s *Server) executeJudge0(
 			return codeRunResponse{}, err
 		}
 		resp := responseForSingleRun(runID, r)
-		if err := s.persistRunFinish(ctx, runID, req.Mode, []judge0Result{r}, nil, resp); err != nil {
+		if err := s.persistRunFinish(ctx, attemptID, runID, req.Mode, []judge0Result{r}, nil, resp); err != nil {
 			return codeRunResponse{}, err
 		}
 		return resp, nil
@@ -773,9 +920,11 @@ func (s *Server) executeJudge0(
 
 	runType := "success"
 	stderr := ""
+	statusID := 3
 	if passCount != len(tests) {
 		runType = "partial"
 		if firstFail != nil {
+			statusID = firstFail.Status.ID
 			runType = mapJudge0Type(firstFail.Status.ID, true)
 			if runType == "success" {
 				runType = "partial"
@@ -792,11 +941,12 @@ func (s *Server) executeJudge0(
 		Memory:      formatJudge0Memory(peakJudge0Memory(results)),
 		Summary:     fmt.Sprintf("%d/%d test cases passed.", passCount, len(tests)),
 		RunID:       runID.String(),
+		StatusID:    statusID,
 	}
 	if passCount == len(tests) {
 		resp.Summary = "All test cases passed."
 	}
-	if err := s.persistRunFinish(ctx, runID, req.Mode, results, tests, resp); err != nil {
+	if err := s.persistRunFinish(ctx, attemptID, runID, req.Mode, results, tests, resp); err != nil {
 		return codeRunResponse{}, err
 	}
 	return resp, nil
@@ -804,6 +954,7 @@ func (s *Server) executeJudge0(
 
 func (s *Server) persistRunFinish(
 	ctx context.Context,
+	attemptID uuid.UUID,
 	runID uuid.UUID,
 	mode string,
 	results []judge0Result,
@@ -815,11 +966,6 @@ func (s *Server) persistRunFinish(
 		return err
 	}
 	defer tx.Rollback(ctx)
-
-	var attemptID uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT attempt_id FROM code_runs WHERE id = $1`, runID).Scan(&attemptID); err != nil {
-		return err
-	}
 
 	statusID := 3
 	statusDesc := "Accepted"
@@ -852,7 +998,11 @@ func (s *Server) persistRunFinish(
 	if peak := peakJudge0Memory(results); peak > 0 {
 		memoryKB = peak
 	}
-	if _, err := tx.Exec(ctx, `
+
+	batch := &pgx.Batch{}
+
+	// 1. Update code_runs status
+	batch.Queue(`
 		UPDATE code_runs
 		SET judge0_token = $2,
 		    judge0_status_id = $3,
@@ -865,10 +1015,9 @@ func (s *Server) persistRunFinish(
 		    finished_at = now()
 		WHERE id = $1
 	`, runID, nullEmpty(token), statusID, statusDesc, nullEmpty(stdout),
-		nullEmpty(stderr), nullEmpty(compileOutput), timeSeconds, memoryKB); err != nil {
-		return err
-	}
+		nullEmpty(stderr), nullEmpty(compileOutput), timeSeconds, memoryKB)
 
+	// 2. Queue all test results
 	if mode == "tests" || mode == "final" {
 		for i, tc := range tests {
 			if i >= len(resp.TestResults) {
@@ -884,25 +1033,25 @@ func (s *Server) persistRunFinish(
 					tcMemory = *results[i].Memory
 				}
 			}
-			if _, err := tx.Exec(ctx, `
+			batch.Queue(`
 				INSERT INTO code_run_test_results (
 				    id, code_run_id, test_case_id, ordinal, passed,
 				    actual_stdout, expected_stdout, time_seconds, memory_kb
 				)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			`, uuid.New(), runID, tc.ID, tc.Ordinal, resp.TestResults[i].Passed,
-				resp.TestResults[i].Actual, tc.Expected, tcTime, tcMemory); err != nil {
-				return err
-			}
+				resp.TestResults[i].Actual, tc.Expected, tcTime, tcMemory)
 		}
 	}
+
+	// 3. Queue telemetry event code_run_finished
 	severity := int16(0)
 	if resp.Type == "partial" {
 		severity = 1
 	} else if resp.Type != "success" {
 		severity = 2
 	}
-	if err := s.recordAttemptEventTx(ctx, tx, attemptID, "code_run_finished", severity, nil, map[string]any{
+	eventPayload, _ := json.Marshal(map[string]any{
 		"runId":       runID.String(),
 		"mode":        mode,
 		"type":        resp.Type,
@@ -910,9 +1059,28 @@ func (s *Server) persistRunFinish(
 		"statusId":    statusID,
 		"status":      statusDesc,
 		"testResults": len(resp.TestResults),
-	}); err != nil {
+	})
+	occurredAt := time.Now().UTC()
+	batch.Queue(`
+		INSERT INTO attempt_events (
+		    attempt_id, occurred_at, kind, severity, exam_question_id, payload
+		)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+	`, attemptID, occurredAt, "code_run_finished", severity, nil, eventPayload)
+
+	batch.Queue(`
+		INSERT INTO attempt_event_summary (attempt_id, kind, count, last_at)
+		VALUES ($1, $2, 1, $3)
+		ON CONFLICT (attempt_id, kind) DO UPDATE
+		SET count = attempt_event_summary.count + 1,
+		    last_at = GREATEST(attempt_event_summary.last_at, EXCLUDED.last_at)
+	`, attemptID, "code_run_finished", occurredAt)
+
+	br := tx.SendBatch(ctx, batch)
+	if err := br.Close(); err != nil {
 		return err
 	}
+
 	return tx.Commit(ctx)
 }
 
@@ -1030,13 +1198,14 @@ func (s *Server) buildJudge0Payload(req codeRunRequest) (map[string]any, error) 
 
 func responseForSingleRun(runID uuid.UUID, r judge0Result) codeRunResponse {
 	return codeRunResponse{
-		Type:    mapJudge0Type(r.Status.ID, false),
-		Stdout:  r.Stdout,
-		Stderr:  stderrForJudge0(r),
-		Time:    formatJudge0Time(r.Time),
-		Memory:  formatJudge0Memory(pointerMemory(r.Memory)),
-		Summary: headlineForJudge0(r.Status),
-		RunID:   runID.String(),
+		Type:     mapJudge0Type(r.Status.ID, false),
+		Stdout:   r.Stdout,
+		Stderr:   stderrForJudge0(r),
+		Time:     formatJudge0Time(r.Time),
+		Memory:   formatJudge0Memory(pointerMemory(r.Memory)),
+		Summary:  headlineForJudge0(r.Status),
+		RunID:    runID.String(),
+		StatusID: r.Status.ID,
 	}
 }
 

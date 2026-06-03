@@ -1291,7 +1291,7 @@ func (s *Server) runFinalCodeForAttempt(ctx context.Context, userID int64, attem
 		}
 
 		persistCtx, persistCancel := contextWithTimeout(ctx, 15*time.Second)
-		runID, err := s.persistRunStart(persistCtx, userID, attemptID, ans.ExamQuestionID, req, true)
+		runID, err := s.persistRunStart(persistCtx, userID, attemptID, ans.ExamQuestionID, req, true, nil, nil)
 		persistCancel()
 		if err != nil {
 			s.logger.Warn("final eval: run start failed", "examQuestionId", ans.ExamQuestionID, "err", err.Error())

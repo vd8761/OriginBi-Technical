@@ -117,9 +117,16 @@ export class BulkAdminUsersService {
         roleDescription: row['RoleDescription'] || row['role_description'] || row['Role Description'] || row['roleDescription'],
         password: row['Password'] || row['password'] || 'TempPassword123!',
         groupName: row['GroupName'] || row['group_name'] || row['Group'] || row['group'] || '',
+        pricingPolicy: (() => {
+          const val = row['PricingPolicy'] || row['pricing_policy'] || row['Pricing Policy'] || row['pricingPolicy'];
+          return val && String(val).trim().toLowerCase() === 'pay' ? 'pay' : 'free';
+        })(),
         sendEmail: (() => {
-          const val = row['SendEmail'] || row['send_email'];
-          return val ? String(val).toUpperCase() === 'TRUE' : false;
+          const val = row['SendEmail'] || row['send_email'] || row['Send Email'] || row['sendEmail'];
+          if (val === undefined || val === null || String(val).trim() === '') {
+            return true; // Default to true if not specified
+          }
+          return String(val).trim().toUpperCase() !== 'FALSE';
         })(),
       };
 
@@ -272,7 +279,7 @@ export class BulkAdminUsersService {
             gender: String(dto.gender || 'MALE').toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
             mobileNumber: dto.mobileNumber || dto.mobile || '',
             countryCode: dto.countryCode || '+91',
-            sendEmail: dto.sendEmail || false,
+            sendEmail: dto.sendEmail !== false,
             programCode: dto.programCode,
             schoolLevel: dto.schoolLevel,
             schoolStream: dto.schoolStream,
@@ -282,6 +289,7 @@ export class BulkAdminUsersService {
             currentRole: dto.currentRole,
             roleDescription: dto.roleDescription,
             groupName: dto.groupName,
+            pricingPolicy: dto.pricingPolicy,
             registrationSource: 'ADMIN',
           });
 

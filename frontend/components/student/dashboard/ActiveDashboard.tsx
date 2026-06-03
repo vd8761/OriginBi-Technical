@@ -164,13 +164,14 @@ const getTraitImage = (archetype: string): string => {
 
 // ── Sub-components (rendered outside main component to avoid IIFE issues) ──
 const RingChart: React.FC<{ results: Record<string, AssessmentResult> }> = ({ results }) => {
+  const { isVisible } = usePaidAssessments();
   const metrics = [
-    { r: 70, score: results.aptitude?.overallScore || 0, color: "#10b981" },
-    { r: 60, score: results.communication?.overallScore || 0, color: "#06b6d4" },
-    { r: 50, score: results.coding?.overallScore || 0, color: "#f59e0b" },
-    { r: 40, score: results.mnc?.overallScore || 0, color: "#6366f1" },
-    { r: 30, score: results.role?.overallScore || 0, color: "#84cc16" },
-  ].filter(m => m.score > 0);
+    { key: "aptitude", r: 70, score: results.aptitude?.overallScore || 0, color: "#10b981" },
+    { key: "communication", r: 60, score: results.communication?.overallScore || 0, color: "#06b6d4" },
+    { key: "coding", r: 50, score: results.coding?.overallScore || 0, color: "#f59e0b" },
+    { key: "mnc", r: 40, score: results.mnc?.overallScore || 0, color: "#6366f1" },
+    { key: "role", r: 30, score: results.role?.overallScore || 0, color: "#84cc16" },
+  ].filter(m => m.score > 0 && isVisible(m.key));
   const avg = metrics.length > 0
     ? Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length)
     : 0;
@@ -206,6 +207,7 @@ const RingChart: React.FC<{ results: Record<string, AssessmentResult> }> = ({ re
 };
 
 const Legend: React.FC<{ results: Record<string, AssessmentResult> }> = ({ results }) => {
+  const { isVisible } = usePaidAssessments();
   const dims = [
     { key: "aptitude", label: "Aptitude", color: "#10b981" },
     { key: "communication", label: "Communication", color: "#06b6d4" },
@@ -213,7 +215,7 @@ const Legend: React.FC<{ results: Record<string, AssessmentResult> }> = ({ resul
     { key: "mnc", label: "MNC Career", color: "#6366f1" },
     { key: "role", label: "Role Based", color: "#84cc16" },
   ];
-  const completedDims = dims.filter(d => results[d.key]?.overallScore);
+  const completedDims = dims.filter(d => results[d.key]?.overallScore && isVisible(d.key));
 
   if (completedDims.length === 0) return <div className="h-4" />;
 
@@ -243,7 +245,7 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   dynamicExams,
 }) => {
   const router = useRouter();
-  const { isPaid } = usePaidAssessments();
+  const { isPaid, isVisible } = usePaidAssessments();
   const { results, isCompleted, getResult } = useAssessmentResults();
   const {
     notifications,
@@ -257,9 +259,9 @@ const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   useEffect(() => {}, []);
 
   const baseExamsList = dynamicExams || EXAMS;
-  const purchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
-  const unpurchasedExams = baseExamsList.filter((e) => examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
-  const completedIds = Object.keys(results) as AssessmentId[];
+  const purchasedExams = baseExamsList.filter((e) => isVisible(e.id) && examPaidStatus(e as ExtendedExam, isPaid) !== "none");
+  const unpurchasedExams = baseExamsList.filter((e) => isVisible(e.id) && examPaidStatus(e as ExtendedExam, isPaid) === "none" && e.available);
+  const completedIds = (Object.keys(results) as AssessmentId[]).filter((id) => isVisible(id));
   const identity = deriveCareerIdentity(completedIds);
 
   const statusOf = (exam: Exam): "completed" | "pending" => {

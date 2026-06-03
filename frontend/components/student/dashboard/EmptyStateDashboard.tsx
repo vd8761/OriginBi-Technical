@@ -112,22 +112,23 @@ const VALUE_PROPOSITIONS: Record<AssessmentId, { benefits: string[]; careerImpac
 };
 
 const EmptyStateDashboard: React.FC<Props> = ({ userName, onSelectExam, onStartExam }) => {
-  const { isPaid } = usePaidAssessments();
+  const { isPaid, isVisible } = usePaidAssessments();
   const [activeTrack, setActiveTrack] = useState<string | "all">("all");
 
   const grouped = useMemo(() => {
     const map: Record<string, ExtendedExam[]> = { core: [], technical: [], career: [] };
-    EXAMS.forEach((e) => map[(e as ExtendedExam).track].push(e as ExtendedExam));
+    EXAMS.filter(e => isVisible(e.id)).forEach((e) => map[(e as ExtendedExam).track].push(e as ExtendedExam));
     return map;
-  }, []);
+  }, [isVisible]);
 
   const tracks = ["core", "technical", "career"];
-  const liveCount = EXAMS.filter(e => e.available).length;
+  const liveCount = EXAMS.filter(e => isVisible(e.id) && e.available).length;
 
   const filteredExams = useMemo(() => {
-    if (activeTrack === "all") return [...EXAMS];
+    const list = EXAMS.filter(e => isVisible(e.id));
+    if (activeTrack === "all") return list;
     return grouped[activeTrack] || [];
-  }, [activeTrack, grouped]);
+  }, [activeTrack, grouped, isVisible]);
 
   return (
     <div className="flex flex-col gap-10">

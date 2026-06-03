@@ -40,7 +40,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isPaid } = usePaidAssessments();
+  const { isPaid, isVisible } = usePaidAssessments();
   const { isSyncing, isInitialized: isHydrated, completions } = useDataHydration();
 
   // Redirect new users to explore page instead of showing empty dashboard.
@@ -48,8 +48,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   // in-flight completion result to display.
   const hasPurchases = useMemo(() => {
     const list = dynamicExams || EXAMS;
-    return list.some((e) => examPaidStatus(e as ExtendedExam, isPaid) !== "none");
-  }, [dynamicExams, isPaid]);
+    return list.some((e) => isVisible(e.id) && examPaidStatus(e as ExtendedExam, isPaid) !== "none");
+  }, [dynamicExams, isPaid, isVisible]);
 
   const hasResults = useMemo(() => {
     if (typeof window === "undefined") return false;

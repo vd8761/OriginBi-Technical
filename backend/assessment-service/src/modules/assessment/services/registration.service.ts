@@ -35,8 +35,7 @@ export class RegistrationService {
 
   async registerUser(dto: RegisterUserDto) {
     const email = dto.email.trim().toLowerCase();
-    const hasGroup = !!dto.groupName?.trim();
-    const effectivePricingPolicy = hasGroup ? null : dto.pricingPolicy;
+    const effectivePricingPolicy = dto.pricingPolicy || 'free';
 
     try {
       this.logger.log(`Forwarding tech assessment registration to student-service for: ${email}`);
@@ -54,6 +53,8 @@ export class RegistrationService {
         department_degree_id: dto.departmentDegreeId || null,
         current_year: dto.currentYear || null,
         registration_source: dto.registrationSource || 'SELF',
+        sendEmail: dto.sendEmail !== false,
+        send_email: dto.sendEmail !== false,
         metadata: {
           sendEmail: dto.sendEmail !== false,
           currentRole: dto.currentRole || null,
