@@ -54,6 +54,8 @@ export class RegistrationService {
         department_degree_id: dto.departmentDegreeId || null,
         current_year: dto.currentYear || null,
         registration_source: dto.registrationSource || 'SELF',
+        sendEmail: dto.sendEmail !== false,
+        send_email: dto.sendEmail !== false,
         metadata: {
           sendEmail: dto.sendEmail !== false,
           currentRole: dto.currentRole || null,
