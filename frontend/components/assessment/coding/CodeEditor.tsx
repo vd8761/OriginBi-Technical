@@ -463,11 +463,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             initialLastRun.testResults.length > 0
             && initialLastRun.testResults.every((t) => t.passed);
         let type: RunResult["type"];
-        if (initialLastRun.mode === "custom") {
+        if (initialLastRun.mode === "custom" || initialLastRun.mode === "final" || initialLastRun.testResults.length === 0) {
             const isAccepted = status === 3 || initialLastRun.summary === "Accepted";
             type = isAccepted ? "success" : status === 5 ? "timeout" : status === 6 ? "compile-error" : "error";
-        } else if (initialLastRun.testResults.length === 0) {
-            type = status === 6 ? "compile-error" : status === 5 ? "timeout" : "error";
         } else if (allPassed) {
             type = "success";
         } else {
