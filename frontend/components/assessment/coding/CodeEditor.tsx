@@ -506,20 +506,46 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const [treeOpen, setTreeOpen] = useState(true);
     const [result, setResult] = useState<RunResult | null>(lastRunAsResult);
     const [running, setRunning] = useState(false);
-    // When the active question changes, the parent passes a new
-    // initialLastRun. Refresh `result` so the output panel mirrors the prior
-    // run for the newly-active question. We only do this when no fresh run is
-    // in-flight so we never clobber a result the candidate is about to see.
+
+    const currentRunIdRef = useRef<string | null>(null);
+    const lastQuestionIdRef = useRef<number>(question.id);
+
+    // Synchronize outputs when the question changes or when prior runs are fetched asynchronously.
     useEffect(() => {
-        if (running) return;
-        setResult(lastRunAsResult);
-    }, [lastRunAsResult, running]);
+        // If the question changed, we MUST rehydrate from the last run for this question.
+        if (lastQuestionIdRef.current !== question.id) {
+            lastQuestionIdRef.current = question.id;
+            currentRunIdRef.current = null;
+            setResult(lastRunAsResult);
+            return;
+        }
+
+        // If the question didn't change, we ONLY want to update the result if we are NOT running,
+        // AND the lastRunAsResult has actually changed to a new finished run (with a new runId)
+        // that we haven't rendered yet. E.g. when a prior run fetches asynchronously.
+        if (!running && lastRunAsResult) {
+            const newRunId = initialLastRun?.runId;
+            const currentResultRunId = result?.runId;
+            
+            if (currentRunIdRef.current) {
+                // We completed a run in this session. Only update setResult if the
+                // incoming lastRunAsResult matches our completed run ID.
+                if (newRunId === currentRunIdRef.current && newRunId !== currentResultRunId) {
+                    setResult(lastRunAsResult);
+                }
+            } else {
+                // No run in this session yet. Update setResult when the async prior run fetches.
+                if (!result || (newRunId && newRunId !== currentResultRunId)) {
+                    setResult(lastRunAsResult);
+                }
+            }
+        }
+    }, [lastRunAsResult, running, question.id, result, initialLastRun]);
     // Per-test results streamed in via SSE before the final HTTP response lands.
     // Cleared at the start of each run; the full result from setResult takes over
     // once the HTTP response returns.
     const [streamingTests, setStreamingTests] = useState<TestResult[]>([]);
     const [streamingTotal, setStreamingTotal] = useState(0);
-    const currentRunIdRef = useRef<string | null>(null);
     const pluginRuntime = usePluginRuntime();
     const [outputOpen, setOutputOpen] = useState(false);
     const [outputHeight, setOutputHeight] = useState(260);
@@ -676,6 +702,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                             summary: "Code runner unavailable.",
                         };
                 if (!res) return;
+                if (res.runId) {
+                    currentRunIdRef.current = res.runId;
+                }
                 setResult(res);
             } catch (e) {
                 if ((e as { name?: string })?.name === "AbortError") return;

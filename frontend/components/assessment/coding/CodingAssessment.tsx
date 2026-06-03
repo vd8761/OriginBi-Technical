@@ -1441,6 +1441,7 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
                 time: response.time,
                 memory: response.memory,
                 summary: response.summary,
+                runId: response.runId,
             };
         },
         [backendAttemptId, examQuestionByLocalId, mcqAnswers, traceEvent, statuses, setQuestionStatus, persistQuestion],

@@ -418,17 +418,45 @@ func (s *Server) executeCodeRunAction(
 			Summary: "Write some code before running.",
 		}, nil
 	}
-	body, err := s.loadQuestionBodyForAttempt(ctx, attemptID, userID, examQuestionID)
-	if err != nil {
-		return codeRunResponse{}, fmt.Errorf("question body lookup failed: %w", err)
+	type metadataResult struct {
+		body  []byte
+		verID uuid.UUID
+		ansID uuid.NullUUID
+		err   error
 	}
-	if err := s.validateCodingAnswerPayload(req, body); err != nil {
+	type testsResult struct {
+		tests []dbTestCase
+		err   error
+	}
+
+	metadataChan := make(chan metadataResult, 1)
+	testsChan := make(chan testsResult, 1)
+
+	go func() {
+		body, verID, ansID, err := s.loadQuestionMetadataForAttempt(ctx, attemptID, userID, examQuestionID)
+		metadataChan <- metadataResult{body: body, verID: verID, ansID: ansID, err: err}
+	}()
+
+	go func() {
+		tests, err := s.loadRunTests(ctx, attemptID, userID, examQuestionID, req.Mode, req.Language)
+		testsChan <- testsResult{tests: tests, err: err}
+	}()
+
+	mRes := <-metadataChan
+	if mRes.err != nil {
+		return codeRunResponse{}, fmt.Errorf("question metadata lookup failed: %w", mRes.err)
+	}
+
+	if err := s.validateCodingAnswerPayload(req, mRes.body); err != nil {
 		return codeRunResponse{}, err
 	}
-	tests, err := s.loadRunTests(ctx, attemptID, userID, examQuestionID, req.Mode, req.Language)
-	if err != nil {
-		return codeRunResponse{}, fmt.Errorf("testcase lookup failed: %w", err)
+
+	tRes := <-testsChan
+	if tRes.err != nil {
+		return codeRunResponse{}, fmt.Errorf("testcase lookup failed: %w", tRes.err)
 	}
+	tests := tRes.tests
+
 	if req.Mode == "tests" && len(tests) == 0 {
 		return codeRunResponse{}, errNoTestCases
 	}
@@ -445,7 +473,7 @@ func (s *Server) executeCodeRunAction(
 		return codeRunResponse{}, errCodeRunnerBusy
 	}
 
-	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req, false)
+	runID, err := s.persistRunStart(ctx, userID, attemptID, examQuestionID, req, false, &mRes.verID, &mRes.ansID)
 	if err != nil {
 		return codeRunResponse{}, fmt.Errorf("run persistence failed: %w", err)
 	}
@@ -466,21 +494,7 @@ func (s *Server) executeCodeRunAction(
 	return resp, nil
 }
 
-func (s *Server) loadQuestionBodyForAttempt(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID) ([]byte, error) {
-	var body []byte
-	err := s.pool.QueryRow(ctx, `
-		SELECT qv.body
-		FROM attempts a
-		JOIN exam_questions eq
-		     ON eq.exam_version_id = a.exam_version_id
-		    AND eq.id = $2
-		JOIN question_versions qv ON qv.id = eq.question_version_id
-		WHERE a.id = $1
-		  AND a.candidate_user_id = $3
-		  AND a.status IN ('started','in_progress','paused')
-	`, attemptID, examQuestionID, userID).Scan(&body)
-	return body, err
-}
+
 
 func actionForRunMode(mode string) string {
 	switch mode {
@@ -589,46 +603,62 @@ func codeRunErrResponse(err error) (int, json.RawMessage) {
 	return status, body
 }
 
-func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID int64, examQuestionID uuid.UUID, mode string, language string) ([]dbTestCase, error) {
+func (s *Server) loadQuestionMetadataForAttempt(
+	ctx context.Context,
+	attemptID uuid.UUID,
+	userID int64,
+	examQuestionID uuid.UUID,
+) ([]byte, uuid.UUID, uuid.NullUUID, error) {
+	var body []byte
+	var verID uuid.UUID
+	var ansIDNull uuid.NullUUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT qv.body, eq.question_version_id, a.id
+		FROM attempts att
+		JOIN exam_questions eq ON eq.exam_version_id = att.exam_version_id AND eq.id = $2
+		JOIN question_versions qv ON qv.id = eq.question_version_id
+		LEFT JOIN answers a ON a.attempt_id = att.id AND a.exam_question_id = eq.id
+		WHERE att.id = $1 AND att.candidate_user_id = $3
+		  AND att.status IN ('started','in_progress','paused')
+	`, attemptID, examQuestionID, userID).Scan(&body, &verID, &ansIDNull)
+	return body, verID, ansIDNull, err
+}
+
+func (s *Server) loadRunTests(
+	ctx context.Context,
+	attemptID uuid.UUID,
+	userID int64,
+	examQuestionID uuid.UUID,
+	mode string,
+	language string,
+) ([]dbTestCase, error) {
+	if mode == "custom" {
+		return nil, nil
+	}
 	itemRef := s.legacyItemRefForLanguage(language)
 	if itemRef == "" {
 		itemRef = "coding:" + runnerjudge0.LegacyLanguageName(language)
 	}
-	var exists int
-	// 'submitted' is included so the post-submit final-evaluation pass can
-	// still load the graded test cases — the attempt is already 'submitted'
-	// by then. The live run path is gated to active attempts elsewhere
-	// (loadQuestionBodyForAttempt), so this does not loosen it.
-	err := s.pool.QueryRow(ctx, `
-		SELECT 1
-		FROM attempts a
-		JOIN exam_assignments assign ON assign.id = a.assignment_id
-		JOIN exam_questions eq
-		     ON eq.exam_version_id = a.exam_version_id
-		    AND eq.id = $2
-		WHERE a.id = $1
-		  AND a.candidate_user_id = $3
-		  AND a.status IN ('started','in_progress','paused','submitted')
-		  AND (
-		      assign.assignment_ref IS NULL
-		      OR assign.assignment_ref = $4
-		  )
-	`, attemptID, examQuestionID, userID, itemRef).Scan(&exists)
-	if err != nil {
-		return nil, err
-	}
-	if mode != "tests" && mode != "final" {
-		return nil, nil
-	}
+
 	rows, err := s.pool.Query(ctx, `
 		SELECT tc.id, tc.ordinal, COALESCE(tc.name, ''), tc.stdin, tc.expected_stdout,
 		       tc.comparator, tc.comparator_config
-		FROM exam_questions eq
-		JOIN question_test_cases tc ON tc.question_version_id = eq.question_version_id
+		FROM question_test_cases tc
+		JOIN question_versions qv ON qv.id = tc.question_version_id
+		JOIN exam_questions eq ON eq.question_version_id = qv.id
+		JOIN attempts a ON a.exam_version_id = eq.exam_version_id
+		JOIN exam_assignments assign ON assign.id = a.assignment_id
 		WHERE eq.id = $1
-		  AND ($2 = 'final' OR tc.is_hidden = false)
+		  AND a.id = $2
+		  AND a.candidate_user_id = $3
+		  AND a.status IN ('started','in_progress','paused','submitted')
+		  AND ($4 = 'final' OR tc.is_hidden = false)
+		  AND (
+		      assign.assignment_ref IS NULL
+		      OR assign.assignment_ref = $5
+		  )
 		ORDER BY tc.ordinal
-	`, examQuestionID, mode)
+	`, examQuestionID, attemptID, userID, mode, itemRef)
 	if err != nil {
 		return nil, err
 	}
@@ -640,6 +670,9 @@ func (s *Server) loadRunTests(ctx context.Context, attemptID uuid.UUID, userID i
 			return nil, err
 		}
 		tests = append(tests, tc)
+	}
+	if len(tests) == 0 {
+		return nil, pgx.ErrNoRows
 	}
 	return tests, rows.Err()
 }
@@ -656,30 +689,43 @@ func (s *Server) persistRunStart(
 	examQuestionID uuid.UUID,
 	req codeRunRequest,
 	reuseAnswer bool,
+	prefetchedVerID *uuid.UUID,
+	prefetchedAnsID *uuid.NullUUID,
 ) (uuid.UUID, error) {
 	var questionVersionID uuid.UUID
-	var answerIDNull uuid.NullUUID
-	err := s.pool.QueryRow(ctx, `
-		SELECT eq.question_version_id, a.id
-		FROM attempts att
-		JOIN exam_questions eq ON eq.exam_version_id = att.exam_version_id AND eq.id = $2
-		LEFT JOIN answers a ON a.attempt_id = att.id AND a.exam_question_id = eq.id
-		WHERE att.id = $1 AND att.candidate_user_id = $3
-		  AND att.status IN ('started','in_progress','paused','submitted')
-	`, attemptID, examQuestionID, userID).Scan(&questionVersionID, &answerIDNull)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("metadata lookup failed: %w", err)
-	}
-
-	if !answerIDNull.Valid && reuseAnswer {
-		return uuid.Nil, errors.New("cannot reuse non-existent answer")
-	}
-
 	var answerID uuid.UUID
-	if answerIDNull.Valid {
-		answerID = answerIDNull.UUID
+
+	if prefetchedVerID != nil && prefetchedAnsID != nil {
+		questionVersionID = *prefetchedVerID
+		if !prefetchedAnsID.Valid && reuseAnswer {
+			return uuid.Nil, errors.New("cannot reuse non-existent answer")
+		}
+		if prefetchedAnsID.Valid {
+			answerID = prefetchedAnsID.UUID
+		} else {
+			answerID = uuid.New()
+		}
 	} else {
-		answerID = uuid.New()
+		var answerIDNull uuid.NullUUID
+		err := s.pool.QueryRow(ctx, `
+			SELECT eq.question_version_id, a.id
+			FROM attempts att
+			JOIN exam_questions eq ON eq.exam_version_id = att.exam_version_id AND eq.id = $2
+			LEFT JOIN answers a ON a.attempt_id = att.id AND a.exam_question_id = eq.id
+			WHERE att.id = $1 AND att.candidate_user_id = $3
+			  AND att.status IN ('started','in_progress','paused','submitted')
+		`, attemptID, examQuestionID, userID).Scan(&questionVersionID, &answerIDNull)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("metadata lookup failed: %w", err)
+		}
+		if !answerIDNull.Valid && reuseAnswer {
+			return uuid.Nil, errors.New("cannot reuse non-existent answer")
+		}
+		if answerIDNull.Valid {
+			answerID = answerIDNull.UUID
+		} else {
+			answerID = uuid.New()
+		}
 	}
 
 	tx, err := s.pool.Begin(ctx)

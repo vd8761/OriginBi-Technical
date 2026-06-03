@@ -37,6 +37,7 @@ export interface RunResult {
     memory: string;
     limitHit?: keyof ExecutionLimits;
     summary?: string;
+    runId?: string;
 }
 
 const byteSize = (s: string) => new Blob([s]).size;
