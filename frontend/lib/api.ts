@@ -297,6 +297,7 @@ export interface CodeRunResponse {
   memory: string;
   summary: string;
   runId: string;
+  statusId?: number;
 }
 
 export interface AttemptEventInput {
@@ -1046,6 +1047,8 @@ export interface LastCodeRun {
   startedAt: string;
   finishedAt?: string;
   testResults: LastCodeRunTest[];
+  stdout?: string;
+  stderr?: string;
 }
 
 /**

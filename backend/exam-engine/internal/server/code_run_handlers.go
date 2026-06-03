@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -47,6 +48,7 @@ type codeRunResponse struct {
 	Memory      string              `json:"memory"`
 	Summary     string              `json:"summary"`
 	RunID       string              `json:"runId"`
+	StatusID    int                 `json:"statusId,omitempty"`
 }
 
 type codeTestResultDTO struct {
@@ -139,6 +141,8 @@ type lastCodeRunDTO struct {
 	StartedAt   time.Time              `json:"startedAt"`
 	FinishedAt  *time.Time             `json:"finishedAt,omitempty"`
 	TestResults []lastCodeRunTestDTO   `json:"testResults"`
+	Stdout      string                 `json:"stdout,omitempty"`
+	Stderr      string                 `json:"stderr,omitempty"`
 }
 
 type lastCodeRunTestDTO struct {
@@ -261,6 +265,12 @@ func (s *Server) lastCodeRun(w http.ResponseWriter, r *http.Request) {
 		FinishedAt:  finishedAt,
 		TestResults: tests,
 	}
+	if stdoutPtr != nil {
+		out.Stdout = *stdoutPtr
+	}
+	if stderrPtr != nil {
+		out.Stderr = *stderrPtr
+	}
 	if timeSeconds != nil {
 		out.TimeMs = int(*timeSeconds*1000 + 0.5)
 	}
@@ -344,6 +354,11 @@ func (s *Server) runCode(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := s.executeCodeRunAction(ctx, principal.UserID, attemptID, examQuestionID, req)
 	if err != nil {
+		s.logger.Error("executeCodeRunAction failed",
+			slog.String("attempt_id", attemptID.String()),
+			slog.String("exam_question_id", examQuestionID.String()),
+			slog.String("error", err.Error()),
+		)
 		writeCodeRunErr(w, err)
 		return
 	}
@@ -369,6 +384,11 @@ func (s *Server) handleCodingAction(ctx context.Context, _ *pluginhost.Registry,
 	}
 	resp, err := s.executeCodeRunAction(ctx, actionReq.UserID, actionReq.AttemptID, actionReq.ExamQuestionID, req)
 	if err != nil {
+		s.logger.Error("executeCodeRunAction failed in plugin",
+			slog.String("attempt_id", actionReq.AttemptID.String()),
+			slog.String("exam_question_id", actionReq.ExamQuestionID.String()),
+			slog.String("error", err.Error()),
+		)
 		status, body := codeRunErrResponse(err)
 		return pluginhost.ActionResponse{HTTPStatus: status, Body: body}, nil
 	}
@@ -854,9 +874,11 @@ func (s *Server) executeJudge0(
 
 	runType := "success"
 	stderr := ""
+	statusID := 3
 	if passCount != len(tests) {
 		runType = "partial"
 		if firstFail != nil {
+			statusID = firstFail.Status.ID
 			runType = mapJudge0Type(firstFail.Status.ID, true)
 			if runType == "success" {
 				runType = "partial"
@@ -873,6 +895,7 @@ func (s *Server) executeJudge0(
 		Memory:      formatJudge0Memory(peakJudge0Memory(results)),
 		Summary:     fmt.Sprintf("%d/%d test cases passed.", passCount, len(tests)),
 		RunID:       runID.String(),
+		StatusID:    statusID,
 	}
 	if passCount == len(tests) {
 		resp.Summary = "All test cases passed."
@@ -1129,13 +1152,14 @@ func (s *Server) buildJudge0Payload(req codeRunRequest) (map[string]any, error) 
 
 func responseForSingleRun(runID uuid.UUID, r judge0Result) codeRunResponse {
 	return codeRunResponse{
-		Type:    mapJudge0Type(r.Status.ID, false),
-		Stdout:  r.Stdout,
-		Stderr:  stderrForJudge0(r),
-		Time:    formatJudge0Time(r.Time),
-		Memory:  formatJudge0Memory(pointerMemory(r.Memory)),
-		Summary: headlineForJudge0(r.Status),
-		RunID:   runID.String(),
+		Type:     mapJudge0Type(r.Status.ID, false),
+		Stdout:   r.Stdout,
+		Stderr:   stderrForJudge0(r),
+		Time:     formatJudge0Time(r.Time),
+		Memory:   formatJudge0Memory(pointerMemory(r.Memory)),
+		Summary:  headlineForJudge0(r.Status),
+		RunID:    runID.String(),
+		StatusID: r.Status.ID,
 	}
 }
 
