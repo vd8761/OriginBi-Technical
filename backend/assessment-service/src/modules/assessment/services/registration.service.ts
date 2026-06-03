@@ -35,8 +35,7 @@ export class RegistrationService {
 
   async registerUser(dto: RegisterUserDto) {
     const email = dto.email.trim().toLowerCase();
-    const hasGroup = !!dto.groupName?.trim();
-    const effectivePricingPolicy = hasGroup ? null : dto.pricingPolicy;
+    const effectivePricingPolicy = dto.pricingPolicy || 'free';
 
     try {
       this.logger.log(`Forwarding tech assessment registration to student-service for: ${email}`);
