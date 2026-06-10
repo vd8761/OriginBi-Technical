@@ -175,16 +175,24 @@ async function seedAptitude(client: any, adminUserId: number) {
 }
 
 async function seedCommunication(client: any, adminUserId: number) {
-    await client.query("TRUNCATE tech_grammar_questions, tech_grammar_options CASCADE");
-
     const assessmentResult = await client.query(
         `INSERT INTO tech_assessments (assessment_code, assessment_name, module_type, total_time_minutes, total_questions, shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value, status, created_by, email_sending_enabled, show_certificate_dashboard, created_at, updated_at)
          VALUES ($1, $2, 'grammar', $3, $4, $5, $6, $7, $8, 'active', $9, true, true, NOW(), NOW())
          ON CONFLICT (assessment_code) DO UPDATE SET assessment_name = EXCLUDED.assessment_name, total_time_minutes = EXCLUDED.total_time_minutes, total_questions = EXCLUDED.total_questions, email_sending_enabled = EXCLUDED.email_sending_enabled, show_certificate_dashboard = EXCLUDED.show_certificate_dashboard, updated_at = NOW()
          RETURNING assessment_id`,
-        ["TECH_COMM_001", "Communication Skills Assessment", 45, communicationQuestions.length, false, false, false, null, adminUserId]
+        ["TECH_COMM_001", "Communication Skills Assessment", 45, 15, false, false, false, null, adminUserId]
     );
     const assessmentId = assessmentResult.rows[0].assessment_id;
+
+    // Check if questions are already seeded (e.g. from the manual Excel import script)
+    const checkResult = await client.query("SELECT COUNT(*)::int as count FROM tech_grammar_questions WHERE assessment_id = $1", [assessmentId]);
+    const count = checkResult.rows[0].count;
+    if (count > 0) {
+        console.log(`Skipping communication questions seed (found ${count} questions already in database for TECH_COMM_001)`);
+        return;
+    }
+
+    await client.query("TRUNCATE tech_grammar_questions, tech_grammar_options CASCADE");
 
     let idx = 0;
     for (const question of communicationQuestions) {

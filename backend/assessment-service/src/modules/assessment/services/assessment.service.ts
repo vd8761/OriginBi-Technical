@@ -1403,10 +1403,10 @@ export class AssessmentService {
     const selectedOptionIdCol = isCoding ? `NULL::bigint as selected_option_id` : `aq.selected_option_id`;
     const taskTypeCol = isGrammar ? `q.task_type` : `NULL as task_type`;
     const roleTypeCol = isRole ? `q.question_type` : `NULL as question_type`;
-    const questionMetadataCol = (!isCoding && !isGrammar)
+    const questionMetadataCol = !isCoding
       ? `q.metadata as question_metadata`
       : `NULL::jsonb as question_metadata`;
-    const attemptMetadataCol = (!isCoding && !isGrammar)
+    const attemptMetadataCol = !isCoding
       ? `aq.metadata as attempt_metadata`
       : `NULL::jsonb as attempt_metadata`;
     // Only aptitude (block-based) junction tables have block_number
@@ -1894,18 +1894,25 @@ export class AssessmentService {
     if (moduleType === 'grammar') {
       const rows = await this.dataSource.query(
         `SELECT aq.${config.idCol} AS question_id,
-                aq.selected_option_id, aq.answer_text, aq.answer_audio_url
+                aq.selected_option_id, aq.answer_text, aq.answer_audio_url, aq.metadata
          FROM ${config.junction} aq
          WHERE aq.${config.attemptIdCol} = $1`,
         [attemptId],
       );
       for (const row of rows) {
         const payload: any = {};
-        if (row.selected_option_id !== null && row.selected_option_id !== undefined) {
+        const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+        const submittedAnswer = (metadata as any).submittedAnswer;
+
+        if (submittedAnswer !== undefined && submittedAnswer !== null && submittedAnswer !== '') {
+          payload.optionId = submittedAnswer;
+        } else if (row.selected_option_id !== null && row.selected_option_id !== undefined) {
           payload.optionId = String(row.selected_option_id);
         }
+
         if (row.answer_text) payload.text = row.answer_text;
         if (row.answer_audio_url) payload.audioUrl = row.answer_audio_url;
+
         if (Object.keys(payload).length > 0) {
           answers[String(row.question_id)] = payload;
         }
@@ -1963,9 +1970,9 @@ export class AssessmentService {
       const questionRows = await queryRunner.query(
         `SELECT aq.attempt_question_id, aq.${config.idCol} AS question_id
          ${dbModule === 'grammar' ? `, q.task_type` : ''}
-         ${dbModule !== 'grammar' && dbModule !== 'coding' ? `, q.metadata` : ''}
+         ${dbModule !== 'coding' ? `, q.metadata` : ''}
          FROM ${config.junction} aq
-         ${(dbModule === 'grammar' || (dbModule !== 'grammar' && dbModule !== 'coding')) ? `JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}` : ''}
+         ${(dbModule === 'grammar' || (dbModule !== 'coding')) ? `JOIN ${config.questions} q ON q.${config.idCol} = aq.${config.idCol}` : ''}
          WHERE aq.${config.attemptIdCol} = $1`,
         [attemptId],
       );
@@ -1986,10 +1993,37 @@ export class AssessmentService {
       const extractOptionId = (value: any) => {
         if (value === undefined || value === null) return null;
         if (typeof value === 'object') {
+          if (Array.isArray(value)) {
+            return value;
+          }
           return value.optionId ?? value.selectedOptionId ?? value.value ?? null;
         }
         if (value === '') return null;
         return value;
+      };
+
+      const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
+        if (!meta) return 'mcq';
+        if (typeof meta === 'object') {
+          const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
+          if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
+            return 'numerical';
+          }
+          if (rawType.includes('multi') || rawType.includes('msq')) {
+            return 'msq';
+          }
+          if (rawType.includes('true') || rawType.includes('tf')) {
+            return 'tf';
+          }
+          const kind = String(meta.kind || 'mcq').toLowerCase();
+          if (kind === 'true_false') return 'tf';
+          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+          return 'mcq';
+        }
+        const kind = String(meta).toLowerCase();
+        if (kind === 'true_false') return 'tf';
+        if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
+        return 'mcq';
       };
 
       let saved = 0;
@@ -2031,19 +2065,35 @@ export class AssessmentService {
 
         if (dbModule === 'grammar') {
           if (taskType === 'listening_mcq' || taskType === 'reading_mcq') {
-            const optId = extractOptionId(rawAnswer);
-            if (optId) {
+            const selectedOptionId = extractOptionId(rawAnswer);
+            const questionMetadata = mapping?.metadata && typeof mapping.metadata === 'object'
+              ? mapping.metadata
+              : {};
+            const kind = normalizeQuestionKind(questionMetadata);
+            const isMsq = kind === 'msq';
+            const isNumerical = kind === 'numerical';
+            const shouldUseMetadataAnswer = isMsq || isNumerical;
+
+            const hasAnswer = Array.isArray(selectedOptionId)
+              ? selectedOptionId.length > 0
+              : !(selectedOptionId === null || selectedOptionId === undefined || selectedOptionId === '');
+
+            if (hasAnswer) {
+              const metadataUpdate = {
+                ...(questionMetadata as Record<string, any>),
+                submittedAnswer: shouldUseMetadataAnswer ? selectedOptionId : null,
+              };
               await queryRunner.query(
                 `UPDATE ${config.junction}
-                 SET selected_option_id = $1, answered_at = NOW()
-                 WHERE attempt_question_id = $2`,
-                [optId, attemptQuestionId],
+                 SET selected_option_id = $1, metadata = $2, answered_at = NOW()
+                 WHERE attempt_question_id = $3`,
+                [shouldUseMetadataAnswer ? null : selectedOptionId, JSON.stringify(metadataUpdate), attemptQuestionId],
               );
               saved++;
             } else {
               await queryRunner.query(
                 `UPDATE ${config.junction}
-                 SET selected_option_id = NULL, answered_at = NULL
+                 SET selected_option_id = NULL, metadata = NULL, answered_at = NULL
                  WHERE attempt_question_id = $1`,
                 [attemptQuestionId],
               );
@@ -2101,29 +2151,7 @@ export class AssessmentService {
           }
         }
 
-      const normalizeQuestionKind = (meta: any): 'mcq' | 'msq' | 'tf' | 'numerical' => {
-        if (!meta) return 'mcq';
-        if (typeof meta === 'object') {
-          const rawType = String(meta.question_type ?? meta.kind ?? meta.type ?? '').toLowerCase();
-          if (rawType.includes('numerical') || rawType.includes('fill') || rawType.includes('blank') || rawType.includes('numeric')) {
-            return 'numerical';
-          }
-          if (rawType.includes('multi') || rawType.includes('msq')) {
-            return 'msq';
-          }
-          if (rawType.includes('true') || rawType.includes('tf')) {
-            return 'tf';
-          }
-          const kind = String(meta.kind || 'mcq').toLowerCase();
-          if (kind === 'true_false') return 'tf';
-          if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
-          return 'mcq';
-        }
-        const kind = String(meta).toLowerCase();
-        if (kind === 'true_false') return 'tf';
-        if (kind === 'msq' || kind === 'tf' || kind === 'numerical') return kind;
-        return 'mcq';
-      };
+
 
       // MCQ modules: aptitude, mnc, role
       const selectedOptionId = extractOptionId(rawAnswer);
