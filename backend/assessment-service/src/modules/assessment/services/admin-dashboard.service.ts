@@ -118,10 +118,10 @@ export class AdminDashboardService {
         const liveSessionsResult = await queryRunner.query(`
           WITH all_attempts AS (
             SELECT CASE WHEN status IN ('in_progress', 'started') THEN 'in_progress' ELSE status::text END as status, last_seen_at as updated_at FROM attempts
-            UNION ALL SELECT status, updated_at FROM tech_aptitude_attempts
-            UNION ALL SELECT status, updated_at FROM tech_grammar_attempts
-            UNION ALL SELECT status, updated_at FROM tech_mnc_attempts
-            UNION ALL SELECT status, updated_at FROM tech_role_attempts
+            UNION ALL SELECT status::text, updated_at FROM tech_aptitude_attempts
+            UNION ALL SELECT status::text, updated_at FROM tech_grammar_attempts
+            UNION ALL SELECT status::text, updated_at FROM tech_mnc_attempts
+            UNION ALL SELECT status::text, updated_at FROM tech_role_attempts
           )
           SELECT
             COUNT(*) FILTER (WHERE status = 'in_progress')::bigint AS live,
