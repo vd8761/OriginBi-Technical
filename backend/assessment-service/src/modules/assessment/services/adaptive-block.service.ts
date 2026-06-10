@@ -927,29 +927,29 @@ export class AdaptiveBlockService {
       modeCondition = ` AND (q.mode = $2 OR q.mode IS NULL)`;
     }
 
-    // Single high-performance database query to fetch all candidates for this assessment.
-    // This avoids up to 12 sequential queries with ORDER BY RANDOM() and LEFT JOIN loops.
+    // Fetch only a small ranked candidate set (rn <= 50) partition by category and difficulty
+    // This avoids fetching the entire 25k+ question bank and doing expensive LEFT JOINs on options
     const allRows = await qr.query(
-      `SELECT q.${cfg.idCol} AS question_id, q.question_text, q.difficulty,
-              q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
-              json_agg(
-                 json_build_object('option_id', o.option_id, 'option_text', o.option_text)
-                 ORDER BY o.option_id
-              ) FILTER (WHERE o.option_id IS NOT NULL) AS options
-       FROM ${cfg.questions} q
-       LEFT JOIN ${cfg.options} o ON o.${cfg.idCol} = q.${cfg.idCol}
-       WHERE q.assessment_id = $1 AND q.status = 'active'${modeCondition}
-       GROUP BY q.${cfg.idCol}`,
+      `WITH RankedQuestions AS (
+         SELECT q.${cfg.idCol} AS question_id, q.question_text, q.difficulty,
+                q.${cfg.categoryCol} AS category, q.marks, q.negative_marks${imgSelect},
+                ROW_NUMBER() OVER (
+                  PARTITION BY q.${cfg.categoryCol}::text, q.difficulty::text 
+                  ORDER BY RANDOM()
+                ) as rn
+         FROM ${cfg.questions} q
+         WHERE q.assessment_id = $1 AND q.status = 'active'${modeCondition}
+       )
+       SELECT question_id, question_text, difficulty, category, marks, negative_marks${imgSelect}
+       FROM RankedQuestions
+       WHERE rn <= 50`,
       params,
     );
 
     const candidates = allRows.map((q: any) => ({
       id: String(q.question_id),
       text: q.question_text,
-      options: (q.options ?? []).map((o: any) => ({
-        id: String(o.option_id),
-        text: o.option_text,
-      })),
+      options: [],
       difficulty: String(q.difficulty || 'medium').toLowerCase(),
       category: q.category ?? '',
       marks: Number(q.marks) || 1,
@@ -1046,7 +1046,36 @@ export class AdaptiveBlockService {
       [results[i], results[j]] = [results[j], results[i]];
     }
 
-    return results.slice(0, count);
+    const slicedResults = results.slice(0, count);
+
+    // Fetch options only for the selected questions in a single query (using idx_xxx_options_question index)
+    if (slicedResults.length > 0) {
+      const selectedQIds = slicedResults.map(q => Number(q.id));
+      const allOptions = await qr.query(
+        `SELECT ${cfg.idCol}::text AS question_id, option_id::text AS id, option_text AS text
+         FROM ${cfg.options}
+         WHERE ${cfg.idCol} IN (${selectedQIds.join(',')})
+         ORDER BY option_id`,
+      );
+
+      // Group options by question_id
+      const optionsMap = new Map<string, Array<{ id: string; text: string }>>();
+      for (const opt of allOptions) {
+        const qId = String(opt.question_id);
+        if (!optionsMap.has(qId)) optionsMap.set(qId, []);
+        optionsMap.get(qId)!.push({
+          id: String(opt.id),
+          text: opt.text,
+        });
+      }
+
+      // Map options back to slicedResults
+      for (const q of slicedResults) {
+        q.options = optionsMap.get(q.id) ?? [];
+      }
+    }
+
+    return slicedResults;
   }
 
   private predictNextDifficulty(currentDifficulty: string, performance?: any): string {
