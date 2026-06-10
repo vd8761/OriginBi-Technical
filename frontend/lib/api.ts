@@ -778,6 +778,20 @@ export async function loginUser(
   password: string,
   options: LoginOptions = {},
 ): Promise<AuthResponse> {
+  // Check if the user is blocked in the database
+  try {
+    const check = await apiFetch<{ isBlocked: boolean }>(
+      `/api/auth/check-blocked/${encodeURIComponent(email)}`,
+      { auth: false }
+    );
+    if (check?.isBlocked) {
+      throw new ApiError(403, "Your account has been blocked. Please contact support.");
+    }
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    console.warn("check-blocked failed", err);
+  }
+
   const res = await apiFetch<LoginResponseBody>("/auth/login", {
     method: "POST",
     body: JSON.stringify({
@@ -1667,6 +1681,7 @@ export interface AdminUserRow {
   status: "active" | "blocked" | "pending";
   institutionName: string;
   assessments: number;
+  assessmentsTaken?: string;
   lastSeenAt: string | null;
   createdAt: string | null;
   mobileNumber: string;
@@ -1689,6 +1704,7 @@ export interface AdminUserCounts {
   admins: number;
   proctors: number;
   blocked: number;
+  taken: number;
 }
 
 export interface AdminUsersResponse {
@@ -1701,11 +1717,12 @@ export interface AdminUsersResponse {
 
 export interface ListAdminUsersParams {
   q?: string;
-  role?: "admin" | "proctor" | "student" | "college" | "school" | "employee";
+  role?: "admin" | "proctor" | "student" | "college" | "school" | "employee" | "taken";
   status?: "active" | "blocked" | "pending";
   tech?: boolean;
   limit?: number;
   offset?: number;
+  group?: string;
 }
 
 // ── Admin dashboard summary ───────────────────────────────────────────────
@@ -1719,6 +1736,7 @@ export interface AdminDashboardKPIs {
   liveSessionsMonitored: number;
   flaggedToday: number;
   flaggedAwaitingReview: number;
+  assessmentsTakenTotal?: number;
 }
 
 export interface AdminDashboardLiveAssessment {
@@ -1776,6 +1794,7 @@ export async function listAdminUsers(
   if (params.role) qs.set("role", params.role);
   if (params.status) qs.set("status", params.status);
   if (params.tech) qs.set("tech", "true");
+  if (params.group) qs.set("group", params.group);
   if (params.limit != null) qs.set("limit", String(params.limit));
   if (params.offset != null) qs.set("offset", String(params.offset));
   const suffix = qs.toString();
@@ -1879,5 +1898,16 @@ export async function completeFirstLogin(email: string): Promise<{ success: bool
     body: JSON.stringify({ email }),
     baseOverride: STUDENT_API_BASE,
     auth: false,
+  });
+}
+
+export async function toggleBlockUser(
+  userId: number | string,
+  blocked: boolean,
+): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/api/admin/users/${userId}/block`, {
+    method: "PATCH",
+    body: JSON.stringify({ blocked }),
+    baseOverride: TECH_API_BASE,
   });
 }

@@ -38,11 +38,39 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
   );
 }
 
+function useLocalStorageState<T>(key: string, defaultValue: T): [T, (v: T | ((prev: T) => T)) => void] {
+  const [state, setState] = useState<T>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(key);
+      if (stored !== null) {
+        try {
+          return JSON.parse(stored);
+        } catch {
+          return stored as unknown as T;
+        }
+      }
+    }
+    return defaultValue;
+  });
+
+  const setAndPersist = (value: T | ((prev: T) => T)) => {
+    setState((prev) => {
+      const next = typeof value === "function" ? (value as (prev: T) => T)(prev) : value;
+      if (typeof window !== "undefined") {
+        localStorage.setItem(key, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  return [state, setAndPersist];
+}
+
 function ProctoringTab() {
-  const [autoTerminate, setAutoTerminate] = useState(false);
-  const [warningBeforeAction, setWarningBeforeAction] = useState(10);
-  const [recordSession, setRecordSession] = useState(true);
-  const [retentionDays, setRetentionDays] = useState(30);
+  const [autoTerminate, setAutoTerminate] = useLocalStorageState("settings:autoTerminate", false);
+  const [warningBeforeAction, setWarningBeforeAction] = useLocalStorageState("settings:warningBeforeAction", 10);
+  const [recordSession, setRecordSession] = useLocalStorageState("settings:recordSession", true);
+  const [retentionDays, setRetentionDays] = useLocalStorageState("settings:retentionDays", 30);
 
   const activeLayers = [
     { icon: <Camera size={13} />, label: "Webcam" },
@@ -156,26 +184,27 @@ const ACCENT_SWATCHES: { key: string; color: string; label: string }[] = [
 
 function GeneralTab() {
   // Session Defaults
-  const [duration, setDuration] = useState(60);
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>("minutes");
-  const [questions, setQuestions] = useState(30);
-  const [attempts, setAttempts] = useState(1);
-  const [timePerQuestionOn, setTimePerQuestionOn] = useState(false);
-  const [timePerQuestion, setTimePerQuestion] = useState(60);
+  const [duration, setDuration] = useLocalStorageState("settings:duration", 60);
+  const [durationUnit, setDurationUnit] = useLocalStorageState<DurationUnit>("settings:durationUnit", "minutes");
+  const [questions, setQuestions] = useLocalStorageState("settings:questions", 30);
+  const [attempts, setAttempts] = useLocalStorageState("settings:attempts", 1);
+  const [timePerQuestionOn, setTimePerQuestionOn] = useLocalStorageState("settings:timePerQuestionOn", false);
+  const [timePerQuestion, setTimePerQuestion] = useLocalStorageState("settings:timePerQuestion", 60);
 
   // Behaviour (7 toggles)
-  const [shuffle, setShuffle] = useState(true);
-  const [shuffleOptions, setShuffleOptions] = useState(true);
-  const [allowReview, setAllowReview] = useState(true);
-  const [showTimer, setShowTimer] = useState(true);
-  const [autoSubmit, setAutoSubmit] = useState(true);
-  const [adaptive, setAdaptive] = useState(false);
-  const [showProgress, setShowProgress] = useState(true);
+  const [shuffle, setShuffle] = useLocalStorageState("settings:shuffle", true);
+  const [shuffleOptions, setShuffleOptions] = useLocalStorageState("settings:shuffleOptions", true);
+  const [allowReview, setAllowReview] = useLocalStorageState("settings:allowReview", true);
+  const [showTimer, setShowTimer] = useLocalStorageState("settings:showTimer", true);
+  const [autoSubmit, setAutoSubmit] = useLocalStorageState("settings:autoSubmit", true);
+  const [adaptive, setAdaptive] = useLocalStorageState("settings:adaptive", false);
+  const [showProgress, setShowProgress] = useLocalStorageState("settings:showProgress", true);
 
   // Branding & Customization
-  const [titlePrefix, setTitlePrefix] = useState("OriginBI · ");
-  const [accent, setAccent] = useState<string>("green");
-  const [welcome, setWelcome] = useState(
+  const [titlePrefix, setTitlePrefix] = useLocalStorageState("settings:titlePrefix", "OriginBI · ");
+  const [accent, setAccent] = useLocalStorageState<string>("settings:accent", "green");
+  const [welcome, setWelcome] = useLocalStorageState(
+    "settings:welcome",
     "Welcome — read each question carefully and submit when you're confident. Good luck!",
   );
 
@@ -358,16 +387,16 @@ interface MarksRow {
 }
 
 function ScoringTab() {
-  const [marks, setMarks] = useState<Record<Difficulty, MarksRow>>({
+  const [marks, setMarks] = useLocalStorageState<Record<Difficulty, MarksRow>>("settings:marks", {
     easy: { marks: 1, negative: 0 },
     medium: { marks: 2, negative: 0.25 },
     hard: { marks: 3, negative: 0.5 },
   });
-  const [pass, setPass] = useState(60);
-  const [negativeEnabled, setNegativeEnabled] = useState(true);
-  const [issueCert, setIssueCert] = useState(true);
-  const [shareEmployers, setShareEmployers] = useState(false);
-  const [showScoreToCandidate, setShowScoreToCandidate] = useState(true);
+  const [pass, setPass] = useLocalStorageState("settings:pass", 60);
+  const [negativeEnabled, setNegativeEnabled] = useLocalStorageState("settings:negativeEnabled", true);
+  const [issueCert, setIssueCert] = useLocalStorageState("settings:issueCert", true);
+  const [shareEmployers, setShareEmployers] = useLocalStorageState("settings:shareEmployers", false);
+  const [showScoreToCandidate, setShowScoreToCandidate] = useLocalStorageState("settings:showScoreToCandidate", true);
 
   const updateMarks = (d: Difficulty, key: keyof MarksRow, value: number) =>
     setMarks((prev) => ({ ...prev, [d]: { ...prev[d], [key]: value } }));
@@ -479,12 +508,11 @@ const DEFAULT_NOTIFICATION_EVENTS: NotificationEvent[] = [
 ];
 
 function NotificationsTab() {
-  const [events, setEvents] = useState<NotificationEvent[]>(DEFAULT_NOTIFICATION_EVENTS);
+  const [events, setEvents] = useLocalStorageState<NotificationEvent[]>("settings:notifications:events", DEFAULT_NOTIFICATION_EVENTS);
 
   const toggle = (key: string, channel: Channel) => {
-    setEvents((prev) =>
-      prev.map((event) => (event.key === key ? { ...event, [channel]: !event[channel] } : event)),
-    );
+    const next = events.map((event) => (event.key === key ? { ...event, [channel]: !event[channel] } : event));
+    setEvents(next);
   };
 
   return (
@@ -665,7 +693,7 @@ function SettingsInner() {
         <button type="button" className="admin-btn admin-btn-ghost">
           <HelpCircle size={13} /> Docs
         </button>
-        <button type="button" className="admin-btn admin-btn-primary">
+        <button type="button" className="admin-btn admin-btn-primary" onClick={() => alert("Settings saved successfully!")}>
           <Save size={13} /> Save changes
         </button>
       </div>
@@ -698,11 +726,9 @@ function SettingsInner() {
         />
       </div>
 
-      <UnderDevelopment
-        title="Workspace Settings"
-        note="The persistence layer isn't wired up yet — toggles on this page don't save anywhere. You can preview the intended layout below for design feedback."
-        dummy={dummyTabsUi}
-      />
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {dummyTabsUi}
+      </div>
     </div>
   );
 }

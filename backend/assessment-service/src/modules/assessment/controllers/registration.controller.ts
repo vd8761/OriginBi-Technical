@@ -1,4 +1,5 @@
-import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException, Get, Param } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { Public } from '../../../auth/public.decorator';
 import { RegistrationService, RegisterUserDto } from '../services/registration.service';
 import { IsString, IsEmail, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
@@ -83,7 +84,29 @@ class RegisterBodyDto {
 
 @Controller('auth')
 export class RegistrationController {
-  constructor(private readonly registrationService: RegistrationService) {}
+  constructor(
+    private readonly registrationService: RegistrationService,
+    private readonly dataSource: DataSource,
+  ) {}
+
+  @Public()
+  @Get('check-blocked/:email')
+  async checkBlocked(@Param('email') email: string): Promise<{ isBlocked: boolean }> {
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    try {
+      const rows = await qr.query(
+        `SELECT is_blocked FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+        [email],
+      );
+      if (!rows || rows.length === 0) {
+        return { isBlocked: false };
+      }
+      return { isBlocked: !!rows[0].is_blocked };
+    } finally {
+      await qr.release();
+    }
+  }
 
   @Public()
   @Post('register')

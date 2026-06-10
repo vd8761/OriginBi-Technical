@@ -27,12 +27,14 @@ import {
   Save,
   Loader2,
   Check,
+  Download,
 } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
 import { COUNTRY_CODES } from "@/lib/countryCodes";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import AddRegistrationForm from "@/components/admin/AddRegistrationForm";
+import BulkUploadRegistration from "@/components/admin/BulkUploadRegistration";
 import {
   Avatar,
   Badge,
@@ -176,7 +178,7 @@ function mapBackendGroup(bg: any): Group {
 function GroupsInner() {
   const router = useRouter();
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [view, setView] = useState<"list" | "detail" | "add-candidate">("list");
+  const [view, setView] = useState<"list" | "detail" | "add-candidate" | "bulk-upload-candidates">("list");
 
   useRegisterAdminPage({
     title: view === "detail" ? "Group Configuration" : view === "add-candidate" ? "Register Candidate" : "Groups Management",
@@ -490,6 +492,21 @@ function GroupsInner() {
     );
   }
 
+  // ── BULK UPLOAD CANDIDATES VIEW RENDERING ────────────────────────────────────
+  if (view === "bulk-upload-candidates" && selectedGroup) {
+    return (
+      <div className="admin-page">
+        <BulkUploadRegistration
+          initialGroupCode={selectedGroup.name}
+          onCancel={() => {
+            setView("detail");
+            setMembersRefreshTrigger((prev) => prev + 1);
+          }}
+        />
+      </div>
+    );
+  }
+
   // ── DETAILED VIEW RENDERING ───────────────────────────────────────────────────
   if (view === "detail" && selectedGroup) {
     const originalGroup = groups.find((g) => g.id === selectedGroup.id) || null;
@@ -780,6 +797,16 @@ function GroupsInner() {
                     style={{ outline: "none", boxShadow: "none" }}
                   />
                 </label>
+
+                {/* Bulk Upload Button */}
+                <button
+                  type="button"
+                  onClick={() => setView("bulk-upload-candidates")}
+                  className="flex items-center justify-center gap-1.5 py-2 px-4 bg-white dark:bg-[#FFFFFF1F] border border-gray-200 dark:border-[#FFFFFF1F] rounded-lg text-xs font-semibold text-brand-text-light-primary dark:text-white hover:bg-gray-50 dark:hover:bg-white/30 transition-all cursor-pointer shrink-0 h-9 shadow-sm"
+                >
+                  <Download size={14} />
+                  <span>Bulk Upload</span>
+                </button>
 
                 {/* Add Candidate Button */}
                 <button
@@ -1231,7 +1258,7 @@ function GroupsInner() {
             <h4 className="text-xs font-bold text-black dark:text-white tracking-wider mb-3">
               Assign Assessments
             </h4>
-            <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
               {availableAssessments.map((a) => {
                 const checked = newGroupAssessments.includes(a);
                 return (
