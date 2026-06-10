@@ -7,11 +7,23 @@ interface BulkReviewTableProps {
     onCancel: () => void;
     groups: any[]; // For dropdown
     isSubmitting?: boolean;
+    initialGroupCode?: string;
 }
 
-export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, invalidRows, onConfirm, onCancel, groups, isSubmitting }) => {
+export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, invalidRows, onConfirm, onCancel, groups, isSubmitting, initialGroupCode }) => {
     const [activeTab, setActiveTab] = useState<'valid' | 'invalid'>('valid');
-    const [overrides, setOverrides] = useState<Record<number, string>>({}); // rowIndex -> groupId
+    const [overrides, setOverrides] = useState<Record<number, string>>(() => {
+        const initialOverrides: Record<number, string> = {};
+        if (initialGroupCode) {
+            validRows.forEach(row => {
+                initialOverrides[row.rowIndex] = initialGroupCode;
+            });
+            invalidRows.forEach(row => {
+                initialOverrides[row.rowIndex] = initialGroupCode;
+            });
+        }
+        return initialOverrides;
+    });
 
     const handleGroupChange = (rowIndex: number, groupId: string) => {
         setOverrides(prev => ({ ...prev, [rowIndex]: groupId }));
@@ -90,8 +102,26 @@ export const BulkReviewTable: React.FC<BulkReviewTableProps> = ({ validRows, inv
                                     <td className="px-4 py-3">
                                         {renderCell(row, ['CountryCode', 'country_code'], (val) => String(val).startsWith('+') ? val : '+' + val)} {renderCell(row, ['Mobile', 'mobile', 'mobile_number'])}
                                     </td>
-                                    <td className="px-4 py-3">
-                                        {renderCell(row, ['GroupName', 'group_name'])}
+                                    <td className="px-4 py-3 text-black dark:text-white">
+                                        {initialGroupCode ? (
+                                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                                {initialGroupCode}
+                                            </span>
+                                        ) : (
+                                            <select
+                                                value={overrides[row.rowIndex] ?? row.normalizedData?.groupName ?? ''}
+                                                onChange={(e) => handleGroupChange(row.rowIndex, e.target.value)}
+                                                style={{ backgroundColor: "var(--admin-card-solid, #ffffff)", color: "var(--admin-fg, #000000)" }}
+                                                className="border border-gray-300 dark:border-white/10 rounded px-2 py-1 text-xs outline-none focus:border-brand-green"
+                                            >
+                                                <option value="">No Group</option>
+                                                {groups.map(g => (
+                                                    <option key={g.id || g.code} value={g.name}>
+                                                        {g.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3">
                                         {isSchool ? renderCell(row, ['SchoolLevel', 'school_level']) : '-'}

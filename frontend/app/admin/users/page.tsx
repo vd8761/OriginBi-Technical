@@ -38,12 +38,14 @@ import {
 } from "@/components/admin/ui";
 import {
   listAdminUsers,
+  toggleBlockUser,
+  getAdminGroups,
   type AdminUserRow,
   type AdminUserCounts,
   type ListAdminUsersParams,
 } from "@/lib/api";
 
-type RoleFilter = "all" | "admin" | "proctor" | "student" | "college" | "school" | "employee";
+type RoleFilter = "all" | "admin" | "proctor" | "student" | "college" | "school" | "employee" | "taken";
 
 const roleTones: Record<AdminUserRow["roleGroup"], "blue" | "purple" | "amber"> = {
   Student: "blue",
@@ -136,6 +138,19 @@ function UsersInner() {
   const [lookupError, setLookupError] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const [groups, setGroups] = useState<any[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>("");
+
+  useEffect(() => {
+    getAdminGroups()
+      .then((data) => {
+        setGroups(data || []);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch groups", err);
+      });
+  }, []);
+
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [counts, setCounts] = useState<AdminUserCounts>({
     total: 0,
@@ -146,6 +161,7 @@ function UsersInner() {
     admins: 0,
     proctors: 0,
     blocked: 0,
+    taken: 0,
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -156,7 +172,7 @@ function UsersInner() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, filter]);
+  }, [debouncedSearch, filter, selectedGroup]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -173,6 +189,7 @@ function UsersInner() {
     };
     if (debouncedSearch) params.q = debouncedSearch;
     if (filter !== "all") params.role = filter;
+    if (selectedGroup) params.group = selectedGroup;
     listAdminUsers(params)
       .then((data) => {
         if (cancelled) return;
@@ -191,7 +208,7 @@ function UsersInner() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, filter, currentPage, refreshTrigger]);
+  }, [debouncedSearch, filter, currentPage, selectedGroup, refreshTrigger]);
 
   const tabs = useMemo(
     () => [
@@ -199,6 +216,7 @@ function UsersInner() {
       { value: "college" as const, label: "College", count: counts.college },
       { value: "school" as const, label: "School", count: counts.school },
       { value: "employee" as const, label: "Employee", count: counts.employee },
+      { value: "taken" as const, label: "Assessment Taken", count: counts.taken },
     ],
     [counts],
   );
@@ -271,6 +289,31 @@ function UsersInner() {
         <div className="admin-control-row" style={{ marginBottom: 16 }}>
           <div className="admin-row" style={{ flexWrap: "wrap", gap: 12 }}>
             <PillTabs value={filter} onChange={setFilter} tabs={tabs} />
+            <select
+              className="admin-select"
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              style={{
+                height: 38,
+                width: 180,
+                padding: "0 10px",
+                borderRadius: "8px",
+                border: "1px solid var(--admin-border, #e2e8f0)",
+                backgroundColor: "var(--admin-card-solid, #ffffff)",
+                color: "var(--admin-fg, #000000)",
+                fontSize: "13.5px",
+                fontWeight: 500,
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              <option value="">All Groups</option>
+              {groups.map((g) => (
+                <option key={g.id || g.code} value={g.name}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
             <label className="admin-search" style={{ width: 280 }}>
               <Search size={14} />
               <input
@@ -316,6 +359,7 @@ function UsersInner() {
                 <th>Mobile Number</th>
                 <th>Designation</th>
                 <th>Status</th>
+                <th>Assessments Taken</th>
                 <th>Assessments</th>
                 <th>Last seen</th>
               </tr>
@@ -323,13 +367,13 @@ function UsersInner() {
             <tbody>
               {loading && rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
                     Loading users…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--admin-fg)" }}>
                     No users match the current filters.
                   </td>
                 </tr>
@@ -375,6 +419,43 @@ function UsersInner() {
                       </td>
                       <td>
                         <Badge tone={statusTones[u.status]} dot>{u.status}</Badge>
+                      </td>
+                      <td>
+                        {(() => {
+                          const modules = u.assessmentsTaken ? u.assessmentsTaken.split(",") : [];
+                          if (modules.length === 0) return "—";
+                          return (
+                            <div className="flex flex-wrap gap-1.5">
+                              {modules.map((mod) => {
+                                let tone: "green" | "blue" | "purple" | "amber" = "green";
+                                let label = "";
+                                if (mod === "aptitude") {
+                                  tone = "green";
+                                  label = "Aptitude";
+                                } else if (mod === "grammar") {
+                                  tone = "blue";
+                                  label = "Grammar/Communication";
+                                } else if (mod === "mnc") {
+                                  tone = "purple";
+                                  label = "MNC";
+                                } else if (mod === "role") {
+                                  tone = "amber";
+                                  label = "Role";
+                                } else if (mod === "coding") {
+                                  tone = "blue";
+                                  label = "Coding";
+                                } else {
+                                  return null;
+                                }
+                                return (
+                                  <Badge key={mod} tone={tone}>
+                                    {label}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="admin-mono">{u.assessments}</td>
                       <td style={{ color: "var(--admin-fg)" }}>{formatRelativeFromIso(u.lastSeenAt)}</td>
@@ -607,9 +688,13 @@ function UsersInner() {
             <hr className="admin-divider" />
 
             <div className="admin-row" style={{ gap: 8 }}>
-              <button type="button" className="admin-btn admin-btn-secondary">
+              <a
+                href={`mailto:${selected.email}`}
+                className="admin-btn admin-btn-secondary flex items-center justify-center gap-1.5"
+                style={{ textDecoration: 'none' }}
+              >
                 <Mail size={14} /> Send email
-              </button>
+              </a>
               <button
                 type="button"
                 className="admin-btn admin-btn-secondary"
@@ -617,8 +702,37 @@ function UsersInner() {
               >
                 Entitlements <ArrowRight size={14} />
               </button>
-              <button type="button" className="admin-btn admin-btn-ghost" style={{ marginLeft: "auto", color: "var(--admin-red)" }}>
-                <X size={14} /> Block
+              <button
+                type="button"
+                className="admin-btn admin-btn-ghost"
+                style={{ marginLeft: "auto", color: selected.status === "blocked" ? "var(--admin-green)" : "var(--admin-red)" }}
+                onClick={async () => {
+                  const action = selected.status === "blocked" ? "unblock" : "block";
+                  if (confirm(`Are you sure you want to ${action} this user?`)) {
+                    try {
+                      await toggleBlockUser(selected.id, selected.status !== "blocked");
+                      alert(`User successfully ${action}ed.`);
+                      setRefreshTrigger(prev => prev + 1);
+                      setSelected({
+                        ...selected,
+                        status: selected.status === "blocked" ? "active" : "blocked",
+                      });
+                    } catch (err) {
+                      console.error(err);
+                      alert(`Failed to ${action} user.`);
+                    }
+                  }
+                }}
+              >
+                {selected.status === "blocked" ? (
+                  <>
+                    <ShieldCheck size={14} /> Unblock
+                  </>
+                ) : (
+                  <>
+                    <X size={14} /> Block
+                  </>
+                )}
               </button>
             </div>
           </>

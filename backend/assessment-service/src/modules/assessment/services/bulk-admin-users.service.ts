@@ -213,6 +213,21 @@ export class BulkAdminUsersService {
     if (!job) throw new NotFoundException('Import job not found');
     if (job.status !== 'DRAFT') throw new BadRequestException(`Job is ${job.status}, cannot execute.`);
 
+    if (overrides && overrides.length > 0) {
+      for (const override of overrides) {
+        const row = await this.bulkImportRowRepo.findOne({
+          where: { importId, rowIndex: override.row_index },
+        });
+        if (row && override.group_id !== undefined) {
+          row.normalizedData = {
+            ...row.normalizedData,
+            groupName: override.group_id,
+          };
+          await this.bulkImportRowRepo.save(row);
+        }
+      }
+    }
+
     job.status = 'QUEUED';
     await this.bulkImportRepo.save(job);
     

@@ -13,6 +13,7 @@ import {
   MessageSquare,
   RefreshCw,
   Target,
+  UserCheck,
   Users,
 } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
@@ -226,6 +227,14 @@ function DashboardInner() {
           iconColor="var(--admin-green)"
         />
         <StatCard
+          label="Assessment Taken"
+          value={(kpis?.assessmentsTakenTotal ?? 0).toLocaleString()}
+          sub="Total unique students"
+          icon={<UserCheck size={18} />}
+          iconBg="rgba(255,183,3,0.18)"
+          iconColor="var(--admin-amber)"
+        />
+        <StatCard
           label="Question Bank"
           value={(kpis?.questionBankTotal ?? 0).toLocaleString()}
           sub={`${kpis?.questionBankPluginCount ?? 0} plugins linked`}
@@ -240,14 +249,6 @@ function DashboardInner() {
           icon={<Activity size={18} />}
           iconBg="rgba(74,198,234,0.16)"
           iconColor="var(--admin-blue)"
-        />
-        <StatCard
-          label="Flagged Today"
-          value={(kpis?.flaggedToday ?? 0).toLocaleString()}
-          sub={`${kpis?.flaggedAwaitingReview ?? 0} await review`}
-          icon={<AlertTriangle size={18} />}
-          iconBg="rgba(255,183,3,0.18)"
-          iconColor="var(--admin-amber)"
         />
         <MountPoint id="dashboard.kpi" />
       </section>
