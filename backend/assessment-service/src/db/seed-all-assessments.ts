@@ -136,8 +136,6 @@ const roleQuestions = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function seedAptitude(client: any, adminUserId: number) {
-    await client.query("TRUNCATE tech_aptitude_questions, tech_aptitude_options CASCADE");
-
     const assessmentResult = await client.query(
         `INSERT INTO tech_assessments (assessment_code, assessment_name, module_type, total_time_minutes, total_questions, shuffle_questions, shuffle_options, negative_mark_enabled, negative_mark_value, status, created_by, email_sending_enabled, show_certificate_dashboard, created_at, updated_at)
          VALUES ($1, $2, 'aptitude', $3, $4, $5, $6, $7, $8, 'active', $9, true, true, NOW(), NOW())
@@ -146,6 +144,16 @@ async function seedAptitude(client: any, adminUserId: number) {
         ["TECH_APT_001", "Technical Aptitude Assessment", 60, aptitudeQuestions.length, true, true, true, 0.25, adminUserId]
     );
     const assessmentId = assessmentResult.rows[0].assessment_id;
+
+    // Check if questions are already seeded (e.g. from the manual Excel import script)
+    const checkResult = await client.query("SELECT COUNT(*)::int as count FROM tech_aptitude_questions WHERE assessment_id = $1", [assessmentId]);
+    const count = checkResult.rows[0].count;
+    if (count > 0) {
+        console.log(`Skipping aptitude questions seed (found ${count} questions already in database for TECH_APT_001)`);
+        return;
+    }
+
+    await client.query("TRUNCATE tech_aptitude_questions, tech_aptitude_options CASCADE");
 
     let idx = 0;
     for (const question of aptitudeQuestions) {
@@ -256,6 +264,14 @@ async function seedRole(client: any, adminUserId: number) {
         ["TECH_ROLE_001", "Role Fit Assessment", 45, roleQuestions.length, true, true, false, null, adminUserId]
     );
     const assessmentId = assessmentResult.rows[0].assessment_id;
+
+    // Check if questions are already seeded (e.g. from the manual Excel import script)
+    const checkResult = await client.query("SELECT COUNT(*)::int as count FROM tech_role_questions WHERE assessment_id = $1", [assessmentId]);
+    const count = checkResult.rows[0].count;
+    if (count > 0) {
+        console.log(`Skipping role questions seed (found ${count} questions already in database for TECH_ROLE_001)`);
+        return;
+    }
 
     for (const question of roleQuestions) {
         const questionResult = await client.query(

@@ -41,7 +41,7 @@ func (s *Server) listActiveAttemptsForProctoring(w http.ResponseWriter, r *http.
 			limit = n
 		}
 	}
-	sinceCutoff := time.Now().Add(-2 * time.Hour)
+	sinceCutoff := time.Now().Add(-24 * time.Hour)
 	if raw := r.URL.Query().Get("since"); raw != "" {
 		if ts, err := time.Parse(time.RFC3339, raw); err == nil {
 			sinceCutoff = ts

@@ -10,6 +10,7 @@ export interface AdminUserRow {
   status: 'active' | 'blocked' | 'pending';
   institutionName: string;
   assessments: number;
+  assessmentsTaken?: string;
   lastSeenAt: string | null;
   createdAt: string | null;
   mobileNumber: string;
@@ -33,6 +34,7 @@ export interface AdminUserCounts {
   admins: number;
   proctors: number;
   blocked: number;
+  taken: number;
 }
 
 export interface AdminUsersResponse {
@@ -50,6 +52,7 @@ export interface ListAdminUsersParams {
   tech?: boolean;
   limit?: number;
   offset?: number;
+  group?: string;
 }
 
 @Injectable()
@@ -72,7 +75,15 @@ export class AdminUsersService {
       const args: any[] = [];
       const where: string[] = [];
 
-      // No longer filtering by is_tech_assessment to show all users
+      if (params.tech) {
+        where.push('r.is_tech_assessment = 1');
+      }
+
+      if (params.group) {
+        const p = args.length + 1;
+        args.push(params.group);
+        where.push(`r.metadata->>'groupName' = $${p}`);
+      }
 
       if (q) {
         const p = args.length + 1;
@@ -99,6 +110,19 @@ export class AdminUsersService {
         case 'employee':
           where.push("p.code = 'EMPLOYEE'");
           break;
+        case 'taken':
+          where.push(`EXISTS (
+            SELECT 1 FROM attempts WHERE candidate_user_id = u.id AND status IN ('submitted', 'evaluated', 'published')
+            UNION ALL
+            SELECT 1 FROM tech_aptitude_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+            UNION ALL
+            SELECT 1 FROM tech_grammar_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+            UNION ALL
+            SELECT 1 FROM tech_mnc_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+            UNION ALL
+            SELECT 1 FROM tech_role_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+          )`);
+          break;
       }
 
       switch (status) {
@@ -118,6 +142,17 @@ export class AdminUsersService {
       this.logger.debug(`listAdminUsers args: ${JSON.stringify(args)}`);
 
       // 1. Get counts
+      const countsWhere: string[] = [];
+      const countsArgs: any[] = [];
+      if (params.tech) {
+        countsWhere.push('r.is_tech_assessment = 1');
+      }
+      if (params.group) {
+        countsArgs.push(params.group);
+        countsWhere.push(`r.metadata->>'groupName' = $${countsArgs.length}`);
+      }
+      const countsWhereSQL = countsWhere.length > 0 ? `WHERE ${countsWhere.join(' AND ')}` : '';
+
       const countsResult = await queryRunner.query(`
         SELECT
             COUNT(*)::bigint AS total,
@@ -127,11 +162,19 @@ export class AdminUsersService {
             COUNT(*) FILTER (WHERE p.code = 'EMPLOYEE')::bigint AS employee,
             COUNT(*) FILTER (WHERE u.role IN ('ADMIN','SUPER_ADMIN','STAFF'))::bigint AS admins,
             COUNT(*) FILTER (WHERE u.role = 'PROCTOR')::bigint AS proctors,
-            COUNT(*) FILTER (WHERE u.is_blocked = TRUE)::bigint AS blocked
+            COUNT(*) FILTER (WHERE u.is_blocked = TRUE)::bigint AS blocked,
+            COUNT(*) FILTER (WHERE EXISTS (
+              SELECT 1 FROM attempts WHERE candidate_user_id = u.id AND status IN ('submitted', 'evaluated', 'published')
+              UNION SELECT 1 FROM tech_aptitude_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+              UNION SELECT 1 FROM tech_grammar_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+              UNION SELECT 1 FROM tech_mnc_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+              UNION SELECT 1 FROM tech_role_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+            ))::bigint AS taken
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
         LEFT JOIN programs p ON p.id = r.program_id
-      `);
+        ${countsWhereSQL}
+      `, countsArgs);
       const countsRaw = countsResult[0];
       this.logger.debug(`listAdminUsers countsRaw: ${JSON.stringify(countsRaw)}`);
       const counts: AdminUserCounts = {
@@ -143,6 +186,7 @@ export class AdminUsersService {
         admins: Number(countsRaw.admins),
         proctors: Number(countsRaw.proctors),
         blocked: Number(countsRaw.blocked),
+        taken: Number(countsRaw.taken),
       };
 
       // 2. Get total matching rows
@@ -180,7 +224,34 @@ export class AdminUsersService {
                u.is_blocked,
                u.last_login_at,
                u.created_at,
-               (SELECT COUNT(*)::bigint FROM attempts a WHERE a.candidate_user_id = u.id) AS assessments
+               (
+                 SELECT COUNT(DISTINCT module_type)::bigint
+                 FROM (
+                   SELECT 'coding'::text as module_type FROM attempts WHERE candidate_user_id = u.id AND status IN ('submitted', 'evaluated', 'published')
+                   UNION ALL
+                   SELECT 'aptitude'::text as module_type FROM tech_aptitude_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                   UNION ALL
+                   SELECT 'grammar'::text as module_type FROM tech_grammar_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                   UNION ALL
+                   SELECT 'mnc'::text as module_type FROM tech_mnc_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                   UNION ALL
+                   SELECT 'role'::text as module_type FROM tech_role_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                 ) t
+               ) AS assessments,
+               COALESCE((
+                 SELECT string_agg(DISTINCT module_type, ',')
+                 FROM (
+                   SELECT 'coding'::text as module_type FROM attempts WHERE candidate_user_id = u.id AND status IN ('submitted', 'evaluated', 'published')
+                   UNION ALL
+                   SELECT 'aptitude'::text as module_type FROM tech_aptitude_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                   UNION ALL
+                   SELECT 'grammar'::text as module_type FROM tech_grammar_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                   UNION ALL
+                   SELECT 'mnc'::text as module_type FROM tech_mnc_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                   UNION ALL
+                   SELECT 'role'::text as module_type FROM tech_role_attempts WHERE user_id = u.id AND status IN ('submitted', 'evaluated')
+                 ) t
+               ), '') AS assessments_taken
         FROM users u
         LEFT JOIN registrations r ON r.user_id = u.id
         LEFT JOIN programs p ON p.id = r.program_id
@@ -213,6 +284,7 @@ export class AdminUsersService {
           status: statusRes,
           institutionName: row.institution,
           assessments: Number(row.assessments),
+          assessmentsTaken: row.assessments_taken || '',
           lastSeenAt: row.last_login_at ? new Date(row.last_login_at).toISOString() : null,
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
           mobileNumber: row.mobile_number,
@@ -234,6 +306,23 @@ export class AdminUsersService {
         offset,
         counts,
       };
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async toggleBlockUser(userId: number, blocked: boolean): Promise<{ success: boolean }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await queryRunner.query(
+        `UPDATE users SET is_blocked = $1 WHERE id = $2`,
+        [blocked, userId],
+      );
+      return { success: true };
+    } catch (err: any) {
+      this.logger.error(`Failed to toggle block status for user ${userId}: ${err.message}`);
+      throw err;
     } finally {
       await queryRunner.release();
     }

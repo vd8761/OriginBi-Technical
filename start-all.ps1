@@ -13,10 +13,10 @@ function Stop-PortProcess {
         ForEach-Object { ($_ -split '\s+')[-1] } |
         Where-Object { $_ -match '^\d+$' } |
         Select-Object -Unique
-    foreach ($pid in $pids) {
-        if ($pid -and $pid -ne '0') {
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Write-Host "  Freed port $Port (killed PID $pid)" -ForegroundColor DarkGray
+    foreach ($procId in $pids) {
+        if ($procId -and $procId -ne '0') {
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+            Write-Host "  Freed port $Port (killed PID $procId)" -ForegroundColor DarkGray
         }
     }
 }

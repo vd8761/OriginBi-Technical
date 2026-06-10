@@ -29,6 +29,7 @@ export class AdminUsersController {
     @Query('role') role?: 'admin' | 'proctor' | 'student' | 'college' | 'school' | 'employee',
     @Query('status') status?: 'active' | 'blocked' | 'pending',
     @Query('tech') tech?: string,
+    @Query('group') group?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ): Promise<AdminUsersResponse> {
@@ -37,6 +38,7 @@ export class AdminUsersController {
       role,
       status,
       tech: tech === 'true',
+      group,
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
     });
@@ -66,5 +68,13 @@ export class AdminUsersController {
   @Get('bulk-jobs/:id/rows')
   async getBulkJobRows(@Param('id') id: string) {
     return this.bulkAdminUsersService.getJobRows(id);
+  }
+
+  @Patch(':id/block')
+  async toggleBlockUser(
+    @Param('id') id: string,
+    @Body('blocked') blocked: boolean,
+  ) {
+    return this.adminUsersService.toggleBlockUser(parseInt(id, 10), blocked);
   }
 }

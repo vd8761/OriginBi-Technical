@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Blocks,
+  CheckCircle2,
   Eye,
   Flag,
   Keyboard,
@@ -18,7 +20,10 @@ import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import { Badge, Card, StatCard, StatusDot } from "@/components/admin/ui";
 import {
   listActiveProctoringAttempts,
+  listPlugins,
+  updatePluginState,
   type AdminProctoringAttempt,
+  type Plugin,
 } from "@/lib/api";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -35,11 +40,21 @@ const COUNTER_DEFS: { key: string; label: string; icon: LucideIcon }[] = [
   { key: "proctoring.focus.lost", label: "Focus", icon: MousePointerClick },
   { key: "proctoring.mouse.left", label: "Mouse", icon: MousePointerClick },
   { key: "proctoring.keypress", label: "Keypress", icon: Keyboard },
+  { key: "proctoring.camera.blocked", label: "Camera", icon: ShieldAlert },
+  { key: "proctoring.shortcut.blocked", label: "Shortcut", icon: Keyboard },
+  { key: "connectivity_gap", label: "Offline", icon: AlertTriangle },
 ];
+
+const INCIDENT_KEYS = new Set(COUNTER_DEFS.map((d) => d.key));
 
 function sumCounts(c: Record<string, number> | undefined) {
   if (!c) return 0;
-  return Object.values(c).reduce((a, b) => a + (b || 0), 0);
+  return Object.entries(c).reduce((sum, [key, val]) => {
+    if (INCIDENT_KEYS.has(key)) {
+      return sum + (val || 0);
+    }
+    return sum;
+  }, 0);
 }
 
 function elapsedSince(iso?: string | null) {
@@ -74,6 +89,46 @@ function ProctoringInner() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const inflight = useRef(false);
+
+  // Proctoring plugins configuration state
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(true);
+  const [pluginsError, setPluginsError] = useState<string | null>(null);
+  const [savingPlugin, setSavingPlugin] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listPlugins({ category: "proctoring" })
+      .then((data) => {
+        if (cancelled) return;
+        setPlugins(data.plugins);
+        setPluginsError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPluginsError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setPluginsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleTogglePlugin = async (plugin: Plugin, state: Plugin["platformState"]) => {
+    setSavingPlugin(plugin.id);
+    try {
+      await updatePluginState(plugin.id, { state, config: plugin.platformConfig ?? {} });
+      setPlugins((current) =>
+        current.map((item) => (item.id === plugin.id ? { ...item, platformState: state } : item)),
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingPlugin(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -231,6 +286,83 @@ function ProctoringInner() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </Card>
+
+      <Card style={{ marginTop: 24 }}>
+        <div className="admin-control-row" style={{ marginBottom: 14 }}>
+          <div>
+            <h3 className="admin-card-title">Proctoring Controls</h3>
+            <p className="admin-card-subtitle">Enable, disable, or restrict proctoring plugins across the platform.</p>
+          </div>
+          <Badge tone="green" dot>
+            {plugins.filter(p => p.platformState === 'enabled').length} enabled
+          </Badge>
+        </div>
+
+        {pluginsError && (
+          <p style={{ color: "var(--admin-red)", fontSize: 13, padding: "12px 0" }}>
+            Error loading proctoring plugins: {pluginsError}
+          </p>
+        )}
+
+        {pluginsLoading && !pluginsError && (
+          <div className="admin-grid-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="admin-skeleton" style={{ height: 120 }} />
+            ))}
+          </div>
+        )}
+
+        {!pluginsLoading && !pluginsError && (
+          <div className="admin-grid-2" style={{ gap: 14 }}>
+            {plugins.map((plugin) => (
+              <div
+                key={plugin.id}
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  border: "1px solid var(--admin-border)",
+                  background: "var(--admin-card-bg)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  gap: 12
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontWeight: 800, color: "var(--admin-fg)" }}>{plugin.name}</div>
+                    <div className="admin-mono" style={{ fontSize: 11, color: "var(--admin-fg-4)", marginTop: 2 }}>
+                      {plugin.slug} · v{plugin.version}
+                    </div>
+                  </div>
+                  <Badge tone={plugin.platformState === "enabled" ? "green" : plugin.platformState === "restricted" ? "amber" : "neutral"} dot>
+                    {plugin.platformState}
+                  </Badge>
+                </div>
+
+                <div className="admin-row" style={{ gap: 6, marginTop: 4 }}>
+                  {(["enabled", "restricted", "disabled"] as Plugin["platformState"][]).map((state) => {
+                    const active = plugin.platformState === state;
+                    return (
+                      <button
+                        key={state}
+                        type="button"
+                        onClick={() => handleTogglePlugin(plugin, state)}
+                        disabled={savingPlugin === plugin.id || active}
+                        className={`admin-btn ${active ? "admin-btn-primary" : "admin-btn-secondary"}`}
+                        style={{ fontSize: 11.5, padding: "4px 8px" }}
+                      >
+                        {active && <CheckCircle2 size={11} style={{ marginRight: 4 }} />}
+                        {state}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>

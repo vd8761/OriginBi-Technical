@@ -10,6 +10,7 @@ export interface DashboardKPIs {
   liveSessionsMonitored: number;
   flaggedToday: number;
   flaggedAwaitingReview: number;
+  assessmentsTakenTotal: number;
 }
 
 export interface DashboardLiveAssessment {
@@ -76,11 +77,12 @@ export class AdminDashboardService {
           activeCandidates: 0,
           activeCandidatesOnline: 0,
           questionBankTotal: 0,
-          questionBankPluginCount: 0,
+          questionBankPluginCount: 5,
           liveSessions: 0,
           liveSessionsMonitored: 0,
           flaggedToday: 0,
           flaggedAwaitingReview: 0,
+          assessmentsTakenTotal: 0,
         },
         liveAssessments: [],
         recentActivity: [],
@@ -115,7 +117,8 @@ export class AdminDashboardService {
       try {
         const liveSessionsResult = await queryRunner.query(`
           WITH all_attempts AS (
-            SELECT status, updated_at FROM tech_aptitude_attempts
+            SELECT CASE WHEN status IN ('in_progress', 'started') THEN 'in_progress' ELSE status::text END as status, last_seen_at as updated_at FROM attempts
+            UNION ALL SELECT status, updated_at FROM tech_aptitude_attempts
             UNION ALL SELECT status, updated_at FROM tech_grammar_attempts
             UNION ALL SELECT status, updated_at FROM tech_mnc_attempts
             UNION ALL SELECT status, updated_at FROM tech_role_attempts
@@ -134,7 +137,8 @@ export class AdminDashboardService {
       try {
         const activeCandidatesResult = await queryRunner.query(`
           WITH all_candidates AS (
-            SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_aptitude_attempts
+            SELECT candidate_user_id as user_id, COALESCE(last_seen_at, started_at, created_at) as activity_at FROM attempts
+            UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_aptitude_attempts
             UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_grammar_attempts
             UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_mnc_attempts
             UNION ALL SELECT user_id, COALESCE(updated_at, started_at, created_at) as activity_at FROM tech_role_attempts
@@ -147,7 +151,8 @@ export class AdminDashboardService {
 
         const onlineCandidatesResult = await queryRunner.query(`
           WITH all_online AS (
-            SELECT user_id, updated_at FROM tech_aptitude_attempts WHERE status = 'in_progress'
+            SELECT candidate_user_id as user_id, last_seen_at as updated_at FROM attempts WHERE status IN ('in_progress', 'started')
+            UNION ALL SELECT user_id, updated_at FROM tech_aptitude_attempts WHERE status = 'in_progress'
             UNION ALL SELECT user_id, updated_at FROM tech_grammar_attempts WHERE status = 'in_progress'
             UNION ALL SELECT user_id, updated_at FROM tech_mnc_attempts WHERE status = 'in_progress'
             UNION ALL SELECT user_id, updated_at FROM tech_role_attempts WHERE status = 'in_progress'
@@ -159,6 +164,22 @@ export class AdminDashboardService {
         out.kpis.activeCandidatesOnline = Number(onlineCandidatesResult[0]?.count || 0);
       } catch (e: any) {
         this.logger.error(`KPI active/online candidates failed: ${e.message}`);
+      }
+
+      try {
+        const takenCandidatesResult = await queryRunner.query(`
+          SELECT COUNT(DISTINCT user_id)::bigint as count
+          FROM (
+            SELECT candidate_user_id as user_id FROM attempts WHERE status IN ('submitted', 'evaluated', 'published')
+            UNION ALL SELECT user_id FROM tech_aptitude_attempts WHERE status IN ('submitted', 'evaluated')
+            UNION ALL SELECT user_id FROM tech_grammar_attempts WHERE status IN ('submitted', 'evaluated')
+            UNION ALL SELECT user_id FROM tech_mnc_attempts WHERE status IN ('submitted', 'evaluated')
+            UNION ALL SELECT user_id FROM tech_role_attempts WHERE status IN ('submitted', 'evaluated')
+          ) t
+        `);
+        out.kpis.assessmentsTakenTotal = Number(takenCandidatesResult[0]?.count || 0);
+      } catch (e: any) {
+        this.logger.error(`KPI taken candidates failed: ${e.message}`);
       }
 
       // 2. Live Assessments
@@ -214,7 +235,8 @@ export class AdminDashboardService {
             SELECT generate_series(current_date - 6, current_date, interval '1 day')::date AS d
           ),
           all_submissions AS (
-            SELECT submitted_at::date as d FROM tech_aptitude_attempts WHERE status IN ('submitted', 'evaluated')
+            SELECT submitted_at::date as d FROM attempts WHERE status IN ('submitted', 'evaluated', 'published')
+            UNION ALL SELECT submitted_at::date as d FROM tech_aptitude_attempts WHERE status IN ('submitted', 'evaluated')
             UNION ALL SELECT submitted_at::date as d FROM tech_grammar_attempts WHERE status IN ('submitted', 'evaluated')
             UNION ALL SELECT submitted_at::date as d FROM tech_mnc_attempts WHERE status IN ('submitted', 'evaluated')
             UNION ALL SELECT submitted_at::date as d FROM tech_role_attempts WHERE status IN ('submitted', 'evaluated')

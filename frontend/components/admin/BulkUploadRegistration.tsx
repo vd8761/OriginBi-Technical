@@ -5,6 +5,7 @@ import {
     getBulkAdminUsersJobStatus,
     getBulkAdminUsersJobRows,
     type BulkAdminUsersRow,
+    getAdminGroups,
 } from '../../lib/api';
 import { BulkUploadDropzone } from "./bulk/BulkUploadDropzone";
 import { BulkReviewTable } from "./bulk/BulkReviewTable";
@@ -12,9 +13,10 @@ import { BulkSuccessSummary } from "./bulk/BulkSuccessSummary";
 
 interface BulkUploadRegistrationProps {
     onCancel: () => void;
+    initialGroupCode?: string;
 }
 
-const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCancel }) => {
+const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCancel, initialGroupCode }) => {
     const [view, setView] = useState<'upload' | 'review' | 'processing' | 'success'>('upload');
     const [importId, setImportId] = useState<string | null>(null);
     const [fileName, setFileName] = useState<string | null>(null);
@@ -35,17 +37,24 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
     const [summary, setSummary] = useState({ total: 0, success: 0, skipped: 0 });
 
     useEffect(() => {
-        const stored = localStorage.getItem("originbi:groups");
-        if (stored) {
+        let isMounted = true;
+        async function fetchGroups() {
             try {
-                const parsed = JSON.parse(stored);
-                setGroups(parsed.map((g: any) => ({ id: g.id || g.code, name: g.name })));
-                return;
+                const data = await getAdminGroups();
+                if (isMounted) {
+                    setGroups(data.map((g: any) => ({ id: g.id || g.code, name: g.name })));
+                }
             } catch (e) {
-                console.error("Failed to parse stored groups in BulkUploadRegistration", e);
+                console.error("Failed to fetch groups in BulkUploadRegistration", e);
+                if (isMounted) {
+                    setGroups([{ id: 1, name: 'Default Tech Group' }]);
+                }
             }
         }
-        setGroups([{ id: 1, name: 'Default Tech Group' }]);
+        fetchGroups();
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     // Polling Logic
@@ -145,6 +154,11 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
                 style={{ backgroundColor: "var(--admin-card-solid, #ffffff)" }}
                 className="w-full border border-gray-200 dark:border-white/10 rounded-3xl p-6 sm:p-10 shadow-sm dark:shadow-xl transition-colors duration-300 relative"
             >
+                {initialGroupCode && (
+                    <div className="mb-6 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                        Note: All uploaded candidates will be automatically assigned to group: <strong className="underline">{initialGroupCode}</strong>
+                    </div>
+                )}
                 {view === 'upload' && (
                     <BulkUploadDropzone
                         onFileSelected={handleFileSelected}
@@ -166,6 +180,7 @@ const BulkUploadRegistration: React.FC<BulkUploadRegistrationProps> = ({ onCance
                         onCancel={handleReset}
                         groups={groups}
                         isSubmitting={isConfirming}
+                        initialGroupCode={initialGroupCode}
                     />
                 )}
 
