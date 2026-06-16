@@ -991,24 +991,24 @@ export class AssessmentService {
         attemptRows = await queryRunner.query(
           `SELECT *
            FROM ${config.attempts}
-           WHERE attempt_token = $1 AND status IN ('submitted', 'evaluated')
-           ORDER BY submitted_at DESC NULLS LAST, updated_at DESC
+           WHERE attempt_token = $1
+           ORDER BY started_at DESC, updated_at DESC
            LIMIT 1`,
           [sanitizedToken],
         );
       } else {
         const resolvedUserId = await this.resolveUserId(queryRunner, userIdParam);
         if (resolvedUserId) {
-          attemptRows = await queryRunner.query(
-            `SELECT *
-             FROM ${config.attempts}
-             WHERE user_id = $1 AND status IN ('submitted', 'evaluated')
-             ORDER BY 
-               submitted_at DESC NULLS LAST, 
-               updated_at DESC
-             LIMIT 1`,
-            [resolvedUserId],
-          );
+          let queryStr = `SELECT * FROM ${config.attempts} WHERE user_id = $1 AND status IN ('submitted', 'evaluated')`;
+          const queryParams: any[] = [resolvedUserId];
+          
+          if (config.hasMode) {
+            queryStr += ` AND mode = 'main'`;
+          }
+          
+          queryStr += ` ORDER BY started_at DESC, updated_at DESC LIMIT 1`;
+          
+          attemptRows = await queryRunner.query(queryStr, queryParams);
         }
       }
 
@@ -1088,8 +1088,8 @@ export class AssessmentService {
         attemptRows = await queryRunner.query(
           `SELECT *
            FROM attempts
-           WHERE id = $1 AND status IN ('submitted', 'evaluated')
-           ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+           WHERE id = $1
+           ORDER BY created_at DESC
            LIMIT 1`,
           [sanitizedToken],
         );
@@ -1101,7 +1101,6 @@ export class AssessmentService {
              FROM attempts
              WHERE candidate_user_id = $1 AND status IN ('submitted', 'evaluated')
              ORDER BY 
-               submitted_at DESC NULLS LAST, 
                created_at DESC
              LIMIT 1`,
             [resolvedUserId],
@@ -1621,7 +1620,7 @@ export class AssessmentService {
           : isGrammar
             ? String(aq.task_type || 'mcq').toLowerCase()
             : isRole
-              ? String(aq.question_type || 'conceptual').toLowerCase()
+              ? (questionKind || String(aq.question_type || 'conceptual').toLowerCase())
               : (questionKind || 'mcq'),
         questionText: String(aq.question_text || ''),
         options: optionsForReview,
@@ -2389,7 +2388,7 @@ export class AssessmentService {
         };
 
         const qMetadataForType = aq.question_metadata || {};
-        const reviewKind = (!isCoding && !isGrammar && !isRole) ? normalizeQuestionKind(qMetadataForType) : null;
+        const reviewKind = (!isCoding && !isGrammar) ? normalizeQuestionKind(qMetadataForType) : null;
         const review: any = {
           questionId: questionIdStr,
           displayOrder: Number(aq.display_order || 0),
@@ -2399,22 +2398,33 @@ export class AssessmentService {
             : isGrammar
               ? String(aq.task_type || 'mcq').toLowerCase()
               : isRole
-                ? String(aq.question_type || 'conceptual').toLowerCase()
+                ? (reviewKind === 'msq' ? 'msq' : String(aq.question_type || 'conceptual').toLowerCase())
                 : (reviewKind || 'mcq'),
           questionText: String(aq.question_text || ''),
           options: optionsForReview,
           selectedOptionId: null,
           selectedAnswerText: null,
           correctOptionId:
-            aq.correct_option_id !== null && aq.correct_option_id !== undefined
-              ? String(aq.correct_option_id)
-              : null,
+            reviewKind === 'msq'
+              ? (Array.isArray(qMetadataForType.correctOptionIds)
+                  ? qMetadataForType.correctOptionIds.map((id: any) => String(id))
+                  : [])
+              : (aq.correct_option_id !== null && aq.correct_option_id !== undefined
+                  ? String(aq.correct_option_id)
+                  : null),
           correctAnswerText: null,
           isCorrect: null,
           status: 'unanswered',
         };
-        if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
-          review.correctAnswerText = optionTextById.get(review.correctOptionId);
+        if (reviewKind === 'msq') {
+          const correctChoices = Array.isArray(review.correctOptionId) ? review.correctOptionId : [];
+          review.correctAnswerText = correctChoices
+            .map((id: string) => optionTextById.get(id) ?? id)
+            .join(', ');
+        } else {
+          if (review.correctOptionId && optionTextById.has(review.correctOptionId)) {
+            review.correctAnswerText = optionTextById.get(review.correctOptionId);
+          }
         }
 
         // Extract selected option ID from raw submitted answer
