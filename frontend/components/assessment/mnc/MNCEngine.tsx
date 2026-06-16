@@ -615,9 +615,14 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <h2 className="text-sm font-bold text-[#17201b] dark:text-white uppercase tracking-wider">
-                                    {currentQuestion.topic}
+                                    Question {currentIndex + 1}
                                 </h2>
-                                <div className="mt-0.5 flex items-center gap-2">
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                    {currentQuestion.topic && (
+                                        <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-white/5 dark:text-slate-400 border border-slate-200 dark:border-white/10 uppercase tracking-tight">
+                                            {currentQuestion.topic}
+                                        </span>
+                                    )}
                                     {isQuestionMarked && (
                                         <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
                                             <div className="h-1 w-1 rounded-full bg-current" />
@@ -664,7 +669,6 @@ const MNCEngine: React.FC<MNCEngineProps> = ({
                     <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
                         <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5 sm:p-5">
                             <h2 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white sm:text-base">
-                                <span className="mr-3 font-semibold">{currentIndex + 1}.</span>
                                 {currentQuestion.text}
                             </h2>
                         </div>

@@ -218,6 +218,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         saveAnswer: cacheSaveAnswer,
         saveNavigation: cacheSaveNavigation,
         clearSession,
+        invalidateCache,
     } = useAssessmentCache({
         token:           attemptToken,
         module:          'role',
@@ -234,35 +235,69 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
     useEffect(() => {
         if (!isCacheRestored || !isRestoredFromCache || !cachedSession || cacheRestoredRef.current) return;
         cacheRestoredRef.current = true;
-        if (cachedSession.questions?.length) {
-            setQuestions(normalizeQuestions(cachedSession.questions as any[]));
-        }
-        if (cachedSession.answers) {
-            const restored: Record<string, string | string[]> = {};
-            for (const [qId, val] of Object.entries(cachedSession.answers)) {
-                if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
-                    restored[qId] = val.optionId as string | string[];
-                } else if (typeof val === 'string' || Array.isArray(val)) {
-                    restored[qId] = val as any;
+
+        const validateAndRestore = async () => {
+            if (cachedSession.token) {
+                try {
+                    const res = await fetch(`${API_BASE}/api/assessment/role/attempts/${cachedSession.token}/questions`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status && data.status !== 'in_progress') {
+                            console.warn('Cached attempt is already submitted/closed, clearing cache and starting fresh');
+                            cacheRestoredRef.current = false;
+                            await invalidateCache();
+                            return;
+                        }
+                    } else {
+                        console.warn('Cached attempt token invalid, clearing cache and starting fresh');
+                        cacheRestoredRef.current = false;
+                        await invalidateCache();
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Failed to validate cached attempt, proceeding with cache:', err);
                 }
             }
-            setAnswers(restored);
-        }
-        if (cachedSession.markedForReview?.length) {
-            setMarkedForReview(new Set(cachedSession.markedForReview));
-        }
-        if (cachedSession.currentIndex !== undefined) {
-            setCurrentIndex(cachedSession.currentIndex);
-        }
-        if (cachedSession.timeLeftSeconds) {
-            setTimeLeft(cachedSession.timeLeftSeconds);
-        }
-        if (cachedSession.token) {
-            setAttemptToken(cachedSession.token);
-        }
-        setShowRestoredBanner(true);
-        setTimeout(() => setShowRestoredBanner(false), 5000);
-    }, [isCacheRestored, isRestoredFromCache, cachedSession]);
+
+            if (!cachedSession.questions?.length) {
+                console.warn('Cached session has no questions, clearing cache and starting fresh');
+                cacheRestoredRef.current = false;
+                await invalidateCache();
+                return;
+            }
+
+            if (cachedSession.questions?.length) {
+                setQuestions(normalizeQuestions(cachedSession.questions as any[]));
+            }
+            if (cachedSession.answers) {
+                const restored: Record<string, string | string[]> = {};
+                for (const [qId, val] of Object.entries(cachedSession.answers)) {
+                    if (typeof val === 'object' && val !== null && 'optionId' in val && val.optionId) {
+                        restored[qId] = val.optionId as string | string[];
+                    } else if (typeof val === 'string' || Array.isArray(val)) {
+                        restored[qId] = val as any;
+                    }
+                }
+                setAnswers(restored);
+            }
+            if (cachedSession.markedForReview?.length) {
+                setMarkedForReview(new Set(cachedSession.markedForReview));
+            }
+            if (cachedSession.currentIndex !== undefined) {
+                setCurrentIndex(cachedSession.currentIndex);
+            }
+            if (cachedSession.timeLeftSeconds) {
+                setTimeLeft(cachedSession.timeLeftSeconds);
+            }
+            if (cachedSession.token) {
+                setAttemptToken(cachedSession.token);
+            }
+            setShowRestoredBanner(true);
+            setTimeout(() => setShowRestoredBanner(false), 5000);
+        };
+
+        validateAndRestore();
+    }, [isCacheRestored, isRestoredFromCache, cachedSession, invalidateCache]);
 
     const normalizeQuestions = (items: any[]): RoleQuestion[] => items.map((q: any, idx: number) => {
         const id = String(q.id ?? q.questionId ?? q.question_id);
