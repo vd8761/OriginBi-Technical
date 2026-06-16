@@ -788,7 +788,7 @@ export async function loginUser(
       throw new ApiError(403, "Your account has been blocked. Please contact support.");
     }
   } catch (err) {
-    if (err instanceof ApiError) throw err;
+    if (err instanceof ApiError && err.status === 403) throw err;
     console.warn("check-blocked failed", err);
   }
 

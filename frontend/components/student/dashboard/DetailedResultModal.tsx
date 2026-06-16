@@ -145,7 +145,7 @@ const statusBadge = (status?: "correct" | "incorrect" | "unanswered" | "subjecti
   if (status === "correct") return "bg-brand-green/10 text-brand-green border-brand-green/30 dark:border-brand-green/40";
   if (status === "incorrect") return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30";
   if (status === "subjective") return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30";
-  return "bg-brand-light-secondary/70 text-brand-text-light-secondary border-brand-light-tertiary/60 dark:bg-white/10 dark:text-white/60 dark:border-white/10";
+  return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30";
 };
 
 const statusLabel = (status?: "correct" | "incorrect" | "unanswered" | "subjective") => {
@@ -584,27 +584,31 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                         </div>
                       ) : (
                         previewReviews.map((review, index) => {
-                          const isMsq = Array.isArray(review.selectedOptionId) || Array.isArray(review.correctOptionId) || review.type === 'msq';
+                          const isMsq = Array.isArray(review.selectedOptionId) ||
+                            Array.isArray(review.correctOptionId) ||
+                            review.type === 'msq' ||
+                            String(review.type).toLowerCase().includes('multi') ||
+                            String(review.type).toLowerCase().includes('msq');
                           const isNumerical = review.type === 'numerical';
 
                           const getSelectedOptionText = () => {
                             if (isMsq && Array.isArray(review.selectedOptionId)) {
                               return review.selectedOptionId
-                                .map((id) => review.options?.find((opt) => opt.id === id)?.text)
+                                .map((id) => review.options?.find((opt) => id != null && opt.id != null && String(opt.id) === String(id))?.text)
                                 .filter(Boolean)
                                 .join(', ');
                             }
-                            return review.options?.find((opt) => opt.id === review.selectedOptionId)?.text;
+                            return review.options?.find((opt) => review.selectedOptionId != null && opt.id != null && String(opt.id) === String(review.selectedOptionId))?.text;
                           };
 
                           const getCorrectOptionText = () => {
                             if (isMsq && Array.isArray(review.correctOptionId)) {
                               return review.correctOptionId
-                                .map((id) => review.options?.find((opt) => opt.id === id)?.text)
+                                .map((id) => review.options?.find((opt) => id != null && opt.id != null && String(opt.id) === String(id))?.text)
                                 .filter(Boolean)
                                 .join(', ');
                             }
-                            return review.options?.find((opt) => opt.id === review.correctOptionId)?.text;
+                            return review.options?.find((opt) => review.correctOptionId != null && opt.id != null && String(opt.id) === String(review.correctOptionId))?.text;
                           };
 
                           const selectedOptionText = getSelectedOptionText();
@@ -660,20 +664,20 @@ const DetailedResultModal: React.FC<DetailedResultModalProps> = ({ isOpen, onClo
                                   {review.options
                                     .filter(option => {
                                       const isSel = Array.isArray(review.selectedOptionId)
-                                        ? review.selectedOptionId.includes(option.id)
-                                        : (review.selectedOptionId && option.id === review.selectedOptionId);
+                                        ? review.selectedOptionId.some(id => id != null && String(id) === String(option.id))
+                                        : (review.selectedOptionId != null && String(option.id) === String(review.selectedOptionId));
                                       const isCorr = Array.isArray(review.correctOptionId)
-                                        ? review.correctOptionId.includes(option.id)
-                                        : (review.correctOptionId && option.id === review.correctOptionId);
+                                        ? review.correctOptionId.some(id => id != null && String(id) === String(option.id))
+                                        : (review.correctOptionId != null && String(option.id) === String(review.correctOptionId));
                                       return isSel || isCorr;
                                     })
                                     .map((option) => {
                                       const isSelected = Array.isArray(review.selectedOptionId)
-                                        ? review.selectedOptionId.includes(option.id)
-                                        : Boolean(review.selectedOptionId && option.id === review.selectedOptionId);
+                                        ? review.selectedOptionId.some(id => id != null && String(id) === String(option.id))
+                                        : Boolean(review.selectedOptionId != null && String(option.id) === String(review.selectedOptionId));
                                       const isCorrect = Array.isArray(review.correctOptionId)
-                                        ? review.correctOptionId.includes(option.id)
-                                        : Boolean(review.correctOptionId && option.id === review.correctOptionId);
+                                        ? review.correctOptionId.some(id => id != null && String(id) === String(option.id))
+                                        : Boolean(review.correctOptionId != null && String(option.id) === String(review.correctOptionId));
                                       return (
                                         <div
                                           key={`${review.questionId}-${option.id}`}
