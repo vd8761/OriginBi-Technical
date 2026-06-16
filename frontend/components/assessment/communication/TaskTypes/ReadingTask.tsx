@@ -118,18 +118,17 @@ const ReadingTaskComponent: React.FC<ReadingTaskProps> = ({ task, value = {}, on
                     >
                         <div className="flex-1 w-full">
                             {task.questions.map((question, qIndex) => (
-                                <div 
-                                    key={question.id} 
-                                    className={`${qIndex === currentQuestionIndex ? "block" : "hidden"} animate-in fade-in slide-in-from-right-4 duration-300 w-full`}
-                                >
-                                    <div className="rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712] w-full">
-                                        <div className="mb-4 flex items-center justify-between">
-                                            <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white">
+                                    <div 
+                                        key={question.id} 
+                                        className={`${qIndex === currentQuestionIndex ? "flex" : "hidden"} flex-col gap-4 w-full animate-in fade-in slide-in-from-right-4 duration-300`}
+                                    >
+                                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5 sm:p-5 w-full">
+                                            <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white sm:text-base">
                                                 {question.text}
                                             </h3>
                                         </div>
 
-                                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                                             {question.options.map((option, optionIndex) => {
                                                 const isSelected = value[question.id] === option.id;
 
@@ -160,7 +159,6 @@ const ReadingTaskComponent: React.FC<ReadingTaskProps> = ({ task, value = {}, on
                                             })}
                                         </div>
                                     </div>
-                                </div>
                              ))}
                         </div>
                     </motion.section>
