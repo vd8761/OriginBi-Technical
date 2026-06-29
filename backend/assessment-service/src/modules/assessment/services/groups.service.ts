@@ -140,6 +140,7 @@ export class GroupsService implements OnModuleInit {
 
     return this.techGroupsRepo.query(`
       SELECT r.id::text as id, 
+             u.id::text as "userId",
              r.full_name as "fullName", 
              u.email, 
              'registered' as status, 
@@ -151,6 +152,55 @@ export class GroupsService implements OnModuleInit {
       LEFT JOIN programs p ON p.id = r.program_id
       WHERE r.metadata->>'groupName' = $1 AND r.is_deleted = false
     `, [group.name]);
+  }
+
+  async addMember(groupId: number, email: string): Promise<any> {
+    const group = await this.techGroupsRepo.findOne({ where: { id: groupId, isDeleted: false } as any });
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    const regRows = await this.techGroupsRepo.query(`
+      SELECT r.id, r.metadata
+      FROM registrations r
+      JOIN users u ON u.id = r.user_id
+      WHERE LOWER(u.email) = LOWER($1) AND r.is_deleted = false
+      LIMIT 1
+    `, [email]);
+
+    if (!regRows || regRows.length === 0) {
+      throw new Error(`User with email ${email} is not registered in the system. Please register them first using the 'Register Candidate' button.`);
+    }
+
+    const registration = regRows[0];
+    const currentMeta = registration.metadata || {};
+    const updatedMeta = {
+      ...currentMeta,
+      groupName: group.name,
+    };
+
+    await this.techGroupsRepo.query(`
+      UPDATE registrations
+      SET metadata = $1
+      WHERE id = $2
+    `, [JSON.stringify(updatedMeta), registration.id]);
+
+    return { success: true };
+  }
+
+  async removeMember(groupId: number, memberId: string): Promise<any> {
+    const group = await this.techGroupsRepo.findOne({ where: { id: groupId, isDeleted: false } as any });
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    await this.techGroupsRepo.query(`
+      UPDATE registrations
+      SET metadata = metadata - 'groupName'
+      WHERE id = $1
+    `, [memberId]);
+
+    return { success: true };
   }
 
   async deleteGroup(id: number): Promise<void> {

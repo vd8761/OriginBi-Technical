@@ -68,17 +68,18 @@ const McqTaskComponent: React.FC<McqTaskProps> = ({ task, value = {}, onChange }
                     const isTf = question.metadata?.kind === "tf";
                     
                     return (
-                        <section 
+                        <div 
                             key={question.id} 
-                            className="rounded-lg border border-brand-green/10 bg-white p-5 transition-all hover:border-brand-green/30 dark:border-white/10 dark:bg-[#0f1712] dark:hover:border-brand-green/20"
+                            className="flex flex-col gap-4 w-full"
                         >
-                            <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white">
-                                <span className="mr-3 font-semibold text-brand-green">{qIndex + 1}.</span>
-                                {question.text}
-                                {isMsq && <span className="ml-2 text-xs font-semibold text-amber-500 uppercase tracking-wider">(Select all that apply)</span>}
-                            </h3>
+                            <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5 sm:p-5 w-full">
+                                <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white sm:text-base">
+                                    {question.text}
+                                    {isMsq && <span className="ml-2 text-xs font-semibold text-amber-500 uppercase tracking-wider">(Select all that apply)</span>}
+                                </h3>
+                            </div>
 
-                            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 {question.options.map((option, optionIndex) => {
                                     const questionVal = value[question.id];
                                     const isSelected = Array.isArray(questionVal)
@@ -111,7 +112,7 @@ const McqTaskComponent: React.FC<McqTaskProps> = ({ task, value = {}, onChange }
                                     );
                                 })}
                             </div>
-                        </section>
+                        </div>
                     );
                 })}
             </div>

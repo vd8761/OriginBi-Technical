@@ -35,7 +35,7 @@ export class RegistrationService {
 
   async registerUser(dto: RegisterUserDto) {
     const email = dto.email.trim().toLowerCase();
-    const effectivePricingPolicy = dto.pricingPolicy || 'free';
+    const effectivePricingPolicy = dto.pricingPolicy || 'pay';
 
     try {
       this.logger.log(`Forwarding tech assessment registration to student-service for: ${email}`);

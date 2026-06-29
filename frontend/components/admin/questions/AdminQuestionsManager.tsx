@@ -30,6 +30,8 @@ import { Settings } from "lucide-react";
 import QuestionTable from "./QuestionTable";
 import QuestionEditor from "./QuestionEditor";
 import CsvImportPanel from "./CsvImportPanel";
+import CodingBankManager from "../coding/CodingBankManager";
+import { listAdminQuestions } from "@/lib/api";
 import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import {
@@ -443,6 +445,24 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
 
     await Promise.all(
       modules.map(async (currentModule) => {
+        if (currentModule === "coding") {
+          try {
+            const data = await listAdminQuestions({
+              pluginSlug: "assessment.coding",
+              includeArchived: false,
+            });
+            const trial = data.questions.filter((q) => q.body?.mode === "trial").length;
+            const main = data.questions.filter((q) => q.body?.mode !== "trial").length;
+            setModuleCounts((prev) => ({
+              ...prev,
+              coding: { trial, main },
+            }));
+          } catch (err) {
+            console.error("Failed to load coding counts:", err);
+          }
+          return;
+        }
+
         if (!isDbModule(currentModule)) return;
 
         try {
@@ -966,8 +986,8 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
               return a.module_type === dbModule || a.assessment_code === at;
             });
 
-            const realTrialCount = isDbModule(at) ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
-            const realMainCount = isDbModule(at) ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
+            const realTrialCount = isDbModule(at) || at === "coding" ? moduleCounts[at]?.trial ?? 0 : loadQuestions(at, "trial").length;
+            const realMainCount = isDbModule(at) || at === "coding" ? moduleCounts[at]?.main ?? 0 : loadQuestions(at, "main").length;
             
             const trialCount = realTrialCount;
             const mainCount = realMainCount;
@@ -1045,12 +1065,8 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                   )}
                   <button
                     onClick={() => {
-                      if (at === "coding") {
-                        router.push("/admin/coding");
-                      } else {
-                        handleSelectModule(at);
-                        setView("list");
-                      }
+                      handleSelectModule(at);
+                      setView("list");
                     }}
                     className="admin-btn admin-btn-primary"
                   >
@@ -1067,6 +1083,19 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
 
   // ─── MANAGEMENT ───
   const accent = ACCENT_COLORS[selectedModule];
+
+  if (selectedModule === "coding") {
+    return (
+      <div className="relative w-full font-sans overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.08] assessment-grid" />
+        </div>
+        <main className="relative z-10 py-2">
+          <CodingBankManager embedded={true} onBack={() => handleSelectModule(null)} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full font-sans overflow-hidden">

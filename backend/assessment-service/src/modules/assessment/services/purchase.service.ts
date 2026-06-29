@@ -239,7 +239,7 @@ export class PurchaseService {
 
             // Fallback to registrations table
             const rows = await this.dataSource.query(
-                `SELECT r.metadata
+                `SELECT r.metadata, r.is_tech_assessment
                  FROM registrations r
                  JOIN users u ON u.id = r.user_id
                  WHERE LOWER(u.email) = LOWER($1)
@@ -251,11 +251,12 @@ export class PurchaseService {
             if (!rows?.length) {
                 return null;
             }
+            const isTechAssessment = rows[0].is_tech_assessment === 1 || rows[0].is_tech_assessment === true;
             const metadata = rows[0].metadata || {};
             if (metadata.pricingPolicy === "pay") {
                 return "pay";
             }
-            if (metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
+            if (isTechAssessment || metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
                 return "free";
             }
             return null;

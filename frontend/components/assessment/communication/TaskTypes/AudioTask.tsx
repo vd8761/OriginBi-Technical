@@ -51,13 +51,17 @@ const AudioTaskComponent: React.FC<AudioTaskProps> = ({ task, value = {}, onChan
 
             <div className="grid gap-4">
                 {task.questions.map((question, qIndex) => (
-                    <section key={question.id} className="rounded-lg border border-brand-green/10 bg-white p-4 dark:border-white/10 dark:bg-[#0f1712]">
-                        <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white">
-                            <span className="mr-2 text-brand-green">{qIndex + 1}.</span>
-                            {question.text}
-                        </h3>
+                    <div 
+                        key={question.id} 
+                        className="flex flex-col gap-4 w-full"
+                    >
+                        <div className="rounded-lg border border-brand-green/10 bg-brand-green/[0.03] p-4 dark:border-white/10 dark:bg-white/5 sm:p-5 w-full">
+                            <h3 className="text-sm font-medium leading-relaxed text-[#17201b] dark:text-white sm:text-base">
+                                {question.text}
+                            </h3>
+                        </div>
 
-                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                             {question.options.map((option, optionIndex) => {
                                 const isSelected = value[question.id] === option.id;
 
@@ -87,7 +91,7 @@ const AudioTaskComponent: React.FC<AudioTaskProps> = ({ task, value = {}, onChan
                                 );
                             })}
                         </div>
-                    </section>
+                    </div>
                 ))}
             </div>
         </div>

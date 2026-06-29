@@ -11,7 +11,7 @@ function EditorInner({ questionId }: { questionId: string }) {
     title: "MCQ Editor",
     subtitle: "Prompt, options, correct-answer key, and per-question settings.",
     breadcrumb: [
-      { label: "Question Bank", href: "/admin/coding" },
+      { label: "Question Bank", href: "/admin/questions?module=coding" },
       { label: "MCQ" },
     ],
   });

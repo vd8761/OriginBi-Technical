@@ -427,13 +427,13 @@ function DashboardInner() {
               ))
             )}
           </div>
-          <button
-            type="button"
+          <Link
+            href="/admin/proctoring"
             className="admin-btn admin-btn-secondary"
-            style={{ marginTop: 14, width: "100%" }}
+            style={{ marginTop: 14, width: "100%", textDecoration: "none", display: "inline-flex", justifyContent: "center", alignItems: "center" }}
           >
             View full audit log
-          </button>
+          </Link>
         </Card>
       </section>
 

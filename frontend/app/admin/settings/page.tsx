@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Activity,
   Award,
@@ -23,6 +23,7 @@ import { useRegisterAdminPage } from "@/components/admin/AdminPageContext";
 import { Badge, Card, PillTabs, ToggleSwitch, UnderDevelopment } from "@/components/admin/ui";
 import { MountPoint } from "@/plugins";
 import { IntervalSlider, ProctorRow } from "@/plugins/proctoringControls";
+import { getGlobalSettings, saveGlobalSettings } from "@/lib/api";
 
 type Tab = "proctoring" | "general" | "scoring" | "notifications" | "integrations";
 
@@ -672,6 +673,53 @@ function IntegrationsTab() {
   );
 }
 
+const SETTINGS_KEYS = [
+  "settings:autoTerminate",
+  "settings:warningBeforeAction",
+  "settings:recordSession",
+  "settings:retentionDays",
+  "settings:duration",
+  "settings:durationUnit",
+  "settings:questions",
+  "settings:attempts",
+  "settings:timePerQuestionOn",
+  "settings:timePerQuestion",
+  "settings:shuffle",
+  "settings:shuffleOptions",
+  "settings:allowReview",
+  "settings:showTimer",
+  "settings:autoSubmit",
+  "settings:adaptive",
+  "settings:showProgress",
+  "settings:titlePrefix",
+  "settings:accent",
+  "settings:welcome",
+  "settings:marks",
+  "settings:pass",
+  "settings:negativeEnabled",
+  "settings:issueCert",
+  "settings:shareEmployers",
+  "settings:showScoreToCandidate",
+  "settings:notifications:events"
+];
+
+function getSettingsPayload() {
+  const payload: Record<string, any> = {};
+  SETTINGS_KEYS.forEach(key => {
+    if (typeof window !== "undefined") {
+      const val = localStorage.getItem(key);
+      if (val !== null) {
+        try {
+          payload[key] = JSON.parse(val);
+        } catch {
+          payload[key] = val;
+        }
+      }
+    }
+  });
+  return payload;
+}
+
 function SettingsInner() {
   useRegisterAdminPage({
     eyebrow: "System / Settings",
@@ -683,18 +731,75 @@ function SettingsInner() {
   });
 
   const [tab, setTab] = useState<Tab>("proctoring");
+  const [loading, setLoading] = useState(true);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // The tabs on this page are UI-only — they stay under the
-  // UnderDevelopment placeholder so admins can't confuse them with working
-  // settings.
+  useEffect(() => {
+    let cancelled = false;
+    getGlobalSettings()
+      .then((data) => {
+        if (cancelled) return;
+        if (data) {
+          Object.entries(data).forEach(([key, val]) => {
+            try {
+              localStorage.setItem(key, typeof val === "object" ? JSON.stringify(val) : String(val));
+            } catch {}
+          });
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load settings:", err);
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    setSaveLoading(true);
+    setSaveSuccess(false);
+    try {
+      const payload = getSettingsPayload();
+      await saveGlobalSettings(payload);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      alert("Failed to save settings: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300 }}>
+        <p style={{ color: "var(--admin-fg-3)", fontSize: 14 }}>Loading platform settings...</p>
+      </div>
+    );
+  }
+
   const dummyTabsUi = (
     <>
-      <div className="admin-row" style={{ justifyContent: "flex-end", gap: 8 }}>
+      <div className="admin-row" style={{ justifyContent: "flex-end", gap: 8, marginBottom: 14 }}>
+        {saveSuccess && (
+          <span style={{ color: "var(--admin-green)", fontSize: 13, fontWeight: "bold" }}>
+            Settings saved successfully!
+          </span>
+        )}
         <button type="button" className="admin-btn admin-btn-ghost">
           <HelpCircle size={13} /> Docs
         </button>
-        <button type="button" className="admin-btn admin-btn-primary" onClick={() => alert("Settings saved successfully!")}>
-          <Save size={13} /> Save changes
+        <button
+          type="button"
+          className="admin-btn admin-btn-primary"
+          onClick={handleSave}
+          disabled={saveLoading}
+        >
+          <Save size={13} />
+          {saveLoading ? "Saving..." : "Save changes"}
         </button>
       </div>
 
@@ -704,7 +809,7 @@ function SettingsInner() {
       {tab === "notifications" && <NotificationsTab />}
       {tab === "integrations" && <IntegrationsTab />}
 
-      <p style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--admin-fg-4)", fontSize: 11 }}>
+      <p style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--admin-fg-4)", fontSize: 11, marginTop: 14 }}>
         <Activity size={11} /> Proctoring cards are plugin-mounted; changes persist to platform plugin config.
       </p>
     </>
