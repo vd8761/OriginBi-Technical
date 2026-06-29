@@ -326,6 +326,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
     role: { trial: 0, main: 0 },
     coding: { trial: 0, main: 0 },
   });
+  const [loadingCounts, setLoadingCounts] = useState(true);
   const [view, setView] = useState<"list" | "json-import">("list");
   const [editingQuestion, setEditingQuestion] = useState<AnyQuestion | null | "new">(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -439,6 +440,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
   }, []);
 
   const refreshModuleCounts = useCallback(async (module?: AssessmentType) => {
+    setLoadingCounts(true);
     const modules = module
       ? [module]
       : (["aptitude", "mnc", "communication", "role", "coding"] as AssessmentType[]);
@@ -483,6 +485,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
         }
       })
     );
+    setLoadingCounts(false);
   }, []);
 
   useEffect(() => {
@@ -1015,41 +1018,23 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 <div className="admin-qb-stats">
                   <div className="admin-qb-stat">
                     <p className="admin-stat-label">Trial</p>
-                    <strong>{trialCount.toLocaleString()}</strong>
+                    {loadingCounts ? (
+                      <span className="text-xs text-slate-400 dark:text-white/40 animate-pulse font-semibold">Loading...</span>
+                    ) : (
+                      <strong>{trialCount.toLocaleString()}</strong>
+                    )}
                   </div>
                   <div className="admin-qb-stat">
                     <p className="admin-stat-label">Main</p>
-                    <strong>{mainCount.toLocaleString()}</strong>
+                    {loadingCounts ? (
+                      <span className="text-xs text-slate-400 dark:text-white/40 animate-pulse font-semibold">Loading...</span>
+                    ) : (
+                      <strong>{mainCount.toLocaleString()}</strong>
+                    )}
                   </div>
                 </div>
 
-                <div className="admin-row" style={{ flexWrap: "wrap", gap: 6 }}>
-                  {(() => {
-                    let tagsToShow: string[] = [];
-                    if (dbExam && dbExam.categories) {
-                      let parsed: any[] = [];
-                      if (Array.isArray(dbExam.categories)) {
-                        parsed = dbExam.categories;
-                      } else if (typeof dbExam.categories === "string") {
-                        try {
-                          parsed = JSON.parse(dbExam.categories);
-                        } catch {
-                          parsed = [];
-                        }
-                      }
-                      if (parsed.length > 0) {
-                        tagsToShow = parsed.map((c) =>
-                          typeof c === "string" ? c : c.name || c.id || ""
-                        );
-                      }
-                    }
-                    return tagsToShow.slice(0, 4).map((tag, tIdx) => (
-                      <Badge key={tIdx} tone="neutral">
-                        {tag}
-                      </Badge>
-                    ));
-                  })()}
-                </div>
+
 
                 <div className="admin-control-row" style={{ marginTop: "auto", paddingTop: 16 }}>
                   {(isDbModule(at) || at === "coding") && (
@@ -1185,7 +1170,7 @@ export default function AdminQuestionsManager({ initialModule = null }: AdminQue
                 className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-red-400/80 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm shrink-0"
               >
                 <Trash2 size={16} />
-                <span>Clear Bank</span>
+                <span>Clear all questions bank</span>
               </button>
             </div>
 
