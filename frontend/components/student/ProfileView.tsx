@@ -66,10 +66,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
                     if (res.ok) {
                         const profileData = await res.json();
                         const freshProfile: UserProfile = {
-                            name: profileData?.fullName || profileData?.metadata?.fullName || cachedProfile.name,
+                            name: profileData?.full_name || profileData?.fullName || profileData?.metadata?.full_name || profileData?.metadata?.fullName || cachedProfile.name,
                             email: email,
-                            mobile_number: profileData?.mobileNumber || profileData?.metadata?.mobileNumber || cachedProfile.mobile_number,
-                            programCode: profileData?.programCode || cachedProfile.programCode,
+                            mobile_number: profileData?.mobile_number || profileData?.mobileNumber || profileData?.metadata?.mobile_number || profileData?.metadata?.mobileNumber || cachedProfile.mobile_number,
+                            programCode: profileData?.programCode || profileData?.program_code || cachedProfile.programCode,
                         };
                         setUser(freshProfile);
 

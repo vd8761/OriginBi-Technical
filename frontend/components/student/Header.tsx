@@ -217,7 +217,13 @@ const Header: React.FC<HeaderProps> = ({
                 });
                 if (res.ok) {
                     const profileData = await res.json();
-                    const freshName = cleanName(profileData?.fullName || profileData?.metadata?.fullName || user.name);
+                    const freshName = cleanName(
+                        profileData?.full_name || 
+                        profileData?.fullName || 
+                        profileData?.metadata?.full_name || 
+                        profileData?.metadata?.fullName || 
+                        user.name
+                    );
                     updateProfile({
                         name: freshName,
                     });
