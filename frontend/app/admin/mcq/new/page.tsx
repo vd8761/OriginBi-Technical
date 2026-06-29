@@ -10,7 +10,7 @@ function NewMcqInner() {
     title: "New MCQ",
     subtitle: "Author a new multiple-choice question.",
     breadcrumb: [
-      { label: "Question Bank", href: "/admin/coding" },
+      { label: "Question Bank", href: "/admin/questions?module=coding" },
       { label: "New MCQ" },
     ],
   });

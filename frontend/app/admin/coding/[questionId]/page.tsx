@@ -11,7 +11,7 @@ function EditorInner({ questionId }: { questionId: string }) {
     title: "Coding Problem Editor",
     subtitle: "Problem statement, test cases, languages, judge limits, candidate settings.",
     breadcrumb: [
-      { label: "Coding", href: "/admin/coding" },
+      { label: "Coding", href: "/admin/questions?module=coding" },
       { label: "Editor" },
     ],
   });

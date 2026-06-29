@@ -10,7 +10,7 @@ function NewFillBlankInner() {
     title: "New Fill-in-the-Blank",
     subtitle: "Author a new fill-in-the-blank question.",
     breadcrumb: [
-      { label: "Question Bank", href: "/admin/coding" },
+      { label: "Question Bank", href: "/admin/questions?module=coding" },
       { label: "New Fill-in-the-Blank" },
     ],
   });

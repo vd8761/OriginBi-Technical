@@ -11,7 +11,7 @@ function EditorInner({ questionId }: { questionId: string }) {
     title: "Fill-in-the-Blank Editor",
     subtitle: "Prompt with {{n}} placeholders, accepted answers per blank, and matching rules.",
     breadcrumb: [
-      { label: "Question Bank", href: "/admin/coding" },
+      { label: "Question Bank", href: "/admin/questions?module=coding" },
       { label: "Fill-in-the-Blank" },
     ],
   });

@@ -36,6 +36,16 @@ export class GroupsController {
     return this.groupsService.getMembers(Number(id));
   }
 
+  @Post(':id/members')
+  async addGroupMember(@Param('id') id: string, @Body() body: { email: string }) {
+    return this.groupsService.addMember(Number(id), body.email);
+  }
+
+  @Delete(':id/members/:memberId')
+  async removeGroupMember(@Param('id') id: string, @Param('memberId') memberId: string) {
+    return this.groupsService.removeMember(Number(id), memberId);
+  }
+
   @Delete(':id')
   async deleteGroup(@Param('id') id: string) {
     await this.groupsService.deleteGroup(Number(id));
