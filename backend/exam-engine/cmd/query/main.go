@@ -13,7 +13,8 @@ import (
 func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgresql://neondb_owner:npg_Tj5ChLpNn9rP@ep-young-cherry-a48v28qx-pooler.us-east-1.aws.neon.tech/origin_neon?sslmode=require"
+		fmt.Fprintf(os.Stderr, "DATABASE_URL environment variable is not set\n")
+		os.Exit(1)
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, dbURL)
