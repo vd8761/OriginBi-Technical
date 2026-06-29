@@ -84,6 +84,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const [newCategoryId, setNewCategoryId] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [editingCategorySlug, setEditingCategorySlug] = useState("");
   const [newSubCategoryNames, setNewSubCategoryNames] = useState<Record<string, string>>({});
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
   const toggleExpandCategory = (id: string) => {
@@ -320,6 +321,7 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const handleStartEdit = (cat: Category) => {
     setEditingCategoryId(cat.id);
     setEditingCategoryName(cat.name);
+    setEditingCategorySlug(cat.id);
   };
 
   const handleAddCategory = () => {
@@ -359,14 +361,43 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
   const handleCancelEdit = () => {
     setEditingCategoryId(null);
     setEditingCategoryName("");
+    setEditingCategorySlug("");
   };
 
-  const handleSaveEdit = (id: string) => {
-    const trimmed = editingCategoryName.trim();
-    if (!trimmed) return;
-    setCategoriesList(categoriesList.map(c => c.id === id ? { ...c, name: trimmed } : c));
+  const handleSaveEdit = (oldId: string) => {
+    const trimmedName = editingCategoryName.trim();
+    const trimmedSlug = editingCategorySlug.trim().toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+    if (!trimmedName || !trimmedSlug) return;
+
+    if (trimmedSlug !== oldId && categoriesList.find(c => c.id === trimmedSlug)) {
+      confirm({
+        title: "Category ID Conflict",
+        message: `A category with ID "${trimmedSlug}" already exists. Please choose a different slug.`,
+        confirmLabel: "Ok",
+        cancelLabel: "Close",
+        variant: "warning",
+      });
+      return;
+    }
+
+    setCategoriesList(categoriesList.map(c => {
+      if (c.id === oldId) {
+        return { ...c, id: trimmedSlug, name: trimmedName };
+      }
+      return c;
+    }));
+
+    // Cascade to questionsList (updates local state questions using this category)
+    setQuestionsList(questionsList.map(q => {
+      if (matchCategory(q.category, oldId)) {
+        return { ...q, category: trimmedSlug };
+      }
+      return q;
+    }));
+
     setEditingCategoryId(null);
     setEditingCategoryName("");
+    setEditingCategorySlug("");
     markDirty();
   };
 
@@ -1089,10 +1120,29 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                                       <React.Fragment key={cat.id}>
                                         <tr className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors border-b border-slate-100 dark:border-white/5">
                                           <td className="px-6 py-4 align-middle">
-                                            <div className="flex flex-col">
-                                              <span className="font-bold text-sm text-slate-900 dark:text-white">{cat.name}</span>
-                                              <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">{cat.id}</span>
-                                            </div>
+                                            {editingCategoryId === cat.id ? (
+                                              <div className="flex flex-col gap-1.5 max-w-xs">
+                                                <input 
+                                                  type="text" 
+                                                  value={editingCategoryName} 
+                                                  onChange={e => setEditingCategoryName(e.target.value)} 
+                                                  className="block w-full rounded-lg border border-slate-200 dark:border-white/10 py-1.5 px-2.5 text-xs bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white font-bold"
+                                                  placeholder="Category Name" 
+                                                />
+                                                <input 
+                                                  type="text" 
+                                                  value={editingCategorySlug} 
+                                                  onChange={e => setEditingCategorySlug(e.target.value.replace(/[^a-zA-Z0-9\-_]/g, ""))} 
+                                                  className="block w-full rounded-lg border border-slate-200 dark:border-white/10 py-1 px-2.5 text-[10px] font-mono bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-slate-400"
+                                                  placeholder="backend_slug" 
+                                                />
+                                              </div>
+                                            ) : (
+                                              <div className="flex flex-col">
+                                                <span className="font-bold text-sm text-slate-900 dark:text-white">{cat.name}</span>
+                                                <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">{cat.id}</span>
+                                              </div>
+                                            )}
                                           </td>
                                           <td className="px-6 py-4 align-middle">
                                             {isExpanded ? (
@@ -1121,48 +1171,76 @@ export default function AssessmentSettingsPage({ moduleOverride }: AssessmentSet
                                             )}
                                           </td>
                                           <td className="px-6 py-4 align-middle text-right space-x-2">
-                                            <button
-                                              type="button"
-                                              onClick={() => toggleExpandCategory(cat.id)}
-                                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all inline-flex items-center gap-1.5 active:scale-95 ${
-                                                isExpanded
-                                                  ? "bg-brand-green/10 border-brand-green/20 text-brand-green"
-                                                  : "bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
-                                              }`}
-                                            >
-                                              <span>Manage</span>
-                                              <ChevronDown size={12} className={`transform transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
-                                            </button>
-                                            <button 
-                                              type="button"
-                                              onClick={async () => {
-                                                const catQuestions = questionsList.filter(q => matchCategory(q.category, cat.id));
-                                                if (catQuestions.length > 0) {
-                                                  await confirm({
-                                                    title: "Cannot Delete Category",
-                                                    message: `This category cannot be deleted because it has ${catQuestions.length} question(s) allocated to it. Please reassign or delete the questions first.`,
-                                                    confirmLabel: "Ok",
-                                                    cancelLabel: "Close",
-                                                    variant: "warning",
-                                                  });
-                                                  return;
-                                                }
-                                                const confirmed = await confirm({
-                                                  title: "Delete Category?",
-                                                  message: `Are you sure you want to delete "${cat.name}"? This will also delete all linked subcategories.`,
-                                                  confirmLabel: "Delete",
-                                                  cancelLabel: "Cancel",
-                                                  variant: "danger",
-                                                });
-                                                if (confirmed) {
-                                                  setCategoriesList(categoriesList.filter(c => c.id !== cat.id));
-                                                  markDirty();
-                                                }
-                                              }}
-                                              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all inline-flex items-center justify-center align-middle"
-                                            >
-                                              <Trash2 size={16} />
-                                            </button>
+                                            {editingCategoryId === cat.id ? (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSaveEdit(cat.id)}
+                                                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-green text-white hover:bg-brand-green/90 transition active:scale-95 inline-flex items-center gap-1 shadow-sm"
+                                                >
+                                                  Save
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={handleCancelEdit}
+                                                  className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition active:scale-95 inline-flex items-center gap-1"
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => toggleExpandCategory(cat.id)}
+                                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all inline-flex items-center gap-1.5 active:scale-95 ${
+                                                    isExpanded
+                                                      ? "bg-brand-green/10 border-brand-green/20 text-brand-green"
+                                                      : "bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                                                  }`}
+                                                >
+                                                  <span>Manage</span>
+                                                  <ChevronDown size={12} className={`transform transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStartEdit(cat)}
+                                                  className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition active:scale-95 inline-flex items-center gap-1.5"
+                                                >
+                                                  Edit
+                                                </button>
+                                                <button 
+                                                  type="button"
+                                                  onClick={async () => {
+                                                    const catQuestions = questionsList.filter(q => matchCategory(q.category, cat.id));
+                                                    if (catQuestions.length > 0) {
+                                                      await confirm({
+                                                        title: "Cannot Delete Category",
+                                                        message: `This category cannot be deleted because it has ${catQuestions.length} question(s) allocated to it. Please reassign or delete the questions first.`,
+                                                        confirmLabel: "Ok",
+                                                        cancelLabel: "Close",
+                                                        variant: "warning",
+                                                      });
+                                                      return;
+                                                    }
+                                                    const confirmed = await confirm({
+                                                      title: "Delete Category?",
+                                                      message: `Are you sure you want to delete "${cat.name}"? This will also delete all linked subcategories.`,
+                                                      confirmLabel: "Delete",
+                                                      cancelLabel: "Cancel",
+                                                      variant: "danger",
+                                                    });
+                                                    if (confirmed) {
+                                                      setCategoriesList(categoriesList.filter(c => c.id !== cat.id));
+                                                      markDirty();
+                                                    }
+                                                  }}
+                                                  className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all inline-flex items-center justify-center align-middle"
+                                                >
+                                                  <Trash2 size={16} />
+                                                </button>
+                                              </>
+                                            )}
                                           </td>
                                         </tr>
                                         {isExpanded && (

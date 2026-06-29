@@ -775,6 +775,7 @@ export class AdminQuestionService {
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
                   WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='trial')
+                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM questions q JOIN question_versions qv ON qv.id = q.current_version_id JOIN plugins p ON p.id = q.plugin_id WHERE p.slug = 'assessment.coding' AND q.deleted_at IS NULL AND q.is_archived = false AND qv.body->>'mode' = 'trial')
                   ELSE 0
                 END) as trial_questions_count,
                 (CASE 
@@ -782,6 +783,7 @@ export class AdminQuestionService {
                   WHEN a.module_type = 'grammar' THEN (SELECT COUNT(*)::int FROM tech_grammar_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
                   WHEN a.module_type = 'mnc' THEN (SELECT COUNT(*)::int FROM tech_mnc_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
                   WHEN a.module_type = 'role' THEN (SELECT COUNT(*)::int FROM tech_role_questions WHERE assessment_id = a.assessment_id AND status='active' AND mode='main')
+                  WHEN a.module_type = 'coding' THEN (SELECT COUNT(*)::int FROM questions q JOIN question_versions qv ON qv.id = q.current_version_id JOIN plugins p ON p.id = q.plugin_id WHERE p.slug = 'assessment.coding' AND q.deleted_at IS NULL AND q.is_archived = false AND COALESCE(qv.body->>'mode', 'main') = 'main')
                   ELSE 0
                 END) as main_questions_count
          FROM tech_assessments a ${where} ORDER BY a.assessment_id DESC`,
