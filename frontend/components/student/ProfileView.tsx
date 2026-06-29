@@ -55,6 +55,21 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
             setUser(cachedProfile);
             setIsLoading(false);
 
+            // Fetch certificates using whatever session we currently have
+            const fetchCerts = async () => {
+                try {
+                    const certData = await getMyCertificates();
+                    setCertificates(certData?.certificates || []);
+                } catch (certErr) {
+                    console.error("Failed fetching student certificates", certErr);
+                } finally {
+                    setIsLoadingCertificates(false);
+                }
+            };
+
+            // Start initial fetch of certificates immediately
+            fetchCerts();
+
             // Fetch fresh profile from API in background to ensure accurate information
             if (email) {
                 try {
@@ -65,6 +80,37 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
                     });
                     if (res.ok) {
                         const profileData = await res.json();
+                        
+                        // Sync to localStorage "user" to ensure X-User-Id is injected for exam-engine requests
+                        const userId = profileData?.id || profileData?.metadata?.id || profileData?.user_id || profileData?.userId || 0;
+                        const currentUserData = localStorage.getItem("user");
+                        let userIdChanged = false;
+
+                        if (userId) {
+                            const newUserData = {
+                                id: userId,
+                                email,
+                                role: "STUDENT",
+                                emailVerified: true,
+                                isActive: true
+                            };
+
+                            if (currentUserData) {
+                                try {
+                                    const parsed = JSON.parse(currentUserData);
+                                    if (parsed.id !== userId) {
+                                        userIdChanged = true;
+                                    }
+                                } catch {
+                                    userIdChanged = true;
+                                }
+                            } else {
+                                userIdChanged = true;
+                            }
+
+                            localStorage.setItem("user", JSON.stringify(newUserData));
+                        }
+
                         const freshProfile: UserProfile = {
                             name: profileData?.full_name || profileData?.fullName || profileData?.metadata?.full_name || profileData?.metadata?.fullName || cachedProfile.name,
                             email: email,
@@ -79,6 +125,11 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
                             mobile_number: freshProfile.mobile_number,
                             programCode: freshProfile.programCode,
                         });
+
+                        // If user ID was updated or synced for the first time, re-fetch certificates to ensure headers are correct
+                        if (userIdChanged) {
+                            await fetchCerts();
+                        }
                     }
                 } catch (err) {
                     console.error("Failed background fetch of fresh student profile", err);
@@ -87,21 +138,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
         };
 
         fetchUserProfile();
-    }, [sessionUser?.email, isSessionLoading]);
-
-    useEffect(() => {
-        const fetchCertificates = async () => {
-            if (isSessionLoading || !sessionUser?.email) return;
-            try {
-                const res = await getMyCertificates();
-                setCertificates(res?.certificates || []);
-            } catch (err) {
-                console.error("Failed fetching student certificates", err);
-            } finally {
-                setIsLoadingCertificates(false);
-            }
-        };
-        fetchCertificates();
     }, [sessionUser?.email, isSessionLoading]);
 
     const handleLinkedInClick = () => {

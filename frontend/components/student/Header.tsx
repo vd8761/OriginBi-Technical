@@ -217,6 +217,19 @@ const Header: React.FC<HeaderProps> = ({
                 });
                 if (res.ok) {
                     const profileData = await res.json();
+                    
+                    // Sync to localStorage "user" to ensure X-User-Id is injected for exam-engine requests
+                    const userId = profileData?.id || profileData?.metadata?.id || profileData?.user_id || profileData?.userId || 0;
+                    if (userId && user?.email) {
+                        localStorage.setItem("user", JSON.stringify({
+                            id: userId,
+                            email: user.email,
+                            role: "STUDENT",
+                            emailVerified: true,
+                            isActive: true
+                        }));
+                    }
+
                     const freshName = cleanName(
                         profileData?.full_name || 
                         profileData?.fullName || 
