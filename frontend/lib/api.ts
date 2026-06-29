@@ -707,7 +707,7 @@ export async function registerUser(input: RegisterRequest): Promise<AuthResponse
       roleDescription: input.roleDescription,
       groupCode: input.groupCode,
       registrationSource: input.registrationSource,
-      pricingPolicy: input.pricingPolicy || "free",
+      pricingPolicy: input.pricingPolicy || "pay",
     }),
     baseOverride: TECH_API_BASE,
     auth: false,
@@ -1908,6 +1908,20 @@ export async function toggleBlockUser(
   return apiFetch<{ success: boolean }>(`/api/admin/users/${userId}/block`, {
     method: "PATCH",
     body: JSON.stringify({ blocked }),
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function getGlobalSettings(): Promise<Record<string, any>> {
+  return apiFetch<Record<string, any>>("/api/admin/settings", {
+    baseOverride: TECH_API_BASE,
+  });
+}
+
+export async function saveGlobalSettings(settings: Record<string, any>): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>("/api/admin/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
     baseOverride: TECH_API_BASE,
   });
 }

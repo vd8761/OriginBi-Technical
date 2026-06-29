@@ -53,6 +53,7 @@ import {
   updateAdminGroup,
   deleteAdminGroup,
   getAdminAssessments,
+  toggleBlockUser,
 } from "@/lib/api";
 
 function getPaginationRange(currentPage: number, totalPages: number): (number | string)[] {
@@ -280,6 +281,7 @@ function GroupsInner() {
             const data = await res.json();
             setGroupMembers(data.map((m: any) => ({
               id: String(m.id),
+              userId: String(m.userId),
               fullName: m.fullName || m.email.split("@")[0],
               email: m.email,
               status: m.status === "registered" ? "active" : (m.status || "active"),
@@ -396,17 +398,65 @@ function GroupsInner() {
   };
 
   // Drawer Member Actions (Database groups mapped via registrations)
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Candidates must be added via individual registration or bulk CSV uploads.");
+    if (!selectedGroup) return;
+    const email = newMemberEmail.trim();
+    if (!email) return;
+    try {
+      const res = await fetch(`/api/admin/groups/${selectedGroup.id}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) {
+        alert("Candidate added to group successfully.");
+        setNewMemberEmail("");
+        setMembersRefreshTrigger((prev) => prev + 1);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        alert(body.message || "Failed to add candidate. Make sure they are registered first.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add candidate.");
+    }
   };
 
-  const handleRemoveMember = (memberId: string) => {
-    alert("Candidate profiles must be managed from the main Users dashboard.");
+  const handleRemoveMember = async (memberId: string) => {
+    if (!selectedGroup) return;
+    if (confirm("Are you sure you want to remove this candidate from this group?")) {
+      try {
+        const res = await fetch(`/api/admin/groups/${selectedGroup.id}/members/${memberId}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          alert("Candidate removed from group successfully.");
+          setMembersRefreshTrigger((prev) => prev + 1);
+        } else {
+          const body = await res.json().catch(() => ({}));
+          alert(body.message || "Failed to remove candidate.");
+        }
+      } catch (err) {
+        console.error("Failed to remove member:", err);
+        alert("Failed to remove candidate.");
+      }
+    }
   };
 
-  const handleToggleMemberBlock = (memberId: string) => {
-    alert("Candidate blocking/unblocking must be performed from the main Users dashboard.");
+  const handleToggleMemberBlock = async (member: any) => {
+    const isBlocked = member.status === "blocked";
+    const action = isBlocked ? "unblock" : "block";
+    if (confirm(`Are you sure you want to ${action} this user?`)) {
+      try {
+        await toggleBlockUser(member.userId, !isBlocked);
+        alert(`User successfully ${action}ed.`);
+        setMembersRefreshTrigger((prev) => prev + 1);
+      } catch (err) {
+        console.error("Failed to toggle block status:", err);
+        alert(`Failed to ${action} user.`);
+      }
+    }
   };
 
   const [isSaving, setIsSaving] = useState(false);
@@ -831,6 +881,7 @@ function GroupsInner() {
                     <th>Designation</th>
                     <th>Joined Date</th>
                     <th>Status</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -891,6 +942,28 @@ function GroupsInner() {
                           >
                             {m.status}
                           </Badge>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMemberBlock(m)}
+                              className={`px-2 py-1 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
+                                m.status === "blocked"
+                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-600 hover:text-white"
+                                  : "bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-600 hover:text-white"
+                              }`}
+                            >
+                              {m.status === "blocked" ? "Unblock" : "Block"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(m.id)}
+                              className="px-2 py-1 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

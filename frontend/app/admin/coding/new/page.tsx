@@ -10,7 +10,7 @@ function NewInner() {
     title: "New Coding Problem",
     subtitle: "Draft a problem, attach test cases, and configure judge limits.",
     breadcrumb: [
-      { label: "Coding", href: "/admin/coding" },
+      { label: "Coding", href: "/admin/questions?module=coding" },
       { label: "New Problem" },
     ],
   });

@@ -8,6 +8,22 @@ Tag legend: ✅ done · 🟡 in flight · ⏭ next up · ⏳ later · 🔴 block
 
 ---
 
+## Snapshot - 2026-06-18 (Mock cleanups and Settings database persistence)
+
+### Just completed
+- **Settings persistence**: Created `global_settings` table in PostgreSQL dynamically on NestJS bootstrap. Exposed `GET` and `PUT` `/api/admin/settings` endpoints to persist General, Scoring, and Notifications settings in PostgreSQL instead of localStorage.
+- **Groups candidate actions**: Implemented `addMember` and `removeMember` endpoints in `GroupsController`/`GroupsService`. Updated groups frontend candidate table to offer direct block/unblock toggles and member removal.
+- **Dashboard audit trail**: Linked "View full audit log" button to live Proctoring monitor `/admin/proctoring`.
+
+### Verification
+- `npm test` - 27 tests in 5 files pass cleanly.
+- `go test ./...` - all Go test suites pass green.
+- `npx tsc --noEmit` - clean TypeScript build in frontend.
+- `npm run build` - clean NestJS server compilation.
+
+### Next up
+- Review with senior on additional layout adjustments or visual polishes.
+
 ## Snapshot - 2026-05-15 (Backlog cleanup - controller route + typed-any debt)
 
 ### Just completed
