@@ -13,7 +13,6 @@ import {
   Search,
   ShieldCheck,
   UserPlus,
-  UserSearch,
   Users as UsersIcon,
   X,
   Plus,
@@ -134,8 +133,6 @@ function UsersInner() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selected, setSelected] = useState<AdminUserRow | null>(null);
-  const [lookupId, setLookupId] = useState("");
-  const [lookupError, setLookupError] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [groups, setGroups] = useState<any[]>([]);
@@ -221,15 +218,7 @@ function UsersInner() {
     [counts],
   );
 
-  const submitLookup = (event: FormEvent) => {
-    event.preventDefault();
-    const trimmed = lookupId.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      setLookupError("User ID must be a positive integer.");
-      return;
-    }
-    router.push(`/admin/users/${trimmed}/entitlements`);
-  };
+
 
   return (
     <div className="admin-page">
@@ -510,43 +499,6 @@ function UsersInner() {
                 <ChevronRight size={16} />
               </button>
             </div>
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <div className="admin-control-row" style={{ alignItems: "flex-start" }}>
-          <div>
-            <h3 className="admin-card-title">Entitlement Lookup</h3>
-            <p className="admin-card-subtitle">
-              Enter the database user ID from a ticket or admin query to view purchase, organisation grant, and free-tier entitlements.
-            </p>
-          </div>
-          <Badge tone="green" dot>Support tool</Badge>
-        </div>
-        <form
-          onSubmit={submitLookup}
-          className="admin-row"
-          style={{ marginTop: 16, gap: 10, maxWidth: 520 }}
-        >
-          <input
-            value={lookupId}
-            onChange={(event) => {
-              setLookupId(event.target.value);
-              if (lookupError) setLookupError("");
-            }}
-            placeholder="e.g. 1042"
-            inputMode="numeric"
-            className="admin-field admin-mono"
-            style={{ flex: 1, height: 38, padding: "0 12px" }}
-          />
-          <button type="submit" className="admin-btn admin-btn-primary">
-            <UserSearch size={14} /> Lookup <ArrowRight size={14} />
-          </button>
-        </form>
-        {lookupError && (
-          <div className="admin-error" style={{ marginTop: 12, maxWidth: 520 }}>
-            {lookupError}
           </div>
         )}
       </Card>
