@@ -228,7 +228,10 @@ export class PurchaseService {
                 [email],
             );
             if (userRows?.length) {
-                const metadata = userRows[0].metadata || {};
+                let metadata = userRows[0].metadata || {};
+                if (typeof metadata === "string") {
+                    try { metadata = JSON.parse(metadata); } catch {}
+                }
                 if (metadata.pricingPolicy === "pay") {
                     return "pay";
                 }
@@ -239,7 +242,7 @@ export class PurchaseService {
 
             // Fallback to registrations table
             const rows = await this.dataSource.query(
-                `SELECT r.metadata, r.is_tech_assessment
+                `SELECT r.metadata, r.is_tech_assessment, r.registration_source
                  FROM registrations r
                  JOIN users u ON u.id = r.user_id
                  WHERE LOWER(u.email) = LOWER($1)
@@ -251,12 +254,26 @@ export class PurchaseService {
             if (!rows?.length) {
                 return null;
             }
+            let metadata = rows[0].metadata || {};
+            if (typeof metadata === "string") {
+                try { metadata = JSON.parse(metadata); } catch {}
+            }
             const isTechAssessment = rows[0].is_tech_assessment === 1 || rows[0].is_tech_assessment === true;
-            const metadata = rows[0].metadata || {};
+            const registrationSource = rows[0].registration_source || '';
+
             if (metadata.pricingPolicy === "pay") {
                 return "pay";
             }
-            if (isTechAssessment || metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
+            if (metadata.pricingPolicy === "free" || metadata.isFree === true || metadata.is_free === true) {
+                return "free";
+            }
+
+            // Standard SELF registered landing page signups must be paid (pay)
+            if (registrationSource.toUpperCase() === 'SELF') {
+                return "pay";
+            }
+
+            if (isTechAssessment) {
                 return "free";
             }
             return null;

@@ -440,10 +440,10 @@ export default function QuestionEditor({
   const labelCls = "text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-white/40";
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-0">
       <div className="absolute inset-0 bg-[#0b100d]/80 backdrop-blur-md z-0" />
       <div 
-        className="relative z-10 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 shadow-2xl"
+        className="relative z-10 w-full h-full max-h-screen flex flex-col overflow-hidden rounded-none border-none shadow-2xl"
         style={{ backgroundColor: "var(--admin-bg-soft)" }}
       >
         
