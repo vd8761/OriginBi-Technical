@@ -15,6 +15,7 @@ import QuestionNavigator, { NavigatorQuestion, QuestionState } from "./QuestionN
 import { NumericalQuestion } from "./question-types/NumericalQuestion";
 import ProctoringHost from "@/lib/proctoring/ProctoringHost";
 import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import { techFetch } from "@/lib/api";
 import {
   DEFAULT_PROCTORING,
   fetchEffectiveAssessmentSettings,
@@ -169,7 +170,7 @@ const AdaptiveEngineV2: React.FC<AdaptiveV2Props> = ({
           moduleSlug === "communication" ? "grammar" : moduleSlug;
         setPackageSlug(normalizedModuleSlug);
 
-        const res = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        const res = await techFetch(`/api/assessment/admin/assessments`);
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled) return;

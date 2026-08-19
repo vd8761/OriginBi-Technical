@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Video, Mic, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
 import { requestDummyMedia } from "@/lib/proctoring/dummyMedia";
+import { techFetch } from "@/lib/api";
 
 interface AptitudePreTestProps {
     onStart: (mode: 'trial' | 'main') => void;
@@ -61,12 +62,8 @@ const AptitudePreTest: React.FC<AptitudePreTestProps> = ({
                         }
                     }
                 }
-                const API_BASE =
-                    (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL?.replace(/\/$/, "")) ||
-                    process.env.NEXT_PUBLIC_EXAM_ENGINE_URL?.replace(/\/$/, "") ||
-                    "";
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-                const response = await fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+                const response = await techFetch(`/api/assessment/attempts-stats${emailParam}`);
                 const json = await response.json();
                 const data = json.data || json;
                 if (active && data) {

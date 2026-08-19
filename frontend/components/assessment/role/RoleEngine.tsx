@@ -12,6 +12,7 @@ import { SidebarOpenIcon, SidebarCloseIcon, SidebarMobileIcon } from "../shared/
 import { useAssessmentCache } from "@/lib/useAssessmentCache";
 import ProctoringHost from "@/lib/proctoring/ProctoringHost";
 import AssessmentPluginHost from "@/lib/proctoring/AssessmentPluginHost";
+import { techFetch } from "@/lib/api";
 import {
     DEFAULT_PROCTORING,
     fetchEffectiveAssessmentSettings,
@@ -155,8 +156,8 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
 
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
-                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                    techFetch(`/api/assessment/attempts-stats${emailParam}`),
+                    techFetch(`/api/assessment/admin/assessments`)
                 ]);
                 const statsJson = await statsRes.json();
                 if (statsJson?.data) {
@@ -239,7 +240,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         const validateAndRestore = async () => {
             if (cachedSession.token) {
                 try {
-                    const res = await fetch(`${API_BASE}/api/assessment/role/attempts/${cachedSession.token}/questions`);
+                    const res = await techFetch(`/api/assessment/role/attempts/${cachedSession.token}/questions`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.status && data.status !== 'in_progress') {
@@ -372,7 +373,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                     console.error("Error reading profile email:", err);
                 }
 
-                const response = await fetch(`${API_BASE}/api/assessment/role/attempts`, {
+                const response = await techFetch(`/api/assessment/role/attempts`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ assessmentCode, userId: activeEmail || userId, mode }),
@@ -388,7 +389,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
                 // If backend returned block-based adaptive mode, redirect to adaptive engine
                 if (data.isBlockBased) {
                     setIsRedirecting(true);
-                    const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+                    const assessmentsRes = await techFetch(`/api/assessment/admin/assessments`);
                     const assessmentsJson = await assessmentsRes.json();
                     const found = assessmentsJson?.data?.find((a: any) => a.module_type === 'role');
                     const assessmentId = found?.assessment_id || 1;
@@ -434,7 +435,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
 
     const persistAnswer = useCallback((questionId: string, payload: any) => {
         if (!attemptToken) return;
-        void fetch(`${API_BASE}/api/assessment/role/attempts/${attemptToken}/answers`, {
+        void techFetch(`/api/assessment/role/attempts/${attemptToken}/answers`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answers: { [questionId]: payload } }),
@@ -475,7 +476,7 @@ const RoleEngine: React.FC<RoleEngineProps> = ({
         if (!attemptToken || isSubmitting) return;
         setIsSubmitting(true);
         try {
-            const response = await fetch(`${API_BASE}/api/assessment/role/attempts/${attemptToken}/submit`, {
+            const response = await techFetch(`/api/assessment/role/attempts/${attemptToken}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ answers }),

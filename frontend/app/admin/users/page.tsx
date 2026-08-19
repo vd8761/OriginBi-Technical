@@ -442,6 +442,19 @@ function UsersInner() {
                                   </Badge>
                                 );
                               })}
+                              {/* Straight through to what they actually scored —
+                                  the roster tells you a module was taken but
+                                  never how it went. */}
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  router.push(`/admin/results?q=${encodeURIComponent(u.email)}`);
+                                }}
+                                className="text-[11px] font-bold uppercase tracking-wider text-brand-green underline-offset-2 hover:underline cursor-pointer"
+                              >
+                                View results
+                              </button>
                             </div>
                           );
                         })()}

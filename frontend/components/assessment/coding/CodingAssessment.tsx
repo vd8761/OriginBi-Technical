@@ -41,6 +41,7 @@ import {
     type CodeRunResponse,
     type LastCodeRun,
     type SnapshotQuestion,
+    techFetch,
 } from "@/lib/api";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { MountPoint, useCommandStream, usePluginRuntime, type EnabledPluginConfig } from "@/plugins";
@@ -738,8 +739,8 @@ const CodingAssessment: React.FC<CodingAssessmentProps> = ({ lang, snapshot, mod
 
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/attempts-stats${emailParam}`),
-                    fetch(`${LEGACY_TECH_API_URL}/api/assessment/admin/assessments`)
+                    techFetch(`/api/assessment/attempts-stats${emailParam}`),
+                    techFetch(`/api/assessment/admin/assessments`)
                 ]);
                 if (!statsRes.ok || !assessmentsRes.ok) return;
                 const statsJson = await statsRes.json();

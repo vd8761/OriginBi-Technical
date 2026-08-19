@@ -69,15 +69,15 @@ const MyScoreView: React.FC = () => {
                     <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-8 py-16 text-center dark:border-white/10 dark:bg-[#212824]">
                         <p className="text-[15px] font-bold text-black dark:text-white">No results yet</p>
                         <p className="mx-auto mt-2 max-w-md text-[13px] text-slate-500 dark:text-gray-400">
-                            Once you complete a coding assessment and it finishes grading, your score and
-                            per-test breakdown will appear here.
+                            Once you complete an assessment, your score and breakdown will appear
+                            here.
                         </p>
                         <button
                             type="button"
-                            onClick={() => router.push("/explore/coding")}
+                            onClick={() => router.push("/explore")}
                             className="mt-6 rounded-full bg-[#1ED36A] px-6 py-2.5 text-[12px] font-bold uppercase tracking-wider text-white"
                         >
-                            Explore Coding
+                            Explore Assessments
                         </button>
                     </div>
                 ) : (
@@ -85,8 +85,17 @@ const MyScoreView: React.FC = () => {
                         {results.map((res) => {
                             const cert = certBySerial(res.certificateSerial);
                             const pct = Math.round(res.percentage);
+                            // MCQ modules are scored inside the submit
+                            // transaction, so "submitted" is already final for
+                            // them. Only coding has an asynchronous grading
+                            // step worth showing as in-progress.
                             const processing =
-                                res.status === "submitted" || res.status === "under_review";
+                                !res.module &&
+                                (res.status === "submitted" || res.status === "under_review");
+                            const heading = res.title ?? `${titleCase(res.language)} Coding`;
+                            const retakeHref = res.module
+                                ? `/assessment/${res.module === "grammar" ? "communication" : res.module}?mode=main`
+                                : `/assessment/coding?lang=${res.language}&mode=main`;
                             return (
                                 <section
                                     key={res.attemptId}
@@ -108,7 +117,7 @@ const MyScoreView: React.FC = () => {
                                             </div>
                                             <div>
                                                 <h2 className="text-[17px] font-bold text-black dark:text-white">
-                                                    {titleCase(res.language)} Coding
+                                                    {heading}
                                                 </h2>
                                                 <p className="text-[12.5px] text-slate-500 dark:text-gray-400">
                                                     {processing
@@ -134,9 +143,7 @@ const MyScoreView: React.FC = () => {
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    router.push(
-                                                        `/assessment/coding?lang=${res.language}&mode=main`,
-                                                    )
+                                                    router.push(retakeHref)
                                                 }
                                                 className="rounded-full border border-[#1ED36A]/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#1ED36A] transition hover:bg-[#1ED36A]/10"
                                             >
@@ -155,9 +162,11 @@ const MyScoreView: React.FC = () => {
                                                     <span className="min-w-0 flex-1 truncate text-black dark:text-white">
                                                         {q.ordinal}. {q.title || "Coding question"}
                                                     </span>
-                                                    <span className="shrink-0 text-slate-500 dark:text-gray-400">
-                                                        {q.testsPassed}/{q.testsTotal} tests
-                                                    </span>
+                                                    {q.testsTotal > 0 && (
+                                                        <span className="shrink-0 text-slate-500 dark:text-gray-400">
+                                                            {q.testsPassed}/{q.testsTotal} tests
+                                                        </span>
+                                                    )}
                                                     <span className="w-16 shrink-0 text-right font-semibold text-black dark:text-white">
                                                         {q.score}/{q.maxScore}
                                                     </span>

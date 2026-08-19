@@ -14,6 +14,7 @@ import { McqQuestion } from "./question-types/McqQuestion";
 import { MsqQuestion } from "./question-types/MsqQuestion";
 import { TfQuestion } from "./question-types/TfQuestion";
 import { NumericalQuestion } from "./question-types/NumericalQuestion";
+import { techFetch } from "@/lib/api";
 import {
   DEFAULT_PROCTORING,
   fetchEffectiveAssessmentSettings,
@@ -304,7 +305,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         setIsLoading(true);
         setLoadError(null);
 
-        const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/block-based`, {
+        const response = await techFetch(`/api/assessment/aptitude/attempts/block-based`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assessmentCode, userId, mode }),
@@ -366,7 +367,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+        const res = await techFetch(`/api/assessment/admin/assessments`);
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled) return;
@@ -476,8 +477,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
         if (latestAnswers[q.id] != null) currentBlockAnswers[q.id] = latestAnswers[q.id];
       });
 
-      const response = await fetch(
-        `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${currentBlockNumber}/next`,
+      const response = await techFetch(`/api/assessment/aptitude/attempts/${attemptToken}/blocks/${currentBlockNumber}/next`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -542,8 +542,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     // Load block from backend
     setIsLoadingBlock(true);
     try {
-      const response = await fetch(
-        `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${blockNum}/questions`
+      const response = await techFetch(`/api/assessment/aptitude/attempts/${attemptToken}/blocks/${blockNum}/questions`
       );
       if (!response.ok) throw new Error('Failed to load block');
 
@@ -599,7 +598,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
     if (Object.keys(blockAnswers).length === 0) return;
     
     try {
-      await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/blocks/${blockNum}/answers`, {
+      await techFetch(`/api/assessment/aptitude/attempts/${attemptToken}/blocks/${blockNum}/answers`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: blockAnswers }),
@@ -628,8 +627,7 @@ const AdaptiveAptitudeEngine: React.FC<AdaptiveAptitudeEngineProps> = ({
       // Read latest answers from ref — this prevents stale closure where
       // the last block's answers might not be included
       const latestAnswers = allAnswersRef.current;
-      const response = await fetch(
-        `${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit-block-based`,
+      const response = await techFetch(`/api/assessment/aptitude/attempts/${attemptToken}/submit-block-based`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -8,6 +8,120 @@ Tag legend: ✅ done · 🟡 in flight · ⏭ next up · ⏳ later · 🔴 block
 
 ---
 
+## Snapshot - 2026-08-19 (Authorization, authenticated candidate flow, admin results)
+
+Production-readiness pass. Four of five assessment modules were already working
+and persisting correctly; what was missing was the security layer and the admin
+half of the exam loop.
+
+### Just completed
+
+- **Authorization on assessment-service** (`src/auth/`):
+  - New `roles.decorator.ts` (`@Roles(...)`) and `roles.guard.ts`, registered as
+    a second global `APP_GUARD` after `CognitoAuthGuard`. The guard resolves the
+    caller's `users` row from the verified token (`cognito_sub`, falling back to
+    email), attaches it as `req.dbUser`, and enforces the declared roles.
+    Previously the service had **no** role checks at all — a valid token from any
+    candidate reached every `/api/admin/*` endpoint.
+  - `@Roles('ADMIN')` on admin-dashboard, admin-users, admin-settings, groups and
+    admin-question. `GET assessment/admin/assessments` is widened to any
+    authenticated user (config only, no answer key) because candidate pre-tests
+    read it.
+  - `admin-me.controller.ts` rewritten: dropped the `X-User-Context` header
+    identity fallback and the "no row in `users` → return `role: 'ADMIN'`" branch.
+    Between them, any Cognito account in the pool could become an admin here.
+- **Ownership instead of client-supplied identity** (`assessment.controller.ts`):
+  `latest-result`, `in-progress`, `attempts-stats`, `validate-certificate`,
+  `validate-eligibility` and both `startAttempt` paths now derive the user from
+  `req.dbUser`; a `userId` parameter is honoured only for admins. Added an
+  `ownerUserId` check to `getLatestSubmittedResult` so an attempt token alone no
+  longer reads another candidate's result.
+  Also removed the `resolveUserId` fallback that returned **the first row in
+  `users`** when no identifier was supplied.
+- **Authorization on exam-engine**: the `/v1/admin` group now runs behind
+  `adminOnly` (`internal/server/auth_handlers.go`). 28 of 31 admin handlers
+  already called `requireAdmin` individually; three did not —
+  `listActiveAttemptsForProctoring` (live feed of every candidate mid-exam),
+  `createPricingItem` and `judge0Health`. Enforcing at the router makes it
+  structural. `auth.Principal` gained `IsAdmin`.
+- **Candidate flow now authenticated** (`frontend/`): new `techFetch()` in
+  `lib/api.ts` — a `fetch`-shaped wrapper that injects the bearer token and
+  reuses the single-flight refresh path. Migrated **47 raw `fetch()` call sites
+  across 15 files** (all five module engines, their pre-tests, the adaptive
+  variants, `payments.tsx`, `evaluationEngine.ts`) which previously sent no
+  token and passed identity as `?userId=<email>`. Extracted the shared
+  `applyAuthHeaders()` so `apiFetch` and `techFetch` decide credentials in one
+  place. Dropped `auth: false` from `getPurchasedAssessments` and
+  `getLatestSubmittedResult`. `ASSESSMENT_AUTH` flipped to `on`.
+- **Admin results view — the missing half of the exam loop**: admins could see
+  *that* a candidate sat an assessment but never what they scored.
+  - `admin-results.service.ts` / `admin-results.controller.ts`:
+    `GET /api/admin/results` (UNION roster across the four `tech_*` families,
+    filters for module/mode/outcome/candidate) and
+    `GET /api/admin/results/:module/:attemptToken` (delegates to the existing
+    candidate-facing reader, so admin and candidate always see the same numbers).
+  - `app/admin/results/page.tsx` and `app/admin/results/[module]/[token]/page.tsx`,
+    registered in `AdminSidebar` and the `AdminHeader` breadcrumb map. The users
+    roster gained a "View results" link per candidate.
+- **`/my-score` fixed**: it read exam-engine `/v1/me/results` (the `attempts`
+  table), which holds only coding attempts — so it was empty for every candidate
+  who had taken only MCQ modules. Added
+  `GET /api/assessment/me/results`; `getMyResults()` now fetches both and merges.
+  `MyScoreView` generalised off its coding-only assumptions (heading, retake
+  target, per-question "tests" column, and the `status === 'submitted'` check
+  that showed every finished MCQ attempt as "Grading in progress").
+
+### Verification
+
+- `go build ./...` and `go test ./...` — green across exam-engine.
+- `npx nest build` — clean.
+- `npx tsc --noEmit` and `npm run build` — clean in frontend.
+- Live, `ASSESSMENT_AUTH=on`: `/api/health` 200; `/api/admin/users`,
+  `/api/admin/results`, `/api/admin/dashboard-summary`,
+  `/api/assessment/admin/aptitude/questions`,
+  `latest-result?userId=1` and `me/results` all **401** without a token. A
+  spoofed `X-User-Context` header grants nothing.
+- Live role enforcement on exam-engine via `DEV_AUTH_BYPASS` with a temporary
+  STUDENT user: all five probed `/v1/admin/*` routes **403**, the same routes
+  **200** as an ADMIN, and the student's own `/v1/me/results` still **200**.
+- Admin results API returns real rows and the detail route returns 3 sections
+  and 15 question reviews for a role attempt.
+- `me/results` returns all four MCQ modules for a candidate.
+- Test attempts and the temporary STUDENT user were removed afterwards.
+
+- **Authorization regression tests** (`internal/server/admin_authz_test.go`):
+  `TestAdminRoutesAreInsideAdminOnlyGroup` reads the route table and fails if any
+  `/admin` route is registered outside the guarded group — the exact mistake that
+  produced the three holes. Verified it catches a deliberately reintroduced
+  regression. Plus middleware and principal-plumbing tests.
+- **Coding module brought up**: Judge0 1.13.1 running under Docker (server, workers,
+  db, redis), all languages listed, and a real submission executed — the seeded
+  "Sum Two Integers" sample (`2 3` → `5`) returns Accepted. The coding **question
+  bank was already seeded** (3 questions, 12 test cases, 5 languages available via
+  `/v1/catalog/coding/languages`); the empty `tech_coding_*` tables are the retired
+  implementation and are a red herring.
+
+### Next up
+
+- Get a real Cognito access token into an automated test so the **403** path on
+  assessment-service is covered by CI. The 401 path and exam-engine's 403 path are
+  verified; assessment-service role denial is currently reasoned about plus proven
+  by construction, not exercised by a test.
+- Re-run a full candidate exam end-to-end through the browser with a real login now
+  that `ASSESSMENT_AUTH=on`, to confirm the 47 migrated `techFetch` call sites all
+  carry the token in practice.
+- `coding_language_configs` is empty, so language selection falls back to the
+  default pool. Populate it if per-language question mixes are wanted.
+
+### Later
+
+- Consolidate the two MCQ implementations. Phase 4 above bridges the split
+  (`getMyResults` merges two backends); it does not merge them.
+
+### Blocked
+
+- **Phase A6** - still needs real design reference assets.
+
 ## Snapshot - 2026-06-18 (Mock cleanups and Settings database persistence)
 
 ### Just completed

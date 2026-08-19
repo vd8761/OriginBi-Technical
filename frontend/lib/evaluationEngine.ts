@@ -4,6 +4,7 @@
  */
 
 import type { AssessmentId } from "./exams";
+import { techFetch } from "@/lib/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & INTERFACES
@@ -599,7 +600,6 @@ export const evaluateAttempt = (params: EvaluateAttemptParams): EvaluationResult
 // API INTEGRATION HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? "" : (process.env.NEXT_PUBLIC_ASSESSMENT_SERVICE_URL || "http://localhost:5000");
 
 export const submitAndEvaluate = async (
   assessmentId: AssessmentId,
@@ -621,7 +621,7 @@ export const submitAndEvaluate = async (
   
   // 2. Submit to backend
   try {
-    const response = await fetch(`${API_BASE}/api/assessment/${assessmentId}/attempts/${attemptToken}/submit`, {
+    const response = await techFetch(`/api/assessment/${assessmentId}/attempts/${attemptToken}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

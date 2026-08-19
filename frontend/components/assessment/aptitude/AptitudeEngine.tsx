@@ -20,6 +20,7 @@ import { McqQuestion } from "./question-types/McqQuestion";
 import { MsqQuestion } from "./question-types/MsqQuestion";
 import { TfQuestion } from "./question-types/TfQuestion";
 import { NumericalQuestion } from "./question-types/NumericalQuestion";
+import { techFetch } from "@/lib/api";
 
 const APTITUDE_TOTAL_TIME = 3600;
 
@@ -172,8 +173,8 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
                 const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
                 const [statsRes, assessmentsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`),
-                    fetch(`${API_BASE}/api/assessment/admin/assessments`)
+                    techFetch(`/api/assessment/attempts-stats${emailParam}`),
+                    techFetch(`/api/assessment/admin/assessments`)
                 ]);
                 const statsJson = await statsRes.json();
                 if (statsJson?.data) {
@@ -238,7 +239,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
             // If the cache has a token, validate it against the server
             if (cachedSession.token) {
                 try {
-                    const res = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${cachedSession.token}/questions`);
+                    const res = await techFetch(`/api/assessment/aptitude/attempts/${cachedSession.token}/questions`);
                     if (res.ok) {
                         const data = await res.json();
                         // If the attempt status is submitted/closed, the cache is stale
@@ -419,7 +420,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                     console.error("Error reading profile email:", err);
                 }
 
-                const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts`, {
+                const response = await techFetch(`/api/assessment/aptitude/attempts`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ assessmentCode, userId: activeEmail || userId, mode }),
@@ -436,7 +437,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 // If backend returned block-based adaptive mode, redirect to adaptive engine
                 if (data.isBlockBased) {
                     setIsRedirecting(true);
-                    const assessmentsRes = await fetch(`${API_BASE}/api/assessment/admin/assessments`);
+                    const assessmentsRes = await techFetch(`/api/assessment/admin/assessments`);
                     const assessmentsJson = await assessmentsRes.json();
                     const found = assessmentsJson?.data?.find((a: any) => a.module_type === "aptitude");
                     const assessmentId = found?.assessment_id || 1;
@@ -450,7 +451,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
                 let fetchedQuestions = data.questions;
                 let serverAnswers = data.answers;
                 if (!Array.isArray(fetchedQuestions) && token) {
-                    const questionsRes = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${token}/questions`);
+                    const questionsRes = await techFetch(`/api/assessment/aptitude/attempts/${token}/questions`);
                     if (!questionsRes.ok) {
                         throw new Error("Failed to fetch questions");
                     }
@@ -503,7 +504,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
 
     const persistAnswer = useCallback((questionId: string, payload: any) => {
         if (!attemptToken) return;
-        void fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/answers`, {
+        void techFetch(`/api/assessment/aptitude/attempts/${attemptToken}/answers`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answers: { [questionId]: payload } }),
@@ -524,7 +525,7 @@ const AptitudeEngine: React.FC<AptitudeEngineProps> = ({
         
         try {
             const currentAnswers = answersRef.current;
-            const response = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/${attemptToken}/submit`, {
+            const response = await techFetch(`/api/assessment/aptitude/attempts/${attemptToken}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ answers: currentAnswers }),

@@ -1,38 +1,87 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, Req, BadRequestException } from '@nestjs/common';
 import { AssessmentService } from '../services/assessment.service';
 import { AdaptiveBlockService } from '../services/adaptive-block.service';
+import { AdminResultsService } from '../services/admin-results.service';
+import type { AuthedRequest } from '../../../auth/roles.guard';
 
 @Controller('assessment')
 export class AssessmentController {
   constructor(
     private readonly assessmentService: AssessmentService,
     private readonly adaptiveBlockService: AdaptiveBlockService,
+    private readonly adminResultsService: AdminResultsService,
   ) {}
 
+  /**
+   * The user whose data this request may touch.
+   *
+   * Identity comes from the verified token (`req.dbUser`), not from the
+   * request — a `userId` parameter is something the caller asserted. Admins
+   * keep the ability to pass one explicitly so the admin results views can
+   * read another candidate's attempts.
+   *
+   * Returns `undefined` only under `ASSESSMENT_AUTH=off`, where no identity can
+   * be resolved; the requested value is then used so local development works.
+   */
+  private effectiveUserId(req: AuthedRequest, requested?: string): string | undefined {
+    if (req.dbUser) {
+      if (req.dbUser.isAdmin && requested) return requested;
+      return String(req.dbUser.id);
+    }
+    return requested;
+  }
+
+  /**
+   * The id an attempt must belong to for this caller to read it, or null when
+   * the caller may read anyone's (admins, and local dev with auth disabled).
+   */
+  private ownerScope(req: AuthedRequest): number | null {
+    if (!req.dbUser || req.dbUser.isAdmin) return null;
+    return req.dbUser.id;
+  }
+
   @Get('attempts-stats')
-  async getAttemptsStats(@Query('userId') userId?: string) {
-    const data = await this.assessmentService.getAttemptsStats(userId);
+  async getAttemptsStats(@Req() req: AuthedRequest, @Query('userId') userId?: string) {
+    const data = await this.assessmentService.getAttemptsStats(
+      this.effectiveUserId(req, userId),
+    );
     return { data };
   }
 
   @Post('validate-certificate')
-  async validateCertificate(@Body() body: { userId: number; examId: string; mode: 'trial' | 'main' }) {
+  async validateCertificate(
+    @Req() req: AuthedRequest,
+    @Body() body: { userId: number; examId: string; mode: 'trial' | 'main' },
+  ) {
     // Both trial and main assessments can generate certificates
-    
+
     const module = body.examId === 'communication' ? 'grammar' : body.examId;
-    const result = await this.assessmentService.getLatestSubmittedResult(module, body.userId.toString());
-    
+    const result = await this.assessmentService.getLatestSubmittedResult(
+      module,
+      this.effectiveUserId(req, body.userId?.toString()),
+      undefined,
+      this.ownerScope(req),
+    );
+
     if (!result || result.status !== 'completed') {
       throw new BadRequestException('Assessment not completed or no valid result found');
     }
-    
+
     return { valid: true, result: result };
   }
 
   @Post('validate-eligibility')
-  async validateEligibility(@Body() body: { userId: number; assessmentCode: string; mode: 'trial' | 'main' }) {
+  async validateEligibility(
+    @Req() req: AuthedRequest,
+    @Body() body: { userId: number; assessmentCode: string; mode: 'trial' | 'main' },
+  ) {
+    const userId = this.effectiveUserId(req, body.userId?.toString());
+    if (!userId) {
+      throw new BadRequestException('Unable to determine the candidate for this request');
+    }
+
     const validation = await this.assessmentService.validateAttemptEligibility(
-      body.userId,
+      userId,
       body.assessmentCode,
       body.mode
     );
@@ -45,35 +94,88 @@ export class AssessmentController {
   }
 
   @Get('in-progress')
-  async getInProgressAttempts(@Query('userId') userId?: string) {
-    const data = await this.assessmentService.getInProgressAttempts(userId);
+  async getInProgressAttempts(@Req() req: AuthedRequest, @Query('userId') userId?: string) {
+    const data = await this.assessmentService.getInProgressAttempts(
+      this.effectiveUserId(req, userId),
+    );
     return { data };
+  }
+
+  /**
+   * GET /api/assessment/me/results
+   *
+   * The caller's own submitted attempts across the MCQ modules, shaped like the
+   * exam-engine `/v1/me/results` payload so the frontend can concatenate the
+   * two.
+   *
+   * This exists because "My Performance" reads exam-engine's `attempts` table,
+   * which only ever holds coding attempts — MCQ results live in the tech_*
+   * tables, so the page was empty for every candidate who had only taken MCQ
+   * assessments. Declared above `:module/latest-result` to keep the literal
+   * path ahead of the parameterised one.
+   */
+  @Get('me/results')
+  async getMyResults(@Req() req: AuthedRequest) {
+    const userId = req.dbUser?.id;
+    if (!userId) return { passPercent: 90, results: [] };
+
+    const roster = await this.adminResultsService.listResults({ userId, limit: 200 });
+    return {
+      passPercent: roster.passPercent,
+      results: roster.results.map((r) => ({
+        attemptId: r.attemptToken,
+        assignmentRef: `${r.module}:${r.assessmentCode}`,
+        module: r.module,
+        title: r.assessmentName || r.moduleLabel,
+        language: r.moduleLabel,
+        status: r.status,
+        score: r.totalScore,
+        maxScore: r.maxScore,
+        percentage: r.percentage,
+        passed: r.passed,
+        submittedAt: r.submittedAt ?? undefined,
+        // Per-question review is served by `:module/latest-result`; the roster
+        // deliberately stays a summary so this page loads in one query.
+        questions: [],
+      })),
+    };
   }
 
   @Get(':module/latest-result')
   async getLatestSubmittedResult(
+    @Req() req: AuthedRequest,
     @Param('module') module: string,
     @Query('userId') userId?: string,
     @Query('attemptToken') attemptToken?: string,
   ) {
-    return this.assessmentService.getLatestSubmittedResult(module, userId, attemptToken);
+    return this.assessmentService.getLatestSubmittedResult(
+      module,
+      this.effectiveUserId(req, userId),
+      attemptToken,
+      this.ownerScope(req),
+    );
   }
 
   @Post(':module/attempts')
-  async startAttempt(@Param('module') module: string, @Body() body: any) {
+  async startAttempt(@Req() req: AuthedRequest, @Param('module') module: string, @Body() body: any) {
+    // The attempt is always started for the authenticated caller. Taking the
+    // id from the body let anyone sit an exam as, or burn the attempt quota of,
+    // another candidate.
+    body = { ...body, userId: this.effectiveUserId(req, body?.userId) };
+
     // SECURITY: Validate attempt eligibility before starting
     if (body.assessmentCode && body.userId && body.mode) {
       const validation = await this.assessmentService.validateAttemptEligibility(
-        body.userId, 
-        body.assessmentCode, 
+        body.userId,
+        body.assessmentCode,
         body.mode
       );
-      
+
       if (!validation.canStart) {
         throw new BadRequestException(validation.reason);
       }
     }
-    
+
     return this.assessmentService.startAttempt(module, body);
   }
 
@@ -111,7 +213,14 @@ export class AssessmentController {
    * POST /api/assessment/aptitude/attempts/block-based
    */
   @Post(':module/attempts/block-based')
-  async startBlockBasedAttempt(@Param('module') module: string, @Body() body: any) {
+  async startBlockBasedAttempt(
+    @Req() req: AuthedRequest,
+    @Param('module') module: string,
+    @Body() body: any,
+  ) {
+    // Same rule as the non-block path: the attempt belongs to the caller.
+    body = { ...body, userId: this.effectiveUserId(req, body?.userId) };
+
     // SECURITY: Validate attempt eligibility before starting
     if (body.assessmentCode && body.userId && body.mode) {
       const validation = await this.assessmentService.validateAttemptEligibility(

@@ -15,6 +15,9 @@ import (
 type Principal struct {
 	UserID int64
 	OrgID  string // UUID string of the org the request is acting on behalf of
+	// IsAdmin mirrors users.role being one of ADMIN/SUPER_ADMIN/STAFF. Set by
+	// the session middleware and enforced by Server.requireAdmin.
+	IsAdmin bool
 }
 
 type ctxKey struct{}

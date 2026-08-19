@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Body, Query, Param, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CognitoAuthGuard } from '../../../auth/cognito-auth.guard';
+import { Roles } from '../../../auth/roles.decorator';
 import { AdminUsersService, AdminUsersResponse } from '../services/admin-users.service';
 import { BulkAdminUsersService } from '../services/bulk-admin-users.service';
 
@@ -16,6 +17,7 @@ function isMulterFile(obj: unknown): obj is MulterFile {
 }
 
 @Controller('admin/users')
+@Roles('ADMIN')
 @UseGuards(CognitoAuthGuard)
 export class AdminUsersController {
   constructor(

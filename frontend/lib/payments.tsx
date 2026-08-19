@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { AssessmentId } from "./exams";
+import { techFetch } from "@/lib/api";
 import {
     getActiveEmail,
     getLatestSubmittedResult,
@@ -95,7 +96,7 @@ const fetchServerEntitlements = async (): Promise<{ paid: Set<string>; visible: 
             // when the user's registrations.registration_source is 'ADMIN',
             // so the regular hydration path covers the admin free-access
             // case without a separate client check.
-            const response = await fetch(`${LEGACY_TECH_API_URL}/api/assessment/purchase/purchases`, {
+            const response = await techFetch(`/api/assessment/purchase/purchases`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),

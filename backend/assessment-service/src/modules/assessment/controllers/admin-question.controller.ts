@@ -3,8 +3,20 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpS
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminQuestionService, ModuleType } from '../services/admin-question.service';
 import { R2Service } from '../../r2/r2.service';
+import { Roles } from '../../../auth/roles.decorator';
 
+/**
+ * Question-bank authoring API. Admin-only by default at the class level —
+ * `GET :module/questions` returns questions together with which option is
+ * correct, so a candidate must never reach it.
+ *
+ * The one exception is `GET assessments`, which returns assessment
+ * configuration (duration, question count, attempt limits) and no answer key.
+ * Candidate pre-tests read it to size the exam, so it widens to any
+ * authenticated user.
+ */
 @Controller('assessment/admin')
+@Roles('ADMIN')
 export class AdminQuestionController {
   constructor(
     private readonly adminQuestionService: AdminQuestionService,
@@ -29,7 +41,10 @@ export class AdminQuestionController {
     return { success: true, ...result };
   }
 
+  // Config only, no answer key — widened from the class-level ADMIN default so
+  // candidate pre-tests can read duration/limits before starting an attempt.
   @Get('assessments')
+  @Roles('ADMIN', 'PROCTOR', 'STUDENT')
   async listAssessments(@Query('module') module?: string) {
     const data = await this.adminQuestionService.listAssessments(module);
     return { data };

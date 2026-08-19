@@ -227,18 +227,20 @@ export class AssessmentService {
         }
       }
     }
-    
-    // Fall back to first available user in DB (matching Go engine's behavior)
-    const fallbackRows = await queryRunner.query('SELECT id FROM users ORDER BY id LIMIT 1');
-    if (fallbackRows.length > 0) {
-      return fallbackRows[0].id;
-    }
-    
+
+    // No fallback. This used to return the first row in `users` when the caller
+    // supplied no identifier, which handed out that user's attempts and results
+    // to anyone who omitted the parameter. An unresolvable caller is nobody.
     return null;
   }
 
 
-  private getTableMap() {
+  /**
+   * Table names per MCQ module. Public so AdminResultsService can build its
+   * cross-module roster from the same definitions rather than a second copy
+   * that would drift the first time a column is renamed.
+   */
+  getTableMap() {
     return {
       aptitude: {
         attempts: 'tech_aptitude_attempts',
@@ -968,7 +970,17 @@ export class AssessmentService {
     }
   }
 
-  async getLatestSubmittedResult(module: string, userIdParam?: any, attemptTokenParam?: string) {
+  /**
+   * @param ownerUserId When set, the attempt must belong to this user or the
+   *   lookup returns null. Callers pass it for every non-admin viewer so that
+   *   knowing an attempt token is not by itself enough to read the result.
+   */
+  async getLatestSubmittedResult(
+    module: string,
+    userIdParam?: any,
+    attemptTokenParam?: string,
+    ownerUserId?: number | null,
+  ) {
     const dbModule = module === 'communication' ? 'grammar' : module;
     if (dbModule === 'coding') {
       return this.getCodingLatestSubmittedResult(userIdParam, attemptTokenParam);
@@ -1014,6 +1026,16 @@ export class AssessmentService {
 
       const attempt = attemptRows[0];
       if (!attempt) return null;
+
+      // Ownership. The token branch above looks an attempt up by token alone,
+      // so this is what stops one candidate reading another's result.
+      if (
+        ownerUserId !== undefined &&
+        ownerUserId !== null &&
+        Number(attempt.user_id) !== Number(ownerUserId)
+      ) {
+        return null;
+      }
 
       const snapshot = await this.evaluateAttemptFromStoredAnswers(
         queryRunner,

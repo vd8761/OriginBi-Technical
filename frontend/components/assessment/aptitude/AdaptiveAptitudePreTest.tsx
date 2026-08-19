@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { securityCheckBeforeStart, getUserId } from "@/lib/assessmentSecurity";
+import { techFetch } from "@/lib/api";
 
 interface AdaptiveAptitudePreTestProps {
   mode: 'trial' | 'main';
@@ -85,7 +86,7 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
           "";
 
         const [assessmentsRes, statsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/assessment/admin/assessments?module=aptitude`),
+          techFetch(`/api/assessment/admin/assessments?module=aptitude`),
           (async () => {
             try {
               let activeEmail = "";
@@ -102,7 +103,7 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
                 }
               }
               const emailParam = activeEmail ? `?userId=${encodeURIComponent(activeEmail)}` : "";
-              return fetch(`${API_BASE}/api/assessment/attempts-stats${emailParam}`);
+              return techFetch(`/api/assessment/attempts-stats${emailParam}`);
             } catch {
               return null;
             }
@@ -192,7 +193,7 @@ const AdaptiveAptitudePreTest: React.FC<AdaptiveAptitudePreTestProps> = ({
         const sanitizedMode = securityCheck.sanitizedMode;
         const userId = getUserId();
 
-        const res = await fetch(`${API_BASE}/api/assessment/aptitude/attempts/block-based`, {
+        const res = await techFetch(`/api/assessment/aptitude/attempts/block-based`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assessmentCode: "TECH_APT_001", userId: userId, mode: sanitizedMode }),

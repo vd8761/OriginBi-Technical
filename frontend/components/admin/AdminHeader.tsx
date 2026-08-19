@@ -42,6 +42,7 @@ function defaultBreadcrumb(pathname: string, sectionFallback: string): Breadcrum
     const labelMap: Record<string, string> = {
       coding: "Question Banks",
       questions: "Assessments",
+      results: "Results",
       groups: "Groups",
       plugins: "Plugins",
       proctoring: "Proctoring",

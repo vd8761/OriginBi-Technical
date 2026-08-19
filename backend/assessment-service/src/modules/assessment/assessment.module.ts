@@ -22,6 +22,8 @@ import { GroupsController } from './controllers/groups.controller';
 import { GroupsService } from './services/groups.service';
 import { AdminMeController } from './controllers/admin-me.controller';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
+import { AdminResultsController } from './controllers/admin-results.controller';
+import { AdminResultsService } from './services/admin-results.service';
 import * as Entities from '../../entities';
 
 import { R2Module } from '../r2/r2.module';
@@ -44,6 +46,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     GroupsController,
     AdminMeController,
     AdminSettingsController,
+    AdminResultsController,
   ],
   providers: [
     AdminQuestionService,
@@ -58,6 +61,7 @@ const entities = Object.values(Entities).filter(e => typeof e === 'function');
     RegistrationService,
     EmailService,
     GroupsService,
+    AdminResultsService,
   ],
   exports: [
     AdminQuestionService,

@@ -1,8 +1,10 @@
 import { Controller, Get, Put, Body, OnModuleInit, UseGuards } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CognitoAuthGuard } from '../../../auth/cognito-auth.guard';
+import { Roles } from '../../../auth/roles.decorator';
 
 @Controller('admin/settings')
+@Roles('ADMIN')
 @UseGuards(CognitoAuthGuard)
 export class AdminSettingsController implements OnModuleInit {
   constructor(private readonly dataSource: DataSource) {}

@@ -16,10 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/originbi/exam-engine/internal/auth"
 )
@@ -259,68 +257,6 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, authResponse{User: user, Registration: reg})
 }
 
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if !s.limiter.allow(rateKey(r, "login"), 12, time.Minute) {
-		writeError(w, http.StatusTooManyRequests, tooManyRequestsMessage(12, time.Minute))
-		return
-	}
-	var req loginRequest
-	if !decodeJSON(w, r, &req, maxAuthBodyBytes) {
-		return
-	}
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if !validEmail(email) || strings.TrimSpace(req.Password) == "" {
-		writeError(w, http.StatusBadRequest, "valid email and password are required")
-		return
-	}
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	var user userDTO
-	var passwordHash string
-	err := s.pool.QueryRow(ctx, `
-		SELECT id, email, password, status, is_admin
-		FROM users
-		WHERE email = $1 AND deleted_at IS NULL
-	`, email).Scan(&user.ID, &user.Email, &passwordHash, &user.Status, &user.IsAdmin)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusUnauthorized, "invalid credentials")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "db error")
-		return
-	}
-	if user.Status != "active" || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
-		writeError(w, http.StatusUnauthorized, "invalid credentials")
-		return
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "db unavailable")
-		return
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `UPDATE users SET last_login_at = now(), updated_at = now() WHERE id = $1`, user.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, "login update failed")
-		return
-	}
-	token, expires, err := createSession(ctx, tx, user.ID, r)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "create session failed")
-		return
-	}
-	if err := tx.Commit(ctx); err != nil {
-		writeError(w, http.StatusInternalServerError, "commit failed")
-		return
-	}
-	setSessionCookie(w, token, expires)
-
-	reg, _ := s.registrationForUser(r.Context(), user.ID)
-	writeJSON(w, http.StatusOK, authResponse{User: user, Registration: reg, ExpiresAt: expires})
-}
-
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {
 		ctx, cancel := contextWithTimeout(r.Context(), 2*time.Second)
@@ -337,76 +273,101 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 	session, ok := sessionFromContext(r.Context())
 	if !ok {
-		user, expires, found := s.userFromSession(r.Context(), r)
-		if !found {
-			writeError(w, http.StatusUnauthorized, "unauthenticated")
-			return
-		}
-		session = sessionContextValue{user: user, expires: expires}
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
 	}
 	reg, _ := s.registrationForUser(r.Context(), session.user.ID)
 	writeJSON(w, http.StatusOK, authResponse{User: session.user, Registration: reg, ExpiresAt: session.expires})
 }
 
+// devBypassEnabled reports whether the X-User-Id development bypass may be
+// used. It requires an explicit opt-in and is never available in production.
+//
+// A previous version of this middleware also honoured a hardcoded header
+// (`X-Bypass-Key: originbi-secret-testing`) which granted a full session as
+// any user id, with no credential at all. That was a remotely exploitable
+// authentication bypass — including admin routes — and has been removed. Do
+// not reintroduce a shared-secret bypass: use a real token.
+func devBypassEnabled() bool {
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	if appEnv == "production" || appEnv == "prod" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("DEV_AUTH_BYPASS"))) {
+	case "on", "true", "1":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Bypass-Key") == "originbi-secret-testing" {
-			uidStr := r.Header.Get("X-User-Id")
-			uid, _ := strconv.ParseInt(uidStr, 10, 64)
-			ctx := withSessionContext(r.Context(), userDTO{ID: uid}, time.Now().Add(1*time.Hour))
-			ctx = auth.WithPrincipal(ctx, auth.Principal{
-				UserID: uid,
-				OrgID:  s.defaultOrgID,
-			})
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
 		user, expires, ok := s.userFromBearer(r.Context(), r)
-		if !ok {
-			authMode := strings.ToLower(strings.TrimSpace(os.Getenv("ASSESSMENT_AUTH")))
-			authEnabled := authMode == "on" || authMode == "true" || authMode == "1"
-			if !authEnabled {
-				uidStr := r.Header.Get("X-User-Id")
-				if uidStr != "" {
-					uid, err := strconv.ParseInt(uidStr, 10, 64)
-					if err == nil && uid > 0 {
-						var dbUser userDTO
-						var role *string
-						dbErr := s.pool.QueryRow(r.Context(), `
-							SELECT id, COALESCE(email, ''), role
-							FROM users
-							WHERE id = $1
-							  AND is_active = TRUE
-							  AND is_blocked = FALSE
-						`, uid).Scan(&dbUser.ID, &dbUser.Email, &role)
-						if dbErr == nil {
-							dbUser.Status = "active"
-							if role != nil {
-								switch *role {
-								case "ADMIN", "SUPER_ADMIN", "STAFF":
-									dbUser.IsAdmin = true
-								}
+
+		if !ok && devBypassEnabled() {
+			if uidStr := r.Header.Get("X-User-Id"); uidStr != "" {
+				uid, err := strconv.ParseInt(uidStr, 10, 64)
+				if err == nil && uid > 0 {
+					var dbUser userDTO
+					var role *string
+					dbErr := s.pool.QueryRow(r.Context(), `
+						SELECT id, COALESCE(email, ''), role
+						FROM users
+						WHERE id = $1
+						  AND is_active = TRUE
+						  AND is_blocked = FALSE
+					`, uid).Scan(&dbUser.ID, &dbUser.Email, &role)
+					if dbErr == nil {
+						dbUser.Status = "active"
+						if role != nil {
+							switch *role {
+							case "ADMIN", "SUPER_ADMIN", "STAFF":
+								dbUser.IsAdmin = true
 							}
-							user = dbUser
-							expires = time.Now().Add(24 * time.Hour)
-							ok = true
-						} else {
-							s.logger.Warn("auth: dev-bypass DB lookup failed", "uid", uid, "err", dbErr)
 						}
+						user = dbUser
+						expires = time.Now().Add(24 * time.Hour)
+						ok = true
+						s.logger.Warn("auth: DEV_AUTH_BYPASS used — request authenticated without a token",
+							"user_id", uid, "path", r.URL.Path)
+					} else {
+						s.logger.Warn("auth: dev-bypass DB lookup failed", "uid", uid, "err", dbErr)
 					}
 				}
 			}
 		}
+
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
 		ctx := withSessionContext(r.Context(), user, expires)
 		ctx = auth.WithPrincipal(ctx, auth.Principal{
-			UserID: user.ID,
-			OrgID:  s.defaultOrgID,
+			UserID:  user.ID,
+			OrgID:   s.defaultOrgID,
+			IsAdmin: user.IsAdmin,
 		})
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// adminOnly gates the whole /v1/admin route group.
+//
+// Most admin handlers already call s.requireAdmin themselves, but that is an
+// opt-in check on 31 routes and three of them had been missed — including
+// listActiveAttemptsForProctoring, the live feed of every candidate currently
+// sitting an exam. Enforcing it once at the router makes the guarantee
+// structural: a new /admin route is protected by where it is registered, not by
+// the author remembering a line. The per-handler calls stay as they are.
+func (s *Server) adminOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireAdminPrincipal(w, r); !ok {
+			s.logger.Warn("authorization refused at admin route group",
+				"method", r.Method, "path", r.URL.Path)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -462,104 +423,6 @@ func (s *Server) updateRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 	reg, _ := s.registrationForUser(r.Context(), principal.UserID)
 	writeJSON(w, http.StatusOK, reg)
-}
-
-func (s *Server) bootstrapAdmin(w http.ResponseWriter, r *http.Request) {
-	if !s.limiter.allow(rateKey(r, "bootstrap"), 5, 5*time.Minute) {
-		writeError(w, http.StatusTooManyRequests, tooManyRequestsMessage(5, 5*time.Minute))
-		return
-	}
-	var req bootstrapAdminRequest
-	if !decodeJSON(w, r, &req, maxAuthBodyBytes) {
-		return
-	}
-	token := req.Token
-	if token == "" {
-		token = r.Header.Get("X-Bootstrap-Token")
-	}
-	expectedToken, ok := bootstrapToken()
-	if !ok {
-		writeError(w, http.StatusNotFound, "bootstrap disabled")
-		return
-	}
-	if !constantTimeEqual(token, expectedToken) {
-		writeError(w, http.StatusUnauthorized, "invalid bootstrap token")
-		return
-	}
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	req.Name = strings.TrimSpace(req.Name)
-	if !validEmail(req.Email) || !validPassword(req.Password) {
-		writeError(w, http.StatusBadRequest, "valid email and password are required")
-		return
-	}
-	if req.Name == "" {
-		req.Name = "Platform Admin"
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "password hashing failed")
-		return
-	}
-
-	ctx, cancel := contextWithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "db unavailable")
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	var user userDTO
-	err = tx.QueryRow(ctx, `
-		INSERT INTO users (email, password, is_admin)
-		VALUES ($1, $2, true)
-		ON CONFLICT (email) DO UPDATE
-		SET password = EXCLUDED.password,
-		    is_admin = true,
-		    status = 'active',
-		    updated_at = now(),
-		    deleted_at = NULL
-		RETURNING id, email, status, is_admin
-	`, req.Email, string(hash)).Scan(&user.ID, &user.Email, &user.Status, &user.IsAdmin)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "bootstrap user failed")
-		return
-	}
-
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO registrations (user_id, full_name, gender, country_code, phone, user_role)
-		VALUES ($1, $2, 'OTHER', '+91', '', 'ADMIN')
-		ON CONFLICT (user_id) DO UPDATE
-		SET full_name = EXCLUDED.full_name,
-		    user_role = 'ADMIN',
-		    updated_at = now()
-	`, user.ID, req.Name); err != nil {
-		writeError(w, http.StatusInternalServerError, "bootstrap registration failed")
-		return
-	}
-
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO organization_members (id, org_id, user_id, role)
-		VALUES ($1, '00000000-0000-0000-0000-000000000001', $2, 'platform_admin')
-		ON CONFLICT (org_id, user_id, role) DO NOTHING
-	`, uuid.New(), user.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, "bootstrap membership failed")
-		return
-	}
-
-	tokenValue, expires, err := createSession(ctx, tx, user.ID, r)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "create session failed")
-		return
-	}
-	if err := tx.Commit(ctx); err != nil {
-		writeError(w, http.StatusInternalServerError, "commit failed")
-		return
-	}
-	setSessionCookie(w, tokenValue, expires)
-	reg, _ := s.registrationForUser(r.Context(), user.ID)
-	writeJSON(w, http.StatusOK, authResponse{User: user, Registration: reg, ExpiresAt: expires})
 }
 
 func (s *Server) isAdmin(ctx context.Context, userID int64) bool {
@@ -741,54 +604,8 @@ func (s *Server) userFromBearer(ctx context.Context, r *http.Request) (userDTO, 
 // userFromSession is retained for legacy cookie-based callers (none in the
 // current router after the Cognito migration). Kept compiling against the
 // real `users` schema so it doesn't crash if accidentally invoked.
-func (s *Server) userFromSession(ctx context.Context, r *http.Request) (userDTO, time.Time, bool) {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil || cookie.Value == "" {
-		return userDTO{}, time.Time{}, false
-	}
-	ctx, cancel := contextWithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	var user userDTO
-	var expires time.Time
-	var role *string
-	err = s.pool.QueryRow(ctx, `
-		SELECT u.id, COALESCE(u.email, ''), u.role, us.expires_at
-		FROM user_sessions us
-		JOIN users u ON u.id = us.user_id
-		WHERE us.token_hash = $1
-		  AND us.revoked_at IS NULL
-		  AND us.expires_at > now()
-		  AND u.is_active = TRUE
-		  AND u.is_blocked = FALSE
-	`, hashToken(cookie.Value)).Scan(&user.ID, &user.Email, &role, &expires)
-	if err != nil {
-		return userDTO{}, time.Time{}, false
-	}
-	user.Status = "active"
-	if role != nil {
-		switch *role {
-		case "ADMIN", "SUPER_ADMIN", "STAFF":
-			user.IsAdmin = true
-		}
-	}
-	return user, expires, true
-}
-
 type txExecutor interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
-}
-
-func createSession(ctx context.Context, tx txExecutor, userID int64, r *http.Request) (string, time.Time, error) {
-	token, err := randomToken()
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	expires := time.Now().UTC().Add(sessionTTL)
-	_, err = tx.Exec(ctx, `
-		INSERT INTO user_sessions (id, user_id, token_hash, user_agent, ip_address, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6)
-	`, uuid.New(), userID, hashToken(token), r.UserAgent(), clientIP(r), expires)
-	return token, expires, err
 }
 
 func randomToken() (string, error) {

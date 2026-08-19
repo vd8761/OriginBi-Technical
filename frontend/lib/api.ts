@@ -532,6 +532,58 @@ async function refreshAccessToken(scope: TokenScope): Promise<boolean> {
   return refreshInFlight[scope];
 }
 
+/**
+ * Attaches the bearer token and the non-credential context headers for a
+ * request. Shared by apiFetch and techFetch so there is exactly one place
+ * that decides how a request proves who it is.
+ */
+function applyAuthHeaders(headers: Headers, tokenScope: TokenScope): void {
+  // Both backends verify token_use=access — exam-engine in
+  // internal/auth/cognito.go, assessment-service via CognitoJwtVerifier
+  // ({ tokenUse: 'access' }). An id token is rejected by both with
+  // `token_use "id" is not 'access'`, so there is deliberately NO fallback
+  // to the id token here: it could only ever produce a 401 and burn the
+  // retry below. If the access token is missing we send no Authorization
+  // header and let the request fail cleanly.
+  const token = typeof window !== "undefined"
+    ? window.localStorage.getItem(getTokenKeys(tokenScope).access)
+    : null;
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  
+  // Add X-User-Context / X-User-Id / X-Org-Id for downstream consumers that
+  // read them for context (logging, org scoping).
+  //
+  // These are NOT credentials. exam-engine previously accepted X-User-Id as
+  // proof of identity, which meant anyone could act as any user by setting a
+  // header; that bypass has been removed. Authentication now comes solely
+  // from the Bearer access token above — never re-add a header-based
+  // identity path here or in the engine.
+  if (typeof window !== "undefined") {
+    const userData = window.localStorage.getItem("user");
+    if (userData) {
+      headers.set("X-User-Context", userData);
+      try {
+        const parsed = JSON.parse(userData);
+        // user.id can come back as either a number (Postgres bigint serialized
+        // as JSON number) or a string (when it round-trips through localStorage
+        // that was originally written as a string). Coerce + validate either.
+        const rawId = parsed?.id;
+        const idStr = typeof rawId === "number" ? String(rawId) : typeof rawId === "string" ? rawId : "";
+        if (idStr && /^\d+$/.test(idStr) && Number(idStr) > 0 && !headers.has("X-User-Id")) {
+          headers.set("X-User-Id", idStr);
+        }
+        if (parsed && typeof parsed.orgId === "string" && parsed.orgId && !headers.has("X-Org-Id")) {
+          headers.set("X-Org-Id", parsed.orgId);
+        }
+      } catch {
+        // Stored user payload is not JSON — skip header injection.
+      }
+    }
+  }
+}
+
 export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T> {
   const { baseOverride, auth = true, _retried, ...rest } = init;
   const tokenScope = resolveTokenScope(path);
@@ -546,48 +598,7 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     headers.set("Content-Type", "application/json");
   }
   if (auth) {
-    // The exam-engine's Cognito verifier (backend/exam-engine/internal/auth/
-    // cognito.go) requires token_use=access — sending the id token gets
-    // rejected with `token_use "id" is not 'access'`. Prefer the access
-    // token; fall back to the id token only if access isn't stored (e.g.
-    // older sessions written before login was fixed).
-    const token = typeof window !== "undefined"
-      ? (
-          window.localStorage.getItem(getTokenKeys(tokenScope).access) ||
-          window.localStorage.getItem(getTokenKeys(tokenScope).id)
-        )
-      : null;
-    if (token && !headers.has("Authorization")) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-    
-    // Add X-User-Context if user data exists. The exam-engine's auth.Middleware
-    // (backend/exam-engine/internal/auth/auth.go) trusts an upstream gateway
-    // and reads X-User-Id / X-Org-Id directly — when the frontend talks to the
-    // engine without going through the NestJS gateway, we must inject those
-    // headers ourselves from the stored user object or every request 401s.
-    if (typeof window !== "undefined") {
-      const userData = window.localStorage.getItem("user");
-      if (userData) {
-        headers.set("X-User-Context", userData);
-        try {
-          const parsed = JSON.parse(userData);
-          // user.id can come back as either a number (Postgres bigint serialized
-          // as JSON number) or a string (when it round-trips through localStorage
-          // that was originally written as a string). Coerce + validate either.
-          const rawId = parsed?.id;
-          const idStr = typeof rawId === "number" ? String(rawId) : typeof rawId === "string" ? rawId : "";
-          if (idStr && /^\d+$/.test(idStr) && Number(idStr) > 0 && !headers.has("X-User-Id")) {
-            headers.set("X-User-Id", idStr);
-          }
-          if (parsed && typeof parsed.orgId === "string" && parsed.orgId && !headers.has("X-Org-Id")) {
-            headers.set("X-Org-Id", parsed.orgId);
-          }
-        } catch {
-          // Stored user payload is not JSON — skip header injection.
-        }
-      }
-    }
+    applyAuthHeaders(headers, tokenScope);
   }
   const base =
     path.startsWith("/admin-api") ||
@@ -647,6 +658,54 @@ export async function apiFetch<T>(path: string, init: FetchOpts = {}): Promise<T
     throw new ApiError(res.status, msg, data?.__raw, data);
   }
   return data as T;
+}
+
+/**
+ * Authenticated `fetch` against the assessment-service (tech) API.
+ *
+ * Returns a plain `Response` rather than parsed JSON, deliberately: the
+ * candidate exam engines were written against raw `fetch` and branch on
+ * `res.ok` / `res.status` themselves. Giving them a drop-in replacement lets
+ * every one of those call sites start sending a bearer token without also
+ * rewriting its error handling — the risky part of the change.
+ *
+ * Prefer `apiFetch` for new code. Use this only where an existing raw-`fetch`
+ * call site is being migrated.
+ *
+ * Pass a service-relative path (`/api/assessment/...`); the base URL is
+ * supplied here so no caller has to interpolate `API_BASE` again.
+ */
+export async function techFetch(
+  path: string,
+  init: RequestInit = {},
+  _retried = false,
+): Promise<Response> {
+  const tokenScope: TokenScope = resolveTokenScope(path);
+  if (!_retried && isAccessTokenExpired(tokenScope)) {
+    await refreshAccessToken(tokenScope);
+  }
+
+  const headers = new Headers(init.headers);
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (init.body && !isFormData && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  applyAuthHeaders(headers, tokenScope);
+
+  const res = await fetch(`${TECH_API_BASE || ""}${path}`, {
+    ...init,
+    headers,
+    credentials: "omit",
+  });
+
+  // One reactive refresh + replay, mirroring apiFetch. Without this a token
+  // that expires mid-exam would fail the next answer save outright.
+  if (res.status === 401 && !_retried && getAccessToken(tokenScope)) {
+    if (await refreshAccessToken(tokenScope)) {
+      return techFetch(path, init, true);
+    }
+  }
+  return res;
 }
 
 interface ErrorEnvelope {
@@ -967,6 +1026,10 @@ export interface ResultQuestion {
 export interface AssessmentResult {
   attemptId: string;
   assignmentRef: string;
+  /** MCQ module slug ("aptitude", "grammar", ...); absent for coding results. */
+  module?: string;
+  /** Display name. Falls back to the coding-style "<language> Coding" heading. */
+  title?: string;
   language: string;
   status: string;
   score: number;
@@ -983,13 +1046,43 @@ export interface ResultsResponse {
   results: AssessmentResult[];
 }
 
+/**
+ * Every graded result for the signed-in candidate.
+ *
+ * Two backends own results and neither has all of them: exam-engine's
+ * `attempts` table holds coding, and the assessment-service `tech_*` tables
+ * hold the four MCQ modules. "My Performance" used to read only the first, so
+ * it was empty for anyone who had not taken a coding assessment. Both are
+ * fetched and merged here, newest first.
+ *
+ * A failure on either side degrades to that side contributing nothing rather
+ * than blanking the page.
+ */
 export async function getMyResults(): Promise<ResultsResponse> {
-  if (!HAS_EXAM_API || !getAccessToken("user")) return { passPercent: 90, results: [] };
-  try {
-    return await apiFetch<ResultsResponse>("/v1/me/results");
-  } catch {
-    return { passPercent: 90, results: [] };
-  }
+  if (!getAccessToken("user")) return { passPercent: 90, results: [] };
+
+  const [coding, tech] = await Promise.allSettled([
+    HAS_EXAM_API
+      ? apiFetch<ResultsResponse>("/v1/me/results")
+      : Promise.resolve<ResultsResponse>({ passPercent: 90, results: [] }),
+    HAS_TECH_API
+      ? apiFetch<ResultsResponse>("/api/assessment/me/results", {
+          baseOverride: TECH_API_BASE,
+        })
+      : Promise.resolve<ResultsResponse>({ passPercent: 90, results: [] }),
+  ]);
+
+  const unwrap = (r: PromiseSettledResult<ResultsResponse>): ResultsResponse | null =>
+    r.status === "fulfilled" ? r.value : null;
+  const a = unwrap(coding);
+  const b = unwrap(tech);
+
+  return {
+    passPercent: a?.passPercent ?? b?.passPercent ?? 90,
+    results: [...(a?.results ?? []), ...(b?.results ?? [])].sort((x, y) =>
+      (y.submittedAt ?? "").localeCompare(x.submittedAt ?? ""),
+    ),
+  };
 }
 
 export interface Certificate {
@@ -1649,7 +1742,6 @@ export async function getPurchasedAssessments(email: string): Promise<{ purchase
     method: "POST",
     body: JSON.stringify({ email }),
     baseOverride: TECH_API_BASE,
-    auth: false,
   });
 }
 
@@ -1661,12 +1753,11 @@ export async function getLatestSubmittedResult(
   const tokenParam = attemptToken
     ? `&attemptToken=${encodeURIComponent(attemptToken)}`
     : "";
+  // `userId` is a hint, not an authorization: the service resolves the caller
+  // from the bearer token and ignores it unless the caller is an admin.
   return apiFetch<any>(
     `/api/assessment/${module}/latest-result?userId=${encodeURIComponent(userId)}${tokenParam}`,
-    {
-      baseOverride: TECH_API_BASE,
-      auth: false,
-    },
+    { baseOverride: TECH_API_BASE },
   );
 }
 
@@ -1800,6 +1891,80 @@ export async function listAdminUsers(
   const suffix = qs.toString();
   return apiFetch<AdminUsersResponse>(
     `/api/admin/users${suffix ? `?${suffix}` : ""}`,
+    { baseOverride: TECH_API_BASE },
+  );
+}
+
+// ── Admin results ─────────────────────────────────────────────────────────
+
+export interface AdminResultRow {
+  module: string;
+  moduleLabel: string;
+  attemptToken: string;
+  userId: number;
+  candidateName: string;
+  candidateEmail: string;
+  assessmentCode: string;
+  assessmentName: string;
+  mode: string;
+  status: string;
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  passed: boolean;
+  timeTakenSeconds: number;
+  submittedAt: string | null;
+}
+
+export interface AdminResultsResponse {
+  results: AdminResultRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  passPercent: number;
+  counts: {
+    total: number;
+    passed: number;
+    failed: number;
+    byModule: Record<string, number>;
+  };
+}
+
+export interface ListAdminResultsParams {
+  q?: string;
+  module?: string;
+  mode?: "trial" | "main";
+  outcome?: "passed" | "failed";
+  userId?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listAdminResults(
+  params: ListAdminResultsParams = {},
+): Promise<AdminResultsResponse> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.module) qs.set("module", params.module);
+  if (params.mode) qs.set("mode", params.mode);
+  if (params.outcome) qs.set("outcome", params.outcome);
+  if (params.userId != null) qs.set("userId", String(params.userId));
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  const suffix = qs.toString();
+  return apiFetch<AdminResultsResponse>(
+    `/api/admin/results${suffix ? `?${suffix}` : ""}`,
+    { baseOverride: TECH_API_BASE },
+  );
+}
+
+/** Section breakdown and per-question review for one attempt. */
+export async function getAdminResultDetail(
+  module: string,
+  attemptToken: string,
+): Promise<any> {
+  return apiFetch<any>(
+    `/api/admin/results/${encodeURIComponent(module)}/${encodeURIComponent(attemptToken)}`,
     { baseOverride: TECH_API_BASE },
   );
 }

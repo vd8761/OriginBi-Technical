@@ -10,8 +10,10 @@ import {
 } from '@nestjs/common';
 import { GroupsService } from '../services/groups.service';
 import { CognitoAuthGuard } from '../../../auth/cognito-auth.guard';
+import { Roles } from '../../../auth/roles.decorator';
 
 @Controller('admin/groups')
+@Roles('ADMIN')
 @UseGuards(CognitoAuthGuard)
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
