@@ -26,13 +26,18 @@ type AccessTokenVerifier = ReturnType<
  * the handler/controller is annotated `@Public()`. Decoded claims are
  * attached to `req.user` for downstream consumers.
  *
- * Behavior is gated by `ASSESSMENT_AUTH`:
- *   - `on`  → strict verification; missing/invalid token → 401.
- *   - any other value (default) → guard is a no-op so local dev keeps
- *     working without Cognito wiring. The startup log makes the active
- *     mode obvious.
+ * Behavior is gated by `ASSESSMENT_AUTH`, which defaults to ON. Authentication
+ * has to be switched off deliberately, and never in production:
+ *   - unset, `on`, `true`, `1` → strict verification; missing/invalid → 401.
+ *   - `off`, `false`, `0`      → passthrough, for local dev without Cognito
+ *                                wiring. Refused when NODE_ENV=production.
  *
- * Required env when `ASSESSMENT_AUTH=on`:
+ * This used to default to passthrough, which meant a missing env var silently
+ * disabled authentication for the entire service. Defaults must fail closed:
+ * forgetting to set a variable should break a deployment loudly, not quietly
+ * publish every endpoint.
+ *
+ * Required env (unless explicitly disabled):
  *   - `COGNITO_USER_POOL_ID`
  *   - `COGNITO_APP_CLIENT_ID`
  */
@@ -46,13 +51,24 @@ export class CognitoAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     config: ConfigService,
   ) {
-    const mode = (config.get<string>('ASSESSMENT_AUTH') ?? '').toLowerCase();
-    this.enabled = mode === 'on' || mode === 'true' || mode === '1';
+    const mode = (config.get<string>('ASSESSMENT_AUTH') ?? '').trim().toLowerCase();
+    const explicitlyDisabled =
+      mode === 'off' || mode === 'false' || mode === '0';
+    const isProduction =
+      (config.get<string>('NODE_ENV') ?? '').toLowerCase() === 'production';
+
+    if (explicitlyDisabled && isProduction) {
+      throw new Error(
+        'ASSESSMENT_AUTH is disabled but NODE_ENV=production. Refusing to start an unauthenticated assessment service.',
+      );
+    }
+
+    this.enabled = !explicitlyDisabled;
 
     if (!this.enabled) {
       this.verifier = null;
       this.logger.warn(
-        'ASSESSMENT_AUTH is not "on" — Cognito auth guard is in passthrough mode. Set ASSESSMENT_AUTH=on to require JWTs.',
+        'ASSESSMENT_AUTH is explicitly disabled — Cognito auth guard is in passthrough mode. This is only permitted outside production.',
       );
       return;
     }
@@ -61,7 +77,8 @@ export class CognitoAuthGuard implements CanActivate {
     const clientId = config.get<string>('COGNITO_APP_CLIENT_ID');
     if (!userPoolId || !clientId) {
       throw new Error(
-        'ASSESSMENT_AUTH=on but COGNITO_USER_POOL_ID / COGNITO_APP_CLIENT_ID are not configured.',
+        'Cognito auth is enabled but COGNITO_USER_POOL_ID / COGNITO_APP_CLIENT_ID are not configured. ' +
+          'Set them, or set ASSESSMENT_AUTH=off for local development.',
       );
     }
 

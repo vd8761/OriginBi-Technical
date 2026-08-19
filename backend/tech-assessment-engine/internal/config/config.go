@@ -14,6 +14,14 @@ type Config struct {
 	DBName      string
 	DBPort      string
 	DatabaseURL string
+
+	CognitoRegion     string
+	CognitoUserPoolID string
+	CognitoClientID   string
+
+	// AllowedOrigins is the CORS allowlist, comma-separated. Empty means no
+	// cross-origin browser access is permitted.
+	AllowedOrigins string
 }
 
 func LoadConfig() *Config {
@@ -40,5 +48,11 @@ func LoadConfig() *Config {
 		DBName:      os.Getenv("DB_NAME"),
 		DBPort:      os.Getenv("DB_PORT"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
+
+		CognitoRegion:     os.Getenv("COGNITO_REGION"),
+		CognitoUserPoolID: os.Getenv("COGNITO_USER_POOL_ID"),
+		CognitoClientID:   os.Getenv("COGNITO_CLIENT_ID"),
+
+		AllowedOrigins: os.Getenv("ALLOWED_ORIGINS"),
 	}
 }

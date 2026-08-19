@@ -16,7 +16,10 @@ SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
+-- NOTE: the pg_dump line `SELECT pg_catalog.set_config('search_path', '', false)`
+-- was removed here. It clears search_path for the whole session, which breaks
+-- the migrator's own bookkeeping INSERT into assessment_db_version. Every
+-- object below is explicitly public.-qualified, so it was not doing any work.
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;

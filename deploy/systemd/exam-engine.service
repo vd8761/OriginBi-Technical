@@ -4,8 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+# Runs as a dedicated unprivileged account, not root. Create it once with:
+#   useradd --system --no-create-home --shell /usr/sbin/nologin originbi
+#   chown -R originbi: /home/OriginBi-Technical
+User=originbi
+Group=originbi
 WorkingDirectory=/home/OriginBi-Technical/backend/exam-engine
+# .env.local holds AWS and database credentials — keep it 0400 and owned by
+# the service account: chmod 400 .env.local && chown originbi: .env.local
 EnvironmentFile=/home/OriginBi-Technical/backend/exam-engine/.env.local
 ExecStart=/home/OriginBi-Technical/backend/exam-engine/exam-engine
 Restart=always
@@ -13,6 +19,22 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=exam-engine
+
+# Sandboxing. The service needs only its own directory and outbound network.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/OriginBi-Technical/backend/exam-engine
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
 
 [Install]
 WantedBy=multi-user.target

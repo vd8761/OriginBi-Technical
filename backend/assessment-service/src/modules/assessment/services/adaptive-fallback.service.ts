@@ -47,7 +47,7 @@ export class AdaptiveFallbackService {
 
     if (!adaptiveTables) {
       recommendations.push(
-        'Run the block-adaptive-schema.sql migration to create adaptive tables',
+        'Adaptive tables are missing. Start the service with RUN_MIGRATIONS=true so db/migrations are applied (001_baseline creates them).',
       );
     }
 

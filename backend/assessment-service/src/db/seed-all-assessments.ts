@@ -57,10 +57,10 @@ const aptitudeQuestions = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const communicationQuestions = [
-    // Reading (3)
-    { skill: "reading_mcq", difficulty: "medium", question_text: "Read passage about technology. Main idea?", marks: 10, explanation: "Tech affects workplace productivity" },
-    { skill: "reading_mcq", difficulty: "medium", question_text: "Based on article, inference about author's AI view?", marks: 10, explanation: "Author has balanced view" },
-    { skill: "reading_mcq", difficulty: "hard", question_text: "Analyze text tone: optimistic, pessimistic, or neutral?", marks: 15, explanation: "Neutral with slight optimism" },
+    // Reading (3) — MCQ tasks carry options; they are unanswerable without them.
+    { skill: "reading_mcq", difficulty: "medium", question_text: "Read passage about technology. Main idea?", marks: 10, explanation: "Tech affects workplace productivity", options: [{ text: "Technology affects workplace productivity", isCorrect: true }, { text: "Technology is too expensive", isCorrect: false }, { text: "Workplaces should avoid new tools", isCorrect: false }, { text: "Productivity cannot be measured", isCorrect: false }] },
+    { skill: "reading_mcq", difficulty: "medium", question_text: "Based on article, inference about author's AI view?", marks: 10, explanation: "Author has balanced view", options: [{ text: "The author is balanced about AI", isCorrect: true }, { text: "The author rejects AI entirely", isCorrect: false }, { text: "The author is uncritically enthusiastic", isCorrect: false }, { text: "The author does not mention AI", isCorrect: false }] },
+    { skill: "reading_mcq", difficulty: "hard", question_text: "Analyze text tone: optimistic, pessimistic, or neutral?", marks: 15, explanation: "Neutral with slight optimism", options: [{ text: "Neutral with slight optimism", isCorrect: true }, { text: "Strongly pessimistic", isCorrect: false }, { text: "Sarcastic throughout", isCorrect: false }, { text: "Openly hostile", isCorrect: false }] },
     // Writing (3)
     { skill: "writing", difficulty: "easy", question_text: "Write formal email to manager requesting time off (min 100 words).", marks: 10, explanation: "Assess clarity and professionalism" },
     { skill: "writing", difficulty: "medium", question_text: "Write persuasive paragraph (150-200 words) on remote work policies.", marks: 15, explanation: "Assess argument structure" },
@@ -70,9 +70,9 @@ const communicationQuestions = [
     { skill: "speaking", difficulty: "medium", question_text: "Describe challenging work situation and resolution (2-3 min).", marks: 15, explanation: "Assess storytelling ability" },
     { skill: "speaking", difficulty: "hard", question_text: "Present argument on controversial topic (3 min) with reasoning.", marks: 20, explanation: "Assess persuasive speaking" },
     // Listening (3)
-    { skill: "listening_mcq", difficulty: "easy", question_text: "Listen to simple conversation. Main topic?", marks: 10, explanation: "Basic comprehension" },
-    { skill: "listening_mcq", difficulty: "medium", question_text: "Listen to business meeting. Budget decision made?", marks: 15, explanation: "Extract specific information" },
-    { skill: "listening_mcq", difficulty: "hard", question_text: "Listen to academic lecture excerpt. Summarize key arguments.", marks: 20, explanation: "Comprehension of complex content" },
+    { skill: "listening_mcq", difficulty: "easy", question_text: "Listen to simple conversation. Main topic?", marks: 10, explanation: "Basic comprehension", options: [{ text: "Planning a team lunch", isCorrect: true }, { text: "Filing a tax return", isCorrect: false }, { text: "Booking a flight", isCorrect: false }, { text: "Reporting a system outage", isCorrect: false }] },
+    { skill: "listening_mcq", difficulty: "medium", question_text: "Listen to business meeting. Budget decision made?", marks: 15, explanation: "Extract specific information", options: [{ text: "The budget was approved with conditions", isCorrect: true }, { text: "The budget was rejected outright", isCorrect: false }, { text: "The budget was doubled", isCorrect: false }, { text: "No budget was discussed", isCorrect: false }] },
+    { skill: "listening_mcq", difficulty: "hard", question_text: "Listen to academic lecture excerpt. Summarize key arguments.", marks: 20, explanation: "Comprehension of complex content", options: [{ text: "Evidence should drive policy decisions", isCorrect: true }, { text: "Policy should ignore evidence", isCorrect: false }, { text: "The lecture had no argument", isCorrect: false }, { text: "Only anecdotes matter", isCorrect: false }] },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,12 +205,30 @@ async function seedCommunication(client: any, adminUserId: number) {
     let idx = 0;
     for (const question of communicationQuestions) {
         const mode = idx % 3 === 0 ? "trial" : "main"; // 33% trial, 66% main
-        await client.query(
+        const questionResult = await client.query(
             `INSERT INTO tech_grammar_questions (assessment_id, task_type, difficulty, question_text, reference_answer, rubric_json, marks, negative_marks, status, mode, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'active', $8, NOW(), NOW())
-             ON CONFLICT DO NOTHING`,
+             RETURNING grammar_question_id`,
             [assessmentId, question.skill, question.difficulty, question.question_text, "AI evaluated response", JSON.stringify({ criteria: ["grammar", "vocabulary", "coherence"] }), question.marks, mode]
         );
+        const questionId = questionResult.rows[0].grammar_question_id;
+
+        // Only the MCQ task types have options. speaking/writing are answered
+        // with audio/free text and scored against the rubric, so they have
+        // none — but listening_mcq and reading_mcq are unanswerable without
+        // them, which previously made the whole module impossible to complete.
+        let correctOptionId: number | null = null;
+        for (const option of question.options ?? []) {
+            const optionResult = await client.query(
+                `INSERT INTO tech_grammar_options (grammar_question_id, option_text, created_at) VALUES ($1, $2, NOW()) RETURNING option_id`,
+                [questionId, option.text]
+            );
+            if (option.isCorrect) correctOptionId = optionResult.rows[0].option_id;
+        }
+
+        if (correctOptionId) {
+            await client.query(`UPDATE tech_grammar_questions SET correct_option_id = $1, updated_at = NOW() WHERE grammar_question_id = $2`, [correctOptionId, questionId]);
+        }
         idx++;
     }
     console.log(`Seeded ${communicationQuestions.length} communication questions`);

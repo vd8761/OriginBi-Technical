@@ -1,3 +1,22 @@
+-- Tech assessment module schema: assessments, questions, options, attempts and
+-- attempt/question junctions for the aptitude, grammar, mnc and role modules.
+--
+-- These 17 tables were previously defined only in backend/db/schema.sql, which
+-- no migrator ran — it had to be applied by hand. A freshly migrated database
+-- was therefore missing the entire tech_* data model, and the services failed
+-- against it (tech-assessment-engine swallowed the errors and reported zeros).
+-- Folding it in here makes a fresh database complete and keeps the schema in
+-- lockstep with the code.
+--
+-- Every statement is idempotent, so this applies cleanly to existing databases
+-- that already have these objects.
+--
+-- ORDERING: these tables carry foreign keys to users(id), which is created by
+-- exam-engine's goose baseline. exam-engine must have migrated the database
+-- before assessment-service applies this file. On a shared database that means
+-- starting exam-engine first on a fresh install; applying this against a
+-- database with no users table fails on the first foreign key.
+
 -- Tech Assessment schema (PostgreSQL)
 -- NOTE: This schema assumes an existing users table with users.id.
 
@@ -529,4 +548,195 @@ BEGIN
     ) THEN
         ALTER TABLE tech_role_questions ADD COLUMN explanation TEXT NULL;
     END IF;
+END $$;
+
+-- Add mode column to the module question tables if it doesn't exist.
+-- The services filter every question query by mode ('main' = graded run,
+-- 'trial' = practice run); see ModuleConfigs in tech-assessment-engine and
+-- the attempts-stats split. Defaults to 'main' so pre-existing rows stay
+-- visible to the graded flow.
+DO $$
+DECLARE
+    tbl TEXT;
+BEGIN
+    FOREACH tbl IN ARRAY ARRAY[
+        'tech_aptitude_questions',
+        'tech_grammar_questions',
+        'tech_mnc_questions',
+        'tech_role_questions'
+    ] LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = tbl AND column_name = 'mode'
+        ) THEN
+            EXECUTE format(
+                'ALTER TABLE %I ADD COLUMN mode VARCHAR(16) NOT NULL DEFAULT ''main''',
+                tbl
+            );
+            EXECUTE format(
+                'ALTER TABLE %I ADD CONSTRAINT %I CHECK (mode IN (''main'', ''trial''))',
+                tbl, tbl || '_mode_check'
+            );
+            EXECUTE format(
+                'CREATE INDEX IF NOT EXISTS %I ON %I(assessment_id, status, mode)',
+                'idx_' || tbl || '_mode', tbl
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- Add the shared category/subcategory pair the services select on every
+-- module question query (getAttemptQuestionsByConfig). Only the columns
+-- genuinely absent are added; the rest already ship above.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tech_aptitude_questions' AND column_name = 'category'
+    ) THEN
+        ALTER TABLE tech_aptitude_questions ADD COLUMN category VARCHAR(120) NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tech_grammar_questions' AND column_name = 'category'
+    ) THEN
+        ALTER TABLE tech_grammar_questions ADD COLUMN category VARCHAR(120) NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tech_grammar_questions' AND column_name = 'subcategory'
+    ) THEN
+        ALTER TABLE tech_grammar_questions ADD COLUMN subcategory VARCHAR(120) NULL;
+    END IF;
+END $$;
+
+-- tech_assessments.categories: jsonb list of category weights read back during
+-- submission scoring (see TechAssessment.Categories / the submit query's
+-- assessment_categories alias).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tech_assessments' AND column_name = 'categories'
+    ) THEN
+        ALTER TABLE tech_assessments ADD COLUMN categories JSONB NULL;
+    END IF;
+END $$;
+
+-- Add mode to the module ATTEMPT tables.
+--
+-- assessment-service records which run an attempt belongs to and reads it back
+-- (`SELECT mode FROM <attempts> WHERE attempt_token = ...`), and its attempt
+-- inserts name the column explicitly. Some call sites guard with a runtime
+-- column-existence check and some do not, so a database without this column
+-- fails on starting an attempt.
+DO $$
+DECLARE
+    tbl TEXT;
+BEGIN
+    FOREACH tbl IN ARRAY ARRAY[
+        'tech_aptitude_attempts',
+        'tech_grammar_attempts',
+        'tech_mnc_attempts',
+        'tech_role_attempts'
+    ] LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = tbl AND column_name = 'mode'
+        ) THEN
+            EXECUTE format(
+                'ALTER TABLE %I ADD COLUMN mode VARCHAR(16) NOT NULL DEFAULT ''main''',
+                tbl
+            );
+            EXECUTE format(
+                'ALTER TABLE %I ADD CONSTRAINT %I CHECK (mode IN (''main'', ''trial''))',
+                tbl, tbl || '_mode_check'
+            );
+            EXECUTE format(
+                'CREATE INDEX IF NOT EXISTS %I ON %I(user_id, mode, status)',
+                'idx_' || tbl || '_user_mode', tbl
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- Remaining JSONB configuration columns the services read.
+--
+-- tech_assessments carries per-assessment configuration that both
+-- assessment-service and exam-engine select by name: block/adaptive settings,
+-- which question kinds are enabled, and per-difficulty negative marking. The
+-- question tables carry a free-form metadata blob whose `kind` key selects the
+-- MCQ variant (mcq / msq / tf / numerical).
+--
+-- All are nullable with sensible defaults so existing rows keep their current
+-- behaviour: no block mode, no adaptive mode, all question kinds enabled.
+DO $$
+DECLARE
+    tbl TEXT;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'tech_assessments' AND column_name = 'block_config') THEN
+        ALTER TABLE tech_assessments ADD COLUMN block_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'tech_assessments' AND column_name = 'adaptive_config') THEN
+        ALTER TABLE tech_assessments ADD COLUMN adaptive_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'tech_assessments' AND column_name = 'enabled_question_types') THEN
+        ALTER TABLE tech_assessments ADD COLUMN enabled_question_types JSONB NOT NULL DEFAULT '{}'::jsonb;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'tech_assessments' AND column_name = 'difficulty_negative_marks') THEN
+        ALTER TABLE tech_assessments ADD COLUMN difficulty_negative_marks JSONB NULL;
+    END IF;
+
+    FOREACH tbl IN ARRAY ARRAY[
+        'tech_aptitude_questions',
+        'tech_grammar_questions',
+        'tech_mnc_questions',
+        'tech_role_questions'
+    ] LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = tbl AND column_name = 'metadata'
+        ) THEN
+            EXECUTE format(
+                'ALTER TABLE %I ADD COLUMN metadata JSONB NOT NULL DEFAULT ''{}''::jsonb',
+                tbl
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- Per-answer metadata on the attempt/question junctions.
+--
+-- assessment-service stores the submitted answer payload here (selected
+-- option(s), free text, audio reference) and selects it back as
+-- `attempt_metadata` when resuming or reviewing an attempt.
+DO $$
+DECLARE
+    tbl TEXT;
+BEGIN
+    FOREACH tbl IN ARRAY ARRAY[
+        'tech_aptitude_attempt_questions',
+        'tech_grammar_attempt_questions',
+        'tech_mnc_attempt_questions',
+        'tech_role_attempt_questions'
+    ] LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = tbl AND column_name = 'metadata'
+        ) THEN
+            EXECUTE format(
+                'ALTER TABLE %I ADD COLUMN metadata JSONB NOT NULL DEFAULT ''{}''::jsonb',
+                tbl
+            );
+        END IF;
+    END LOOP;
 END $$;

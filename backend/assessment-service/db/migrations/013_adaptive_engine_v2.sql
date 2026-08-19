@@ -1,3 +1,31 @@
+-- Adaptive engine v2: snapshot-based marks blueprint.
+--
+-- Adds the configuration, metrics and timing columns the v2 adaptive module
+-- reads. Previously this lived at backend/db/003_adaptive_engine_v2.sql, which
+-- no migrator ran — it had to be applied by hand, and on this database it never
+-- was. Every one of these columns was missing, so the whole v2 adaptive path
+-- (block generation, snapshots, analytics) failed against a migrated database.
+-- The service's own /api/adaptive/v2/health endpoint reports "degraded" and
+-- names this migration when they are absent.
+--
+-- The tables themselves come from 001_baseline; this only extends them.
+--
+-- Idempotent (ADD COLUMN IF NOT EXISTS / CREATE ... IF NOT EXISTS), so it is
+-- safe on databases where some columns were already applied by hand.
+
+-- The triggers below call update_updated_at_column(). That function was only
+-- ever defined in backend/db/block-adaptive-schema.sql, another loose file no
+-- migrator ran, so this migration failed on a real database. Migrations have to
+-- be self-contained — define it here rather than depending on a hand-applied
+-- file being present.
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================================
 -- Migration 003: Snapshot-Based Marks Blueprint Adaptive Engine
 -- Idempotent — safe to run multiple times.
@@ -203,3 +231,18 @@ END $$;
 --     'block_snapshots','adaptive_question_timing',
 --     'adaptive_blueprint','adaptive_subcategory_coverage'
 --   );
+
+-- adaptive_enabled is the master switch the adaptive module reads before it
+-- will build a blueprint or generate blocks. It was missing from the original
+-- 003 file even though every settings query selects it, so the adaptive
+-- settings endpoint failed outright.
+ALTER TABLE tech_assessments
+  ADD COLUMN IF NOT EXISTS adaptive_enabled BOOLEAN NOT NULL DEFAULT false;
+
+-- question_limit and metadata are both selected by the adaptive block
+-- generator's assessment lookup, so their absence broke block generation
+-- outright. question_limit optionally caps how many questions an assessment
+-- serves (NULL = no cap); metadata is a free-form per-assessment blob.
+ALTER TABLE tech_assessments
+  ADD COLUMN IF NOT EXISTS question_limit INT   NULL,
+  ADD COLUMN IF NOT EXISTS metadata       JSONB NOT NULL DEFAULT '{}'::jsonb;

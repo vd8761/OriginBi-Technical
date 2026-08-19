@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 	"tech-assessment-engine/internal/models"
 	"tech-assessment-engine/internal/repository"
@@ -22,6 +21,51 @@ type AssessmentService struct{}
 
 func NewAssessmentService() *AssessmentService {
 	return &AssessmentService{}
+}
+
+// Sentinel errors so handlers can map failures to status codes without
+// string-matching, and without leaking driver detail to callers.
+var (
+	ErrAttemptNotFound    = errors.New("attempt not found")
+	ErrAttemptForbidden   = errors.New("attempt belongs to another user")
+	ErrModuleUnsupported  = errors.New("module is not supported")
+	ErrAssessmentNotFound = errors.New("assessment not found")
+)
+
+// moduleConfig resolves the caller-supplied module name to its table config.
+// "communication" is the public name for the grammar module.
+func moduleConfig(module string) (string, models.ModuleConfig, error) {
+	dbModule := module
+	if module == "communication" {
+		dbModule = "grammar"
+	}
+	config, ok := models.ModuleConfigs[dbModule]
+	if !ok {
+		return "", models.ModuleConfig{}, ErrModuleUnsupported
+	}
+	return dbModule, config, nil
+}
+
+// loadOwnedAttempt fetches an attempt by token and verifies it belongs to
+// userID. Ownership is checked in the query rather than after the fact so a
+// token for someone else's attempt is indistinguishable from a bad token
+// until we know the row exists.
+func loadOwnedAttempt(db *gorm.DB, config models.ModuleConfig, token string, userID int64, extraSelect, extraJoin string) (map[string]interface{}, error) {
+	var attempt map[string]interface{}
+	query := fmt.Sprintf(`SELECT a.*%s FROM %s a%s WHERE a.attempt_token = ?`,
+		extraSelect, config.Attempts, extraJoin)
+	if err := db.Raw(query, token).Scan(&attempt).Error; err != nil {
+		return nil, err
+	}
+	if len(attempt) == 0 {
+		return nil, ErrAttemptNotFound
+	}
+
+	ownerID, ok := attempt["user_id"].(int64)
+	if !ok || ownerID != userID {
+		return nil, ErrAttemptForbidden
+	}
+	return attempt, nil
 }
 
 // generateUUID returns a version 4 random UUID string
@@ -73,53 +117,10 @@ func shuffleWithSeed[T any](items []T, seed string) []T {
 	return array
 }
 
-// resolveUserId selects target or default user_id from DB. Supports numeric user ID and email string.
-func (s *AssessmentService) resolveUserId(tx *gorm.DB, userId interface{}) (int64, error) {
-	if userId != nil {
-		switch v := userId.(type) {
-		case int64:
-			return v, nil
-		case int:
-			return int64(v), nil
-		case float64:
-			return int64(v), nil
-		case *int64:
-			if v != nil {
-				return *v, nil
-			}
-		case string:
-			trimmed := strings.TrimSpace(v)
-			if trimmed != "" {
-				// Try parsing as integer
-				if parsed, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
-					return parsed, nil
-				}
-				// Otherwise, treat as email if it contains '@'
-				if strings.Contains(trimmed, "@") {
-					var id int64
-					err := tx.Raw("SELECT id FROM users WHERE email = ?", trimmed).Scan(&id).Error
-					if err == nil && id > 0 {
-						return id, nil
-					}
-				}
-			}
-		}
-	}
-	var id int64
-	err := tx.Raw("SELECT id FROM users ORDER BY id LIMIT 1").Scan(&id).Error
-	if err != nil {
-		return 0, errors.New("no users found in the database")
-	}
-	return id, nil
-}
 
 // GetAttemptsStats retrieves attempt counts per module type for a user
-func (s *AssessmentService) GetAttemptsStats(userId interface{}) (map[string]map[string]int64, error) {
+func (s *AssessmentService) GetAttemptsStats(resolvedUserId int64) (map[string]map[string]int64, error) {
 	db := repository.GetDB()
-	resolvedUserId, err := s.resolveUserId(db, userId)
-	if err != nil {
-		return nil, err
-	}
 
 	stats := make(map[string]map[string]int64)
 
@@ -189,22 +190,19 @@ func (s *AssessmentService) getFallbackAssessment(tx *gorm.DB, dbModule string, 
 	return models.TechAssessment{}
 }
 
-// StartAttempt starts an assessment attempt for standard models
-func (s *AssessmentService) StartAttempt(module string, req models.StartAttemptRequest) (*models.StartAttemptResponse, error) {
+// StartAttempt starts an assessment attempt on behalf of userID, which the
+// caller must have already authenticated. The request body cannot influence
+// whose attempt this becomes.
+func (s *AssessmentService) StartAttempt(module string, userID int64, req models.StartAttemptRequest) (*models.StartAttemptResponse, error) {
 	db := repository.GetDB()
-	dbModule := module
-	if module == "communication" {
-		dbModule = "grammar"
-	}
-
-	config, ok := models.ModuleConfigs[dbModule]
-	if !ok {
-		return nil, fmt.Errorf("module %s is not supported", module)
+	dbModule, config, err := moduleConfig(module)
+	if err != nil {
+		return nil, err
 	}
 
 	var assessment models.TechAssessment
 	var startResponse *models.StartAttemptResponse
-	err := db.Transaction(func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		if req.AssessmentID != nil {
 			err = tx.Raw("SELECT * FROM tech_assessments WHERE assessment_id = ? AND module_type = ?", *req.AssessmentID, dbModule).Scan(&assessment).Error
@@ -226,13 +224,10 @@ func (s *AssessmentService) StartAttempt(module string, req models.StartAttemptR
 		}
 
 		if assessment.AssessmentID == 0 {
-			return fmt.Errorf("%s assessment not found", module)
+			return ErrAssessmentNotFound
 		}
 
-		resolvedUserId, err := s.resolveUserId(tx, req.UserID)
-		if err != nil {
-			return err
-		}
+		resolvedUserId := userID
 
 		now := time.Now()
 		durationMinutes := assessment.TotalTimeMinutes
@@ -503,41 +498,30 @@ func (s *AssessmentService) getAttemptQuestionsByConfig(tx *gorm.DB, attemptId i
 }
 
 // GetAttemptQuestions fetches the questions of an active attempt by token
-func (s *AssessmentService) GetAttemptQuestions(token string) (interface{}, error) {
+// GetAttemptQuestions returns the question set for an attempt owned by userID.
+// The module comes from the route rather than being inferred from the token
+// prefix, which previously defaulted to "aptitude" for anything unrecognised
+// and would read the wrong tables.
+func (s *AssessmentService) GetAttemptQuestions(module string, token string, userID int64) (interface{}, error) {
 	db := repository.GetDB()
-	var moduleType string
-	if strings.HasPrefix(token, "APT-") {
-		moduleType = "aptitude"
-	} else if strings.HasPrefix(token, "GRA-") || strings.HasPrefix(token, "COM-") {
-		moduleType = "grammar"
-	} else if strings.HasPrefix(token, "MNC-") {
-		moduleType = "mnc"
-	} else if strings.HasPrefix(token, "ROL-") {
-		moduleType = "role"
-	} else {
-		moduleType = "aptitude" // fallback default
+	_, config, err := moduleConfig(module)
+	if err != nil {
+		return nil, err
 	}
 
-	config, ok := models.ModuleConfigs[moduleType]
+	attempt, err := loadOwnedAttempt(db, config, token, userID,
+		", ass.shuffle_options, ass.module_type",
+		" JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id")
+	if err != nil {
+		return nil, err
+	}
+
+	attemptId, ok := attempt[config.AttemptIDCol].(int64)
 	if !ok {
-		return nil, fmt.Errorf("unknown module for token %s", token)
+		return nil, ErrAttemptNotFound
 	}
-
-	var attempt map[string]interface{}
-	query := fmt.Sprintf(`
-		SELECT a.*, ass.shuffle_options, ass.module_type
-		FROM %s a
-		JOIN tech_assessments ass ON ass.assessment_id = a.assessment_id
-		WHERE a.attempt_token = ?`, config.Attempts)
-
-	err := db.Raw(query, token).Scan(&attempt).Error
-	if err != nil || len(attempt) == 0 {
-		return nil, errors.New("attempt not found")
-	}
-
-	attemptId := attempt[config.AttemptIDCol].(int64)
-	shuffleOptions := attempt["shuffle_options"].(bool)
-	shuffleSeed := attempt["shuffle_seed"].(string)
+	shuffleOptions, _ := attempt["shuffle_options"].(bool)
+	shuffleSeed, _ := attempt["shuffle_seed"].(string)
 
 	questions, err := s.getAttemptQuestionsByConfig(db, attemptId, config, shuffleOptions, shuffleSeed)
 	if err != nil {
@@ -555,23 +539,17 @@ func (s *AssessmentService) GetAttemptQuestions(token string) (interface{}, erro
 }
 
 // SubmitAttempt scores, saves answers, and finalizes attempt
-func (s *AssessmentService) SubmitAttempt(module string, token string, answers map[string]interface{}) (interface{}, error) {
+// SubmitAttempt scores and finalizes an attempt owned by userID.
+func (s *AssessmentService) SubmitAttempt(module string, token string, userID int64, answers map[string]interface{}) (interface{}, error) {
 	db := repository.GetDB()
-	dbModule := module
-	if module == "communication" {
-		dbModule = "grammar"
+	dbModule, config, err := moduleConfig(module)
+	if err != nil {
+		return nil, err
 	}
 
-	config, ok := models.ModuleConfigs[dbModule]
-	if !ok {
-		return nil, fmt.Errorf("module %s is not supported", module)
-	}
-
-	var attempt map[string]interface{}
-	query := fmt.Sprintf("SELECT * FROM %s WHERE attempt_token = ?", config.Attempts)
-	err := db.Raw(query, token).Scan(&attempt).Error
-	if err != nil || len(attempt) == 0 {
-		return nil, errors.New("attempt not found")
+	attempt, err := loadOwnedAttempt(db, config, token, userID, "", "")
+	if err != nil {
+		return nil, err
 	}
 
 	if attempt["status"] != "in_progress" {

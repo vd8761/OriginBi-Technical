@@ -2,10 +2,24 @@
 Description=Tech Assessment Engine API Server
 After=network.target
 
+# NOTE: as of this writing nothing calls this service. The frontend proxies
+# /api/assessment/* to the NestJS assessment-service on port 5000, which
+# implements a superset of these routes. Confirm it is genuinely unused in
+# your environment and then decommission it rather than running it idle:
+#   systemctl disable --now tech-assessment-engine
+# It is kept here, authenticated, only so an existing deployment is not left
+# exposed while that decision is made.
+
 [Service]
 Type=simple
-User=root
+# Runs as a dedicated unprivileged account, not root. Create it once with:
+#   useradd --system --no-create-home --shell /usr/sbin/nologin originbi
+#   chown -R originbi: /home/OriginBi-Technical
+User=originbi
+Group=originbi
 WorkingDirectory=/home/OriginBi-Technical/backend/tech-assessment-engine
+# .env.local holds database and Cognito settings — keep it 0400 and owned by
+# the service account: chmod 400 .env.local && chown originbi: .env.local
 EnvironmentFile=/home/OriginBi-Technical/backend/tech-assessment-engine/.env.local
 ExecStart=/home/OriginBi-Technical/backend/tech-assessment-engine/tech-engine
 Restart=always
@@ -13,6 +27,22 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=tech-assessment-engine
+
+# Sandboxing. The service needs only its own directory and outbound network.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/OriginBi-Technical/backend/tech-assessment-engine
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
 
 [Install]
 WantedBy=multi-user.target

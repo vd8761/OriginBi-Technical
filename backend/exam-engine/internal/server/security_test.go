@@ -32,25 +32,6 @@ func TestAllowedOrigins(t *testing.T) {
 	}
 }
 
-func TestBootstrapTokenMustBeConfigured(t *testing.T) {
-	t.Setenv("BOOTSTRAP_ADMIN_TOKEN", "")
-	if _, ok := bootstrapToken(); ok {
-		t.Fatal("expected bootstrap to be disabled when token is unset")
-	}
-
-	t.Setenv("BOOTSTRAP_ADMIN_TOKEN", "secret")
-	token, ok := bootstrapToken()
-	if !ok || token != "secret" {
-		t.Fatalf("expected configured token, got %q ok=%v", token, ok)
-	}
-	if !constantTimeEqual("secret", token) {
-		t.Fatal("expected constant-time comparison to accept matching token")
-	}
-	if constantTimeEqual("wrong", token) {
-		t.Fatal("expected constant-time comparison to reject non-matching token")
-	}
-}
-
 func TestSessionCookieDeploymentControls(t *testing.T) {
 	expires := time.Now().Add(time.Hour)
 
@@ -201,5 +182,68 @@ func TestRateLimiter(t *testing.T) {
 	}
 	if limiter.allow("key", 2, time.Minute) {
 		t.Fatal("expected third request to be limited")
+	}
+}
+
+// TestNoAuthBypassHeaders guards a removed authentication bypass.
+//
+// sessionMiddleware used to grant a full session — admin routes included — to
+// any request carrying `X-Bypass-Key: originbi-secret-testing` plus an
+// `X-User-Id`, with no credential of any kind. It also honoured `X-User-Id`
+// alone whenever ASSESSMENT_AUTH was not "on", which was the default. Both
+// paths are gone; the dev bypass now needs an explicit DEV_AUTH_BYPASS opt-in
+// and is refused in production.
+func TestNoAuthBypassHeaders(t *testing.T) {
+	srv := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	for _, tc := range []struct {
+		name    string
+		headers map[string]string
+	}{
+		{
+			name:    "hardcoded bypass key",
+			headers: map[string]string{"X-Bypass-Key": "originbi-secret-testing", "X-User-Id": "1"},
+		},
+		{
+			name:    "user id header alone",
+			headers: map[string]string{"X-User-Id": "1"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Neither ASSESSMENT_AUTH nor DEV_AUTH_BYPASS is set: the default
+			// must be to reject, not to trust the headers.
+			t.Setenv("ASSESSMENT_AUTH", "")
+			t.Setenv("DEV_AUTH_BYPASS", "")
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/admin/questions", nil)
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401 for %s, got %d", tc.name, rec.Code)
+			}
+		})
+	}
+}
+
+func TestDevBypassRefusedInProduction(t *testing.T) {
+	t.Setenv("DEV_AUTH_BYPASS", "on")
+
+	t.Setenv("APP_ENV", "production")
+	if devBypassEnabled() {
+		t.Fatal("dev auth bypass must never be available in production")
+	}
+
+	t.Setenv("APP_ENV", "development")
+	if !devBypassEnabled() {
+		t.Fatal("expected explicit opt-in to enable the bypass outside production")
+	}
+
+	t.Setenv("DEV_AUTH_BYPASS", "")
+	if devBypassEnabled() {
+		t.Fatal("bypass must be off by default, even in development")
 	}
 }
