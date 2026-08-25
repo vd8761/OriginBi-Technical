@@ -69,8 +69,12 @@ logs/
 eslint-report*.txt
 backend/assessment-service/detailed-audit*.json
 
-# Service build binaries
+# Service build binaries. The deploy workflow builds these on the host; they
+# were tracked, so every deploy carried a stale ~20MB binary that nothing ran.
 backend/exam-engine/server
+backend/exam-engine/exam-engine
+backend/exam-engine/migrate
+backend/exam-engine/migrate.exe
 backend/tech-assessment-engine/tech-engine
 
 # Local office/archive artifacts
@@ -81,3 +85,12 @@ backend/tech-assessment-engine/tech-engine
 *.rar
 
 origin services.bat
+# Local development scaffolding state (see local-dev/README.md)
+local-dev/node_modules/
+local-dev/cognito/db/
+
+# Judge0 runtime config. Holds the API token and the sandbox's database and
+# redis passwords; it was committed with live values until the separation.
+# The template beside it documents every key.
+backend/judge0/judge0.conf
+!backend/judge0/judge0.conf.example

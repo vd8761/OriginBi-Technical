@@ -1,3 +1,19 @@
+# Judge0 configuration TEMPLATE.
+#
+# Copy to judge0.conf and replace every CHANGE_ME_* value with a freshly
+# generated secret (`openssl rand -hex 32`). The real judge0.conf is
+# gitignored: it used to be committed with live passwords in it.
+#
+# The three that matter:
+#   AUTHN_TOKEN       - the only access control Judge0 has. exam-engine sends
+#                       it as JUDGE0_AUTH_TOKEN (header name JUDGE0_AUTH_HEADER,
+#                       which must equal AUTHN_HEADER below).
+#   POSTGRES_PASSWORD - Judge0's own database, separate from originbi_technical.
+#   REDIS_PASSWORD    - Judge0's queue.
+#
+# ALLOW_ORIGIN / ALLOW_IP are left blank deliberately: the API is bound to
+# 127.0.0.1 by docker-compose.yml and no browser ever reaches it directly.
+#
 ################################################################################
 # Judge0 Configuration File
 ################################################################################
@@ -154,11 +170,11 @@ DISALLOW_IP=
 
 # Specify authentication header name.
 # Default: X-Auth-Token
-AUTHN_HEADER=
+AUTHN_HEADER=X-Auth-Token
 
 # Specify valid authentication tokens.
 # Default: empty - authentication is disabled
-AUTHN_TOKEN=
+AUTHN_TOKEN=CHANGE_ME_JUDGE0_TOKEN
 
 
 ################################################################################
@@ -196,7 +212,7 @@ REDIS_PORT=
 
 # Specify Redis password. Cannot be blank.
 # Default: NO DEFAULT! MUST BE SET!
-REDIS_PASSWORD=originbi
+REDIS_PASSWORD=CHANGE_ME_REDIS_PASSWORD
 
 
 ################################################################################
@@ -220,7 +236,7 @@ POSTGRES_USER=judge0
 
 # Password of the user. Cannot be blank. Used only in production.
 # Default: NO DEFAULT, YOU MUST SET YOUR PASSWORD
-POSTGRES_PASSWORD=originbi
+POSTGRES_PASSWORD=CHANGE_ME_POSTGRES_PASSWORD
 
 
 ################################################################################

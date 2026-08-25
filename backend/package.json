@@ -4,6 +4,7 @@
   "private": true,
   "workspaces": [
     "assessment-service",
+    "auth-service",
     "shared"
   ],
   "scripts": {

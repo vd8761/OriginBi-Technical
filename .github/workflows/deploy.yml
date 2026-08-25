@@ -34,6 +34,7 @@ jobs:
       exam_engine:        ${{ steps.filter.outputs.exam_engine }}
       tech_engine:        ${{ steps.filter.outputs.tech_engine }}
       assessment_service: ${{ steps.filter.outputs.assessment_service }}
+      auth_service:       ${{ steps.filter.outputs.auth_service }}
       judge0:             ${{ steps.filter.outputs.judge0 }}
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +54,10 @@ jobs:
             assessment_service:
               - 'backend/assessment-service/**'
               - 'backend/shared/**'
+              - 'backend/package.json'
+              - 'backend/package-lock.json'
+            auth_service:
+              - 'backend/auth-service/**'
               - 'backend/package.json'
               - 'backend/package-lock.json'
             judge0:
@@ -207,7 +212,37 @@ jobs:
         run: npm run build --workspace=assessment-service
 
   # ──────────────────────────────────────────────
-  # 2e. VERIFY: Judge0 (compose config)
+  # 2e. VERIFY: Auth Service (NestJS)
+  # ──────────────────────────────────────────────
+  verify-auth-service:
+    name: Verify Auth Service
+    needs: detect-changes
+    if: needs.detect-changes.outputs.auth_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "backend/package-lock.json"
+
+      - name: Install workspace dependencies
+        working-directory: ./backend
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Strict type-check (tsc --noEmit)
+        working-directory: ./backend/auth-service
+        run: npx tsc --noEmit
+
+      - name: Production build (nest build)
+        working-directory: ./backend
+        run: npm run build --workspace=auth-service
+
+  # ──────────────────────────────────────────────
+  # 2f. VERIFY: Judge0 (compose config)
   # ──────────────────────────────────────────────
   verify-judge0:
     name: Verify Judge0
@@ -216,6 +251,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # judge0.conf is gitignored (it holds the API token and the sandbox's
+      # database passwords). The template is what CI can legitimately see, and
+      # validating against it still catches a malformed compose file.
+      - name: Stage config from template
+        working-directory: ./backend/judge0
+        run: cp judge0.conf.example judge0.conf
 
       - name: Validate docker compose config
         working-directory: ./backend/judge0
@@ -232,6 +274,7 @@ jobs:
       - verify-exam-engine
       - verify-tech-engine
       - verify-assessment-service
+      - verify-auth-service
       - verify-judge0
     # Run only on push events (i.e. after merge to main), and only when at
     # least one service changed AND no required verify failed. Skipped verify
@@ -245,6 +288,7 @@ jobs:
         needs.detect-changes.outputs.exam_engine == 'true' ||
         needs.detect-changes.outputs.tech_engine == 'true' ||
         needs.detect-changes.outputs.assessment_service == 'true' ||
+        needs.detect-changes.outputs.auth_service == 'true' ||
         needs.detect-changes.outputs.judge0 == 'true'
       )
     runs-on: ubuntu-latest
@@ -362,7 +406,31 @@ jobs:
             echo "✓ Assessment Service deployed"
 
   # ──────────────────────────────────────────────
-  # 4e. Deploy Judge0 (Docker Compose)
+  # 4e. Deploy Auth Service (NestJS → PM2)
+  # ──────────────────────────────────────────────
+  deploy-auth-service:
+    name: Deploy Auth Service
+    needs: [detect-changes, verify-auth-service, sync]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.auth_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and reload auth-service
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            cd ${{ env.PROJECT_PATH }}/backend
+            npm ci --workspaces --if-present
+            npm run build --workspace=auth-service
+            pm2 reload auth-service --update-env || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.config.js --only auth-service
+            echo "✓ Auth Service deployed"
+
+  # ──────────────────────────────────────────────
+  # 4f. Deploy Judge0 (Docker Compose)
   # ──────────────────────────────────────────────
   deploy-judge0:
     name: Deploy Judge0
