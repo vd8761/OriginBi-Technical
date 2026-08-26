@@ -309,10 +309,15 @@ jobs:
   # ──────────────────────────────────────────────
   # 4a. Deploy Frontend (Next.js → PM2)
   # ──────────────────────────────────────────────
+  # The frontend is deployed by Vercel (evaluation.originbi.com), which builds
+  # from its own GitHub integration. This job is kept for the day the frontend
+  # moves back onto a droplet, but must not run meanwhile: it would build
+  # Next.js on a 1 vCPU host and start a second copy of a site Vercel already
+  # serves. verify-frontend still runs and still gates merges.
   deploy-frontend:
-    name: Deploy Frontend
+    name: Deploy Frontend (disabled - Vercel owns this)
     needs: [detect-changes, verify-frontend, sync]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.frontend == 'true'
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Build and reload frontend
@@ -402,7 +407,7 @@ jobs:
             npm run build --workspace=shared
             npm run build --workspace=assessment-service
             pm2 reload assessment-service --update-env \
-              || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.config.js --only assessment-service
+              || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.droplet.config.js --only assessment-service
             echo "✓ Assessment Service deployed"
 
   # ──────────────────────────────────────────────
@@ -426,7 +431,7 @@ jobs:
             cd ${{ env.PROJECT_PATH }}/backend
             npm ci --workspaces --if-present
             npm run build --workspace=auth-service
-            pm2 reload auth-service --update-env || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.config.js --only auth-service
+            pm2 reload auth-service --update-env || pm2 start ${{ env.PROJECT_PATH }}/ecosystem.droplet.config.js --only auth-service
             echo "✓ Auth Service deployed"
 
   # ──────────────────────────────────────────────

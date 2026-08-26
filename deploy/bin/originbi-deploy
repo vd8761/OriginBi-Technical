@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Pull the deploy branch and restart only what actually changed.
+#
+# This is the small stand-in for Coolify: Coolify's own stack (Postgres, Redis,
+# Traefik, a realtime server) needs about a gigabyte before your app starts, so
+# it does not fit on this droplet. Everything it would have given us here is a
+# git pull, a conditional build and a zero-downtime reload.
+set -euo pipefail
+
+ROOT=/home/OriginBi-Technical
+BRANCH="${1:-deploy}"
+cd "$ROOT"
+
+echo "==> fetching origin"
+OLD=$(git rev-parse HEAD)
+git fetch --quiet origin
+git checkout --quiet -B deploy "origin/${BRANCH#origin/}" 2>/dev/null || git reset --hard --quiet "origin/${BRANCH#origin/}"
+NEW=$(git rev-parse HEAD)
+
+if [ "$OLD" = "$NEW" ]; then
+  echo "==> already at $NEW — nothing to do"
+  exit 0
+fi
+echo "==> $OLD -> $NEW"
+CHANGED=$(git diff --name-only "$OLD" "$NEW")
+changed() { echo "$CHANGED" | grep -q "^$1"; }
+
+export HOME=/root PATH=$PATH:/usr/local/go/bin
+
+if changed "backend/exam-engine/"; then
+  echo "==> building exam-engine"
+  cd "$ROOT/backend/exam-engine"
+  go build -trimpath -ldflags="-s -w" -o exam-engine.new ./cmd/server
+  go build -trimpath -ldflags="-s -w" -o migrate.new     ./cmd/migrate
+  mv -f exam-engine.new exam-engine && mv -f migrate.new migrate
+  chown originbi:originbi exam-engine migrate
+  # Migrate before the new binary serves traffic. cmd/migrate reads
+  # DATABASE_URL from the environment and does not parse .env.local itself,
+  # so export it here rather than letting the migration silently not run.
+  set -a; . "$ROOT/backend/exam-engine/.env.local"; set +a
+  sudo -u originbi --preserve-env=DATABASE_URL ./migrate
+  systemctl restart exam-engine
+fi
+
+if changed "backend/assessment-service/" || changed "backend/shared/" || changed "backend/package"; then
+  echo "==> building assessment-service"
+  # Install from the WORKSPACE ROOT. backend/ declares three workspaces, so
+  # `npm ci` inside a child reshuffles the hoisted backend/node_modules and
+  # silently drops packages the siblings need (this removed @nestjs/typeorm
+  # and crash-looped assessment-service).
+  cd "$ROOT/backend"
+  npm ci --workspaces --include-workspace-root --no-audit --fund=false --silent
+  NODE_OPTIONS=--max-old-space-size=1400 npm run build --workspace=assessment-service
+  pm2 reload assessment-service --update-env
+fi
+
+if changed "backend/auth-service/"; then
+  echo "==> building auth-service"
+  cd "$ROOT/backend"
+  npm ci --workspaces --include-workspace-root --no-audit --fund=false --silent
+  NODE_OPTIONS=--max-old-space-size=1400 npm run build --workspace=auth-service
+  pm2 reload auth-service --update-env
+fi
+
+if changed "deploy/nginx/"; then
+  echo "==> nginx config changed in repo — review and copy by hand, not reloading blind"
+fi
+
+chown -R originbi:originbi "$ROOT"
+chmod 600 "$ROOT"/backend/*/.env.local 2>/dev/null || true
+pm2 save --force >/dev/null 2>&1 || true
+echo "==> deployed $NEW"
